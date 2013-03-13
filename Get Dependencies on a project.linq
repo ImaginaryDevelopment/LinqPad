@@ -15,18 +15,32 @@ void Main()
 	var projects=GetProjects(basePath).ToArray();
 	var autocomplete=projects.Select (p => System.IO.Path.GetFileNameWithoutExtension(p));
 	var selectedProject=Util.ReadLine("Which project?","PaySpan.PayerPortal.WebSite",autocomplete);
-	var selectedProjectFullPath=projects.First (p => p.AfterLastOrSelf("\\").Contains(selectedProject));
-	var relativeDirectory=System.IO.Path.GetDirectoryName(selectedProjectFullPath);
-	var selectedText=System.IO.File.ReadAllText(selectedProjectFullPath);
-	var references=WalkReferences(selectedText).Select (wr =>System.IO.Path.GetFullPath( System.IO.Path.Combine(relativeDirectory, wr)));
-	var badReference=references.FirstOrDefault (r => System.IO.File.Exists(r)==false);
-	if(badReference!=null){
-		badReference.Dump("bad reference");
-		return;
-	}
-	references.Dump();
 	
-	referenceProjects.OrderBy (p => p).Select (p =>new{Name= System.IO.Path.GetFileNameWithoutExtension(p),Path=p}).ToArray().Dump(selectedProject+" depends on");
+	var selectedProjectFullPath=projects.First (p => p.AfterLastOrSelf("\\").Contains(selectedProject));
+	selectedProjectFullPath.Dump("project path");
+	foreach(var project in projects)
+	{
+		var text=System.IO.File.ReadAllText(project);
+		if(text.Contains(selectedProject))
+		{
+			var depDirectory=System.IO.Path.GetDirectoryName(project);
+			
+			var q=new Queue<string>();
+			foreach(var r in WalkReferences(text)
+			.Select (t =>System.IO.Path.GetFullPath(System.IO.Path.Combine(depDirectory,t )))
+			.Where (t => referenceProjects.Contains(t)==false))
+			{
+				if(System.IO.File.Exists(r)==false)
+					throw new FileNotFoundException(r);
+					
+				q.Enqueue(r);
+			}
+			WalkDequeue(depDirectory, q,referenceProjects);
+			
+			
+		}
+	}
+	referenceProjects.OrderBy (p => p).Select (p =>new{Name= System.IO.Path.GetFileNameWithoutExtension(p),Path=p}).ToArray().Dump("these depend on "+selectedProject);
 }
 
 void WalkDequeue(string depDirectory,Queue<string> q, IList<string> referenceProjects){
