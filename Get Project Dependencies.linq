@@ -1,65 +1,96 @@
 <Query Kind="Program" />
 
 // find out what projects depend on X project
+//regex to find all project references
 Regex projectReferenceRegex=new Regex("Include=\"(.*\\.csproj)\">", RegexOptions.Compiled);
-//Regex solutionFolder
+
+//solutionFolder
 const string container="{2150E333-8FDC-42A3-9474-1A3956D46DE8}";
 Guid containerGuid=Guid.Parse(container);
 void Main()
 {
 
-	var referenceProjects=new List<string>();
+	var referenceProjects=new List<DependencyInfo>();
 	var basePath=@"C:\Projects\psh\hpx";
 	var sln=basePath+@"\solutions\AllApps.sln";
 	var slnText= System.IO.File.ReadAllText(sln);
 	var projects=GetProjects(basePath).ToArray();
 	var autocomplete=projects.Select (p => System.IO.Path.GetFileNameWithoutExtension(p));
 	var selectedProject=Util.ReadLine("Which project?","PaySpan.PayerPortal.WebSite",autocomplete);
-	var selectedProjectFullPath=projects.First (p => p.AfterLastOrSelf("\\").Contains(selectedProject));
-	var relativeDirectory=System.IO.Path.GetDirectoryName(selectedProjectFullPath);
+	var selectedProjectFullPath=projects.First (p => p.AfterLastOrSelf("\\").IndexOf(selectedProject,StringComparison.InvariantCultureIgnoreCase)>=0);
+	//adjust for autocomplete casing fail
+	selectedProject=System.IO.Path.GetFileNameWithoutExtension( selectedProjectFullPath);
 	var selectedText=System.IO.File.ReadAllText(selectedProjectFullPath);
-	var references=WalkReferences(selectedText).Select (wr =>System.IO.Path.GetFullPath( System.IO.Path.Combine(relativeDirectory, wr)));
-	var badReference=references.FirstOrDefault (r => System.IO.File.Exists(r)==false);
-	if(badReference!=null){
-		badReference.Dump("bad reference");
-		return;
-	}
-	references.Dump();
 	
-	referenceProjects.OrderBy (p => p).Select (p =>new{Name= System.IO.Path.GetFileNameWithoutExtension(p),Path=p}).ToArray().Dump(selectedProject+" depends on");
+	var directReferences=WalkReferences(selectedText);
+	referenceProjects.AddRange(directReferences.Select (r => new DependencyInfo(selectedProjectFullPath,r,0)));
+	referenceProjects.Dump("first pass");
+	var walked=new List<string>(){selectedProjectFullPath};
+	var searching=true;
+	int depth=1;
+	while(searching){
+		var addedItem=false;
+		var toWalk=referenceProjects.Where (p => p.Exists &&  walked.Contains(p.FullPath)==false ).ToArray();
+		
+		foreach(var walk in toWalk.ToArray()){
+			
+			var badRefence=toWalk.FirstOrDefault (w => w.Exists==false);
+			if(badRefence!=null)
+			{
+				badRefence.Dump("bad");
+				return;
+			}
+			walked.Add(walk.FullPath);
+			
+			var projectText=System.IO.File.ReadAllText(walk.FullPath);
+			var refDirectory=System.IO.Path.GetDirectoryName(walk.FullPath);
+			var references=WalkReferences(projectText).Select (wr => new DependencyInfo(walk.FullPath,wr,depth)).Where (wr =>walked.Contains(wr.FullPath)==false );
+			//references.Dump("found by walking:"+walk.Name);
+			foreach(var r in references.Where (r =>referenceProjects.Any (p => p.FullPath==r.FullPath)==false )){
+				referenceProjects.Add(r);
+				addedItem=true;
+			}
+		}
+		
+		if(!addedItem)
+		{
+			"done searching".Dump();
+			searching=false;
+		}
+		depth++;
+	}
+	
+	referenceProjects.OrderBy (p => p.Name).ThenBy (p => p.Depth).Dump(selectedProject+" depends on");
+	
+	
 }
 
-void WalkDequeue(string depDirectory,Queue<string> q, IList<string> referenceProjects){
-while(q.Any ())
-			{
-				var r=q.Dequeue();
-				
-				//r.Dump("walking");
-				if(System.IO.File.Exists(r)==false)
-					throw new FileNotFoundException(r);
-					if(referenceProjects.Contains(r)==false)
-					{
-						referenceProjects.Add(r);
-					}
-				depDirectory=System.IO.Path.GetDirectoryName(r);
-				var sText=System.IO.File.ReadAllText(r);
-				
-				foreach(var item in WalkReferences(sText).Select (t =>System.IO.Path.GetFullPath(System.IO.Path.Combine(depDirectory,t )))
-					.Where (t => referenceProjects.Contains(t)==false).Distinct())
-				{
-					if(System.IO.File.Exists(item)==false)
-						throw new FileNotFoundException(item);
-					q.Enqueue(item);
-				}
-				
-			
-			}
-}
+
 public IEnumerable<string> WalkReferences(string text){
 	return projectReferenceRegex.Matches(text).Cast<Match>().Select (m => m.Groups[1].Value);
 }
-// Define other methods and classes here
+
 public IEnumerable<string> GetProjects(string basePath)
 {
 	return System.IO.Directory.GetFiles(basePath,"*.csproj", SearchOption.AllDirectories);
+}
+public class DependencyInfo{
+readonly string _baseDirectory;
+	public string Name{get;private set;}
+	public string RelativeName{get;private set;}
+	public string ReferencedBy{get;private set;}
+	public int Depth{get;set;}
+	public string FullPath{get;private set;}
+	public bool Exists{get;private set;}
+	public DependencyInfo(string referencedBy,string relativeName,int depth){
+		if(System.IO.File.Exists( referencedBy)==false)
+			throw new FileNotFoundException(referencedBy);
+		_baseDirectory=System.IO.Path.GetDirectoryName(referencedBy);
+		ReferencedBy=referencedBy;
+		RelativeName=relativeName;
+		Depth=depth;
+		FullPath=System.IO.Path.GetFullPath(System.IO.Path.Combine(_baseDirectory,relativeName));
+		Exists=System.IO.File.Exists(FullPath);
+		Name=System.IO.Path.GetFileName(FullPath);
+	}
 }
