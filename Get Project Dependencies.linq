@@ -7,24 +7,26 @@ Guid containerGuid=Guid.Parse(container);
 void Main()
 {
 	var referenceProjects=new List<string>();
-	var basePath=@"C:\Projects\trunk\hpx";
-	var sln=@"C:\Projects\trunk\hpx\solutions\AllApps.sln";
+	var basePath=@"C:\Projects\psh\hpx";
+	var sln=basePath+@"\solutions\AllApps.sln";
 	var slnText= System.IO.File.ReadAllText(sln);
-	
-	foreach(var dependentProject in GetProjects(basePath).ToArray())
+	var projects=GetProjects(basePath).ToArray();
+	var autocomplete=projects.Select (p => System.IO.Path.GetFileNameWithoutExtension(p));
+	var selectedProject=Util.ReadLine("Which project?","PaySpan.PayerPortal.WebSite",autocomplete);
+	foreach(var project in projects)
 	{
-		var text=System.IO.File.ReadAllText(dependentProject);
-		if(text.Contains("WS-NPSQueryBroker"))
+		var text=System.IO.File.ReadAllText(project);
+		if(text.Contains(selectedProject))
 		{
-			var depDirectory=System.IO.Path.GetDirectoryName(dependentProject);
+			var depDirectory=System.IO.Path.GetDirectoryName(project);
 			//depDirectory.Dump("dep directory");
-			dependentProject.Dump();
+			project.Dump();
 			var q=new Queue<string>();
 			foreach(var r in WalkReferences(text)
 			.Select (t =>System.IO.Path.GetFullPath(System.IO.Path.Combine(depDirectory,t )))
 			.Where (t => referenceProjects.Contains(t)==false))
 			{
-			if(System.IO.File.Exists(r)==false)
+				if(System.IO.File.Exists(r)==false)
 					throw new FileNotFoundException(r);
 					
 				q.Enqueue(r);
@@ -46,8 +48,8 @@ void Main()
 				foreach(var item in WalkReferences(sText).Select (t =>System.IO.Path.GetFullPath(System.IO.Path.Combine(depDirectory,t )))
 					.Where (t => referenceProjects.Contains(t)==false).Distinct())
 				{
-				if(System.IO.File.Exists(item)==false)
-					throw new FileNotFoundException(item);
+					if(System.IO.File.Exists(item)==false)
+						throw new FileNotFoundException(item);
 					q.Enqueue(item);
 				}
 				
