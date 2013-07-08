@@ -34,3 +34,28 @@ var clientSq= from x in xml.Root.Elements(rootns+"system.serviceModel")
 				let address= ep.Attribute("address").Value
 				select new{name,address=LINQPad.Util.HighlightIf( address,n=>n.Contains(Environment.MachineName, StringComparison.CurrentCultureIgnoreCase))};  //,ep};
 clientSq.Dump("server clients");
+
+var baseDir=@"C:\Microsoft .Net 3.5 Framework\MortgageFlex Products\";
+var buildDir=baseDir+@"LoanQuest Origination\bin\release\";
+var hostDir=baseDir+@"Common Framework\HOST\Mortgageflex.Services.Host.LoanQuest\Bin\";
+//var toCompare=new[]{"Mortgageflex.Common.dll","Mortgageflex.LoanQuest.Library.Registration.dll","Mortgageflex.LoanQuest.Library.Setup.dll"};
+
+var hostVsBuildQ = from i in System.IO.Directory.EnumerateFiles(buildDir,"*.dll")
+	let hostPath= System.IO.Path.Combine(hostDir, System.IO.Path.GetFileName(i))
+	where System.IO.File.Exists(hostPath)
+	let buildInfo=new System.IO.FileInfo(i)
+	let hostInfo= new System.IO.FileInfo(hostPath)
+	let creation=new{ Build= buildInfo.CreationTimeUtc,Hosted= hostInfo.CreationTimeUtc}
+	let size= new{ Build=buildInfo.Length, Hosted=hostInfo.Length}
+	let versions= new{Build= FileVersionInfo.GetVersionInfo(i), Hosted= FileVersionInfo.GetVersionInfo(hostPath)}
+	let fileVersion =new{Build= versions.Build.FileVersion, Hosted= versions.Hosted.FileVersion}
+	let productVersion= new{Build= versions.Build.ProductVersion, Hosted= versions.Hosted.ProductVersion}
+	where size.Build!= size.Hosted
+	select new{Item=buildInfo.Name, //LINQPad.Util.HighlightIf(i,_=>buildInfo.CreationTimeUtc!=hostInfo.CreationTimeUtc || buildInfo.Length!=hostInfo.Length),
+		Creation= Util.HighlightIf(creation,a=>a.Build!=a.Hosted),
+		FileVersion =Util.HighlightIf(fileVersion ,a=>a.Build!=a.Hosted),
+		ProductVersion= Util.HighlightIf(productVersion ,a=>a.Build!=a.Hosted),
+		Size=Util.HighlightIf(size,a=>a.Build!=a.Hosted)
+		};
+	
+hostVsBuildQ.Dump("buildVsHostMismatches");

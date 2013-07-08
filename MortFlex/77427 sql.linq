@@ -42,6 +42,7 @@ alter table lninvestorcomm add CC_DESK_INCENTIVE NUMERIC(7,4)
 
 alter table custom1 add INVESTOR NVARCHAR(50)
 alter table custom1 add NON_LLPA NUMERIC(7,4)
+alter table custom1 add TOTAL_LLPA NUMERIC(7,4)
 drop table inv_price_adjustment
 create table INV_PRICE_ADJUSTMENT (
 	ACCOUNT_ID uniqueidentifier NOT NULL foreign key references accounts (account_id) ,

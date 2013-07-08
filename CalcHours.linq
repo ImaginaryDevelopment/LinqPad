@@ -2,9 +2,9 @@
 
 void Main()
 {
-	var startHour=8;
-	var startMinutes=20;
-	var lunchMinutes=45;
+	var startHour=7;
+	var startMinutes=50;
+	var lunchMinutes=60;
 	var includedLunch=DateTime.Now.Hour>11;
 	var startTime=DateTime.Today.AddHours(startHour).AddMinutes(startMinutes);
 	var grossWorked=(DateTime.Now - startTime);
@@ -26,27 +26,28 @@ void Main()
 		Stop60=DateTime.Now.Add( addALunch(TimeSpan.FromMinutes( 60))).ToTime()
 		}.Dump();
 	var days= new[]{ 
-		new TimeInput(new DateTime(2013,06,20,9,0,0),5+12,15,lunch:30),
-		new TimeInput(new DateTime(2013,06,21,8,20,0),6+12,5,lunch:60),
-		new TimeInput(new DateTime(2013,06,24,8,40,0),5+12,20,lunch:30),
-		new TimeInput(new DateTime(2013,06,25,8,30,0),5+12,45,lunch:60),
+		new TimeInput(new DateTime(2013,6,20,9,0,0),5,15,lunch:30),
+		new TimeInput(new DateTime(2013,6,21,8,20,0),6,5,lunch:60),
+		new TimeInput(new DateTime(2013,6,24,8,40,0),5,20,lunch:30),
+		new TimeInput(new DateTime(2013,6,25,8,30,0),5,45,lunch:60),
 		
 		// 6/26 8:30 - 6:30 - 45 min over by 1 hr 15
-		new TimeInput(new DateTime(2013,06,26,8,30,0),6+12,30,lunch:45),
-		new TimeInput(new DateTime(2013,06,27,8,30,0),5+12,15,lunch:45),
-		new TimeInput(new DateTime(2013,06,20,9,0,0),5+12,15,lunch:30),
-		new TimeInput(new DateTime(2013,06,28,8,30,0),5+12,15,lunch:30),
+		new TimeInput(new DateTime(2013,6,26,8,30,0),6,30,lunch:45),
+		new TimeInput(new DateTime(2013,6,27,8,30,0),5,15,lunch:45),
+		new TimeInput(new DateTime(2013,6,28,8,30,0),5,15,lunch:30),
+		new TimeInput(new DateTime(2013,7,1,8,45,0),5,15,lunch:30),
+		new TimeInput(new DateTime(2013,7,2,8,20,0),5,15,lunch:45),
+		new TimeInput(new DateTime(2013,7,3,8,0,0),5,15,lunch:15),
+		new TimeInput(new DateTime(2013,7,4,8,0,0),5,0,lunch:0),
 		};
+		
 	var dq= from d in days
 			let stop=d.End
 			let worked=(stop-d.Start) -d.Lunch
 			let workedMinutes=Math.Round(worked.Hours+ worked.Minutes/60.0m,2)
 			select new{Date=d.Start.Date.ToString("yyyy-MM-dd"),Timesheet=workedMinutes, worked,Lunch=d.Lunch.TotalMinutes.ToString()+" Minutes",Stopped=stop.ToString("hh:mm:ss")};
 			dq.OrderByDescending(d=>d.Date).Dump();
-	
-	// 6/28 8:30 - 5:15 - 45 min
-	// 7/01 8:45 - 5:15 - 30 min
-	// 7/02 8:20 - 
+
 	var gross= 55.0m *(8-.15m);
 	gross.Dump();
 }
@@ -60,7 +61,8 @@ public class TimeInput{
 	
 	public TimeInput(DateTime start, int stopHour,int stopMinute, int lunch){
 		Start=start;
-		End=new DateTime(Start.Year,Start.Month,Start.Day,stopHour,stopMinute,0);
+		//assume PM (+12)
+		End=new DateTime(Start.Year,Start.Month,Start.Day,stopHour+12,stopMinute,0);
 		Lunch=TimeSpan.FromMinutes(lunch);
 	}
 }
