@@ -2,9 +2,9 @@
 
 void Main()
 {
-	var startHour=7;
-	var startMinutes=50;
-	var lunchMinutes=60;
+	var startHour=8;
+	var startMinutes=10;
+	var lunchMinutes=45;
 	var includedLunch=DateTime.Now.Hour>11;
 	var startTime=DateTime.Today.AddHours(startHour).AddMinutes(startMinutes);
 	var grossWorked=(DateTime.Now - startTime);
@@ -38,7 +38,8 @@ void Main()
 		new TimeInput(new DateTime(2013,7,1,8,45,0),5,15,lunch:30),
 		new TimeInput(new DateTime(2013,7,2,8,20,0),5,15,lunch:45),
 		new TimeInput(new DateTime(2013,7,3,8,0,0),5,15,lunch:15),
-		new TimeInput(new DateTime(2013,7,4,8,0,0),5,0,lunch:0),
+		new TimeInput(new DateTime(2013,7,5,8,0,0),5,0,lunch:0),
+		new TimeInput(new DateTime(2013,7,8,7,50,0),4,15,lunch:0)
 		};
 		
 	var dq= from d in days

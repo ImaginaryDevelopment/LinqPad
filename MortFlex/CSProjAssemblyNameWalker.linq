@@ -12,22 +12,8 @@ var baseQuery=(from i in csProjects
 	let proj=doc.Element(rootns+"Project").DumpIf(x=>x==null,i+" has no project element")
 	where proj!=null
 	select new{ Path=i, Doc=doc,RootNs=rootns,ProjNode=proj}).ToArray();
-var references= from i in baseQuery
-	from ig in i.ProjNode.Elements(i.RootNs+"ItemGroup")
-	
-	select new{Project=i.Path,Condition=ig.Attribute(XNamespace.None+"Condition"),Items= ig.Nodes().Cast<XElement>()};
-	references.Where (r => r.Items.Any (i => i.Attribute(XNamespace.None+"Include").Value.Contains("Hibernate")))
-		.Select (r => new{r.Project,HibernateReferences=r.Items.Where (i => i.Attribute(XNamespace.None+"Include").Value.Contains("Hibernate")).ToArray()})
-		.Dump("hibernate references")
-		;
-	//references.Dump("references");
-//var runtime=from i in baseQuery
-//	from r in i.ProjNode.Elements(i.RootNs+"runtime")
-//	where r!=null
-//	let abNs=r.GetNamespaceOfPrefix("urn")
-//	let ab=r.Element(abNs+"assemblyBinding")
-//	select new{r,ab};
-//	runtime.Dump();
+
+
 var relational= from i in csProjects
 		let doc=XDocument.Load(i)
 		let proj=doc.Element(doc.Root.Name.Namespace+"Project").DumpIf(x=>x==null,i+" has no project element")
@@ -46,11 +32,12 @@ var flat= from i in csProjects
 		let bogus= proj==null? doc.DumpFormatted(i):null
 		where proj!=null
 		from p in proj.Elements(rootns+"PropertyGroup")
-		from prop in p.Nodes().Cast<XElement>()
-		select new{ Project=i, PropertyGroupCondition=p.Attribute(XNamespace.None+"Condition"),prop.Name.LocalName,prop.Value};
+		let an =p.Nodes().Cast<XElement>().FirstOrDefault(n=>n.Name.LocalName=="AssemblyName")
+		where an!=null
+		orderby an.Value
+		select new{ Project=i, PropertyGroupCondition=p.GetAttribValOrNull("Condition"),Value=an.Value};
 
 //example
-flat.Where (f => f.LocalName=="VisualStudioVersion").Dump();
-			
-relational.Dump();
-flat.Dump();
+flat .Where(a=>a.PropertyGroupCondition.IsNullOrEmpty() || a.PropertyGroupCondition.Contains("Debug")==false)
+.Dump();
+//relational.Dump();

@@ -2,6 +2,8 @@
 
 //check deployed case settings
 var targetMachine= "vBCDApp1";
+
+//determine case by junction?
 var targetcase = "77427";
 var deployPath=string.Format("\\\\{0}\\C$\\MFWebContent\\Cases\\{1}\\LoanQuestNETDeploy",targetMachine,targetcase);
 var applicationFullPath = System.IO.Path.Combine(deployPath,"MortgageFlex.LoanQuest.application");

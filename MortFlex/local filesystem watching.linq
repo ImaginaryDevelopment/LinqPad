@@ -1,54 +1,17 @@
 <Query Kind="Program" />
 
-IDictionary<deploySites,string> _sites=new Dictionary<deploySites,string>{
-	{deploySites.sitwebDeploy,@"\\gtpm-init1-sit\sites$\gtpm-init1\wwwroot\Site\" }, // @"\\crprdnii1i7\sites$\Gtpm-init1\wwwroot\Site\"},
-	{deploySites.ditWebDeploy,@"\\crprdnii1i4\sites\Gtpm-init1\wwwroot\Site\"},
-	{deploySites.ditsvcDeploy,@"\\crprdnii1i4\sites\Gtpm-init1\wwwroot\services\"},
-	//{deploySites.uatwebDeploy,@""},
-	{ deploySites.prodDeploy,@"\\crprdnii1h9\sites$\Gtpm-init1\wwwroot\"},
-	{deploySites.prod2Deploy,@"\\crprdnii1h8\sites$\Gtpm-init1\wwwroot\"},
-	{deploySites.unknown,@"\\crprdnii1g7\sites$\Gtpm\wwwroot\"},
+IDictionary<string,string> _sites=new Dictionary<string,string>{
+	{"Built",@"C:\Microsoft .Net 3.5 Framework\MortgageFlex Products\LoanQuest Origination\bin\release\"},
+	{"Hosted",@"C:\Microsoft .Net 3.5 Framework\MortgageFlex Products\Common Framework\HOST\Mortgageflex.Services.Host.LoanQuest\Bin\"}
 };
+IDictionary<string,int> _fileChangeCounts= new Dictionary<string,int>();
 bool debug=false;
 void Main()
 {
-var toWatch=_sites.Except(_sites.Where(a=>a.Key== deploySites.prod2Deploy)).ToDictionary(k=>k.Key,v=>v.Value);
+var toWatch=_sites.ToDictionary(k=>k.Key,v=>v.Value);
 
 toWatch.Count.Dump("attempting to watch");
-	var results=new System.Collections.Concurrent.BlockingCollection<dynamic>(toWatch.Count);
-	foreach(var item in toWatch.AsParallel())
-	{
-		if(debug)("starting "+item.Key.ToString()).Dump();
-		var dllPath=System.IO.Path.Combine(item.Value,@"site\bin\PSAT.WebApp.dll");
-		if(System.IO.File.Exists(dllPath)==false)
-		dllPath=System.IO.Path.Combine(item.Value,@"bin\PSAT.WebApp.dll");
-		if(System.IO.File.Exists(dllPath))
-		{
-			var fs=new FileInfo(dllPath);
-			
-			Assembly r=null;
-			Version aV=null;
-			try
-			{	        
-			
-				 r=System.Reflection.Assembly.ReflectionOnlyLoadFrom(dllPath);
-				aV= r.GetName().Version;
-				
-			}
-			catch (FileLoadException flex)
-			{
-				
-				flex.Dump(item.Key.ToString());
-			}
-			var fi=FileVersionInfo.GetVersionInfo(dllPath);
-			
-			
-			results.Add(new {Key=item.Key.ToString(),fs,fi,r,aV,item.Value});
-		}
-		
-	}
-	results.CompleteAdding();
-	results.Dump();
+	
 	var watchers=AttachHandlers(toWatch).Materialize();//prodWebDeploy,prod2WebDeploy}).ToArray();
 	handlerCount.Dump("Handlers attached");
 	while(Util.ReadLine()!=string.Empty)
@@ -57,11 +20,11 @@ toWatch.Count.Dump("attempting to watch");
 	}
 	foreach(var item in watchers)
 		item.Dispose();
-	
+	_fileChangeCounts.Dump();
 }
 
 static ushort handlerCount=0;
-IEnumerable<IDisposable> AttachHandlers(IDictionary<deploySites,string> paths)
+IEnumerable<IDisposable> AttachHandlers(IDictionary<string,string> paths)
 {
 	foreach(var path in paths)
 	{
@@ -93,11 +56,14 @@ IEnumerable<IDisposable> AttachHandlers(IDictionary<deploySites,string> paths)
 void NamedFsChangeHandler(object sender, System.IO.FileSystemEventArgs args,string key)
 {
 
-Func<string,bool> filter= s=> true;
+Func<string,bool> filter= s=>s.EndsWith(".dll",StringComparison.InvariantCultureIgnoreCase) || s.EndsWith(".bat", StringComparison.InvariantCultureIgnoreCase);
 	//s.Contains(".")==false || s.EndsWith("config");
 	var item=args.FullPath;
 	  if(filter(item))
-	  item.Dump(key+":"+args.ChangeType.ToString());
+	  {
+	  	_fileChangeCounts[item]=_fileChangeCounts.ContainsKey(item)? _fileChangeCounts[item]+1:1;
+	  	item.Dump(key+":"+args.ChangeType.ToString());
+	  }
 }
 void FsChangeHandler(object sender, System.IO.FileSystemEventArgs args)
 {
