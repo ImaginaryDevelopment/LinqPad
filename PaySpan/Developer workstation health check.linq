@@ -82,6 +82,9 @@ public static void HandleSites(string payspanRoot,HealthMode mode,bool debug)
 	}
 	using(var ps=new Process())
 	{
+	ps.StartInfo.UseShellExecute=false;
+		ps.StartInfo.RedirectStandardOutput=true;
+		ps.StartInfo.RedirectStandardError=true;
 		ps.StartInfo.FileName=path; //appcmd list app /config
 		var outputs=ps.RunProcessRedirected("list apps /config /xml"); // for debug consider adding /path:/jms
 		if(outputs.Errors.IsNullOrEmpty()==false)
@@ -99,7 +102,7 @@ public static void HandleSites(string payspanRoot,HealthMode mode,bool debug)
 			let appName=siteApp.Attribute(XNamespace.None+"APP.NAME").Value
 				from app in siteApp.XPathSelectElements("application")
 			let appPath=app.Attribute(XNamespace.None+"path").Value
-			let pool=app.Attribute(XNamespace.None+"applicationPool").Value
+			let pool=app.GetAttribValOrNull("applicationPool")
 			let vd=app.XPathSelectElements("virtualDirectory[@path]")
 			let virtuals=vd.Select (v => new{VirDir=v.Attribute(XNamespace.None+"path").Value,PhysicalPath=v.Attribute(XNamespace.None+"physicalPath").Value})
 			let xvirtuals=virtuals.Select (v => new{ VirDir=v.VirDir,
@@ -138,7 +141,6 @@ public static void HandleSites(string payspanRoot,HealthMode mode,bool debug)
 					if(System.IO.Path.GetDirectoryName(proposedUri.ToString())!=System.IO.Path.GetDirectoryName(payspanRoot))
 					segments=segments.Skip(1).ToArray();
 					var basedProposed=segments.Prepend(payspanRoot).ToArray();
-					
 					
 					var proposedPath=System.IO.Path.Combine(basedProposed);
 					
@@ -181,10 +183,12 @@ public static void HandleSites(string payspanRoot,HealthMode mode,bool debug)
 	}
 	
 }
+
 public static IEnumerable<string> SegmentPath(string input)
 {
 	return input.Split(new[]{System.IO.Path.AltDirectorySeparatorChar,System.IO.Path.DirectorySeparatorChar });
 }
+
 public static void HandleGitBash(bool debug)
 {
 	var profilePath=System.Environment.GetFolderPath( System.Environment.SpecialFolder.UserProfile);
@@ -201,6 +205,7 @@ public static void HandleGitBash(bool debug)
 		"alias gr='git remote -v'").Dump();
 	
 }
+
 public static void HandleApps(bool debug){
 
 	var uninstallKey=Registry.LocalMachine.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall");

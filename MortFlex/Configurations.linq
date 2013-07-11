@@ -75,7 +75,7 @@ void ShowServerConfig(string description, string path){
 			orderby name.StartsWith("P") descending, name
 			select new{Name=Util.HighlightIf( name,n=>n.Contains("Production")),ds,ic}; //,cs};
 			
-			path.AsFilePath().ExplorerSelectLink("web.config").Dump(description);
+			path.AsFilePath().AsExplorerSelectLink("web.config").Dump(description);
 	sq.Dump("server config:"+description);
 	
 	var clientSq= from x in xml.Root.Elements(rootns+"system.serviceModel")
@@ -99,6 +99,6 @@ void ShowAppConfig(string description, string path){
 			let address= ep.Attribute("address").Value
 			select new{name,address=LINQPad.Util.HighlightIf( address,n=>n.Contains(Environment.MachineName, StringComparison.CurrentCultureIgnoreCase))};  //,ep};
 		//select x;
-			path.AsFilePath().ExplorerSelectLink("app.config").Dump();
+			path.AsFilePath().AsExplorerSelectLink("app.config").Dump();
 	aq.Dump("app.config");
 }
