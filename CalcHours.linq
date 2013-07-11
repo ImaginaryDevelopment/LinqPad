@@ -3,8 +3,8 @@
 void Main()
 {
 	var startHour=8;
-	var startMinutes=10;
-	var lunchMinutes=45;
+	var startMinutes=45;
+	var lunchMinutes=30;
 	var includedLunch=DateTime.Now.Hour>11;
 	var startTime=DateTime.Today.AddHours(startHour).AddMinutes(startMinutes);
 	var grossWorked=(DateTime.Now - startTime);
@@ -15,9 +15,9 @@ void Main()
 	Func<TimeSpan,TimeSpan> addALunch= lm=> includedLunch? timeRemaining: timeRemaining+lm;
 	
 	//+(includedLunch?TimeSpan.FromSeconds(0):TimeSpan.FromMinutes(60))
-	if(includedLunch)
-	DateTime.Now.Add(timeRemaining).Dump("stop");
-	else 
+	//if(includedLunch)
+	//DateTime.Now.Add(timeRemaining).Dump("stop");
+	//else 
 	new{ GrossRemaining=timeRemaining,
 		Stop=DateTime.Now.Add(timeRemaining).ToString().After(" "),
 		Remaining30=addALunch(TimeSpan.FromMinutes(30)),
@@ -39,7 +39,9 @@ void Main()
 		new TimeInput(new DateTime(2013,7,2,8,20,0),5,15,lunch:45),
 		new TimeInput(new DateTime(2013,7,3,8,0,0),5,15,lunch:15),
 		new TimeInput(new DateTime(2013,7,5,8,0,0),5,0,lunch:0),
-		new TimeInput(new DateTime(2013,7,8,7,50,0),4,15,lunch:0)
+		new TimeInput(new DateTime(2013,7,8,7,50,0),4,15,lunch:0),
+		new TimeInput(new DateTime(2013,7,9,8,10,0),4,55,lunch:45),
+		new TimeInput(new DateTime(2013,7,10,8,15,0),5,15,lunch:60)
 		};
 		
 	var dq= from d in days
@@ -58,7 +60,6 @@ public class TimeInput{
 	public DateTime Start{get;private set;}
 	public DateTime End{get;private set;}
 	public TimeSpan Lunch{get;private set;}
-	
 	
 	public TimeInput(DateTime start, int stopHour,int stopMinute, int lunch){
 		Start=start;
