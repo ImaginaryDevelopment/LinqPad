@@ -1,69 +1,97 @@
 <Query Kind="Program">
   <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.DataVisualization.dll</Reference>
-  <Reference>&lt;RuntimeDirectory&gt;\Microsoft.Build.Framework.dll</Reference>
-  <Reference>&lt;RuntimeDirectory&gt;\Microsoft.Build.Utilities.v4.0.dll</Reference>
-  <Reference>C:\Projects\CASE\TechnicalDebtAccountant\TechnicalDebtTaskLib\TechnicalDebtTaskLib\bin\Debug\TechnicalDebtTaskLib.dll</Reference>
-  <Namespace>System.Windows.Forms</Namespace>
   <Namespace>System.Windows.Forms.DataVisualization.Charting</Namespace>
 </Query>
 
 void Main()
 {
+	var headers=new[]{"db","num_procs","proc_len","joins","wheres","ors"};
+	var data=new[]{"db1","2","400","1","6","4","5"};
+	var data2=new[]{"db1","2","400","4","2","4","5"};
+	var data3=new[]{"db1","4","400","3","4","4","5"};
+	var data4=new[]{"db1","4","40000","30","4","4","5"};
+	var data5=new[]{"db1","4","40000","1","4","4","5"};
+	var allSamples=new[]{data,data2,data3,data4,data5};
+	var chart=new Chart();
+	chart.Size=new System.Drawing.Size(800,600);
 	
-					
-					
-					
-			
-			var chartTask=new TechnicalDebtTaskLib.SqlMetricChartTask();
-			chartTask.Input=GenerateInput();
-			chartTask.Execute();
-			
-		ShowChart(chartTask.Chart);
-			
-			
+	var chartArea=new ChartArea("area1");
+	chart.ChartAreas.Add(chartArea);
+	var chartType=SeriesChartType.Line;
+	chartArea.AxisX.Minimum=1;
+	double minimum=0;
+	double maximum=0;
+	var series=new Series("total deltas");
+	series.BorderWidth=2;
 	
+	chartArea.AxisX.Maximum=allSamples.Count ( );
+	for (int i = 3; i < headers.Count (); i++)
+	{
+	
+		headers[i].Dump();
+		var metricSeries=new Series(headers[i]);
+		metricSeries.ChartType=chartType;
+		var dataPoints=Deltas(allSamples.Select (s =>Double.Parse(s[i])),1);
+		metricSeries.BorderDashStyle= ChartDashStyle.Dash;
+		minimum=Math.Min( dataPoints.Min ( ),minimum);
+		maximum=Math.Max(dataPoints.Max ( ),maximum);
+		dataPoints.ToList().ForEach(p=>metricSeries.Points.Add(p));
+		 chart.Series.Add(metricSeries);
+	}
+	var totalDataPoints=Deltas(allSamples.Select (s =>s.Skip(3).Select (x => double.Parse(x)).Sum () ),1).Dump("total");
+			minimum=Math.Min( totalDataPoints.Min ( ),minimum);
+		maximum=Math.Max(totalDataPoints.Max ( ),maximum);
+		totalDataPoints.ToList().ForEach(p=>series.Points.Add(p));
+	
+	series.ChartType=chartType;
+	series.Points.Count ( ).Dump("series points");
+	chart.Series.Add(series);
+	
+	
+	//chart.Series.ToList().ForEach(s=>s.IsValueShownAsLabel=true);
+	chartArea.AxisY.Minimum=minimum.Dump();
+	chartArea.AxisY.Maximum=maximum.Dump();
+	
+	//series.Points.AddY(data[i]
+	
+	chart.Series.Count ( ).Dump("series Count");
+	chart.ChartAreas.Count ().Dump("ChartAreasCount");
+	chartArea.Visible=true;
+	ShowChart(chart);
 	
 }
-void ShowChart(Chart chartControl)
-{
 
-			using(var form=new Form())
-			{
-			//chartControl.ChartAreas.Add("db");
-			chartControl.Series.ToList().ForEach(x=> x.ChartArea=chartControl.ChartAreas.First ().Name);
-			form.Controls.Add(chartControl);
-			chartControl.Dock= DockStyle.Fill;
-			//chartControl.Legends.Add("db");
-			form.ShowDialog();
-			}
-}
 // Define other methods and classes here
-IEnumerable<IEnumerable<KeyValuePair<string,string>>> GenerateInput()
+
+IEnumerable<double> Deltas(IEnumerable<double> source,double scale)
 {
-var data=@"db,num_procs,len_procs,cursors_refs,tt_refs,ifs,cases,where,join,ands,ors
-	master,1,,,,,,,,,
-	msdb,19,,,,,,,,,
-	LINX_INIT1_DEV,102,173755,84,16,904,80,625,160,585,3514
-	CreditSource_Init1_SIT,255,306586,96,112,1320,576,1545,692,1098,4490
-	GUS_Init1_SIT,1214,3164502,426,484,13712,2308,11690,5387,10750,55332
-	GMS_Init1_SIT,1167,3295064,660,2682,13274,2716,23873,4925,15768,42194
-	GMS_GLM_Init1_SIT,227,558090,84,97,2238,808,3905,1356,2796,7808
-	GMS_ODM_Init1_SIT,291,749058,42,171,3614,1032,4880,2820,4480,10158";
+	double? last=null;
+	foreach(var item in source)
+	{
+		if(last.HasValue==false)
+		{
+		last=item;
+		yield return 0;
+		}
+		else
+		{
+		var result=scale*(last.Value-item);
+		last=item;
+		yield return result;
+		}
 	
-	
-	var csv= from d in data.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries).AsEnumerable()		
-			select d.Split(',').AsEnumerable();
-			
-			foreach(var row in csv.Skip(1))
-			{
-			var list=new List<KeyValuePair<string,string>>();
-			foreach(var datapoint in row.Zip(csv.First (),(x,header)=> new KeyValuePair<string,string>(header,x)))
-				list.Add(datapoint);
-				yield return list;
-			}
-			
-			
-				
-			
+	}
+}
+
+void ShowChart(Chart chart)
+{
+	using(var form=new System.Windows.Forms.Form())
+	{
+	chart.Legends.Add("k");
+	chart.Dock= System.Windows.Forms.DockStyle.Fill;
+		form.Controls.Add(chart);
+		form.WindowState= System.Windows.Forms.FormWindowState.Maximized;
+		form.ShowDialog();
+	}
 }
