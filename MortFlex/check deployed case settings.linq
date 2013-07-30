@@ -1,14 +1,19 @@
 <Query Kind="Statements" />
 
 //check deployed case settings
-var targetMachine= "vBCDApp1";
+var targetMachine= "vBcdApp1";
 
 //determine case by junction?
-var targetcase = "77427";
-var customer = "Nova";
+var targetcase = "77494";
+var customer = "Homestreet";
 
 var deployPath=string.Format("\\\\{0}\\C$\\MFWebContent\\Cases\\{1}\\LoanQuestNETDeploy",targetMachine,targetcase);
 var applicationFullPath = System.IO.Path.Combine(deployPath,"MortgageFlex.LoanQuest.application");
+if(System.IO.File.Exists(applicationFullPath)==false)
+{
+	applicationFullPath.Dump( "could not find file");
+	return;
+}
 var appDoc=XDocument.Load(applicationFullPath);
 var applicationDependency = 
 				from doc in  appDoc.Root.Elements()

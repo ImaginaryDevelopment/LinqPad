@@ -12,6 +12,7 @@
 
 static ushort handlerCount=0;
 Func<string,bool> fileFilter=s=>true;
+static DateTime cutOff=DateTime.Today.AddHours(14);
 void Main()
 {
 	var targetPath=@"\\vBCDApp1\c$\inetpub\logs\LogFiles\W3SVC1\";
@@ -19,7 +20,8 @@ void Main()
 	System.IO.File.GetLastWriteTime(latest).Dump("last modified");
 	ReparseLog(latest);
 	latest.Dump("initial scan");
-	
+	if(!Util.ReadLine<bool>("watch for changes?",false))
+		return;
 	var watchers=AttachHandlers(new Dictionary<string,string>(){{"log",targetPath}} ).Materialize();//prodWebDeploy,prod2WebDeploy}).ToArray();
 	handlerCount.Dump("Handlers attached");
 	if(handlerCount>0)
@@ -61,16 +63,58 @@ IEnumerable<IDisposable> AttachHandlers(IDictionary<string,string> paths)
 	
 	}
 }
+
 void ReparseLog(string fullPath){
 	
-	IEnumerable<string> lines=fullPath.AsFilePath().ReadAllShared().SplitLines();
+	var lines=fullPath.AsFilePath().ReadAllShared().SplitLines().AsEnumerable();
 
 	lines=lines.Where(a=>a.Contains("192.168.102.158")==false);
 
 	
-	lines.Where(a=>a.Contains("#")==false).Dump();
+	lines=lines.Where(a=>a.Contains("#")==false);
+	var regex= BuildLogParserRegex();
+	var q = from l in lines
+		where l.IsNullOrEmpty()==false
+		where l.Contains("rubyforge")==false
+		let match= regex.Match(l)
+		
+		let year=int.Parse( match.Groups[1].Value)
+		let month= int.Parse(match.Groups[2].Value)
+		let day= int.Parse(match.Groups[3].Value)
+		let hour= int.Parse(match.Groups[4].Value)
+		let minute= int.Parse(match.Groups[5].Value)
+		let second= int.Parse(match.Groups[6].Value)
+		let dateTimeUtc=new DateTime(year,month,day,hour,minute,second, DateTimeKind.Utc)
+		let localTime=dateTimeUtc.ToLocalTime()
+		where localTime>cutOff
+		orderby localTime descending
+		select new { //DateTime=dateTimeRaw,
+		LocalTime=localTime,
+		//dateRaw= year +"_"+month+"_"+day,
+		//HostIp= 		match.Groups[7].Value,
+		Verb=			match.Groups[8].Value,
+		RequestPath=	match.Groups[9].Value,
+		RequestPort=match.Groups[10].Value,
+		StatusCode=		match.Groups[12].Value,
+		RequestIp=		match.Groups[11].Value,
+			
+			Raw= l};
 	
-	
+	q.OrderByDescending(a=>a.LocalTime). Dump();
+	cutOff=DateTime.Now.AddSeconds(-10);
+}
+
+Regex BuildLogParserRegex(){
+
+	var regexDate= "(201[3-9])-([0-1][0-9])-([0-3][0-9])";
+		var regexTime= "([0-2][0-9]):([0-5][0-9]):([0-5][0-9])";
+		var regexIp = "[0-2][0-9][0-9]\\.[0-2][0-9][0-9]\\.[0-2][0-9][0-9]\\.[0-2][0-9][0-9]";
+		var regexVerb = "[A-Z]+";
+		var regexRequestPath = "/[^ ]*";
+		var regexPort = "[1-9][0-9]*";
+		var regexStatusCode= "[0-9]+";
+		 var regex= new Regex(string.Format("{0} {1} ({2}) ({3}) ({4}) - ({5}) - ({2}) - ({6})", regexDate, regexTime, regexIp,regexVerb,regexRequestPath,regexPort,regexStatusCode));
+		 return regex;
 }
 
 void NamedFsChangeHandler(object sender, System.IO.FileSystemEventArgs args,string key)

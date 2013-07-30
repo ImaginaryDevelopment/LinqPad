@@ -2,24 +2,90 @@
 
 void Main()
 {
-var baseDir=@"C:\Microsoft .Net 3.5 Framework\MortgageFlex Products\";
-	var buildDir=baseDir+@"LoanQuest Origination\bin\release\";
-	var localHostDir=baseDir+@"Common Framework\HOST\Mortgageflex.Services.Host.LoanQuest\Bin\";
 	
-	var sandboxDir=@"\\vBCDApp1\c$\MFWebContent\Cases\77427\Mortgageflex.Services.Host.LoanQuest\Bin";
+	var caseNum="77494";
+	var customerDefault="Homestreet";
+	var sandboxDefault= "vBcdApp1";
+	var targetCase= Util.ReadLine("Target case?",caseNum);
+	var customer=Util.ReadLine("Customer?", customerDefault	,new[]{ "Homestreet","Nova"});
+	var baseDir=@"C:\Microsoft .Net 3.5 Framework\";
+	var junctionDir=baseDir+@"MortgageFlex Products\";
+	var buildDir=junctionDir+@"LoanQuest Origination\bin\release\";
+	var localHostDir=junctionDir+@"Common Framework\HOST\Mortgageflex.Services.Host.LoanQuest\Bin\";
+	var sandboxDir=String.Format(@"\\{0}\c$\MFWebContent\Cases\{1}\Mortgageflex.Services.Host.LoanQuest\Bin", sandboxDefault,targetCase);
+	var sandboxCase=sandboxDir.After("Cases\\").Before("\\");
+	var junction= new DirectoryPathWrapper( baseDir).GetJunctions().First();
+	string junctionTargetPath=junction.Item2;
+	string junctionCase=junctionTargetPath.After("_").Dump("junction case");
+	CheckDeployedCase(targetCase,customer,sandboxDefault);
+	var sandboxMatchesJunction= sandboxDir.Contains(junctionCase) || sandboxDir.Contains(targetCase);
+	if(sandboxMatchesJunction)
+	{
 	CompareBin(buildDir,localHostDir,sandboxDir);
+	}	else {
+		new{ SandboxCase= sandboxCase,JunctionCase=junctionCase}.Dump();
+		Util.Highlight("junction not lined up with sandbox, aborting bin compare").Dump();
+	}
 	
 	var appConfigPath= @"C:\Microsoft .Net 3.5 Framework\MORTGAGEFLEX PRODUCTS\LoanQuest Origination\Application\LoanQuest\App.config";
 	//var sandboxAppConfigInfo=System.IO.Directory.EnumerateDirectories( @"\\vBCDApp1\c$\MFWebContent\Cases\77427\LoanQuestNETDeploy\Application Files").Select(d=>new System.IO.DirectoryInfo(d)).OrderByDescending(d=>d.CreationTimeUtc).First();
 	var serverConfigPath=@"C:\Microsoft .Net 3.5 Framework\MORTGAGEFLEX PRODUCTS\Common Framework\Host\Mortgageflex.Services.Host.LoanQuest\Web.config";
-	var sandboxServerConfigPath=@"\\vBCDApp1\c$\MFWebContent\Cases\77427\Mortgageflex.Services.Host.LoanQuest\Web.Config";
+	var sandboxServerConfigPath=String.Format( @"\\{0}\c$\MFWebContent\Cases\{1}\Mortgageflex.Services.Host.LoanQuest\Web.Config",sandboxDefault,caseNum);
 	Environment.MachineName.Dump("local machine name");
 	ShowAppConfig("localHost",appConfigPath);
 	
-	ShowServerConfig("local",serverConfigPath);
-	ShowServerConfig("sandbox",sandboxServerConfigPath);
+	ShowServerConfig("local:"+junctionCase+"("+targetCase+")",serverConfigPath);
 	
+	ShowServerConfig("sandbox:"+sandboxCase,sandboxServerConfigPath);
 	
+}
+
+void CheckDeployedCase(string targetCase,string customer,string sandbox){
+//check deployed case settings
+var targetMachine= sandbox;
+
+
+var deployPath=string.Format("\\\\{0}\\C$\\MFWebContent\\Cases\\{1}\\LoanQuestNETDeploy",targetMachine,targetCase);
+var applicationFullPath = System.IO.Path.Combine(deployPath,"MortgageFlex.LoanQuest.application");
+if(System.IO.File.Exists(applicationFullPath)==false)
+{
+	applicationFullPath.Dump( "could not find file");
+	return;
+}
+var appDoc=XDocument.Load(applicationFullPath);
+var applicationDependency = 
+				from doc in  appDoc.Root.Elements()
+				let ns= appDoc.Root.Name.Namespace
+				let n2= XNamespace.Get("urn:schemas-microsoft-com:asm.v2")
+				where doc.Name==n2+"dependency"
+				from da in doc.Elements(n2+"dependentAssembly")
+				let codebase= da.Attribute("codebase").Value
+				let assemblyIdentity=da.Element(n2+"assemblyIdentity").Attribute("name").Value
+				let nameShouldContain= customer.IsNullOrEmpty()? targetCase: (customer+"-Cust"+targetCase)
+				let name=Util.HighlightIf( assemblyIdentity,a=>a.AfterOrSelf("(").BeforeOrSelf(")").Contains(nameShouldContain)==false)
+				select new{deployPath,codebase,name}; //,doc,da};
+				
+var ad= applicationDependency.First().Dump();
+
+var adQ = from deployment in System.IO.Directory.EnumerateDirectories(System.IO.Path.Combine(deployPath,"Application Files"))
+		let versionEnding= System.IO.Path.GetFileName(deployment).AfterLast("_")
+		orderby ad.codebase.Contains(System.IO.Path.GetFileName(deployment)) descending, int.Parse(versionEnding) descending
+		let configPath=System.IO.Path.Combine(deployment,"Mortgageflex.LoanQuest.exe.config.deploy")
+		let config= XDocument.Load(configPath)
+		let ns= config.Root.Name.Namespace
+		let serviceModeld= (from ssm in config.Root.Elements().Where(ssme=>ssme.Name=="system.serviceModel")
+							from ep in ssm.Element("client").Elements("endpoint")
+							let shouldTargetAddress=string.Format("http://{0}.mortgageflex.com/{1}/Mortgageflex.Services.Host.LoanQuest/WcfPortal.svc",targetMachine,targetCase)
+							let address=Util.HighlightIf( ep.Attribute("address").Value,v=>v.StartsWith(shouldTargetAddress,StringComparison.CurrentCultureIgnoreCase)==false)
+							let deployedAs=Util.HighlightIf(deployment.AfterLast("\\"), v=>ad.codebase.Contains(v,StringComparison.CurrentCultureIgnoreCase))
+							select new{DeployedAs=deployedAs, Address= address,deployment})
+		let appSettings=config.Root.Elements().Where(cre=>cre.Name =="appSettings").Elements().Select(a=>new{Name=a.GetAttribValOrNull("key"),Value=a.GetAttribValOrNull("value")})
+		let logging=config.Root.Elements().Where(lc=>lc.Name=="loggingConfiguration").Elements().Where(lc=>lc.Name=="listeners")
+			.Elements().Where(lc=>lc.Name=="add" && lc.GetAttribValOrNull("toAddress").IsNullOrEmpty()==false).FirstOrDefault()
+		let fromAdd=logging!=null? logging.GetAttribValOrNull("fromAddress"):null
+		let toAdd=logging!=null? logging.GetAttribValOrNull("toAddress"):null
+	select new{versionEnding,serviceModeld,fromAdd,toAdd,EnvironmentName=appSettings.Where(apps=>apps.Name=="EnvironmentName").Select(a=>a.Value).FirstOrDefault()};
+adQ.Take(5).Dump();
 }
 
 void CompareBin(string builtDir, string localhostDir,string sandboxDir){
