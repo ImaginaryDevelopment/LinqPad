@@ -5,7 +5,7 @@ void Main()
 	bool showMoney=Util.ReadLine<bool>("show money?",false);
 	var startHour=8;
 	var startMinutes=0;
-	var lunchMinutes=0;
+	var lunchMinutes=45;
 	
 	
 	var includedLunch=DateTime.Now.Hour>11;
@@ -30,6 +30,7 @@ void Main()
 		Stop60=DateTime.Now.Add( addALunch(TimeSpan.FromMinutes( 60))).ToTime()
 		}.Dump();
 	var days= new[]{ 
+		new TimeInput(new DateTime(2013,7,30,8,0,0),5,20,lunch:45),
 		new TimeInput(new DateTime(2013,7,29,8,45,0),2,15,lunch:0),
 		new TimeInput(new DateTime(2013,7,26,8,45,0),4,55,lunch:10),
 		new TimeInput(new DateTime(2013,7,25,8,45,0),5,15,lunch:75),
