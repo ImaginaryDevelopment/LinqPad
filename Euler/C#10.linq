@@ -12,21 +12,23 @@ top.ToString("C").Dump();
 var sw = new Stopwatch();
 sw.Start();
 	GetPrimes(2,10);
+	sw.Elapsed.Dump();
 	var test=Primes.TakeWhile(a=>a<10).Aggregate((x,y)=> x+y);
+	
 	if(test!=17)
 	{	
 		test.Dump("failed!");
 		return;
 	}
-	sw.Elapsed.Dump();
-	GetPrimes(primeMax,top/4);
-	Primes.TakeWhile(a=>a<top/4).Select(a=>(long)a).Aggregate((x,y)=> x+y).Dump();
-	sw.Elapsed.Dump();
-	sw.Restart();
-	GetPrimes(primeMax,top/2);
-	Primes.TakeWhile(a=>a<top/2).Select(a=>(long)a).Aggregate((x,y)=> x+y).Dump();
 	
-	sw.Elapsed.Dump();
+//	GetPrimes(primeMax,top/4);
+//	Primes.TakeWhile(a=>a<top/4).Select(a=>(long)a).Aggregate((x,y)=> x+y).Dump();
+//	sw.Elapsed.Dump();
+//	sw.Restart();
+//	GetPrimes(primeMax,top/2);
+//	Primes.TakeWhile(a=>a<top/2).Select(a=>(long)a).Aggregate((x,y)=> x+y).Dump();
+	
+	
 	sw.Restart();
 	GetPrimes(primeMax,top);
 	var primes = Primes.TakeWhile(a=>a<top).ToArray();
@@ -65,9 +67,10 @@ bool IsPrime(int val){
 		}
 	}
 	var maxPrime= primeMax;
-	var top= Math.Max(maxPrime+1,nonPrimeMax+1);
-	if(top < val)
-	foreach(var i in (top).To(val)){
+	var start= Math.Max(maxPrime+1,nonPrimeMax+1);
+	var stop = (int)Math.Sqrt(val);
+	if(start < stop)
+	foreach(var i in (start).To(stop)){
 		if(val % i ==0)
 		{
 			if(i>nonPrimeMax)
