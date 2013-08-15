@@ -30,12 +30,13 @@ void Main()
 	var appConfigPath= @"C:\Microsoft .Net 3.5 Framework\MORTGAGEFLEX PRODUCTS\LoanQuest Origination\Application\LoanQuest\App.config";
 	//var sandboxAppConfigInfo=System.IO.Directory.EnumerateDirectories( @"\\vBCDApp1\c$\MFWebContent\Cases\77427\LoanQuestNETDeploy\Application Files").Select(d=>new System.IO.DirectoryInfo(d)).OrderByDescending(d=>d.CreationTimeUtc).First();
 	var serverConfigPath=@"C:\Microsoft .Net 3.5 Framework\MORTGAGEFLEX PRODUCTS\Common Framework\Host\Mortgageflex.Services.Host.LoanQuest\Web.config";
+	var regServerConfigPath=@"C:\Microsoft .Net 3.5 Framework\MORTGAGEFLEX PRODUCTS\Common Framework\Host\Mortgageflex.Services.Host.LoanQuest\Web.config";
 	var sandboxServerConfigPath=String.Format( @"\\{0}\c$\MFWebContent\Cases\{1}\Mortgageflex.Services.Host.LoanQuest\Web.Config",sandboxDefault,targetCase);
 	Environment.MachineName.Dump("local machine name");
 	ShowAppConfig("localHost",appConfigPath);
 	
 	ShowServerConfig("local:"+junctionCase+"("+targetCase+")",serverConfigPath);
-	
+	//ShowServerConfig("localRegistration:"+junctionCase+"("+targetCase+")",
 	ShowServerConfig("sandbox:"+sandboxCase,sandboxServerConfigPath);
 	
 }

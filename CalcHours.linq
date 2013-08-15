@@ -3,12 +3,13 @@
 void Main()
 {
 	bool showMoney=Util.ReadLine<bool>("show money?",false);
-	var startHour=7;
-	var startMinutes=45;
-	var lunchMinutes=60;
-	var targetHours=new TimeSpan(8,30,0).Dump("targetHours");
-	var historyLimit= 8;
-	
+	var startHour=8;
+	var startMinutes=40;
+	var lunchMinutes=30;
+	var targetHours=new TimeSpan(8,0,0).Dump("targetHours");
+	var historyLimit= 20;
+	var checkStartDate=new DateTime(2013,7,26);
+	var checkEndDate= new DateTime(2013,8,10);
 	var includedLunch=DateTime.Now.Hour>11;
 	
 	var startTime=DateTime.Today.AddHours(startHour).AddMinutes(startMinutes);
@@ -23,6 +24,8 @@ void Main()
 	//+(includedLunch?TimeSpan.FromSeconds(0):TimeSpan.FromMinutes(60))
 	
 	var days= new[]{
+	new TimeInput(new DateTime(2013,8,14,8,35,0),7,00,lunch:0),
+	new TimeInput(new DateTime(2013,8,13,7,45,0),5,20,lunch:60),
 	new TimeInput(new DateTime(2013,8,12,8,45,0),4,15,lunch:15),
 	new TimeInput(new DateTime(2013,8,9,8,30,0),4,45,lunch:15),
 	new TimeInput(new DateTime(2013,8,8,8,30,0),4,15,lunch:60),
@@ -69,7 +72,7 @@ void Main()
 			return;
 	//var estimatedNet= 55.0m *(8-.15m);
 	var rate=decimal.Parse( Util.GetPassword("hourly"));
-	var dq= from d in days.Take(historyLimit)
+	var dq= from d in days
 			let stop=d.End
 			let worked=(stop-d.Start) -d.Lunch
 			let workedMinutes=Math.Round(worked.Hours+ worked.Minutes/60.0m,2)
@@ -103,7 +106,11 @@ void Main()
 		}.Dump();
 	//ShowRemaining(includedLunch,timeRemaining);
 	
-	dq.OrderByDescending(d=>d.Date).Dump();
+	dq.Take(historyLimit).OrderByDescending(d=>d.Date).Dump();
+	
+	var paycheck = 
+dq.Where(a=>string.Compare(a.Date,checkStartDate.ToString("yyyy-MM-dd"))>=0 
+&& string.Compare(a.Date,checkEndDate.ToString("yyyy-MM-dd")) <=0).Dump("Paycheck");
 
 	
 	//gross.Dump();

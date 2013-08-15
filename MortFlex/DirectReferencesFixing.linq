@@ -2,8 +2,10 @@
 
 void Main()
 {
-	var csprojPath=@"C:\Microsoft .Net 3.5 Framework\Mortgageflex products\LoanQuest Origination\BusinessLogic\DomainObjects\Mortgageflex.LoanQuest.DomainObjects.csproj";
-	
+	var csprojPath=@"C:\Microsoft .Net 3.5 Framework\Mortgageflex products\Common Framework\Mortgageflex.Scripting\Mortgageflex.Scripting.csproj";
+	csprojPath=Util.ReadLine("csproj?",csprojPath);
+	Debug.Assert(csprojPath.EndsWith(".csproj"),"invalid csproj file");
+	Debug.Assert(System.IO.File.Exists( csprojPath),"could not find csproj file");
 	var commonPath=@"C:\Microsoft .Net 3.5 Framework\Mortgageflex products\Common Framework\bin\debug\";
 	var commonTransportPath=@"C:\Microsoft .Net 3.5 Framework\Mortgageflex products\LoanQuest Transport Server\bin\debug\";
 	var thirdRefPath=@"C:\Microsoft .Net 3.5 Framework\references\";
@@ -62,7 +64,8 @@ void Main()
 				),
 				Old=r};
 			
-			q.Dump();
+			//q.Dump();
+			q.Select(a=>a.Node).Dump();
 		
 }
 
