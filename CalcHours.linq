@@ -3,8 +3,8 @@
 void Main()
 {
 	bool showMoney=false; //Util.ReadLine<bool>("show money?",false);
-	var startHour=9;
-	var startMinutes=0;
+	var startHour=8;
+	var startMinutes=30;
 	var lunchMinutes=0;
 	var targetHours=new TimeSpan(8,0,0).Dump("targetHours");
 	var historyLimit= 8;
