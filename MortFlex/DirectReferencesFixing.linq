@@ -2,13 +2,14 @@
 
 void Main()
 {
-	var csprojPath=@"C:\Microsoft .Net 3.5 Framework\Mortgageflex products\Common Framework\Mortgageflex.Scripting\Mortgageflex.Scripting.csproj";
+	var baseDir= @"C:\Microsoft .Net 3.5 Framework\";
+	var csprojPath=baseDir+@"Mortgageflex products\Common Framework\Services\Mortgageflex.Services.GatewayService\Mortgageflex.Services.GatewayService.csproj";
 	csprojPath=Util.ReadLine("csproj?",csprojPath);
 	Debug.Assert(csprojPath.EndsWith(".csproj"),"invalid csproj file");
 	Debug.Assert(System.IO.File.Exists( csprojPath),"could not find csproj file");
-	var commonPath=@"C:\Microsoft .Net 3.5 Framework\Mortgageflex products\Common Framework\bin\debug\";
-	var commonTransportPath=@"C:\Microsoft .Net 3.5 Framework\Mortgageflex products\LoanQuest Transport Server\bin\debug\";
-	var thirdRefPath=@"C:\Microsoft .Net 3.5 Framework\references\";
+	var commonPath=baseDir+@"Mortgageflex products\Common Framework\bin\debug\";
+	var commonTransportPath=baseDir+@"Mortgageflex products\LoanQuest Transport Server\bin\debug\";
+	var thirdRefPath=baseDir+@"references\";
 	
 	Debug.Assert(System.IO.Directory.Exists(commonPath),"Common Path not found");
 	Debug.Assert(System.IO.Directory.Exists(thirdRefPath),"Third Party references path not found");

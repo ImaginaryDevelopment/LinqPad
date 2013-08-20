@@ -3,7 +3,7 @@
 void Main()
 {
 	bool debug=false;
-	var baseDir=Util.ReadLine("Directory?",@"C:\Microsoft .Net 3.5 Framework\MORTGAGEFLEX PRODUCTS\LOANQUEST ORIGINATION");
+	var baseDir=Util.ReadLine("Directory?",@"C:\Microsoft .Net 3.5 Framework\Mortgageflex products\Common Framework");
 	var projects= System.IO.Directory.GetFiles(baseDir,"*.*proj", SearchOption.AllDirectories);
 	
 	
@@ -19,6 +19,7 @@ void Main()
 		select new{ Path=i, Doc=doc,RootNs=rootns,ProjNode=proj}).ToArray();
 	
 	var commonNonProjectRefs = new string[]{
+	//put these back for pointing at non-common dir stuff
 	//	"Mortgageflex.Core",
 //		"Mortgageflex.Common",
 //		"Mortgageflex.Win",
@@ -38,7 +39,7 @@ void Main()
 		let refs=from r in ig.Nodes().OfType<XElement>()
 			.Where(a=>a.Name.LocalName=="Reference")
 			.Select(a=>new{Include=a.GetAttribValOrNull("Include").BeforeOrSelf(","),Node=a})
-			.Where(a=>a.Include.Contains("Mortgage") && a.Include.Contains("Proxy")==false && a.Include.Contains("Workflow")==false)
+			.Where(a=>(a.Include.Contains("Mortgage") ||a.Include.Contains("Csla") ) && a.Include.Contains("Proxy")==false && a.Include.Contains("Workflow")==false)
 			.Where(a=>commonNonProjectRefs.Contains( a.Include)==false)
 			let csProj=projectsWithGuid.ContainsKey(r.Include)? projectsWithGuid[r.Include].Path:null
 			let csProjGuid=projectsWithGuid.ContainsKey(r.Include)? projectsWithGuid[r.Include].Guid:null
