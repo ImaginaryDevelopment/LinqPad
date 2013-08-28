@@ -3,16 +3,21 @@
 void Main()
 {
 	
-	var caseNum="77494";
-	var customerDefault="Homestreet";
+	var caseNum="76280";
+	var customerDefault="StanPac";
 	var sandboxDefault= "vBcdApp1";
+	var mode = Util.ReadLine("Debug or release?","debug",new[]{"debug","release"};
 	var targetCase= Util.ReadLine("Target case?",caseNum);
 	var customer=Util.ReadLine("Customer?", customerDefault	,new[]{ "Homestreet","Nova"});
 	var baseDir=@"C:\Microsoft .Net 3.5 Framework\";
 	var junctionDir=baseDir+@"MortgageFlex Products\";
-	var buildDir=junctionDir+@"LoanQuest Origination\bin\release\";
-	var localHostDir=junctionDir+@"Common Framework\HOST\Mortgageflex.Services.Host.LoanQuest\Bin\";
-	var sandboxDir=String.Format(@"\\{0}\c$\MFWebContent\Cases\{1}\Mortgageflex.Services.Host.LoanQuest\Bin", sandboxDefault,targetCase);
+	var buildDir=junctionDir+@"LoanQuest Origination\bin\"+mode+"\\";
+	
+	var localhostBase =junctionDir+@"Common Framework\HOST\";
+	var localHostDir=localhostBase+@"Mortgageflex.Services.Host.LoanQuest\Bin\";
+	var sandboxBase = String.Format(@"\\{0}\c$\MFWebContent\Cases\{1}\", sandboxDefault,targetCase);
+	
+	var sandboxDir=String.Format(sandboxBase+@"Mortgageflex.Services.Host.LoanQuest\Bin", sandboxDefault,targetCase);
 	var sandboxCase=sandboxDir.After("Cases\\").Before("\\");
 	var junction= new DirectoryPathWrapper( baseDir).GetJunctions().First();
 	string junctionTargetPath=junction.Item2;
@@ -21,7 +26,8 @@ void Main()
 	var sandboxMatchesJunction= sandboxDir.Contains(junctionCase) || sandboxDir.Contains(targetCase);
 	if(sandboxMatchesJunction)
 	{
-	CompareBin(buildDir,localHostDir,sandboxDir);
+	//CompareBin(buildDir,localHostDir,sandboxDir);
+	CompareBins(buildDir,localhostBase,sandboxBase,@"Mortgageflex.Services.Host.LoanQuest\Bin",@"Mortgageflex.Services.Host.PrintingService\Bin");
 	}	else {
 		new{ SandboxCase= sandboxCase,JunctionCase=junctionCase}.Dump();
 		Util.Highlight("junction not lined up with sandbox, aborting bin compare").Dump();
@@ -89,7 +95,17 @@ var adQ = from deployment in System.IO.Directory.EnumerateDirectories(System.IO.
 adQ.Take(5).Dump();
 }
 
-void CompareBin(string builtDir, string localhostDir,string sandboxDir){
+void CompareBins(string built, string localhostBase, string sandboxBase,params string[] targets){
+	foreach(var t in targets){
+	if(System.IO.Directory.Exists(sandboxBase+t))
+		{
+			
+			CompareBin(built,localhostBase+t,sandboxBase+t,t+":");
+		}
+	}
+}
+
+void CompareBin(string builtDir, string localhostDir,string sandboxDir,string description=null){
 
 var copyFileText=@"	var source= @""{0}"";
 		var dest=@""{1}"";
@@ -106,6 +122,7 @@ var copyFileText=@"	var source= @""{0}"";
 		let hostPath= System.IO.Path.Combine(localhostDir, fileName)
 		where System.IO.File.Exists(hostPath)
 		let sandBoxPath= System.IO.Path.Combine(sandboxDir,fileName)
+		where System.IO.File.Exists(sandBoxPath)
 		let buildInfo=new System.IO.FileInfo(i)
 		let hostInfo= new System.IO.FileInfo(hostPath)
 		let sandBoxInfo = new System.IO.FileInfo(sandBoxPath)
@@ -117,7 +134,7 @@ var copyFileText=@"	var source= @""{0}"";
 		let productVersion= new{Built= versions.Built.ProductVersion, Hosted= versions.Hosted.ProductVersion,SandBox=versions.SandBox.ProductVersion}
 		let deployDifferenceMinutes=Math.Round( Math.Abs(( modification.SandBox-modification.Built).TotalMinutes))
 		where size.Built!= size.LocalHost || size.Built!=size.SandBox || (modification.Built!= modification.SandBox && deployDifferenceMinutes>3) //at least x min apart
-		orderby fileName.StartsWith("Mort") descending,buildInfo.CreationTimeUtc descending, fileName
+		orderby fileName.StartsWith("Mort") descending,buildInfo.LastWriteTimeUtc descending, fileName
 		select new{Item=new Hyperlinq( QueryLanguage.Statements,string.Format(copyFileText,buildInfo.FullName,sandBoxInfo.FullName), buildInfo.Name), //LINQPad.Util.HighlightIf(i,_=>buildInfo.CreationTimeUtc!=hostInfo.CreationTimeUtc || buildInfo.Length!=hostInfo.Length),
 			Modification=Util.HighlightIf(modification,a=>a.Built!=a.SandBox),
 			//ModDifference= deployDifferenceMinutes,
@@ -127,7 +144,7 @@ var copyFileText=@"	var source= @""{0}"";
 			Creation= creation //Util.HighlightIf(creation,a=>a.Built!=a.Hosted),
 			};
 		
-	hostVsBuildQ.Dump("buildVsHostMismatches");
+	hostVsBuildQ.Dump(description+"buildVsHostMismatches");
 }
 // Define other methods and classes here
 void ShowServerConfig(string description, string path){

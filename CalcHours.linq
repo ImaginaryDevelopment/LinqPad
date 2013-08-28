@@ -3,9 +3,9 @@
 void Main()
 {
 	bool showMoney=false; //Util.ReadLine<bool>("show money?",false);
-	var startHour=9;
-	var startMinutes=0;
-	var lunchMinutes=0;
+	var startHour=8;
+	var startMinutes=15;
+	var lunchMinutes=15;
 	var targetHours=new TimeSpan(8,0,0).Dump("targetHours");
 	var historyLimit= 8;
 	var checkStartDate=new DateTime(2013,7,26);
@@ -24,6 +24,12 @@ void Main()
 	//+(includedLunch?TimeSpan.FromSeconds(0):TimeSpan.FromMinutes(60))
 	
 	var days= new[]{
+	new TimeInput(new DateTime(2013,8,28,8,15,0),4,30,lunch:15),
+	new TimeInput(new DateTime(2013,8,27,9,0,0),5,15,lunch:15),
+	new TimeInput(new DateTime(2013,8,26,8,45,0),4,45,lunch:0),
+	new TimeInput(new DateTime(2013,8,23,9,0,0),5,15,lunch:15),
+	new TimeInput(new DateTime(2013,8,22,9,0,0),5,15,lunch:15),
+	new TimeInput(new DateTime(2013,8,21,9,0,0),5,15,lunch:15),
 	new TimeInput(new DateTime(2013,8,20,8,30,0),4,45,lunch:0),
 	new TimeInput(new DateTime(2013,8,19,9,0,0),5,15,lunch:0),
 	new TimeInput(new DateTime(2013,8,16,8,35,0),1,25,lunch:0),
