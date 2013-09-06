@@ -3,10 +3,10 @@
 void Main()
 {
 	
-	var caseNum="76280";
-	var customerDefault="StanPac";
+	var caseNum="77783";
+	var customerDefault="Homestreet";
 	var sandboxDefault= "vBcdApp1";
-	var mode = Util.ReadLine("Debug or release?","debug",new[]{"debug","release"};
+	var mode = Util.ReadLine("Debug or release?","debug",new[]{"debug","release"});
 	var targetCase= Util.ReadLine("Target case?",caseNum);
 	var customer=Util.ReadLine("Customer?", customerDefault	,new[]{ "Homestreet","Nova"});
 	var baseDir=@"C:\Microsoft .Net 3.5 Framework\";
@@ -26,25 +26,35 @@ void Main()
 	var sandboxMatchesJunction= sandboxDir.Contains(junctionCase) || sandboxDir.Contains(targetCase);
 	if(sandboxMatchesJunction)
 	{
-	//CompareBin(buildDir,localHostDir,sandboxDir);
-	CompareBins(buildDir,localhostBase,sandboxBase,@"Mortgageflex.Services.Host.LoanQuest\Bin",@"Mortgageflex.Services.Host.PrintingService\Bin");
+		//CompareBin(buildDir,localHostDir,sandboxDir);
+		CompareBins(buildDir,localhostBase,sandboxBase,@"Mortgageflex.Services.Host.LoanQuest\Bin",@"Mortgageflex.Services.Host.PrintingService\Bin");
 	}	else {
 		new{ SandboxCase= sandboxCase,JunctionCase=junctionCase}.Dump();
 		Util.Highlight("junction not lined up with sandbox, aborting bin compare").Dump();
 	}
 	
-	var appConfigPath= @"C:\Microsoft .Net 3.5 Framework\MORTGAGEFLEX PRODUCTS\LoanQuest Origination\Application\LoanQuest\App.config";
+	var appConfigPath=junctionDir+ @"LoanQuest Origination\Application\LoanQuest\App.config";
 	//var sandboxAppConfigInfo=System.IO.Directory.EnumerateDirectories( @"\\vBCDApp1\c$\MFWebContent\Cases\77427\LoanQuestNETDeploy\Application Files").Select(d=>new System.IO.DirectoryInfo(d)).OrderByDescending(d=>d.CreationTimeUtc).First();
-	var serverConfigPath=@"C:\Microsoft .Net 3.5 Framework\MORTGAGEFLEX PRODUCTS\Common Framework\Host\Mortgageflex.Services.Host.LoanQuest\Web.config";
-	var regServerConfigPath=@"C:\Microsoft .Net 3.5 Framework\MORTGAGEFLEX PRODUCTS\Common Framework\Host\Mortgageflex.Services.Host.LoanQuest\Web.config";
+	var serverConfigPath=junctionDir+@"Common Framework\Host\Mortgageflex.Services.Host.LoanQuest\Web.config";
+	var regServerConfigPath=junctionDir+@"Common Framework\Host\Mortgageflex.Services.Host.LoanQuest\Web.config";
 	var sandboxServerConfigPath=String.Format( @"\\{0}\c$\MFWebContent\Cases\{1}\Mortgageflex.Services.Host.LoanQuest\Web.Config",sandboxDefault,targetCase);
+	var sandboxRegConfigPath = String.Format( @"\\{0}\c$\MFWebContent\Cases\{1}\Mortgageflex.Services.Host.Registration\Web.Config",sandboxDefault,targetCase);
 	Environment.MachineName.Dump("local machine name");
 	ShowAppConfig("localHost",appConfigPath);
 	
-	ShowServerConfig("local:"+junctionCase+"("+targetCase+")",serverConfigPath);
-	//ShowServerConfig("localRegistration:"+junctionCase+"("+targetCase+")",
-	ShowServerConfig("sandbox:"+sandboxCase,sandboxServerConfigPath);
-	
+	var serverMappings = new Dictionary<string,string>(){
+		{"local:"+junctionCase+"("+targetCase+")",serverConfigPath},
+		{"local Registration:"+sandboxCase,regServerConfigPath},
+		{"sandbox:"+sandboxCase,sandboxServerConfigPath},
+		{"sandbox registration:"+sandboxCase,sandboxRegConfigPath}
+	};
+	foreach(var sm in serverMappings){
+		if(System.IO.File.Exists(sm.Value)){
+			ShowServerConfig(sm.Key,sm.Value);
+		} else {
+			sm.Value.Dump("not found, unable to show server config");
+		}
+	}
 }
 
 void CheckDeployedCase(string targetCase,string customer,string sandbox){
@@ -76,6 +86,7 @@ var ad= applicationDependency.First().Dump();
 
 var adQ = from deployment in System.IO.Directory.EnumerateDirectories(System.IO.Path.Combine(deployPath,"Application Files"))
 		let versionEnding= System.IO.Path.GetFileName(deployment).AfterLast("_")
+		let deploymentDt= new System.IO.DirectoryInfo(deployment).CreationTime
 		orderby ad.codebase.Contains(System.IO.Path.GetFileName(deployment)) descending, int.Parse(versionEnding) descending
 		let configPath=System.IO.Path.Combine(deployment,"Mortgageflex.LoanQuest.exe.config.deploy")
 		let config= XDocument.Load(configPath)
@@ -91,7 +102,7 @@ var adQ = from deployment in System.IO.Directory.EnumerateDirectories(System.IO.
 			.Elements().Where(lc=>lc.Name=="add" && lc.GetAttribValOrNull("toAddress").IsNullOrEmpty()==false).FirstOrDefault()
 		let fromAdd=logging!=null? logging.GetAttribValOrNull("fromAddress"):null
 		let toAdd=logging!=null? logging.GetAttribValOrNull("toAddress"):null
-	select new{versionEnding,serviceModeld,fromAdd,toAdd,EnvironmentName=appSettings.Where(apps=>apps.Name=="EnvironmentName").Select(a=>a.Value).FirstOrDefault()};
+	select new{versionEnding,deploymentDt,serviceModeld,fromAdd,toAdd,EnvironmentName=appSettings.Where(apps=>apps.Name=="EnvironmentName").Select(a=>a.Value).FirstOrDefault()};
 adQ.Take(5).Dump();
 }
 
@@ -104,7 +115,18 @@ void CompareBins(string built, string localhostBase, string sandboxBase,params s
 		}
 	}
 }
-
+Assembly TryReflectionLoad(string path){
+	try
+	{	        
+		return System.Reflection.Assembly.ReflectionOnlyLoadFrom(path);
+	}
+	catch (Exception ex)
+	{
+		
+		ex.Dump();
+		return null;
+	}
+}
 void CompareBin(string builtDir, string localhostDir,string sandboxDir,string description=null){
 
 var copyFileText=@"	var source= @""{0}"";
@@ -126,6 +148,8 @@ var copyFileText=@"	var source= @""{0}"";
 		let buildInfo=new System.IO.FileInfo(i)
 		let hostInfo= new System.IO.FileInfo(hostPath)
 		let sandBoxInfo = new System.IO.FileInfo(sandBoxPath)
+		let builtAssInfo = TryReflectionLoad(i)
+		//let runtime= new{ Built= builtAssInfo}
 		let creation=new{ Built= buildInfo.CreationTime,Hosted= hostInfo.CreationTime,SandBox=sandBoxInfo.CreationTime}
 		let modification= new {Built= buildInfo.LastWriteTime,Hosted= hostInfo.LastWriteTime, SandBox= sandBoxInfo.LastWriteTime}
 		let size= new{ Built=buildInfo.Length, LocalHost=hostInfo.Length,SandBox=sandBoxInfo.Length}
@@ -138,6 +162,7 @@ var copyFileText=@"	var source= @""{0}"";
 		select new{Item=new Hyperlinq( QueryLanguage.Statements,string.Format(copyFileText,buildInfo.FullName,sandBoxInfo.FullName), buildInfo.Name), //LINQPad.Util.HighlightIf(i,_=>buildInfo.CreationTimeUtc!=hostInfo.CreationTimeUtc || buildInfo.Length!=hostInfo.Length),
 			Modification=Util.HighlightIf(modification,a=>a.Built!=a.SandBox),
 			//ModDifference= deployDifferenceMinutes,
+			//runtime,
 			FileVersion =Util.HighlightIf(fileVersion ,a=>a.Built!=a.Hosted),
 			ProductVersion= Util.HighlightIf(productVersion ,a=>a.Built!=a.Hosted),
 			Size=Util.HighlightIf(size,a=>a.Built!=a.LocalHost || a.Built!= a.SandBox),

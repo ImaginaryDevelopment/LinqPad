@@ -31,7 +31,7 @@ foreach(var websiteProjectBinPath in targetPaths.Select(a=>a+"bin"))
 		foreach(var toCreate in canRefresh){
 			var targetFilePath = System.IO.Path.Combine(websiteProjectBinPath,toCreate+".refresh").Dump();
 			//new{ targetFilePath, relative,toCreate}.Dump();
-			System.IO.File.WriteAllText(targetFilePath,relative+toCreate);
+			System.IO.File.WriteAllText(targetFilePath,relative.Replace("/",@"\")+toCreate);
 		}
 		var couldNotReferesh = from dll in System.IO.Directory.EnumerateFiles(websiteProjectBinPath,fileType).Select(System.IO.Path.GetFileName)
 			where existingRefreshes.Contains(dll)==false
