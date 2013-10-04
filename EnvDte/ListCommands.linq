@@ -19,5 +19,6 @@ void Main()
 	var commands=dte.Commands.Cast<Command>().Select (c =>new{c.LocalizedName,c.ID,Bindings=((object[]) c.Bindings).Cast<string>().ToArray()} );
 
 	var buildCommands=commands.Where (c => c.LocalizedName.IndexOf("build",StringComparison.CurrentCultureIgnoreCase) >=0).Dump("Build commands");
-	var resharper= commands.Where (c => c.LocalizedName.IndexOf("resharper", StringComparison.CurrentCultureIgnoreCase) >=0 &&  c.Bindings.Any()).Dump("resharper bindings");
+	var resharper= commands.Where (c => c.LocalizedName.IndexOf("resharper", StringComparison.CurrentCultureIgnoreCase) >=0 //&&  c.Bindings.Any()
+	).Dump("resharper bindings");
 }
