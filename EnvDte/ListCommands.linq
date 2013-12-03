@@ -13,7 +13,12 @@
 void Main()
 {
 	//Visual studio must be running
-	var dte = (EnvDTE.DTE)System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE");
+	var dte = (EnvDTE.DTE)System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE.12.0");
+	//var typeDte = Type.GetTypeFromProgID("VisualStudio.DTE.12.0");
+	
+	//typeDte.Dump();
+	
+	
 	dte.FileName.Dump();
 	dte.Solution.FullName.Dump();
 	var commands=dte.Commands.Cast<Command>().Select (c =>new{c.LocalizedName,c.ID,Bindings=((object[]) c.Bindings).Cast<string>().ToArray()} );
