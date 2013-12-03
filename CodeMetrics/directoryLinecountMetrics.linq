@@ -8,7 +8,7 @@ public class CountSettings
 public CountSettings(){
 pathExpanded=path.Contains("%")? System.Environment.ExpandEnvironmentVariables(path):path;
 }
-	readonly string path=Util.ReadLine("SourceDirectory?",@"C:\Microsoft .Net 3.5 Framework");
+	readonly string path=Util.ReadLine("SourceDirectory?",@"C:\Projects\Products");
 	readonly string pathExpanded;
 	
 	readonly IEnumerable<string> patterns=new[]{"*.cs","*.aspx","*.ascx","*.js"};//;*.aspx;*.ascx
@@ -18,12 +18,14 @@ pathExpanded=path.Contains("%")? System.Environment.ExpandEnvironmentVariables(p
 	 || f.StartsWith("jquery-",StringComparison.CurrentCultureIgnoreCase)
 	 || f.StartsWith("AssemblyInfo",StringComparison.CurrentCultureIgnoreCase) 
 	 || f.EndsWith("generated.cs",StringComparison.CurrentCultureIgnoreCase) 
+	 || f.EndsWith("codegen.cs",StringComparison.CurrentCultureIgnoreCase) 
 	 || f.Contains("jquery")
 	 || f.EndsWith(".js")
 	 || f=="T4MVC.cs";
 	 
 	 readonly Func<string,bool> pathExclude=r=>
 	   	   r.Contains("Service References")
+		|| r.Contains("$tf")
 		|| r.Contains(".git")
 		|| r.Contains("Web References") 
 		|| r.Contains("PackageTmp") 
