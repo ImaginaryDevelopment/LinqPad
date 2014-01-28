@@ -3,12 +3,12 @@
 void Main()
 {
 	bool debug=false;
-	var baseDir=Util.ReadLine("Directory?",@"C:\Microsoft .Net 3.5 Framework\Mortgageflex products\LoanQuest Transport Server");
+	var baseDir=Util.ReadLine("Directory?",@"C:\Development\Products\CVS");
 	var projects= System.IO.Directory.GetFiles(baseDir,"*.*proj", SearchOption.AllDirectories);
 	
 	
 	var csProjects=projects.Where(f=>f.EndsWith(".csproj"));//.Take(2);
-	var filteredProjects= csProjects.Where(i=>i.Contains("Test")==false && i.Contains("itext")==false).ToArray();
+	var filteredProjects= csProjects.Where(i=> i.Contains("WordsMatching")==false&& i.Contains("Test")==false && i.Contains("CVS.DataAccess")==false).ToArray();
 	var projectsWithGuid=filteredProjects.ToDictionary(a=>System.IO.Path.GetFileNameWithoutExtension(a).Dump(),a=>new{Path=a,Guid=GetProjectGuid(a).Dump()});
 	
 	var baseQuery=(from i in filteredProjects

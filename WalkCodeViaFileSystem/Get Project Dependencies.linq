@@ -11,12 +11,12 @@ void Main()
 {
 
 	var referenceProjects=new List<DependencyInfo>();
-	var basePath=@"C:\Projects\psh\hpx";
-	var sln=basePath+@"\solutions\AllApps.sln";
+	var basePath=@"C:\Development\Products\CVS";
+	var sln=basePath+@"\CVS.sln";
 	var slnText= System.IO.File.ReadAllText(sln);
 	var projects=GetProjects(basePath).ToArray();
 	var autocomplete=projects.Select (p => System.IO.Path.GetFileNameWithoutExtension(p));
-	var selectedProject=Util.ReadLine("Which project?","PaySpan.PayerPortal.WebSite",autocomplete);
+	var selectedProject=Util.ReadLine("Which project?","CVS.Member.Web4",autocomplete);
 	var selectedProjectFullPath=projects.First (p => p.AfterLastOrSelf("\\").IndexOf(selectedProject,StringComparison.InvariantCultureIgnoreCase)>=0);
 	//adjust for autocomplete casing fail
 	selectedProject=System.IO.Path.GetFileNameWithoutExtension( selectedProjectFullPath);
