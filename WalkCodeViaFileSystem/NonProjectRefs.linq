@@ -8,7 +8,16 @@ void Main()
 	
 	
 	var csProjects=projects.Where(f=>f.EndsWith(".csproj"));//.Take(2);
-	var filteredProjects= csProjects.Where(i=> i.Contains("WordsMatching")==false&& i.Contains("Test")==false && i.Contains("CVS.DataAccess")==false).ToArray();
+	var filteredProjects=projects.Where(f=>f.EndsWith(".csproj") 
+		&& f.Contains("test", StringComparison.InvariantCultureIgnoreCase)==false
+		//not in solution
+		&& f.EndsWith("WordsMatching.csproj")==false 
+		&& f.Contains("LocalizationTool")==false
+		&& f.EndsWith("CVS.Member.RestfulServices.csproj")==false
+		&& f.EndsWith("CVS.Facebook.Web.csproj")==false
+		&& f.EndsWith("CVS.Manage.Web.PanelBuilder.csproj")==false
+		&& f.EndsWith(@"CVS\CVS.Services\CVS.Services.Twitter\CVS.Services.Twitter.csproj")==false
+		);//.Take(2);
 	var projectsWithGuid=filteredProjects.ToDictionary(a=>System.IO.Path.GetFileNameWithoutExtension(a).Dump(),a=>new{Path=a,Guid=GetProjectGuid(a).Dump()});
 	
 	var baseQuery=(from i in filteredProjects
