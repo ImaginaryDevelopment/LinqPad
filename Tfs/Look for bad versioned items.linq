@@ -29,9 +29,12 @@ var myPending= vcs.QueryWorkspaces(null,Environment.UserName,Environment.Machine
 if(myPending==null)
 return;
 
-myPending.GetPendingChanges().Select (p => new{p.ChangeType, p.ServerItem}).Dump(1);
-foreach(var i in badItems){
-	myPending.PendDelete(i.ServerItem).DumpIf(a=>a!=0, "Pend delete error code for "+i.ServerItem);
-}
 
+foreach(var i in badItems){ //will not delete items that are not mapped into your current workspace
+	myPending.PendDelete(i.ServerItem.Dump()).DumpIf(a=>a!=0, "Pend delete error code for "+i.ServerItem);
+}
+var myChanges=myPending.GetPendingChanges().Select (p => new{p.ChangeType, p.ServerItem});
+myChanges
+	//.Where (c => c.ChangeType.Has( ChangeType.Delete) )
+	.Dump(1);
 //http://msdn.microsoft.com/en-us/magazine/jj553516.aspx
