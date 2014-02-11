@@ -3,9 +3,9 @@
 void Main()
 {
 	bool debug=false;
-	var baseDir=Util.ReadLine("Directory?",@"C:\Development\Products\CVS");
+	var baseDir=Util.ReadLine("Directory?",@"C:\Development\");
 	var projects= System.IO.Directory.GetFiles(baseDir,"*.*proj", SearchOption.AllDirectories);
-	
+	var ourCodeNamespaces=new[]{"Oceanside","CVS"};
 	
 	var csProjects=projects.Where(f=>f.EndsWith(".csproj"));//.Take(2);
 	var filteredProjects=projects.Where(f=>f.EndsWith(".csproj") 
@@ -18,7 +18,7 @@ void Main()
 		&& f.EndsWith("CVS.Manage.Web.PanelBuilder.csproj")==false
 		&& f.EndsWith(@"CVS\CVS.Services\CVS.Services.Twitter\CVS.Services.Twitter.csproj")==false
 		);//.Take(2);
-	var projectsWithGuid=filteredProjects.ToDictionary(a=>System.IO.Path.GetFileNameWithoutExtension(a).Dump(),a=>new{Path=a,Guid=GetProjectGuid(a).Dump()});
+	var projectsWithGuid=filteredProjects.ToDictionary(a=>a.Dump(),a=>new{Path=a,Guid=GetProjectGuid(a).Dump()});
 	
 	var baseQuery=(from i in filteredProjects
 		let doc=XDocument.Load(i)
@@ -40,6 +40,7 @@ void Main()
 		  <Project>{1}</Project>
 	      <Name>{2}</Name>
 	</ProjectReference>";
+	
 	var references= from i in baseQuery
 		let baseUri=new Uri(System.IO.Path.GetDirectoryName( i.Path)+"\\")
 		
@@ -48,24 +49,30 @@ void Main()
 		let refs=from r in ig.Nodes().OfType<XElement>()
 			.Where(a=>a.Name.LocalName=="Reference")
 			.Select(a=>new{Include=a.GetAttribValOrNull("Include").BeforeOrSelf(","),Node=a})
-			.Where(a=>(a.Include.Contains("Mortgage") ||a.Include.Contains("Csla") || a.Include.StartsWith("Text") ) && a.Include.Contains("Proxy")==false && a.Include.Contains("Workflow")==false)
-			.Where(a=>commonNonProjectRefs.Contains( a.Include)==false)
-			let csProj=projectsWithGuid.ContainsKey(r.Include)? projectsWithGuid[r.Include].Path:null
-			let csProjGuid=projectsWithGuid.ContainsKey(r.Include)? projectsWithGuid[r.Include].Guid:null
+			.Where(a=>ourCodeNamespaces.Any (cn => a.Include.Contains(cn, StringComparison.InvariantCultureIgnoreCase)))
+			.Where(a=>commonNonProjectRefs.Contains( a.Include)==false).DumpIf(a=>debug && a.Any(),"references of "+i.Path)
+			let kvp= projectsWithGuid.FirstOrDefault (wg =>r.Include.EndsWith(System.IO.Path.GetFileNameWithoutExtension(wg.Key)))
+			let csProj=kvp.Key!=null? projectsWithGuid[kvp.Key].Path:null
+			
+			let csProjGuid=kvp.Key!=null? projectsWithGuid[kvp.Key].Guid:null
 			let refProjUri =csProj.IsNullOrEmpty()?null: new Uri(csProj)
 			let relativePath=csProj.IsNullOrEmpty()?null: Uri.UnescapeDataString(baseUri.MakeRelativeUri(refProjUri).ToString().Replace('/',Path.DirectorySeparatorChar))
 			
 			select new{r.Include,
 				CsProj=csProj,
-
 				ProposedNode=csProjGuid.IsNullOrEmpty()?csProjGuid: String.Format(projectReferenceFormat,relativePath,csProjGuid,r.Include),
 				r.Node
 				}
 		where refs.Any()
 		select new{Project=i.Path,Condition=ig.Attribute("Condition"),Items=refs};
 		if(debug)
+		{
+			
+			references.Where (r => r.Items.Any (i => i.ProposedNode.IsNullOrEmpty()==false)).Dump("needs changed");
 			references //.Take(2)
 				.Dump();
+				
+		}	
 	var failures= new List<object>();
 	foreach(var p in references){
 		p.Project.Dump("Updating:"+p.Items.Count(a=>a.ProposedNode.IsNullOrEmpty()==false));
@@ -81,7 +88,7 @@ void Main()
 			var endText="</Reference>";
 			var altEnd=text.IndexOf(endText,altFound);
 			if(!found && altFound>=0)
-			new{ toFind,Index=altFound,badBlock=text.Substring(altFound,altEnd-altFound+endText.Length)}.Dump("alternate!");
+			new{ toFind,Index=altFound,badBlock=text.Substring(altFound,altEnd-altFound+endText.Length)}.Dump("alternate is "+r.ProposedNode);
 			
 			
 			if(found)
@@ -100,9 +107,10 @@ void Main()
 			}
 		}
 		
-		if(changed)
-		System.IO.File.WriteAllText(p.Project,text);
-		else {
+		if(changed){
+		
+		//System.IO.File.WriteAllText(p.Project.Dump("Changed!"),text);
+		} else {
 		//p.Project.Dump("made no changes");
 		}
 	}

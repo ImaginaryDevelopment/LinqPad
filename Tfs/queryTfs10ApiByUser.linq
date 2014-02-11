@@ -10,6 +10,7 @@
   <Namespace>System.DirectoryServices</Namespace>
 </Query>
 
+//join TFS to Active Directory
 void Main()
 {
 var srcpath=Util.ReadLine("SourcePath?","$/PSA/gtpm");

@@ -12,8 +12,10 @@
 
 var tfs=new Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(new Uri("https://tfs.oceansideten.com"));
 var vcs=tfs.GetService<VersionControlServer>();
+
+vcs.WebServiceLevel.Dump("Tfs info?");
 //vcs.GetItems("*.user", RecursionType.Full).Dump();
-var bads= new[]{"**.user","**.suo","**resharper**","**.DS_Store"};
+var bads= new[]{"**.user","**.suo","**resharper**","**.DS_Store","**/packages/**"};
 var tp=vcs.GetTeamProject("Development");
 //var dev=vcs.GetItem("$/Development");
 var badItems=new List<Item>();

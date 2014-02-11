@@ -1,6 +1,6 @@
 <Query Kind="Statements" />
 
-var configPath=@"\\gtpm-init1-sit\sites$\gtpm-init1\wwwroot\Site\web.config";
+var configPath=@"\\SVRRBIDEV03\c$\inetpub\dev.clearvoiceresearch.com\Web.config";
 
 if(System.IO.File.Exists(configPath)==false)
 {
