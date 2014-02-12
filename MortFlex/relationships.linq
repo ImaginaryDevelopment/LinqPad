@@ -1,14 +1,4 @@
-<Query Kind="Statements">
-  <Connection>
-    <ID>c9b76ea2-c7e7-4a9e-a336-ec4241c6dac5</ID>
-    <Persist>true</Persist>
-    <Server>rpsql2008r2dev</Server>
-    <SqlSecurity>true</SqlSecurity>
-    <Database>NOVA08RLS</Database>
-    <UserName>WINRLS</UserName>
-    <Password>AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAA1WLKs9qc4USFiwcJ5tmkhgAAAAACAAAAAAADZgAAwAAAABAAAACrzDqjgelbVgZelHzxoUCkAAAAAASAAACgAAAAEAAAANaxhqC+PlSpfWS3MUIfULoIAAAAIqZ2P2kltAwUAAAAsZVmuOxGnoVr0wOGD/We2Jqm8Z4=</Password>
-  </Connection>
-</Query>
+<Query Kind="Statements" />
 
 var q= from t in TRACKs
 	join ac in ACCOUNTS on t.ACCOUNT_ID equals ac.ACCOUNT_ID
@@ -44,4 +34,3 @@ q.Dump();
 q.Where(x=> x.hasLoanInvComm!=null).Take(2).Dump("with loaninvcomm");
 q.Where(x=>x.term!=null).Take(2).Dump("with terms");
 q.Where(x=>x.inc.INVESTOR_ID!=null).Dump();
-
