@@ -1,12 +1,4 @@
-<Query Kind="Program">
-  <Connection>
-    <ID>2edfd334-d1c6-4165-aa6e-08dc66127cf6</ID>
-    <Persist>true</Persist>
-    <Server>CRPRCHGA1G4</Server>
-    <Database>TechnicalDebt</Database>
-    <IncludeSystemObjects>true</IncludeSystemObjects>
-  </Connection>
-</Query>
+<Query Kind="Program" />
 
 void Main()
 {

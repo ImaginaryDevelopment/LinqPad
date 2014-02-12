@@ -10,13 +10,14 @@ void Main()
 	foreach(var tree in allTrees)
 	{
 
-	foreach(var result in SearchValues(tree,@"C:\MSOCache",FilterKeys))
-	result.Dump();
-	
+		foreach(var result in SearchValues(tree,@"C:\MSOCache",FilterKeys))
+			result.Dump();
 	
 	"tree finished".Dump(tree.Name);
 	}
 }
+
+
 public static bool FilterKeys(string searchCriteria,RegistryKey key, string valueName)
 {
 
@@ -35,22 +36,22 @@ public static IEnumerable<Microsoft.Win32.RegistryKey> GetTrees()
 {
 	var roots=new []{Registry.ClassesRoot,  Registry.LocalMachine,Registry.CurrentConfig,
 		Registry.CurrentUser, Registry.Users,};
-		return roots;
+	return roots;
 }
 
 IEnumerable<string> GetKeyValues(RegistryKey key)
 {
-string[] valueNames=null;
-try
-{	        
-	valueNames=key.GetValueNames();
-}
-catch (Exception ex)
-{
-	ex.Dump("Failed to get key value names:"+key.Name);
-	
-}
-return valueNames;
+	string[] valueNames=null;
+	try
+	{	        
+		valueNames=key.GetValueNames();
+	}
+	catch (Exception ex)
+	{
+		ex.Dump("Failed to get key value names:"+key.Name);
+		
+	}
+	return valueNames;
 
 }
 
@@ -85,11 +86,11 @@ return null;
 
 public RegistryKey OpenSubKey(RegistryKey key, string subKeyName)
 {
-if(key==null)
-throw new NullReferenceException("key");
-if(subKeyName==null)
-throw new NullReferenceException("subKeyName");
-RegistryKey subKey=null;
+	if(key==null)
+		throw new NullReferenceException("key");
+	if(subKeyName==null)
+		throw new NullReferenceException("subKeyName");
+	RegistryKey subKey=null;
 	try
 	{	        
 		subKey=key.OpenSubKey(subKeyName);
@@ -99,29 +100,29 @@ RegistryKey subKey=null;
 		//failedOpenings.Add(Tuple.Create(key,subKeyName));
 	}
 	catch (IOException iex)
-{
-"about to query a keyName".Dump();
-	iex.Dump("Failed to query keySubkeys:"+key.Name);
-	"keyName queried".Dump();
-}
-return subKey;
+	{
+		"about to query a keyName".Dump();
+		iex.Dump("Failed to query keySubkeys:"+key.Name);
+		"keyName queried".Dump();
+	}
+	return subKey;
 }
 
 public  IEnumerable<Tuple<string,RegistryKey,string>> SearchValues(RegistryKey baseKey,string searchCriteria,Func<string,RegistryKey,string,bool> predicate)
 {
-var results=new List<Tuple<string,RegistryKey,string>>();
-if(searchCriteria==null)
-throw new NullReferenceException("searchCriteria");
-var valueNames=GetKeyValues(baseKey);
-if(valueNames!=null&& valueNames.Any ())
-foreach(var item in valueNames.Where (n => n!=null))
-{
+	var results=new List<Tuple<string,RegistryKey,string>>();
+	if(searchCriteria==null)
+		throw new NullReferenceException("searchCriteria");
+	var valueNames=GetKeyValues(baseKey);
+	if(valueNames!=null&& valueNames.Any ())
+	foreach(var item in valueNames.Where (n => n!=null))
+	{
 
-var result=SearchKeyValue(baseKey,item,searchCriteria,predicate);
+		var result=SearchKeyValue(baseKey,item,searchCriteria,predicate);
 
-if(result!=null)
-results.Add(result);
-}
+		if(result!=null)
+			results.Add(result);
+	}
 
 	string[] subKeyNames=null;
 	try

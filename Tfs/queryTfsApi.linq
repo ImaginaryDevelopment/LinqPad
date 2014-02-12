@@ -10,17 +10,17 @@
 
 void Main()
 {
-	//Uri tfs10Uri= new Uri("http://g-tfs.bankofamerica.com:8080/tfs/GSTAR");//GMS,HALOS,PSA,SAG
-	Uri tfs08Uri= new Uri("https://tfs.oceansideten.com"); //GPD,Gstar/Monitoring,PST
+	
+	var tfs08Uri= new Uri("https://tfs.oceansideten.com"); 
 	
 	
 	using(var tfsPc=new TfsTeamProjectCollection(tfs08Uri))
 	
 	{
-		tfsPc.Dump();
+		//tfsPc.Dump();
 		var vcs=tfsPc.GetService<Microsoft.TeamFoundation.VersionControl.Client.VersionControlServer>();
 		
-		var gtpm=vcs.GetItem("$/development/products/cvs/CVS.Member.Web4");
+		var gtpm=vcs.GetItem("$/development/products/cvs");
 		
 		
 		var pendings=vcs.QueryPendingSets(new[]{gtpm.ServerItem}, RecursionType.Full,null,null);
@@ -32,7 +32,7 @@ void Main()
 				from pc in pq.PendingChanges
 				where pc.FileName.EndsWith(".refresh")==false
 				select new{pq.OwnerName,pq.Computer,pc.ServerItem,pc.CreationDate,pc.FileName};
-				var users=q.Select(u=>u.OwnerName).Distinct().Dump();
+				var users=q.Select(u=>u.OwnerName).Distinct().Dump("users");
 				var joinedQuery= from pc in q
 					join l in lookup(users).ToList() on pc.OwnerName equals l.Key into luLeft
 					from lu in luLeft.DefaultIfEmpty()
@@ -72,14 +72,14 @@ using(var de=new System.DirectoryServices.DirectoryEntry())
 			if(found.ContainsKey(ownerName))
 				yield return  found.First(k=>k.Key==ownerName);
 			var closure=ownerName;
-			if(closure.StartsWith("RBIDEV\\"))
-				closure=closure.Substring("RBIDEV\\".Length);
+			if(closure.Contains("\\"))
+				closure=closure.After("\\");
 			closure.Dump();
 			deSearch.Filter="(&(objectClass=user)(SAMAccountName="+closure+"))";
 			string value;
 			try
 			{	        
-				var user=deSearch.FindOne();	
+				var user=deSearch.FindOne().Dump("usersearchResults");	
 				//user.Dump("user");
 				value= user.Properties["name"][0].ToString();
 				//value.Dump();

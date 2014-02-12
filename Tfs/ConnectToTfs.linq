@@ -12,6 +12,7 @@
 
 var tfs=new Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(new Uri("https://tfs.oceansideten.com"));
 var vcs=tfs.GetService<VersionControlServer>();
+vcs.Dump();
 //vcs.GetItems("*.user", RecursionType.Full).Dump();
 var tp=vcs.GetTeamProject("Development");
 var dev=vcs.GetItem("$/Development");

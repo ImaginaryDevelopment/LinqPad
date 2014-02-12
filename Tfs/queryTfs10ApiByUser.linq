@@ -1,10 +1,10 @@
 <Query Kind="Program">
-  <Reference>D:\Program Files (x86)\Microsoft Visual Studio 10.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.Client.dll</Reference>
+  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 12.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.Build.Client.dll</Reference>
+  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 12.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.Build.Common.dll</Reference>
+  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 12.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.Client.dll</Reference>
+  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 12.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.VersionControl.Client.dll</Reference>
+  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 12.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.VersionControl.Common.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.DirectoryServices.dll</Reference>
-  <Reference>D:\Program Files (x86)\Microsoft Visual Studio 10.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.VersionControl.Common.dll</Reference>
-  <Reference>D:\Program Files (x86)\Microsoft Visual Studio 10.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.VersionControl.Client.dll</Reference>
-  <Reference>D:\Program Files (x86)\Microsoft Visual Studio 10.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.Build.Common.dll</Reference>
-  <Reference>D:\Program Files (x86)\Microsoft Visual Studio 10.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.Build.Client.dll</Reference>
   <Namespace>Microsoft.TeamFoundation.Client</Namespace>
   <Namespace>Microsoft.TeamFoundation.VersionControl.Client</Namespace>
   <Namespace>System.DirectoryServices</Namespace>
@@ -13,12 +13,13 @@
 //join TFS to Active Directory
 void Main()
 {
-var srcpath=Util.ReadLine("SourcePath?","$/PSA/gtpm");
-var onlyLocks=false; //Util.ReadLine<bool>("only locked files?",true);
+var srcpath=Util.ReadLine("SourcePath?","$/Development");
+var onlyLocks=//false; 
+	Util.ReadLine<bool>("only locked files?",true);
 var minDate=DateTime.Today.AddDays(-30);
 
-	Uri tfs10Uri= new Uri("http://g-tfs.bankofamerica.com:8080/tfs/GSTAR");//GMS,HALOS,PSA,SAG
-	//Uri tfs08Uri= new Uri("http://tfs.bankofamerica.com:8080"); //GPD,Gstar/Monitoring,PST
+	Uri tfs10Uri= new Uri("https://tfs.oceansideten.com");
+	
 	
 	var tfsUri=tfs10Uri;
 	using(var tfsPc=new TfsTeamProjectCollection(tfsUri))
@@ -58,11 +59,11 @@ var minDate=DateTime.Today.AddDays(-30);
 			foreach(var u in qw.OrderBy(o=>o.lu.Value.IsNullOrEmpty()?"zz":
 				o.lu.Key.Contains("\\NBD") || o.lu.Key.Contains("\\NBS")?"z"+o.lu.Value:o.lu.Key))
 			{
-			//u.lu.Dump();
+			
 			var sb=new StringBuilder();
 				foreach(var w in u.Workspaces)
 				{
-				sb.AppendLine(String.Format(baseUndo,srcpath,w.Name,u.u,tfsUri.ToString()));
+					sb.AppendLine(String.Format(baseUndo,srcpath,w.Name,u.u,tfsUri.ToString()));
 					
 				}
 				sb.ToString().Dump("undo command(s) for "+ u.lu.Value);
@@ -78,7 +79,8 @@ public static IEnumerable<KeyValuePair<string,string>> lookup(IEnumerable<string
 
 using(var de=new System.DirectoryServices.DirectoryEntry())
 {
-	var customPath="LDAP://DC=corp,DC=bankofamerica,DC=com";
+//CN=Brandon D'Imperio,OU=Development,OU=Oceanside Ten,DC=RBIDev,DC=local
+	var customPath="LDAP://DC=RBIDev,DC=local";
 	de.Path=customPath;
 	de.AuthenticationType= System.DirectoryServices.AuthenticationTypes.Secure;
 	
@@ -88,12 +90,12 @@ using(var de=new System.DirectoryServices.DirectoryEntry())
 		var found=new Dictionary<string,string>( StringComparer.CurrentCultureIgnoreCase);
 		foreach(var ownerName in nbIds)
 			{
-			if(found.ContainsKey(ownerName))
+			if(found.Dump("found").ContainsKey(ownerName.Dump("ownername")))
 			yield return  found.First(k=>k.Key==ownerName);
 			var closure=ownerName;
-			if(closure.StartsWith("CORP\\")) closure=closure.Substring("CORP\\".Length);
+			if(closure.Contains("\\")) closure=closure.After("\\");
 			//closure.Dump();
-			deSearch.Filter="(&(objectClass=user)(SAMAccountName="+closure+"))";
+			deSearch.Filter="(&(objectClass=user)(SAMAccountname="+closure+"))";
 			string value;
 			try
 			{	        
