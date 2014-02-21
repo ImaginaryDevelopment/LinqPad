@@ -2,7 +2,7 @@
 
 void Main()
 {
-	var baseDir= @"C:\Microsoft .Net 3.5 Framework\";
+	var baseDir= System.Environment.GetEnvironmentVariable("devroot");
 	var csprojPath=baseDir+@"Mortgageflex products\Common Framework\Services\Mortgageflex.Services.GatewayService\Mortgageflex.Services.GatewayService.csproj";
 	csprojPath=Util.ReadLine("csproj?",csprojPath);
 	Debug.Assert(csprojPath.EndsWith(".csproj"),"invalid csproj file");

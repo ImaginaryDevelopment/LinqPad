@@ -2,7 +2,7 @@
 
 void Main()
 {
-var path=Util.ReadLine("SourceDirectory?",@"D:\projects\PSA\GTPM\");
+var path=Util.ReadLine("SourceDirectory?",@"%devroot%");
 var patterns=new[]{"*.cs","*.ascx"};//;*.aspx;*.ascx
 
 Func<string,bool> fileExclude=f=>f.ToLower().EndsWith("designer.cs") 
@@ -11,12 +11,17 @@ Func<string,bool> fileExclude=f=>f.ToLower().EndsWith("designer.cs")
 	
 Func<string,bool> pathExclude=r=>r.Contains("Service References")
 	|| r.Contains("Web References")||r.Contains("\\obj\\") ||  r.StartsWith(@"~\Web\PSAT.WebApp\Scripts\Mvc3");
-	
-if(System.IO.Directory.Exists(path)==false)
+	//System.Environment.GetEnvironmentVariable("devroot", EnvironmentVariableTarget.User).Dump();
+foreach(var toReplace in Regex.Matches(path,"%(.*)%").Cast<Match>().Select (m =>new{m.Value,inner= m.Groups[1].Value }))
+	path=path.Replace(toReplace.Value,System.Environment.GetEnvironmentVariable(toReplace.inner.Dump("inner"), EnvironmentVariableTarget.Machine)??System.Environment.GetEnvironmentVariable(toReplace.inner, EnvironmentVariableTarget.Process)?? System.Environment.GetEnvironmentVariable(toReplace.inner, EnvironmentVariableTarget.User));
+
+if(System.IO.Directory.Exists(path)==false){
+	path.Dump("does not exist");
 return;
+}
 
 System.Environment.CurrentDirectory=path;
-
+System.Environment.CurrentDirectory.Dump("cd");
 	var allResults=RecurseLocation(path,".",patterns);
 	var filtered=	allResults.Where (r =>fileExclude(r.FileName)==false 
 	&& pathExclude(r.RelativePath)==false);

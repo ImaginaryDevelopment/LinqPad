@@ -2,7 +2,7 @@
 
 void Main()
 {
-var path=Util.ReadLine("SourceDirectory?",@"%PAYSPANROOT%");
+var path=Util.ReadLine("SourceDirectory?",@"%devroot%");
 var pathExpanded= path.Contains("%")? System.Environment.ExpandEnvironmentVariables(path):path;
 var patterns=new[]{"*.cs","*.aspx","*.ascx","*.js"};//;*.aspx;*.ascx
 

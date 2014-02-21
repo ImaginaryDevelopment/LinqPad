@@ -1,11 +1,4 @@
 <Query Kind="Program">
-  <Connection>
-    <ID>282ab884-278b-4d31-a865-51e85288681f</ID>
-    <Persist>true</Persist>
-    <Server>SVRRBIDEVDB03</Server>
-    <Database>CVS</Database>
-    <IncludeSystemObjects>true</IncludeSystemObjects>
-  </Connection>
 </Query>
 
 void Main()

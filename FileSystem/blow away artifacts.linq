@@ -3,7 +3,10 @@
 void Main()
 {
 	//clean bin and obj files, .suo and .user
-	var targetPath= Util.ReadLine("Target Path to blow away?", "C:\\development");
+	var fileEndings= new [] {".suo","proj.user"};
+	if(Util.ReadLine<bool>("Include vs user files?")==false)
+		fileEndings=Enumerable.Empty<string>().ToArray();
+	var targetPath= Util.ReadLine("Target Path to blow away?", System.Environment.GetEnvironmentVariable("devroot", EnvironmentVariableTarget.User));
 	var doNotDescend = new[]{"$tf"};
 	if(System.IO.Directory.Exists(targetPath)==false){
 		"could not find path:".Dump(targetPath);
@@ -28,11 +31,13 @@ void Main()
 				{
 					//i.Dump("Deleting");
 					System.IO.Directory.Delete(i,true);
+					System.IO.Directory.Exists(i).DumpIf(a=>a,"delete did not error, but still dir exists");
 					deleted.Add(i);
 				}
-			} else if(i.EndsWith(".suo") || i.EndsWith("proj.user")) {
+			} else if(fileEndings.Any ( i.EndsWith)) {
 				//i.Dump("Deleting");
 				System.IO.File.Delete(i);
+				System.IO.File.Exists(i).DumpIf(a=>a,"delete did not error, but still file exists");
 				deleted.Add(i);
 			} 
 		}

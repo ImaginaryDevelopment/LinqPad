@@ -1,5 +1,4 @@
 <Query Kind="Program">
-  <Reference>D:\projects\PSA\Shared Assemblies\HtmlAgilityPack\1.4.0\HtmlAgilityPack.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.Web.dll</Reference>
 </Query>
 
@@ -69,7 +68,7 @@ foreach(var m in items.Select(s=>s.Groups[1].Value).Distinct().OrderBy(s=>s))
 public string DetermineDefaultBasePath()
 {
 var defaultDrive=System.IO.Directory.Exists(@"D:\Projects")? "D":"C";
-	var baseDir=defaultDrive+@":\Projects\PSA\GTPM\Web\PSAT.Webapp\";
+	var baseDir=defaultDrive+@":\Projects\";
 	var defaultPage=@"Pages\ClientProfilewithDeals.aspx";
 	var page=LINQPad.Util.ReadLine("Page location?",baseDir+defaultPage); //
 	return page;

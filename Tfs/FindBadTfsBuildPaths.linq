@@ -2,6 +2,7 @@
 
 void Main()
 {
+
 	var localbase=@"\\Svrrbidevbuild01\c$\";
 	var remotebase=@"C:\";
 	var relative=@"builds\1";

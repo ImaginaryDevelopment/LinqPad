@@ -3,7 +3,7 @@
 void Main()
 {
 	bool debug=false;
-	var baseDir=Util.ReadLine("Directory?",@"C:\Development\");
+	var baseDir=Util.ReadLine("Directory?",System.Environment.GetEnvironmentVariable("devroot"));
 	var projects= System.IO.Directory.GetFiles(baseDir,"*.*proj", SearchOption.AllDirectories);
 	var ourCodeNamespaces=new[]{"Oceanside","CVS"};
 	

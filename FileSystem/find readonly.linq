@@ -2,8 +2,13 @@
 
 void Main()
 {
-	var sitwebDeploy=@"\\crprdnii1i7\sites$\Gtpm-init1\wwwroot\Site\";
-	
+	var servers=System.Environment.GetEnvironmentVariable("servers", EnvironmentVariableTarget.User).Split(';');
+	var sitwebDeploy=@"\\"+servers[0]+@"\c$\inetpub";
+	if(System.IO.Directory.Exists(sitwebDeploy)==false){
+		sitwebDeploy.Dump("doesn't exist, aborting");
+		return;
+	}
+	sitwebDeploy.Dump("searching under");
 	RecurseLocation(sitwebDeploy,string.Empty,new[]{"*.*"}).Where(f=>f.IsReadonly).Dump();
 	
 	

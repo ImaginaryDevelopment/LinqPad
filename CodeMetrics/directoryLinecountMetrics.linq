@@ -7,8 +7,11 @@ public class CountSettings
 {
 public CountSettings(){
 pathExpanded=path.Contains("%")? System.Environment.ExpandEnvironmentVariables(path):path;
+foreach(var toReplace in Regex.Matches(pathExpanded,"%(.*)%").Cast<Match>().Select (m =>new{m.Value,inner= m.Groups[1].Value }))
+	pathExpanded=path.Replace(toReplace.Value,System.Environment.GetEnvironmentVariable(toReplace.inner.Dump("inner"), EnvironmentVariableTarget.Machine)??System.Environment.GetEnvironmentVariable(toReplace.inner, EnvironmentVariableTarget.Process)?? System.Environment.GetEnvironmentVariable(toReplace.inner, EnvironmentVariableTarget.User));
+
 }
-	readonly string path=Util.ReadLine("SourceDirectory?",@"C:\Projects\Products");
+	readonly string path=Util.ReadLine("SourceDirectory?",@"%devroot%");
 	readonly string pathExpanded;
 	
 	readonly IEnumerable<string> patterns=new[]{"*.cs","*.aspx","*.ascx","*.js"};//;*.aspx;*.ascx
@@ -56,7 +59,7 @@ directoriesSearched.Clear();
 	var allResults=RecurseLocation(settings.Path,".",settings.Patterns);
 		allResults.Count().Dump("Total files found");
 		
-		directoriesSearched.Dump("DirectoriesSearched"+ directoriesSearched.Count);
+		directoriesSearched.Dump("DirectoriesSearched "+ directoriesSearched.Count);
 	var filtered=	allResults.Where (r =>settings.FileExclude(r.FileName)==false 
 		&& settings.PathExclude(r.RelativePath)==false);
 	//filtered.GroupBy(f=>f.RelativePath).Dump();

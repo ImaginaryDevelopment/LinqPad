@@ -3,7 +3,6 @@
   <Namespace>System.IO</Namespace>
 </Query>
 
-
 open System
 //open System.Diagnostics
 open System.IO
@@ -40,7 +39,7 @@ type  CountSettings = {
 //instance of above type
 let currentSettings:CountSettings=	{
 	Path=
-		let userPath=Util.ReadLine("SourceDirectory?",@"%PAYSPANROOT%")
+		let userPath=Util.ReadLine("SourceDirectory?",@"%devroot%")
 		let userExpanded= if userPath.Contains('%') then System.Environment.ExpandEnvironmentVariables(userPath) else userPath
 		let exists=System.IO.Directory.Exists(userExpanded)
 		if not(exists) then //guard clause

@@ -3,7 +3,7 @@
 void Main()
 {
 	
-	var srcPath=@"C:\Development\Products\CVS\Member\CVS.Member.Web4\bin";
+	var srcPath=System.Environment.GetEnvironmentVariable("devroot")+@"\Products\CVS\Member\CVS.Member.Web4\bin";
 	var q=from i in System.IO.Directory.EnumerateFiles(srcPath,"*.dll")
 	let fileName=System.IO.Path.GetFileName(i)
 	let buildInfo=new System.IO.FileInfo(i)

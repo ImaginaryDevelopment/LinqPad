@@ -3,13 +3,7 @@
 //create .refresh file for .dlls
 
 var targetPaths = new []{
-@"C:\Microsoft .Net 3.5 Framework\Mortgageflex products\Common Framework\Host\Mortgageflex.Services.Host.Registration\",
-@"C:\Microsoft .Net 3.5 Framework\Mortgageflex products\Common Framework\Host\Mortgageflex.Services.Host.DataLookupService\",
-@"C:\Microsoft .Net 3.5 Framework\Mortgageflex products\Common Framework\Host\Mortgageflex.Services.Host.LoanQuest\",
-@"C:\Microsoft .Net 3.5 Framework\Mortgageflex products\Common Framework\Host\Mortgageflex.Services.Host.ProgramPricing\",
-@"C:\Microsoft .Net 3.5 Framework\Mortgageflex products\Common Framework\Host\Mortgageflex.Services.Host.PrintingService\",
-@"C:\Microsoft .Net 3.5 Framework\Mortgageflex products\Common Framework\Host\Mortgageflex.Services.Host.GatewayService\"
-
+System.Environment.GetEnvironmentVariable("devroot")+@"\Host\"
 };
 Debug.Assert(targetPaths.All(a=>a.EndsWith(@"\")),"Directories must end with closing \\");
 var fileTypes = new []{ "*.dll", "*.pdb"};

@@ -1,10 +1,28 @@
-<Query Kind="Program" />
+<Query Kind="Program">
+  <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Security.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\Accessibility.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Configuration.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Deployment.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Runtime.Serialization.Formatters.Soap.dll</Reference>
+  <Namespace>System.Windows.Forms</Namespace>
+</Query>
 
 const string slnFolderGuid= "2150E333-8FDC-42A3-9474-1A3956D46DE8";
 const string websiteProjectGuid="E24C65DC-7377-472B-9ABA-BC803B73C61A";
 void Main()
 {
-	var slnPath= @"C:\Microsoft .Net 3.5 Framework\Mortgageflex products\AllApps.sln";
+	string slnPath;
+	using(var ofd= new OpenFileDialog()){
+		ofd.InitialDirectory=System.Environment.GetEnvironmentVariable("devroot");
+		ofd.DefaultExt="SolutionFiles(*.sln)|*.sln";
+		if(ofd.ShowDialog()!= DialogResult.OK){
+			"cancelled, aborting".Dump();
+			return;
+		}
+		slnPath=ofd.FileName.Dump("slnpath");
+	}
+	
 	
 	var lines= System.IO.File.ReadAllLines(slnPath).ToArray();
 	var q=  from l in lines.Select((l,i)=>new{ProjectLine=l,Index=i}).Where(l=>l.ProjectLine.StartsWith("Project(") && l.ProjectLine.Contains(slnFolderGuid)==false)

@@ -1,6 +1,6 @@
 <Query Kind="Statements" />
 
-var text=System.IO.File.ReadAllText(@"C:\Projects\trunk\dev-new\service\ConfigurationService\App_Data\config.xsl");
+var text=System.IO.File.ReadAllText(@"C:\Projects\Service\App_Data\config.xsl");
 var regex= Regex.Matches(text,"<xsl:variable name=\"(.*?)\" (?:select=\"(.*?)\")?");
 var sb=new StringBuilder();
 foreach(var m in regex.Cast<Match>())

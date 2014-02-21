@@ -2,8 +2,10 @@
 
 void Main()
 {
-var sitFilePath=@"\\svrrbidev03\c$\inetpub\logs\LogFiles";
-
+var servers= System.Environment.GetEnvironmentVariable("servers", EnvironmentVariableTarget.User).Split(';').Dump();
+var sitFilePath=@"\\"+servers[0]+@"\c$\inetpub\logs\LogFiles";
+//var sitFilePath=@"\\svrrbidev03\c$\inetpub\logs\LogFiles";
+sitFilePath.Dump();
 var hostfilter="cs-host like '%clearvoice%'";
 var referrerFilter="cs(Referer) like '%clearvoice%'";
 var statusFilter="sc-status not in ('304';'200')";

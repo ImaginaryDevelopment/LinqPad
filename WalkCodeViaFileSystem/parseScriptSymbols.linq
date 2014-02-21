@@ -6,8 +6,8 @@
 ///Assumes that you copy/pasted the raw js script element contents from aspx into js.
 void Main()
 {
-//d:\projects\psa\GTPM\Web\PSAT.WebApp\Pages\ClientProfilewithDeals.aspx
-var basePath=@"d:\projects\psa\gtpm\web\psat.webapp\";
+
+var basePath=System.Environment.GetEnvironmentVariable("devroot");
 
 var htmPath=basePath+@"Pages\ClientProfilewithDeals.aspx";
 var jsPath=basePath+@"scripts\page\ClientProfilewithDeals.js";

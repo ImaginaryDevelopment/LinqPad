@@ -1,32 +1,19 @@
 <Query Kind="Statements" />
 
 //bool debug=false;
-var baseDir=Util.ReadLine("Directory?",@"C:\Development\Products");
+var baseDir=Util.ReadLine("Directory?",System.Environment.GetEnvironmentVariable("devroot"));
 var projects= System.IO.Directory.GetFiles(baseDir,"*.*proj", SearchOption.AllDirectories);
 //sample projFile
 //XDocument.Load(projects.Take(1).Single ( )).DumpFormatted(projects.Take(1).Single ());
 
-var nonSlnProjects= new[]{
-	"WordsMatching.csproj",
-	"CVS.Member.RestfulServices.csproj",
-	"CVS.Facebook.Web.csproj",
-	"CVS.Manage.Web.PanelBuilder.csproj",
-	"CVS.Manage.Integration.csproj",
-	"LocalizationTool.csproj",
-	@"CVS.Services.Twitter\CVS.Services.Twitter.csproj",
-	@"Manage\CVS.DataAccess\CVS.DataAccess.csproj",
-	"CVS.Configuration.csproj",
-	"CVS.FraudEngine.csproj",
-	"CVS.Member.Mobile.csproj"
-	};
 var csProjects=projects.Where(f=>f.EndsWith(".csproj") 
 		&& f.Contains("test", StringComparison.InvariantCultureIgnoreCase)==false //don't check testing projects
 		//&& nonSlnProjects.All(non=>f.EndsWith(non)==false)
 		
 		);//.Take(2);
 csProjects.Count ().Dump("checking projects");
-var baseQuery=(from i in csProjects
-	let isSlnProject=!nonSlnProjects.Any (sp => i.EndsWith(sp, StringComparison.InvariantCultureIgnoreCase))
+var baseQuery=(from i in csProjects	
+	let isSlnProject=i.Contains("NonSln")==false && i.Contains("playground")==false
 	let doc=XDocument.Load(i)
 	let rootns=doc.Root.Name.Namespace
 	let proj=doc.Element(rootns+"Project").DumpIf(x=>x==null,i+" has no project element")
@@ -50,7 +37,7 @@ var nonPackageReferences = from i in baseQuery
 	};
 	
 	nonPackageReferences
-		.Where (pr => pr.IsSlnProject && ! pr.Path.Contains("NonSln"))
+		.Where (pr => !pr.IsSlnProject)
 		.GroupBy (pr => pr.Path,pr=>new{pr.Exists,Ref=Util.OnDemand(pr.Value,()=>new{pr.reference,pr.absPath})})	
 		.Dump("nonpackage");
 	

@@ -1,4 +1,12 @@
-<Query Kind="Program" />
+<Query Kind="Program">
+  <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Security.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\Accessibility.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Configuration.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Deployment.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Runtime.Serialization.Formatters.Soap.dll</Reference>
+  <Namespace>System.Windows.Forms</Namespace>
+</Query>
 
 // find out what projects depend on X project
 //regex to find all project references
@@ -11,12 +19,22 @@ void Main()
 {
 
 	var referenceProjects=new List<DependencyInfo>();
-	var basePath=@"C:\Development\Products\CVS";
-	var sln=basePath+@"\CVS.sln";
+	var basePath=System.Environment.GetEnvironmentVariable("devroot");
+	string sln;
+	using(var ofd= new OpenFileDialog()){
+		ofd.InitialDirectory=basePath;
+		ofd.DefaultExt="SolutionFiles(*.sln)|*.sln";
+		if(ofd.ShowDialog()!= DialogResult.OK){
+			"cancelled, aborting".Dump();
+			return;
+		}
+		
+		sln=ofd.FileName.Dump("slnpath");
+	}
 	var slnText= System.IO.File.ReadAllText(sln);
 	var projects=GetProjects(basePath).ToArray();
 	var autocomplete=projects.Select (p => System.IO.Path.GetFileNameWithoutExtension(p));
-	var selectedProject=Util.ReadLine("Which project?","CVS.Member.Web4",autocomplete);
+	var selectedProject=Util.ReadLine("Which project?",string.Empty,autocomplete.Dump("options"));
 	var selectedProjectFullPath=projects.First (p => p.AfterLastOrSelf("\\").IndexOf(selectedProject,StringComparison.InvariantCultureIgnoreCase)>=0);
 	//adjust for autocomplete casing fail
 	selectedProject=System.IO.Path.GetFileNameWithoutExtension( selectedProjectFullPath);

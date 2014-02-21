@@ -19,7 +19,7 @@ void Main()
 	bool useGitUnpushed=true; //unpushed = log --branches --not --remotes --oneline --simplify-by-decoration --decorate
 	bool doObjBinClean=false; //clean out the target directory's obj and bin artifacts folders (recursively)
 	bool doBuild=false;
-	var junctionDirectory=@"C:\Projects\psh\hpx";
+	var junctionDirectory=@"C:\Projects";
 	var junction=new Junction(junctionDirectory);
 	var sln=System.IO.Path.Combine(junctionDirectory,"solutions","allapps.sln");
 	

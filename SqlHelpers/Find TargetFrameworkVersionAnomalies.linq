@@ -1,7 +1,7 @@
 <Query Kind="Statements" />
 
 //bool debug=false;
-var baseDir=Util.ReadLine("Directory?",System.Environment.GetEnvironmentVariable("devroot"));
+var baseDir=Util.ReadLine("Directory?",@"C:\Development\Products\CVS");
 var projects= System.IO.Directory.GetFiles(baseDir,"*.*proj", SearchOption.AllDirectories);
 //sample projFile
 //XDocument.Load(projects.Take(1).Single ( )).DumpFormatted(projects.Take(1).Single ());

@@ -2,7 +2,7 @@
 
 void Main()
 {
-	var edmx= @"C:\Projects\psh\hpx\src\PaySpan.Entities\JobSystem\JobSystem.edmx";
+	var edmx= @"C:\Projects\JobSystem.edmx";
 	var xdoc=System.Xml.Linq.XDocument.Load(edmx);
 	xdoc.Dump();
 	var ns=xdoc.Root.Name.Namespace;
@@ -96,4 +96,3 @@ void ProcessMappings(IEnumerable<XElement> mappings)
 	}
 	processed.Dump();
 }
-

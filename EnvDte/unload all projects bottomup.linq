@@ -1,6 +1,6 @@
 <Query Kind="Program">
-  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 10.0\Common7\IDE\PublicAssemblies\EnvDTE.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.Runtime.InteropServices.dll</Reference>
+  <GACReference>EnvDTE, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
   <NuGetReference>Rx-Main</NuGetReference>
   <NuGetReference>Rx-Main</NuGetReference>
   <NuGetReference>Rx-Main</NuGetReference>
@@ -11,12 +11,12 @@
 
 void Main()
 {
-	var skips=new []{"Payspan.core",};
+	var skips=new string[]{};
 	bool topdown=false;
 	const string SolutionExplorerWindow="{3AE79031-E1BC-11D0-8F78-00A0C9110057}";
 	const string SolutionFolder="{66A26720-8FB5-11D2-AA7E-00C04F688DDE}";
 	//EnvDTE.DTE
-	var dte = (EnvDTE.DTE)System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE");
+	var dte = (EnvDTE.DTE)System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE.12.0");
 	dte.Dump();
 	dte.FileName.Dump();
 	dte.Solution.FullName.Dump();

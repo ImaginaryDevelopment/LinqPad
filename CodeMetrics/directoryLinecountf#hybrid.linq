@@ -3,7 +3,7 @@
   <Namespace>CodeMetrics</Namespace>
 </Query>
 
-let userPath=Util.ReadLine("SourceDirectory?",@"%PAYSPANROOT%")
+let userPath=Util.ReadLine("SourceDirectory?",@"%devroot%")
 let filePatterns=["*.cs";"*.js";"*.aspx";"*.ascx"]
 let fileExclude (a:string):bool = 
     a.EndsWith("designer.cs",StringComparison.CurrentCultureIgnoreCase)||

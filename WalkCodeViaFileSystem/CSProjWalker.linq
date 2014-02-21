@@ -1,7 +1,9 @@
 <Query Kind="Statements" />
 
 //bool debug=false;
-var baseDir=Util.ReadLine("Directory?",@"C:\Development\Products\CVS");
+var baseDir=Util.ReadLine("Directory?",System.Environment.GetEnvironmentVariable("devroot"));
+var referenceFocus="Microsoft.Report";
+var propFocus = "TargetFrameworkVersion";
 var projects= System.IO.Directory.GetFiles(baseDir,"*.*proj", SearchOption.AllDirectories);
 //sample projFile
 //XDocument.Load(projects.Take(1).Single ( )).DumpFormatted(projects.Take(1).Single ());
@@ -16,18 +18,12 @@ var references= from i in baseQuery
 	from ig in i.ProjNode.Elements(i.RootNs+"ItemGroup")
 	
 	select new{Project=i.Path,Condition=ig.Attribute(XNamespace.None+"Condition"),Items= ig.Nodes().Cast<XElement>()};
-	references.Where (r => r.Items.Any (i => i.Attribute(XNamespace.None+"Include").Value.Contains("Hibernate")))
-		.Select (r => new{r.Project,HibernateReferences=r.Items.Where (i => i.Attribute(XNamespace.None+"Include").Value.Contains("Hibernate")).ToArray()})
-		.Dump("hibernate references")
+	references.Where (r => r.Items.Any (i => i.Attribute(XNamespace.None+"Include").Value.Contains(referenceFocus)))
+		.Select (r => new{r.Project,FocusReferences=r.Items.Where (i => i.Attribute(XNamespace.None+"Include").Value.Contains(referenceFocus)).ToArray()})
+		.Dump(referenceFocus+" references")
 		;
-	//references.Dump("references");
-//var runtime=from i in baseQuery
-//	from r in i.ProjNode.Elements(i.RootNs+"runtime")
-//	where r!=null
-//	let abNs=r.GetNamespaceOfPrefix("urn")
-//	let ab=r.Element(abNs+"assemblyBinding")
-//	select new{r,ab};
-//	runtime.Dump();
+	references.Dump("all references",1);
+
 var relational= from i in csProjects
 		let doc=XDocument.Load(i)
 		let proj=doc.Element(doc.Root.Name.Namespace+"Project").DumpIf(x=>x==null,i+" has no project element")
@@ -50,7 +46,7 @@ var flat= from i in csProjects
 		select new{prop.Value,Name=i.AfterLastOrSelf("\\"), Project=i, PropertyGroupCondition=p.Attribute(XNamespace.None+"Condition"),prop.Name.LocalName};
 
 //example
-flat.Where (f => f.LocalName=="TargetFrameworkVersion").Where (f => f.Value.IsNullOrEmpty() || f.Value!="v4.5.1").OrderByDescending (f => f.Value).Dump("specific prop");
+flat.Where (f => f.LocalName==propFocus).OrderByDescending (f => f.Value).Dump(propFocus);
 			
-relational.Dump("relational");
-flat.Dump("all flat");
+relational.Dump("relational",1);
+flat.Dump("all flat",1);

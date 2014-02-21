@@ -2,7 +2,7 @@
   <Connection>
     <ID>282ab884-278b-4d31-a865-51e85288681f</ID>
     <Persist>true</Persist>
-    <Server>SVRRBIDEVDB03</Server>
+    <Server>SVRRBIDEVDB04</Server>
     <Database>CVS</Database>
     <IncludeSystemObjects>true</IncludeSystemObjects>
   </Connection>
@@ -10,7 +10,7 @@
 
 void Main()
 {
-	var path=@"C:\Development\Products\CVS\Common\CVS.DataAccess\";
+	var path=System.Environment.GetEnvironmentVariable("devroot")+@"\Products\CVS\Common\CVS.DataAccess\";
 	var doNotDescend = new[]{"$tf",".git"};
 	var fieldToFind="verified_bit_field";
 	var adoReferences=from i in RecurseDirectory(path,doNotDescend,".cs")
