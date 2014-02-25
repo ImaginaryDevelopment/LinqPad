@@ -24,11 +24,16 @@
 //s.database_id
 
 
- from req in sys.Dm_exec_requests
+ (from req in sys.Dm_exec_requests
  	let sqltext = sys.dm_exec_sql_text(req.Sql_handle)
 	join sl in sys.Dm_exec_sessions on req.Session_id equals sl.Session_id into sLeft
 	from s in sLeft.DefaultIfEmpty()
 	join dl in sys.Databases on s.Database_id equals dl.Database_id into dLeft
 	from d in dLeft.DefaultIfEmpty()
 	where d==null || d.Name=="CVS"
-	select new {req,sqltext,s,d}
+	
+	select new {s.Login_name,s.Original_login_name,s.Program_name,
+		Kill=req.Command=="KILLED/ROLLBACK" || req.Session_id<=50?null: new LINQPad.Hyperlinq( QueryLanguage.SQL, "kill "+req.Session_id,"kill"),
+		sqltext,req,s,d
+		})
+		.ToArray().OrderByDescending (s => s.sqltext.Any ())
