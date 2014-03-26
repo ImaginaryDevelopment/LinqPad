@@ -2,19 +2,29 @@
   <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 12.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.Build.Client.dll</Reference>
   <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 12.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.Client.dll</Reference>
   <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 12.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.VersionControl.Client.dll</Reference>
+  <NuGetReference>Newtonsoft.Json</NuGetReference>
+  <Namespace>Microsoft.TeamFoundation.Build.Client</Namespace>
   <Namespace>Microsoft.TeamFoundation.Client</Namespace>
   <Namespace>Microsoft.TeamFoundation.VersionControl.Client</Namespace>
-  <Namespace>Microsoft.TeamFoundation.Build.Client</Namespace>
+  <Namespace>Newtonsoft.Json</Namespace>
 </Query>
 
+//http://stackoverflow.com/questions/2909416/how-can-i-copy-a-tfs-2010-build-definition
 void Main()
 {
 //unfinished? https://gist.github.com/jstangroome/6747950
 	var tfs=new Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(new Uri("https://tfs.oceansideten.com"));
+	var saveDir= @"C:\Development\Products\CVS\BuildDefinitions";
+	
 	var vcs=tfs.GetService<VersionControlServer>();
-	var tfsbuild = tfs.GetService<IBuildServer>(); //http://stackoverflow.com/questions/2909416/how-can-i-copy-a-tfs-2010-build-definition
-	var collection =tfsbuild.TeamProjectCollection.Dump();
-	var buildToDump=tfsbuild.GetBuildDefinition("Development","Cvr Dev Deploy").Dump();
+	var tp = vcs.GetTeamProjectForServerPath("$/Development");
+	var tfsbuild = tfs.GetService<IBuildServer>(); 
+	var collection =tfsbuild.TeamProjectCollection;
+	var builds=tfsbuild.QueryBuildDefinitions(tp.Name);
+	
+	var buildToSave=Util.ReadLine("Build?","Cvr Dev Deploy",builds.Select (b => b.Name).Dump("options") );
+	
+	var buildToDump=tfsbuild.GetBuildDefinition(tp.Name,buildToSave);
 	
 	var buildDefinition= new {
 			Uri=buildToDump.Uri, Id=buildToDump.Id, TeamProject=buildToDump.TeamProject,
@@ -40,5 +50,12 @@ void Main()
 		};
 	
 	buildDefinition.Dump("serialized?");
-	
+	var json=Newtonsoft.Json.JsonConvert.SerializeObject(buildDefinition,Newtonsoft.Json.Formatting.Indented).Dump();
+	var targetPath = System.IO.Path.Combine(saveDir,buildDefinition.Name+".json");
+	if(System.IO.Directory.Exists(saveDir)==false)
+	{
+		throw new DirectoryNotFoundException(saveDir);
+	}
+	System.IO.File.WriteAllText(targetPath, json);
+	targetPath.Dump("saved to");
 }

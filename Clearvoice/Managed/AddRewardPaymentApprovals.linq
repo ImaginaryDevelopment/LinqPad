@@ -1,4 +1,6 @@
 <Query Kind="Program">
+  <NuGetReference>Newtonsoft.Json</NuGetReference>
+  <Namespace>Newtonsoft.Json</Namespace>
 </Query>
 
 void Main()
