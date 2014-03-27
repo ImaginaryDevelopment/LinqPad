@@ -1,5 +1,6 @@
 <Query Kind="Program" />
 
+//helps create new entries for T4 translation mock
 void Main()
 {
 	var input=Util.ReadLine("Name");
