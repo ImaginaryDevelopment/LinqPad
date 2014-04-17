@@ -6,8 +6,8 @@ select p.project_id,qg.project_quota_id,count(distinct(
 	ui.invitation_source_id 
 	--end
 	)) 
-	from project.project p
-	join project.quota_group qg
+	from project.project p with(nolock)
+	join project.quota_group qg with (nolock)
 		on p.project_id=qg.project_id
 	join [project].[User_Invitation] ui with(nolock) 
 		on qg.project_quota_id = ui.project_quota_id
