@@ -1,5 +1,4 @@
 <Query Kind="Expression">
-  <Connection>
 </Query>
 
 //WorkItemLongTexts.OrderByDescending(w=>w.AddedDate).Take (100)
