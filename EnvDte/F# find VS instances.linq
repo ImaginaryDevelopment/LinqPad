@@ -3,6 +3,8 @@
   <Reference>&lt;CommonProgramFiles&gt;\Microsoft Shared\MSEnv\PublicAssemblies\envdte80.dll</Reference>
 </Query>
 
+//let why =
+//	http://apavan.net/wordpress/?p=41
 open System;
 open System.Runtime.InteropServices;
 open System.Runtime.InteropServices.ComTypes;
@@ -26,30 +28,33 @@ let rot=
 	let mutable result:IRunningObjectTable = null
 	GetRunningObjectTable(nativeint 0, &result) |> ignore
 	result
-rot |> Dump
-
-//GetRunningObjectTable(nativeint 0,  &rot) |> Dump
 
 
 let mutable enumMoniker:IEnumMoniker = null
 rot.EnumRunning (&enumMoniker) 
+
 enumMoniker.Reset() |> ignore
 let mutable fetched = IntPtr.Zero
 let mutable moniker:IMoniker[] = Array.zeroCreate 1 //http://msdn.microsoft.com/en-us/library/dd233214.aspx
-//moniker |> Dump
-//type IEnumMoniker with
-//	member this.toSeq =
-//		seq { while this.Next(1,moniker,fetched) = 0 do yield
-		
+
 let matches = seq {
 	while enumMoniker.Next(1, moniker, fetched) = 0 do
-		let mutable bindCtx:IBindCtx = null
-		CreateBindCtx(nativeint 0, &bindCtx) |> ignore
-		let mutable displayName:string = null
-		moniker.[0].GetDisplayName(bindCtx,null, &displayName)
-		displayName |> Dump
-		if displayName.StartsWith(rotEntry) then
-			yield displayName,bindCtx
+		"looping" |> Dump
+		for i in moniker do
+			"inner looping" |> Dump
+			let mutable bindCtx:IBindCtx = null
+			CreateBindCtx(nativeint 0, &bindCtx) |> ignore
+			let mutable displayName:string = null
+			moniker.[0].GetDisplayName(bindCtx,null, &displayName)
+			displayName |> Dump
+			if displayName.StartsWith(rotEntry) then
+				let mutable comObject = null
+				rot.GetObject(moniker.[0], &comObject) |> ignore
+				let dte =  comObject:?>EnvDTE80.DTE2
+				yield displayName,bindCtx,comObject,dte.FullName, dte
+			else
+				Marshal.ReleaseComObject(bindCtx) |> ignore
+	Marshal.ReleaseComObject(enumMoniker) |> ignore
 }
 matches |> Dump
-
+Marshal.ReleaseComObject(rot) |> ignore
