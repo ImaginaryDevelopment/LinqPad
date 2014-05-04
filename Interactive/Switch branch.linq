@@ -4,13 +4,12 @@
   <Namespace>System.Threading.Tasks</Namespace>
 </Query>
 
-
 void Main()
 {
 	bool useGitUnpushed=true;
 	bool doObjBinClean=true;
 	bool doBuild=true;
-	var junctionDirectory=@"C:\Projects\psh\hpx";
+	var junctionDirectory=@"C:\Projects";
 	
 	var junctionParent=System.IO.Path.GetDirectoryName(junctionDirectory);
 	

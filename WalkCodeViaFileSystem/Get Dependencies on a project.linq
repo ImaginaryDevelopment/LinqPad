@@ -1,4 +1,12 @@
-<Query Kind="Program" />
+<Query Kind="Program">
+  <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Security.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\Accessibility.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Configuration.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Deployment.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Runtime.Serialization.Formatters.Soap.dll</Reference>
+  <Namespace>System.Windows.Forms</Namespace>
+</Query>
 
 // find out what projects depend on X project
 Regex projectReferenceRegex=new Regex("Include=\"(.*\\.csproj)\">", RegexOptions.Compiled);
@@ -9,12 +17,23 @@ void Main()
 {
 
 	var referenceProjects=new List<string>();
-	var basePath=@"C:\Projects\psh\hpx";
-	var sln=basePath+@"\solutions\AllApps.sln";
+	var basePath=System.Environment.GetEnvironmentVariable("devroot");
+	string sln;
+	using(var ofd= new OpenFileDialog()){
+		ofd.InitialDirectory=basePath;
+		ofd.DefaultExt="SolutionFiles(*.sln)|*.sln";
+		if(ofd.ShowDialog()!= DialogResult.OK){
+			"cancelled, aborting".Dump();
+			return;
+		}
+		sln=ofd.FileName.Dump("slnpath");
+	}
+	
+	
 	var slnText= System.IO.File.ReadAllText(sln);
 	var projects=GetProjects(basePath).ToArray();
-	var autocomplete=projects.Select (p => System.IO.Path.GetFileNameWithoutExtension(p));
-	var selectedProject=Util.ReadLine("Which project?","PaySpan.PayerPortal.WebSite",autocomplete);
+	var autocomplete=projects.Select (p => System.IO.Path.GetFileNameWithoutExtension(p)).ToArray();
+	var selectedProject=Util.ReadLine("Which project?",autocomplete[0],autocomplete.Dump("projects"));
 	
 	var selectedProjectFullPath=projects.First (p => p.AfterLastOrSelf("\\").Contains(selectedProject));
 	selectedProjectFullPath.Dump("project path");

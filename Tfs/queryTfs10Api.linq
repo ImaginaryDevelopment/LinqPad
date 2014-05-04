@@ -1,10 +1,10 @@
 <Query Kind="Program">
-  <Reference>D:\Program Files (x86)\Microsoft Visual Studio 10.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.Client.dll</Reference>
+  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 12.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.Build.Client.dll</Reference>
+  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 12.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.Build.Common.dll</Reference>
+  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 12.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.Client.dll</Reference>
+  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 12.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.VersionControl.Client.dll</Reference>
+  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 12.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.VersionControl.Common.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.DirectoryServices.dll</Reference>
-  <Reference>D:\Program Files (x86)\Microsoft Visual Studio 10.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.VersionControl.Common.dll</Reference>
-  <Reference>D:\Program Files (x86)\Microsoft Visual Studio 10.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.VersionControl.Client.dll</Reference>
-  <Reference>D:\Program Files (x86)\Microsoft Visual Studio 10.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.Build.Common.dll</Reference>
-  <Reference>D:\Program Files (x86)\Microsoft Visual Studio 10.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.Build.Client.dll</Reference>
   <Namespace>Microsoft.TeamFoundation.Client</Namespace>
   <Namespace>Microsoft.TeamFoundation.VersionControl.Client</Namespace>
   <Namespace>System.DirectoryServices</Namespace>
@@ -12,12 +12,12 @@
 
 void Main()
 {
-var srcpath=Util.ReadLine("SourcePath?","$/PSA/GTPM/Trunk");
+var srcpath=Util.ReadLine("SourcePath?","$/Development");
 var onlyLocks=false; //Util.ReadLine<bool>("only locked files?",true);
 var minDate=DateTime.Today.AddMonths(-1);
 
-	//Uri tfs10Uri= new Uri("http://g-tfs.bankofamerica.com:8080/tfs/GSTAR");//GMS,HALOS,PSA,SAG
-	Uri tfs08Uri= new Uri("http://tfs.bankofamerica.com:8080"); //GPD,Gstar/Monitoring,PST
+	
+	Uri tfs08Uri= new Uri("https://tfs.oceansideten.com");
 	
 	var tfsUri=tfs08Uri;
 	using(var tfsPc=new TfsTeamProjectCollection(tfsUri))
@@ -69,7 +69,7 @@ public static IEnumerable<KeyValuePair<string,string>> lookup(IEnumerable<string
 
 using(var de=new System.DirectoryServices.DirectoryEntry())
 {
-	var customPath="LDAP://DC=corp,DC=bankofamerica,DC=com";
+	var customPath="LDAP://DC=RBIDev,DC=local";
 	de.Path=customPath;
 	de.AuthenticationType= System.DirectoryServices.AuthenticationTypes.Secure;
 	
@@ -82,7 +82,7 @@ using(var de=new System.DirectoryServices.DirectoryEntry())
 			if(found.ContainsKey(ownerName))
 			yield return  found.First(k=>k.Key==ownerName);
 			var closure=ownerName;
-			if(closure.StartsWith("CORP\\")) closure=closure.Substring("CORP\\".Length);
+			if(closure.Contains("\\")) closure=closure.After("\\");
 			//closure.Dump();
 			deSearch.Filter="(&(objectClass=user)(SAMAccountName="+closure+"))";
 			string value;

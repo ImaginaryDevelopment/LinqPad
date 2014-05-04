@@ -8,8 +8,8 @@
 void Main()
 {
 	//http://aspalliance.com/806_CodeSnip_Get_memory_size_usage_using_WMI_and_NET_20
-	
-	var cpuName=Util.ReadLine("Server?","pqoweb1");
+	var autocompletes=Environment.GetEnvironmentVariable("servers", EnvironmentVariableTarget.User).Split(';').ToArray();
+	var cpuName=Util.ReadLine("Server?",autocompletes[0],autocompletes);
 	cpuName.Dump("querying");
 	//http://msdn.microsoft.com/en-us/library/windows/desktop/aa394372(v=vs.85).aspx
 	var query= "select * FROM Win32_Process WHERE name='w3wp.exe'";
@@ -90,53 +90,53 @@ void Main()
 		items.Dump(q.QueryString.After(" from "));
 	}
 }
-class Win32_Process{
-	string   Caption;
-  string   CommandLine;
-  string   CreationClassName;
-  DateTime CreationDate;
-  string   CSCreationClassName;
-  string   CSName;
-  string   Description;
-  string   ExecutablePath;
-  UInt16   ExecutionState;
-  string   Handle;
-  UInt32   HandleCount;
-  DateTime InstallDate;
-  UInt64   KernelModeTime;
-  UInt32   MaximumWorkingSetSize;
-  UInt32   MinimumWorkingSetSize;
-  string   Name;
-  string   OSCreationClassName;
-  string   OSName;
-  UInt64   OtherOperationCount;
-  UInt64   OtherTransferCount;
-  UInt32   PageFaults;
-  UInt32   PageFileUsage;
-  UInt32   ParentProcessId;
-  UInt32   PeakPageFileUsage;
-  UInt64   PeakVirtualSize;
-  UInt32   PeakWorkingSetSize;
-  UInt32   Priority;
-  UInt64   PrivatePageCount;
-  UInt32   ProcessId;
-  UInt32   QuotaNonPagedPoolUsage;
-  UInt32   QuotaPagedPoolUsage;
-  UInt32   QuotaPeakNonPagedPoolUsage;
-  UInt32   QuotaPeakPagedPoolUsage;
-  UInt64   ReadOperationCount;
-  UInt64   ReadTransferCount;
-  UInt32   SessionId;
-  string   Status;
-  DateTime TerminationDate;
-  UInt32   ThreadCount;
-  UInt64   UserModeTime;
-  UInt64   VirtualSize;
-  string   WindowsVersion;
-  UInt64   WorkingSetSize;
-  UInt64   WriteOperationCount;
-  UInt64   WriteTransferCount;
-}
+//class Win32_Process{
+//	string   Caption;
+//  string   CommandLine;
+//  string   CreationClassName;
+//  DateTime CreationDate;
+//  string   CSCreationClassName;
+//  string   CSName;
+//  string   Description;
+//  string   ExecutablePath;
+//  UInt16   ExecutionState;
+//  string   Handle;
+//  UInt32   HandleCount;
+//  DateTime InstallDate;
+//  UInt64   KernelModeTime;
+//  UInt32   MaximumWorkingSetSize;
+//  UInt32   MinimumWorkingSetSize;
+//  string   Name;
+//  string   OSCreationClassName;
+//  string   OSName;
+//  UInt64   OtherOperationCount;
+//  UInt64   OtherTransferCount;
+//  UInt32   PageFaults;
+//  UInt32   PageFileUsage;
+//  UInt32   ParentProcessId;
+//  UInt32   PeakPageFileUsage;
+//  UInt64   PeakVirtualSize;
+//  UInt32   PeakWorkingSetSize;
+//  UInt32   Priority;
+//  UInt64   PrivatePageCount;
+//  UInt32   ProcessId;
+//  UInt32   QuotaNonPagedPoolUsage;
+//  UInt32   QuotaPagedPoolUsage;
+//  UInt32   QuotaPeakNonPagedPoolUsage;
+//  UInt32   QuotaPeakPagedPoolUsage;
+//  UInt64   ReadOperationCount;
+//  UInt64   ReadTransferCount;
+//  UInt32   SessionId;
+//  string   Status;
+//  DateTime TerminationDate;
+//  UInt32   ThreadCount;
+//  UInt64   UserModeTime;
+//  UInt64   VirtualSize;
+//  string   WindowsVersion;
+//  UInt64   WorkingSetSize;
+//  UInt64   WriteOperationCount;
+//  UInt64   WriteTransferCount;
+//}
 
 string MemoryToUI(UInt32 number)
 {

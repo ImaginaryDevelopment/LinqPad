@@ -1,27 +1,26 @@
 <Query Kind="Program">
+  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 12.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.Client.dll</Reference>
+  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 12.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.VersionControl.Client.dll</Reference>
+  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 12.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.VersionControl.Common.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.DirectoryServices.dll</Reference>
-  <Reference>D:\Program Files (x86)\Microsoft Visual Studio 10.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.Build.Common.dll</Reference>
-  <Reference>D:\Program Files (x86)\Microsoft Visual Studio 10.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.VersionControl.Client.dll</Reference>
-  <Reference>D:\Program Files (x86)\Microsoft Visual Studio 10.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.Client.dll</Reference>
-  <Reference>D:\Program Files (x86)\Microsoft Visual Studio 10.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.VersionControl.Common.dll</Reference>
   <Namespace>Microsoft.TeamFoundation.Client</Namespace>
-  <Namespace>Microsoft.TeamFoundation.VersionControl.Client</Namespace>
   <Namespace>System.DirectoryServices</Namespace>
+  <Namespace>Microsoft.TeamFoundation.VersionControl.Client</Namespace>
 </Query>
 
 void Main()
 {
-	//Uri tfs10Uri= new Uri("http://g-tfs.bankofamerica.com:8080/tfs/GSTAR");//GMS,HALOS,PSA,SAG
-	Uri tfs08Uri= new Uri("http://tfs.bankofamerica.com:8080"); //GPD,Gstar/Monitoring,PST
+	
+	var tfs08Uri= new Uri("https://tfs.oceansideten.com"); 
 	
 	
 	using(var tfsPc=new TfsTeamProjectCollection(tfs08Uri))
 	
 	{
-	
+		//tfsPc.Dump();
 		var vcs=tfsPc.GetService<Microsoft.TeamFoundation.VersionControl.Client.VersionControlServer>();
 		
-		var gtpm=vcs.GetItem("$/PST/Pricing/GTPM");
+		var gtpm=vcs.GetItem("$/development/products/cvs");
 		
 		
 		var pendings=vcs.QueryPendingSets(new[]{gtpm.ServerItem}, RecursionType.Full,null,null);
@@ -33,7 +32,7 @@ void Main()
 				from pc in pq.PendingChanges
 				where pc.FileName.EndsWith(".refresh")==false
 				select new{pq.OwnerName,pq.Computer,pc.ServerItem,pc.CreationDate,pc.FileName};
-				var users=q.Select(u=>u.OwnerName).Distinct();
+				var users=q.Select(u=>u.OwnerName).Distinct().Dump("users");
 				var joinedQuery= from pc in q
 					join l in lookup(users).ToList() on pc.OwnerName equals l.Key into luLeft
 					from lu in luLeft.DefaultIfEmpty()
@@ -60,7 +59,7 @@ public static IEnumerable<KeyValuePair<string,string>> lookup(IEnumerable<string
 
 using(var de=new System.DirectoryServices.DirectoryEntry())
 {
-	var customPath="LDAP://DC=corp,DC=bankofamerica,DC=com";
+	var customPath="LDAP://DC=RBIDev,DC=local";
 	de.Path=customPath;
 	de.AuthenticationType= System.DirectoryServices.AuthenticationTypes.Secure;
 	
@@ -71,20 +70,23 @@ using(var de=new System.DirectoryServices.DirectoryEntry())
 		foreach(var ownerName in nbIds)
 			{
 			if(found.ContainsKey(ownerName))
-			yield return  found.First(k=>k.Key==ownerName);
+				yield return  found.First(k=>k.Key==ownerName);
 			var closure=ownerName;
-			if(closure.StartsWith("CORP\\")) closure=closure.Substring("CORP\\".Length);
-			//closure.Dump();
+			if(closure.Contains("\\"))
+				closure=closure.After("\\");
+			closure.Dump();
 			deSearch.Filter="(&(objectClass=user)(SAMAccountName="+closure+"))";
 			string value;
 			try
 			{	        
-				var me=deSearch.FindOne();	
-				value= me.Properties["name"][0].ToString();
+				var user=deSearch.FindOne().Dump("usersearchResults");	
+				//user.Dump("user");
+				value= user.Properties["name"][0].ToString();
 				//value.Dump();
 			}
-			catch(Exception)
+			catch(Exception ex)
 			{
+			ex.Dump();
 				value= null;
 			}
 			 found.Add(ownerName,value);

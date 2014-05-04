@@ -2,11 +2,12 @@
 
 void Main()
 {
-var sitFilePath=@"\\gtpm-init1-sit\sites$\Gtpm-init1\logs\W3SVC1803151772\";
-var tfs2010SharepointPath=@"\\g-tfs\c$\Program Files\Common Files\Microsoft Shared\Web Server Extensions\12\LOGS\";
-
-var hostfilter="cs-host like '%gtpm-init1-sit%'";
-var referrerFilter="cs(Referer) like '%gtpm%'";
+var servers= System.Environment.GetEnvironmentVariable("servers", EnvironmentVariableTarget.User).Split(';').Dump();
+var sitFilePath=@"\\"+servers[0]+@"\c$\inetpub\logs\LogFiles";
+//var sitFilePath=@"\\svrrbidev03\c$\inetpub\logs\LogFiles";
+sitFilePath.Dump();
+var hostfilter="cs-host like '%clearvoice%'";
+var referrerFilter="cs(Referer) like '%clearvoice%'";
 var statusFilter="sc-status not in ('304';'200')";
 
 
@@ -27,7 +28,7 @@ arguments.Dump("arguments");
 //var arguments=SetLogParserArguments(outputType,limit,null,null,null,false);
 
 	var logs=from f in System.IO.Directory
-			.GetFiles(currentPath,"*.log")
+			.GetFiles(currentPath,"*.log", SearchOption.AllDirectories)
 			let info=new System.IO.FileInfo(f)
 			orderby info.LastWriteTimeUtc descending
 			select f;
@@ -222,11 +223,11 @@ public enum ParserOutputType
 	CSV, TSV, XML, DATAGRID, CHART, SYSLOG,NEUROVIEW, NAT, W3C, IIS, SQL, TPL, NULL=0
 	
 }
-public struct StreamOuts
-{
-public string Errors{get;set;}
-public string Output{get;set;}
-}
+//public struct StreamOuts
+//{
+//public string Errors{get;set;}
+//public string Output{get;set;}
+//}
 
 
 public static class StringExtensions
@@ -258,21 +259,9 @@ public static bool HasValue(this string text)
 	return string.IsNullOrEmpty(text)==false;
 	}
 	
-	public static string[] SplitLines(this string text)
-	{
-		return text.Split(new string[] {"\r\n","\n"}, StringSplitOptions.None);
-	}
 	
-	public static string StringAfter(this string text, string delimiter)
-	{
-		return text.Substring( text.IndexOf(delimiter)+delimiter.Length);
-	}
-	public static string StringAfterOrSelf(this string text, string delimiter)
-	{
-	if(text.Contains(delimiter)==false)
-	return text;
-	return text.StringAfter(delimiter);
-	}
+	
+	
 	
 	
 }
@@ -357,17 +346,17 @@ where T:struct
 //			select (T)v;
 //}
 // Define other methods and classes here
-public static StreamOuts RunProcessRedirected(this Process ps, string arguments)
-		{
-			ps.StartInfo.Arguments=arguments;
-		ps.Start();
-		var output=ps.StandardOutput.ReadtoEndAndDispose();
-		var errors=ps.StandardError.ReadtoEndAndDispose();
-		
-		ps.WaitForExit(2000);
-		if(errors.Length>0) 	Util.Highlight(errors).Dump("errors");
-		return new StreamOuts(){ Errors=errors, Output=output };
-		}
+//public static StreamOuts RunProcessRedirected(this Process ps, string arguments)
+//		{
+//			ps.StartInfo.Arguments=arguments;
+//		ps.Start();
+//		var output=ps.StandardOutput.ReadtoEndAndDispose();
+//		var errors=ps.StandardError.ReadtoEndAndDispose();
+//		
+//		ps.WaitForExit(2000);
+//		if(errors.Length>0) 	Util.Highlight(errors).Dump("errors");
+//		return new StreamOuts(){ Errors=errors, Output=output };
+//		}
 		
 		
 	public static string ReadtoEndAndDispose(this StreamReader reader)

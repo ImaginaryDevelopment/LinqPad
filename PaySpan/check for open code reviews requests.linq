@@ -1,10 +1,4 @@
 <Query Kind="Program">
-  <Connection>
-    <ID>e7fc9cc3-407b-41ff-b1c6-74516cabda7c</ID>
-    <Persist>true</Persist>
-    <Server>jaxpdrbe1</Server>
-    <Database>PaySpanHealth_Jobsystem</Database>
-  </Connection>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
   <NuGetReference>Rx-Main</NuGetReference>
 </Query>

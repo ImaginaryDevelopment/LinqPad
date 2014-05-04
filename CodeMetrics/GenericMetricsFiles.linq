@@ -2,8 +2,25 @@
   <Reference>&lt;RuntimeDirectory&gt;\System.Threading.dll</Reference>
 </Query>
 
-var path=@"C:\Program Files (x86)\Microsoft Visual Studio 10.0\Team Tools\Static Analysis Tools\FxCop\Metrics.exe";
-var basePath=Util.ReadLine("Start Where?",@"C:\Projects\trunk\dev-new\src");
+var path=@"C:\Program Files (x86)\Microsoft Visual Studio 12.0\Team Tools\Static Analysis Tools\FxCop\Metrics.exe";
+if(System.IO.Directory.Exists(System.IO.Path.GetDirectoryName(path))==false){
+	System.IO.Path.GetDirectoryName(path).Dump("not found, aborting");
+	return;	
+}
+if(System.IO.File.Exists(path)==false){
+	path.Dump("not found, aborting");
+	return;
+}
+var basePath=Util.ReadLine("Start Where?",@"%devroot%");
+if(basePath.Contains("%"))
+	basePath=System.Environment.ExpandEnvironmentVariables(basePath);
+	//if the variables don't expand take the more in depth approach
+if(basePath.Contains("%"))
+{
+	foreach(var toReplace in Regex.Matches(basePath,"%(.*)%").Cast<Match>().Select (m =>new{m.Value,inner= m.Groups[1].Value }))
+	basePath=basePath.Replace(toReplace.Value,System.Environment.GetEnvironmentVariable(toReplace.inner.Dump("inner"), EnvironmentVariableTarget.Machine)??System.Environment.GetEnvironmentVariable(toReplace.inner, EnvironmentVariableTarget.Process)?? System.Environment.GetEnvironmentVariable(toReplace.inner, EnvironmentVariableTarget.User));
+
+}
 var startInfo=new ProcessStartInfo(path){ CreateNoWindow=true, UseShellExecute=false,RedirectStandardError=true, RedirectStandardOutput=true};
 var outputPath=System.IO.Path.Combine(System.Environment.GetFolderPath( System.Environment.SpecialFolder.Desktop),
 	"measures");

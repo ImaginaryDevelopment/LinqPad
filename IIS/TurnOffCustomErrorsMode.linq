@@ -1,7 +1,11 @@
 <Query Kind="Statements" />
 
-var configPath=@"\\gtpm-init1-sit\sites$\gtpm-init1\wwwroot\Site\web.config";
-
+var servers=System.Environment.GetEnvironmentVariable("servers", EnvironmentVariableTarget.User).Split(';');
+var configBase=@"\\"+servers[0]+@"\c$\inetpub\";
+var directories=System.IO.Directory.GetDirectories(configBase).Where (d =>System.IO.File.Exists( System.IO.Path.Combine(d,"web.config"))).Select (d => d.AfterLastOrSelf("\\")).ToArray();
+var site=Util.ReadLine("site?",string.Empty,directories.Dump("site options"));
+var configPath=configBase+site+@"\Web.config";
+configPath.Dump("adjusting at");
 if(System.IO.File.Exists(configPath)==false)
 {
 	"Failed to find".Dump(configPath);

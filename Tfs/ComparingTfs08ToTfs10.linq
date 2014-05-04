@@ -1,12 +1,4 @@
-<Query Kind="Program">
-  <Connection>
-    <ID>2edfd334-d1c6-4165-aa6e-08dc66127cf6</ID>
-    <Persist>true</Persist>
-    <Server>CRPRCHGA1G4</Server>
-    <Database>TechnicalDebt</Database>
-    <IncludeSystemObjects>true</IncludeSystemObjects>
-  </Connection>
-</Query>
+<Query Kind="Program" />
 
 void Main()
 {
@@ -14,10 +6,10 @@ void Main()
 	var storage=new Dictionary<string,Tuple<ChangeBreadcrumb,ChangeBreadcrumb>>();
 	
 	var mappings=new List<Tuple<string,string>>(){
-		Tuple.Create(@"$/PST/Pricing/GTPM/Src/Releases/Release 1.1/PSAT.Web","$/PSA/GTPM/Trunk/Web/PSAT.Web"),
+		Tuple.Create(@"$/PST","$/PSA"),
 		};
 	var tfs08="http://tfs.bankofamerica.com:8080/";
-	var tfs10="http://g-tfs.bankofamerica.com:8080/tfs/gstar";
+	var tfs10="http://g-tfs.bankofamerica.com:8080/tfs/";
 	
 	foreach(var mapping in mappings)
 	{

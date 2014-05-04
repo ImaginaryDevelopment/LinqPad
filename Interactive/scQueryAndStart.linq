@@ -8,7 +8,8 @@ var stop="stop";
 var query="query";
 var options= new[]{start,stop,query};
 var current=Util.ReadLine("Desired action?",query,options);
-	var server=Util.ReadLine("Server?","jaxpdoextream",Enum.GetNames(typeof(MyNetwork)));
+var servers=System.Environment.GetEnvironmentVariable("servers", EnvironmentVariableTarget.User).Split(';');
+	var server=Util.ReadLine("Server?",servers[0],servers);
 	
 	var psi=new ProcessStartInfo("sc"){ RedirectStandardError=true, RedirectStandardOutput=true //,RedirectStandardInput=true 
 		, UseShellExecute=false,ErrorDialog=false, CreateNoWindow=true} ; // WinMgmt or WMSvc?

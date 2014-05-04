@@ -11,7 +11,8 @@
   <Namespace>Microsoft.Web.Administration</Namespace>
 </Query>
 
-var server= Util.ReadLine("Server?","vbcdapp1");
+var servers=System.Environment.GetEnvironmentVariable("servers", EnvironmentVariableTarget.User).Split(';');
+var server= Util.ReadLine("Server?",servers[0],servers);
 var iis=ServerManager.OpenRemote(server);
 
 iis.Sites.SelectMany (ap =>

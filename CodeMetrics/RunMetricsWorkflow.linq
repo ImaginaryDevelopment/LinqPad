@@ -9,7 +9,7 @@ var metricsExePath=System.IO.Path.Combine(Environment.GetFolderPath(Environment.
 if(System.IO.File.Exists(metricsExePath)==false)
 metricsExePath=System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), metricsRelativePath);
 
-var metricsXmlBase=@"c:\users\nbkif5u\desktop\il\";
+var metricsXmlBase=@"c:\users\"+Environment.UserName.AfterOrSelf("\\")+@"\desktop\il\";
 var technicalDebtTaskLibPath=@"C:\Projects\CASE\HALOS\MSBuild.Tasks\BBuildTasks\TechnicalDebtTaskLib\TechnicalDebtTaskLib\bin\Debug\TechnicalDebtTaskLib.dll";
 var publishedTdPath=@"\\b002481060ae4\TFS_Build_Drop\TechnicalDebtTaskLib\TechnicalDebtTaskLib\TechnicalDebtTaskLib_20110419.8\BuildProcessTemplate.dll";
 var item=publishedTdPath;

@@ -2,9 +2,9 @@
 
 void Main()
 {
-	var mainPath=@"C:\Microsoft .Net 3.5 Framework\Mortgageflex products\LoanQuest Origination\bin\debug";
-	var homestreetPath=@"C:\Microsoft .Net 3.5 Framework\MORTGAGEFLEX PRODUCTS_76700\LOANQUEST ORIGINATION\bin\release";
-	var q=from i in System.IO.Directory.EnumerateFiles(homestreetPath,"*.dll")
+	
+	var srcPath=System.Environment.GetEnvironmentVariable("devroot")+@"\Products\CVS\Member\CVS.Member.Web4\bin";
+	var q=from i in System.IO.Directory.EnumerateFiles(srcPath,"*.dll")
 	let fileName=System.IO.Path.GetFileName(i)
 	let buildInfo=new System.IO.FileInfo(i)
 	let builtAssInfo = TryReflectionLoad(i)
@@ -20,7 +20,7 @@ void Main()
 	let versions= FileVersionInfo.GetVersionInfo(i)
 	let fileVersion = versions.FileVersion
 	let productVersion= versions.ProductVersion
-	orderby fileName.StartsWith("Mort") descending,buildInfo.LastWriteTimeUtc descending, fileName
+	orderby fileName.StartsWith("Oceanside") descending,buildInfo.LastWriteTimeUtc descending, fileName
 	select new{Item=buildInfo.Name, //LINQPad.Util.HighlightIf(i,_=>buildInfo.CreationTimeUtc!=hostInfo.CreationTimeUtc || buildInfo.Length!=hostInfo.Length),
 				Modification=modification,
 				//ModDifference= deployDifferenceMinutes,

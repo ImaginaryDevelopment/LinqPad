@@ -7,21 +7,22 @@ void Main()
 	
 	var selected=Util.ReadLine("service?","compmgmt",options);
 	
-	var computerNames=new HashSet<string>(){ "Test"};
+	Process.Start("mmc",selected);
 }
 IDictionary<string,Computers> aliasDictionary= new Dictionary<string,Computers>(){ 
-	{"softwareDrive",Computers.b0024811fefeb}
-	,{"Nbkif5uDesktop",Computers.F0024811FF013}
-	,{"Nbkif5uLaptop",Computers.e68b599fb81ae}
-	,{"GtpmDit", Computers.gtpm_init1_dit}
+	{"buildServer",Computers.svrrbidevbuild01}
+	,{"tfs",Computers.svrrbidevsvc01}
+	,{"laptop",Computers.osxe654014f8ty1}
 	};
 // Define other methods and classes here
 public enum Computers
 {
-	//software drive
-	b0024811fefeb,
-	F0024811FF013,
-	e68b599fb81ae,
-	[System.ComponentModel.Description("gtpm-init1-dit")]
-	gtpm_init1_dit,
+	//build server
+	svrrbidevbuild01,
+	//tfs server
+	svrrbidevsvc01,
+	[System.ComponentModel.Description("Ray's laptop")]
+	OSXXPS264HTQ1,
+	//[System.ComponentModel.Description("gtpm-init1-dit")]
+	osxe654014f8ty1,
 }

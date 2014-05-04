@@ -1,7 +1,7 @@
 <Query Kind="Statements" />
 
 bool debug=false;
-var baseDir=Util.ReadLine("Directory?",@"C:\Microsoft .Net 3.5 Framework\MORTGAGEFLEX PRODUCTS");
+var baseDir=Util.ReadLine("Directory?",System.Environment.GetEnvironmentVariable("devroot"));
 var projects= System.IO.Directory.GetFiles(baseDir,"*.*proj", SearchOption.AllDirectories);
 //sample projFile
 //XDocument.Load(projects.Take(1).Single ( )).DumpFormatted(projects.Take(1).Single ());
