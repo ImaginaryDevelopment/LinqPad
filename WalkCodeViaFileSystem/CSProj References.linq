@@ -41,9 +41,9 @@ var nonPackageReferences = from i in baseQuery
 		.GroupBy (pr => pr.Path,pr=>new{pr.Exists,Ref=Util.OnDemand(pr.Value,()=>new{pr.reference,pr.absPath})})	
 		.Dump("nonpackage");
 	
-	nonPackageReferences.Where (pr => pr.IsSlnProject==false)
-		.GroupBy (pr => pr.Path,pr=>new{ pr.Value,pr.reference,pr.Exists})	
-		.Dump("nonSlnNonPackage");
+//	nonPackageReferences.Where (pr => pr.IsSlnProject==false)
+//		.GroupBy (pr => pr.Path,pr=>new{ pr.Value,pr.reference,pr.Exists})	
+//		.Dump("nonSlnNonPackage");
 	
 	
 var references= from i in baseQuery
@@ -55,4 +55,4 @@ references.Where (r => r.Items.Any (i => i.Attribute(XNamespace.None+"Include").
 		.Select (r => new{r.Project,HibernateReferences=r.Items.Where (i => i.Attribute(XNamespace.None+"Include").Value.Contains("log4net")).ToArray()})
 		//.Dump("log4net references")
 		;
-	//references.Dump("references");
+	references.Dump("references");
