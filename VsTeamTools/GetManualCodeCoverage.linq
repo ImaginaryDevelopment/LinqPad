@@ -10,7 +10,9 @@ module helpers =
 	type applicationHostSite with
 		member this.Uri = 
 			LINQPad.Hyperlinq(this.Protocol + "://" + this.Binding.Split([|":"|],StringSplitOptions.None).Skip(1).Reverse().Delimit(":") )
-
+		member this.Directory = match this.Physical with
+								| x when System.IO.Directory.Exists(x) -> LINQPad.Hyperlinq(x)
+								| _ -> null
 	let ns s= XNamespace.None+s
 	type System.Xml.Linq.XElement with
 		member el.Element(s:string) = el.Element(ns s)
