@@ -5,6 +5,55 @@
 // 2010 version2: http://scissortools.wordpress.com/2011/12/03/code-coverage-test-in-visual-studio-2010-things-to-be-aware-of/
 let vsInstrPath = """C:\Program Files (x86)\Microsoft Visual Studio 12.0\Team Tools\Performance Tools\vsinstr.exe"""
 let vsPerfCmdPath = """C:\Program Files (x86)\Microsoft Visual Studio 12.0\Team Tools\Performance Tools\VSPerfCmd.exe"""
+module helpers =
+	type applicationHostSite = { Name:string; Path:string; Physical:string; Protocol: string; Pool:string;Binding:string; Element:XElement}
+	type applicationHostSite with
+		member this.Uri = 
+			LINQPad.Hyperlinq(this.Protocol + "://" + this.Binding.Split([|":"|],StringSplitOptions.None).Skip(1).Reverse().Delimit(":") )
+
+	let ns s= XNamespace.None+s
+	type System.Xml.Linq.XElement with
+		member el.Element(s:string) = el.Element(ns s)
+		member el.Elements(s:string) = el.Elements(ns s)
+		member el.GetAttribValOpt(s:string) = match el.Attribute(ns s) with
+												| a when a <> null -> Some(a.Value)
+												| _ -> None
+		member el.GetAttribValOrNull(s:string) = match el.Attribute(ns s) with
+												| a when a <> null -> a.Value
+												| _ -> null
+open helpers	
+let appHostConfigPath = Environment.ExpandEnvironmentVariables("""%homedrive%%homepath%\Documents\IISExpress\config\applicationhost.config""")
+let xDoc = XDocument.Load(appHostConfigPath)
+//sitesFile.Document.Root.Elements("system.applicationHost") |> Dump
+let sites = xDoc.Root
+											.Element("system.applicationHost")
+											.Element("sites")
+											.Elements("site") |>
+											Seq.filter (fun e->
+												let app = e.Element("application")
+												app <> null &&
+												app.Element("virtualDirectory") <> null)
+											|> Seq.map (fun e-> 
+												let app = e.Element("application")
+												let virt = app.Element("virtualDirectory")
+												let binding = e.Element("bindings").Element("binding")
+												{
+													Name =e.GetAttribValOrNull("name");
+													Path= virt.GetAttribValOrNull("path");
+													Physical=virt.GetAttribValOrNull("physicalPath");
+													Element= e;
+													Pool = app.GetAttribValOrNull("applicationPool");
+													Protocol = binding.GetAttribValOrNull("protocol");
+													Binding = binding.GetAttribValOrNull("bindingInformation")
+												})
+	
+//siteElements |> Dump
+
+sites.Dump("sites to choose from in "+appHostConfigPath)
+let siteNames = [ for i in sites do yield i.Name]
+let selectedSiteName = Util.ReadLine("Which site?",String.Empty, siteNames)
+let selectedSite =sites |> Seq.find(fun e ->  e.Name = selectedSiteName)
+selectedSite.Dump("selected")
 let coverageFileName = "run.coverage"
 //helpers 
 
@@ -53,7 +102,7 @@ let binDir=Util.ReadLine("bin Directory?",System.IO.Path.Combine( baseDir, "Prod
 Environment.CurrentDirectory <- binDir
 match System.IO.File.Exists(coverageFileName) with 
 	| true -> System.IO.File.Delete(coverageFileName)
-
+	| _ -> printfn "no existing coverage file to delete"
 	
 //instrument  ******************************************************************************************
 // VsInstr http://msdn.microsoft.com/en-us/library/ms182402.aspx
@@ -63,7 +112,7 @@ let filteredDlls = dlls |> Seq.filter (fun x ->
 	fileName.Contains("CVS") || fileName.Contains("Oceanside"))
 //filteredDlls |> Dump
 let tasks = seq { 
-	for dll in dlls do
+	for dll in filteredDlls do
 		yield (dll,Async.StartAsTask(runProcessAsync (vsInstrPath,"/coverage " + dll)))
 	}
 	
@@ -89,5 +138,5 @@ perfOutput |> Dump
 //check for coverage file
 
 match System.IO.File.Exists(coverageFileName) with
-	| true -> "Coverage file created" |> Dump
+	| true -> ("Coverage file created at " + System.IO.Path.GetFullPath(coverageFileName), new System.IO.FileInfo(coverageFileName))|> Dump
 	| _ -> "Could not find coverage file" |> Dump

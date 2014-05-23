@@ -90,21 +90,21 @@ type System.Xml.XmlNode with
 
 //[<EntryPoint>]
 let main args=
-	Debug.Assert ("testing".Before( "ing") = "test")
-	Debug.Assert ("testing".After("test") = "ing")
-	Debug.Assert ("testing".BeforeOrSelf("ING") = "testing")
-	Debug.Assert ("testing".BeforeOrSelf("ng")="testi")
+	assert ("testing".Before( "ing") = "test")
+	assert ("testing".After("test") = "ing")
+	assert ("testing".BeforeOrSelf("ING") = "testing")
+	assert ("testing".BeforeOrSelf("ng")="testi")
 	let dtStart= DateTime(2014,5,22)
 	
-	Debug.Assert ( dtStart.StartOfWeek(DayOfWeek.Monday) = DateTime(2014,5,19))
-	Debug.Assert ( dtStart.StartOfWeek(DayOfWeek.Tuesday) = DateTime(2014,5,20))
-	Debug.Assert ( dtStart.StartOfWeek(DayOfWeek.Wednesday) = DateTime(2014,5,21))
-	Debug.Assert ( dtStart.StartOfWeek(DayOfWeek.Thursday) = DateTime(2014,5,22))
-	Debug.Assert ( dtStart.StartOfWeek(DayOfWeek.Friday) = DateTime(2014,5,16))
-	Debug.Assert ( dtStart.StartOfWeek(DayOfWeek.Saturday) = DateTime(2014,5,17))
-	Debug.Assert ( dtStart.StartOfWeek(DayOfWeek.Sunday) = DateTime(2014,5,18))
+	assert ( dtStart.StartOfWeek(DayOfWeek.Monday) = DateTime(2014,5,19))
+	assert ( dtStart.StartOfWeek(DayOfWeek.Tuesday) = DateTime(2014,5,20))
+	assert ( dtStart.StartOfWeek(DayOfWeek.Wednesday) = DateTime(2014,5,21))
+	assert ( dtStart.StartOfWeek(DayOfWeek.Thursday) = DateTime(2014,5,22))
+	assert ( dtStart.StartOfWeek(DayOfWeek.Friday) = DateTime(2014,5,16))
+	assert ( dtStart.StartOfWeek(DayOfWeek.Saturday) = DateTime(2014,5,17))
+	assert ( dtStart.StartOfWeek(DayOfWeek.Sunday) = DateTime(2014,5,18))
 	(
-		let XName n = System.Xml.Linq.XNamespace.None+ n
+		let XName n = System.Xml.Linq.XNamespace.None + n
 		let child = XElement(XName "child" )
 		let child2 = XElement(XName "child")
 		let attrib =System.Xml.Linq.XAttribute(XName "test","1")
