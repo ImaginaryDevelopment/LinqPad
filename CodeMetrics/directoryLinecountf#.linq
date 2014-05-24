@@ -7,26 +7,30 @@ open System
 //open System.Diagnostics
 open System.IO
 //open System.Windows.Forms
+
+
 let doTestFileExclude = false
+let highestLinesByFileMinimum = 550
+let highestLinesByFolderMinimum = 2000
+let highestMagicByFileMinimum = 6
+
+let endsWithIgnore (value:string ,test:string) = value.EndsWith(test,StringComparison.CurrentCultureIgnoreCase)
+let startsWithIgnore (value:string ,test:string) = value.StartsWith(test,StringComparison.CurrentCultureIgnoreCase)
+let fileExcludeEndings = ["designer.cs";"generated.cs";"codegen.cs"]
 
 //fileExclude= Func<string,bool> a=>
 let fileExclude	(a:string):bool = 
-	a.EndsWith("designer.cs",StringComparison.CurrentCultureIgnoreCase)||
-	a.StartsWith("jquery-",StringComparison.CurrentCultureIgnoreCase)||
+	(a, "designer.cs") |> endsWithIgnore ||
+	(a,"jquery-") |> startsWithIgnore ||
 	a.StartsWith("AssemblyInfo",StringComparison.CurrentCultureIgnoreCase)
 	
+let pathExcludeEndings = ["obj"; "Debug";".sonar";"ServerObjects";"Service References";"Web References";"PackageTmp";"TestResults";"packages";"$tf";".git";"bin" ]
+
+	
 let pathExclude (a:string) :bool =
-	a.EndsWith("obj") ||
-	a.EndsWith("Debug") ||
-	a.EndsWith("bin",StringComparison.CurrentCultureIgnoreCase) ||
-	a.EndsWith(".sonar") ||
-	a.EndsWith("ServerObjects") ||
-	a.EndsWith("Service References")||
-	a.EndsWith("Web References") ||
-	a.EndsWith("PackageTmp") ||
-	a.EndsWith("TestResults") ||
-	a.EndsWith("packages") ||
-	a.Contains(@"\Scripts\Mvc3")
+	List.exists ( fun elem -> (a,elem)|> endsWithIgnore) pathExcludeEndings ||
+	a.Contains(@"\Scripts\Mvc3") ||
+	a.Contains("Generated_C#_Source")
 
 //record, class, struct, or discriminated union?	
 type  CountSettings = {
@@ -76,8 +80,6 @@ let allFiles = getFilesByPatterns includedDirectories currentSettings.Patterns
 
 allFiles |> Seq.length |> fun x->x.Dump("Total files matching pattern list found")
 
-
-
 //rec means recursive function
 let filterFiles files fileFilter= seq{
 	for file in files do
@@ -87,10 +89,10 @@ let filterFiles files fileFilter= seq{
 	}
 	
 let filterFilesResult= filterFiles allFiles currentSettings.FileExclude |> Seq.toArray
-//filterFilesResult.GetType().Dump()			
+	
 filterFilesResult |> Seq.length |> fun x->x.Dump("Total files included")
 
-type FileSummary(relativePath:string, fullPath:string,readerFunc:string->string[]) as self = 
+type FileSummary(relativePath:string, fullPath:string,readerFunc:string->string[]) = 
 	let rgNumber = new Regex(@"\.?[0-9]+(\.[0-9]+)?", RegexOptions.Compiled)
 	let prepend="~"+if relativePath.StartsWith("\\") then "" else "\\" 
 	member self.FullPath with get() = fullPath
@@ -120,7 +122,7 @@ let summaries = asSummary filterFilesResult
 
 let aSummary=summaries.First()
 
-
+aSummary |> Dump
 //let makeButton fs=
 //	let handler(e) = fs.Dump()
 //	let button=new System.Windows.Forms.Button()

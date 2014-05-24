@@ -3,6 +3,7 @@
 const int HIGHEST_LINES_BY_FILE_MINIMUM=550;
 const int HIGHEST_LINES_BY_FOLDER_MINIMUM=2000;
 const int HIGHEST_MAGIC_BY_FILE_MINIMUM=6;
+[Obsolete("need to migrate to directoryLinecountf#")]
 public class CountSettings
 {
 public CountSettings(){
