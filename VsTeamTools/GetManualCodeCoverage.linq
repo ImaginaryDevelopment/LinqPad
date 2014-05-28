@@ -27,27 +27,29 @@ open helpers
 let appHostConfigPath = Environment.ExpandEnvironmentVariables("""%homedrive%%homepath%\Documents\IISExpress\config\applicationhost.config""")
 let xDoc = XDocument.Load(appHostConfigPath)
 //sitesFile.Document.Root.Elements("system.applicationHost") |> Dump
-let sites = xDoc.Root
-											.Element("system.applicationHost")
-											.Element("sites")
-											.Elements("site") |>
-											Seq.filter (fun e->
-												let app = e.Element("application")
-												app <> null &&
-												app.Element("virtualDirectory") <> null)
-											|> Seq.map (fun e-> 
-												let app = e.Element("application")
-												let virt = app.Element("virtualDirectory")
-												let binding = e.Element("bindings").Element("binding")
-												{
-													Name =e.GetAttribValOrNull("name");
-													Path= virt.GetAttribValOrNull("path");
-													Physical=virt.GetAttribValOrNull("physicalPath");
-													Element= e;
-													Pool = app.GetAttribValOrNull("applicationPool");
-													Protocol = binding.GetAttribValOrNull("protocol");
-													Binding = binding.GetAttribValOrNull("bindingInformation")
-												})
+let sites = 
+	let siteElements =	xDoc.Root
+							.Element("system.applicationHost")
+							.Element("sites")
+							.Elements("site")
+	let sitesWithExpecteds = siteElements |>
+							Seq.filter (fun e->
+								let app = e.Element("application")
+								app <> null &&
+								app.Element("virtualDirectory") <> null)
+	sitesWithExpecteds |> Seq.map (fun e-> 
+						let app = e.Element("application")
+						let virt = app.Element("virtualDirectory")
+						let binding = e.Element("bindings").Element("binding")
+						{
+							Name =e.GetAttribValOrNull("name");
+							Path= virt.GetAttribValOrNull("path");
+							Physical=virt.GetAttribValOrNull("physicalPath");
+							Element= e;
+							Pool = app.GetAttribValOrNull("applicationPool");
+							Protocol = binding.GetAttribValOrNull("protocol");
+							Binding = binding.GetAttribValOrNull("bindingInformation")
+						})
 	
 //siteElements |> Dump
 
@@ -140,5 +142,7 @@ perfOutput |> Dump
 //check for coverage file
 
 match System.IO.File.Exists(coverageFileName) with
-	| true -> ("Coverage file created at " + System.IO.Path.GetFullPath(coverageFileName), new System.IO.FileInfo(coverageFileName))|> Dump
+	| true -> 
+		let fullPath = System.IO.Path.GetFullPath(coverageFileName)
+		(LINQPad.Hyperlinq(fullPath),System.IO.FileInfo(coverageFileName)).Dump("Coverage file created at " + coverageFileName)
 	| _ -> "Could not find coverage file" |> Dump
