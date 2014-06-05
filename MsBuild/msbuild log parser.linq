@@ -22,7 +22,7 @@ void Main()
 		if(info.Length==0){
 			info.Dump("Empty logfile"+logFile);
 		}
-		var cleaned=(ReadBlock(System.IO.File.ReadAllLines(logFile),string.Empty));
+		var cleaned=ReadBlock(System.IO.File.ReadAllLines(logFile),string.Empty);
 		cleaned.Dump(logFile);
 		
 		
@@ -39,7 +39,7 @@ public string ReadBlock (IEnumerable<string> lines,string prevIndent){
 	var sb = new StringBuilder();
 	sb.Append("<div>");
 	foreach(var l in lines){ 
-		var shallower =prevIndent==string.Empty || l.StartsWith(prevIndent)==false;
+		var shallower =prevIndent!=string.Empty && l.StartsWith(prevIndent)==false;
 		var deeper = !shallower && l.After(prevIndent).IsMatch(@"\s",false);
 		
 		if(!deeper && ! shallower) //same indention level
