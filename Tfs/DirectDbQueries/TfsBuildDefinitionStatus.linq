@@ -20,6 +20,7 @@ void Main()
 	let bd = raw.BuildDefinition
 	let status = lastBuild==null? null:	lastBuild.BuildStatus
 	let statusName = status==null? null:
+			status==1? "In Progress":
 			status==8? "Failed":
 			status==2? "Success":
 			status.ToString()

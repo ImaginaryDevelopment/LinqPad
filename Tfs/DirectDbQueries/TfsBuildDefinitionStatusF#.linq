@@ -22,9 +22,13 @@ let GetMsBuildArgs (processParams:XElement) =
 	processParams.Elements().Where(fun e->e.Name.LocalName="String")
 		.Where(fun e->e.Attributes().Any(fun a-> a.Name.LocalName = "Key" && a.Value="MSBuildArguments"))
 		.Select(fun e->e.Value).FirstOrDefault()
-type QueryResult = { DefinitionId:int;DefinitionName:string; ProcessTemplateId:int; StatusName:string; DefinitionArgs:string; BuildArgs:string;
-	StatusCode:int option;cleanWorkspaceOption:string; RawProcessParameters:Object; lastBuild:Tbl_Build}	
+		
 type ProcessParametersPair = {Definition:string; Provided:string}
+type QueryResult = {FinishTime:Nullable<DateTime>; DefinitionId:int;DefinitionName:string; ProcessTemplateId:int; StatusName:string; DefinitionArgs:string; BuildArgs:string;
+	StatusCode:int option;cleanWorkspaceOption:string; RawProcessParameters:ProcessParametersPair; lastBuild:Tbl_Build}		
+type QueryDisplay = { DefinitionId:int;DefinitionName:string; ProcessTemplateId:int; StatusName:Object; DefinitionArgs:string; BuildArgs:string;
+	StatusCode:int option;cleanWorkspaceOption:string; RawProcessParameters:Object; lastBuild:Object}	
+
 // F# query expressions http://msdn.microsoft.com/en-us/library/hh225374.aspx	
 let q = query { 
 	for (bd,lastBuild) in rawQ do
@@ -33,6 +37,7 @@ let q = query {
 					| _ -> None
 	let statusName = match status with 
 					|None -> null
+					|Some(1) -> "In Progress"
 					|Some(8) -> "Failed"
 					|Some(2) -> "Success"
 					|_ -> status.ToString()
@@ -41,7 +46,9 @@ let q = query {
 	let cleanWorkspaceOption = processParamsParsed.Elements().Where(fun e -> e.Name.LocalName="CleanWorkspaceOption").Select(fun e -> e.Value).FirstOrDefault()
 	let msBuildArgs = GetMsBuildArgs(processParamsParsed)
 	let lastBuildArgs =if buildParamsParsed=null then null else GetMsBuildArgs(buildParamsParsed)
+	sortBy statusName
 	select {
+		FinishTime=lastBuild.FinishTime
 		DefinitionId=bd.DefinitionId;
 		DefinitionName=bd.DefinitionName;
 		ProcessTemplateId=bd.ProcessTemplateId;
@@ -50,10 +57,9 @@ let q = query {
 		BuildArgs=lastBuildArgs;
 		StatusCode =status;
 		cleanWorkspaceOption=cleanWorkspaceOption;
-		RawProcessParameters = Util.OnDemand("Process Parameters",fun () -> {Provided=lastBuild.ProcessParameters;Definition=bd.ProcessParameters});
-		lastBuild=lastBuild
+		RawProcessParameters =  {Provided=lastBuild.ProcessParameters;Definition=bd.ProcessParameters};//Util.OnDemand("Process Parameters",fun () ->);
+		lastBuild=lastBuild//Util.OnDemand("LastBuild",fun () ->)
 		}
 	}
-	
+
 q.Dump();
-	
