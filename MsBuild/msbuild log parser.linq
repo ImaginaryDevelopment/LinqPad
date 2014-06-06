@@ -19,8 +19,14 @@
   <Namespace>System.Web</Namespace>
 </Query>
 
+static bool delayLoad=false;
+static bool firefoxUnc = true;
+static Regex _fileReferenceRegex = new Regex(@"[a-e]:\\\w+(?:[a-z(0-9)\\.]|\s)+(?=\s|""|$|')", RegexOptions.IgnoreCase);
+static string _lineEndings =  /*"<br />"+*/ Environment.NewLine;
+
 void Main()
 {
+	
 	//msbuild log file sectioning
 	var servers=Environment.GetEnvironmentVariable("servers").Dump().Split(';');
 	var buildServer=Util.ReadLine("buildServer?",servers.FirstOrDefault(s=>s.Contains("build", StringComparison.CurrentCultureIgnoreCase)),servers);
@@ -47,25 +53,31 @@ void Main()
 		}
 		var lines = System.IO.File.ReadLines(logFile) as IEnumerable<string>;
 		IEnumerator<string> enumerator = lines.GetEnumerator();
-		var cleaned=Htmlify(logFile,ReadBlock(enumerator,string.Empty));
+		var cleaned=Htmlify(logFile,ReadBlock(enumerator,buildServer,null,string.Empty));
 		
 		var tempFile = System.IO.Path.GetTempFileName().Dump();
 		var targetFileName= tempFile+".htm";
 		System.IO.File.Move(tempFile,targetFileName);
 		System.IO.File.WriteAllText(targetFileName,cleaned);
 		var targetFilePath=new My.PathWrapper(targetFileName);
-		var p = Process.Start(targetFileName);
-		new{ FileLink = targetFilePath.ToAHref(), ExplorerLink =targetFilePath.AsExplorerSelectLink("ExplorerLink"),
-		OpenLink=Util.OnDemand("OpenFile",
+		object openLink;
+		if(delayLoad){
+		 openLink = Util.OnDemand("OpenFile",
 			()=>{
-				//var p =Process.Start(targetFileName);
-				return new{p.Id, p.MainModule.ModuleName};}
-				)}.Dump();
-		//System.IO.File.Delete(tempFile);
-		//cleaned.Dump(logFile);
+				var p =Process.Start(targetFileName);
+				return new{p.Id, p.MainModule.ModuleName}; 
+				});
+				
+		} else {
+			var p = Process.Start(targetFileName);
+			openLink= new{p.Id, p.MainModule.ModuleName} ;
+		}
 		
 		
-		//collect every mention of a .targets file then distinct by full path?
+		new{ FileLink = targetFilePath.ToAHref(), ExplorerLink =targetFilePath.AsExplorerSelectLink("ExplorerLink"),
+		OpenLink= openLink}.Dump();
+		
+		
 		//write out the file as html grouping based on indention?
 		
 		
@@ -79,21 +91,27 @@ public static string Htmlify(string title,string content){
 		+System.Net.WebUtility.HtmlEncode(title)
 		+"</title>"
 		+ IncludeCss("http://netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css")
+		+ IncludeInlineStyleSheet(".warn{ border-bottom:1px solid yellow;}")
 		+"</head><body>"
 		+Environment.NewLine
 		+content
 		+IncludeScript("http://netdna.bootstrapcdn.com/bootstrap/3.1.1/js/bootstrap.min.js")
 		+"</body></html>";
 }
-static Regex _fileReferenceRegex = new Regex(@"[a-e]:\\\w+[a-z (0-9)\\.]+(?=\s|"")", RegexOptions.IgnoreCase);
-static string _lineEndings =  /*"<br />"+*/ Environment.NewLine;
+
 // Define other methods and classes here
-public string ReadBlock (IEnumerator<string> lines,string prevIndent){
+public string ReadBlock (IEnumerator<string> lines,string buildServer,string parentLine, string prevIndent){
 	var sb = new StringBuilder();
-	const string opening= "<ul>";
-	const string closer =" </ul>";
-	
-	sb.Append(opening);
+	const string openlist= "<ul>";
+	const string closelist =" </ul>";
+	var currentOpener = openlist;
+	var currentCloser = closelist;
+	if(parentLine!=null && parentLine.StartsWith("ForceNugetRestore:")){
+		var @class="forceNugetRestore";
+		currentOpener=BootstrapToggleButton("."+@class,"Collapse all "+@class)+"<div class='collapse "+@class+"'>"+openlist;
+		currentCloser = "</div>"+closelist;
+	}
+	sb.Append(currentOpener);
 	
 	while(lines.MoveNext()){ 
 		var l = lines.Current;
@@ -105,38 +123,47 @@ public string ReadBlock (IEnumerator<string> lines,string prevIndent){
 			
 			if(l.Trim().Length>0){
 				var classes = new List<string>();
-			
-				if(l.IsMatch("\\): warning ",true))
+				var glyphs = new List<string>();
+				if(l.IsMatch("\\): warning ",true)){
+					glyphs.Add("glyphicon-warning-sign");
 					classes.Add("warn");
+				}
 				if(l.IsMatch("Copying",true))
 					classes.Add("copy");
-				var lineClass=classes.Any()?"class='"+classes.Delimit(" "):string.Empty;
-				var reassembledLine = MarkupLine(l);
 				
-				sb.AppendLine("<li"+lineClass+">"+reassembledLine+"</li>"+_lineEndings);
+				
+				var lineClass=classes.Any()?" class='"+classes.Delimit(" ") +"'":string.Empty;
+				var glyphText = glyphs.Any()?glyphs.Select(g=>"<span class='glyphicon "+g+"'></span>").Delimit(string.Empty):string.Empty;
+				
+				var reassembledLine = MarkupLine(l,buildServer);
+				
+				sb.AppendLine("<li"+lineClass+">"+glyphText+reassembledLine+"</li>"+_lineEndings);
+				 
+					
 				
 			}
 			continue;
 		}
 		if(shallower){
-			if(sb.Length==opening.Length)
+			if(sb.Length==currentOpener.Length)
 				return string.Empty;
-			sb.AppendLine(closer+_lineEndings);
+			sb.AppendLine(currentCloser+_lineEndings);
 			return sb.ToString();
 		}
 		// must be a deeper level
 		var indentLevel = prevIndent==string.Empty? Regex.Match(l,@"\s+").Value: Regex.Match(l.After(prevIndent),@"\s+").Value; // get the whitespace after the current indent level if there is one
 		//new {indentLevel, l}.Dump("going deeper!");
-		sb.Append(ReadBlock(lines,indentLevel)+_lineEndings);
+		sb.Append(ReadBlock(lines,buildServer,l,indentLevel)+_lineEndings);
 	}
-	sb.Append(closer+_lineEndings);
+	sb.Append(currentCloser+_lineEndings);
 	return sb.ToString();
 }
-public static string MarkupLine(string line){
-	return MarkupFileReferences(line);
+public static string MarkupLine(string line,string server){
+	//collect every mention of a .targets file then distinct by full path?
+	return MarkupFileReferences(line,server);
 }
 
-public static string MarkupFileReferences(string line){
+public static string MarkupFileReferences(string line,string server){
 	var fileReferences = _fileReferenceRegex.Matches(line);
 	if(fileReferences.Count==0)
 		return System.Net.WebUtility.HtmlEncode(line);
@@ -148,7 +175,17 @@ public static string MarkupFileReferences(string line){
 			sb.Append(System.Net.WebUtility.HtmlEncode( line.Before(fr.Value)));
 			index=fr.Index;
 		}
-		sb.Append("<a href='file://"+HttpUtility.HtmlAttributeEncode(fr.Value.Replace('\\','/'))+"'>"+System.Net.WebUtility.HtmlEncode(fr.Value)+"</a>");
+		var cleanedPath = System.IO.Path.GetFullPath(fr.Value); // eliminate c:\abc\..\def type stuff
+		//firefox doesn't like this http://kb.mozillazine.org/Links_to_local_pages_don%27t_work
+		var uncLinkStyle ="file://"+ (firefoxUnc? "///":string.Empty);
+		
+		var linkPath = System.IO.Directory.Exists(cleanedPath) || System.IO.File.Exists(cleanedPath) ? //let link point locally if file exists locally, otherwise point out to server filesystem
+			cleanedPath: (server+"\\"+cleanedPath.Replace(":\\","$\\"));
+		sb.Append("<a href='"+uncLinkStyle
+			+HttpUtility.HtmlAttributeEncode(linkPath.Replace('\\','/')) +"'" 
+			+" title='"+HttpUtility.HtmlAttributeEncode(fr.Value)+"'>"
+			+System.Net.WebUtility.HtmlEncode(linkPath)
+			+"</a>");
 		index+=fr.Length;
 	}
 	if(index<line.Length){
@@ -159,15 +196,31 @@ public static string MarkupFileReferences(string line){
 	return sb.ToString();
 }
 
-public static string IncludeCss(string href){
-	return Include("link",new Dictionary<string,string>{ {"rel","stylesheet"},{"href",href}});
+public static string BootstrapToggleButton(string selector,string text){  //http://getbootstrap.com/javascript/#collapse
+	return "<a data-toggle='collapse' data-target='"+selector+"'>"+HttpUtility.HtmlEncode(text)+"</a>";
 }
 
+public static string IncludeCss(string href){
+	return Include("link",new Dictionary<string,string>{ {"rel","stylesheet"},{"href",href}},true);
+}
+public static string IncludeInlineStyleSheet(string content){
+	return Include("style",null,content);
+}
 public static string IncludeScript(string src){
 	return Include("script",new Dictionary<string,string>{ {"src",src}},false);
 }
 
-public static string Include(string tag, IDictionary<string,string> attributes, bool selfClose=true){
-	var closing = selfClose?" />":("><"+tag+"/>");
-	return "<"+tag+" " + attributes.Select(x=>x.Key+"='"+HttpUtility.HtmlAttributeEncode(x.Value)+"'").Delimit(" ")+ closing;
+public static string Include(string tag, IDictionary<string,string> attributes, string content){
+	var closing="</"+tag+">";
+	var attributesText = attributes==null? string.Empty:(" "+ attributes.Select(x=>x.Key+"='"+HttpUtility.HtmlAttributeEncode(x.Value)+"'").Delimit(" "));
+	return "<"+tag+attributesText +">"+content+ closing;
+}
+/// <summary>
+/// for self-closing links or links with no content
+/// </summary>
+public static string Include(string tag, IDictionary<string,string> attributes, bool selfClose){
+	
+	var closing = selfClose?" />":("></"+tag+">");
+	var attributesText = attributes==null?string.Empty: attributes.Select(x=>x.Key+"='"+HttpUtility.HtmlAttributeEncode(x.Value)+"'").Delimit(" ");
+	return "<"+tag+" " +attributesText+ closing;
 }
