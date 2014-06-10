@@ -22,8 +22,8 @@
 static bool delayLoad=false;
 static bool firefoxUnc = true;
 static Regex _fileReferenceRegex = new Regex(@"[a-e]:\\\w+(?:[a-z(0-9)\\.]|\s)+(?=\s|""|$|')", RegexOptions.IgnoreCase);
-static string _lineEndings =  /*"<br />"+*/ Environment.NewLine;
 
+int index=0;
 void Main()
 {
 	
@@ -37,10 +37,16 @@ void Main()
 					from buildFolder in System.IO.Directory.EnumerateDirectories(teamFolder) 
 				select new{agentFolder,teamFolder,buildFolder,BuildName=System.IO.Path.GetFileName(buildFolder)};
 	var targetBuild=Util.ReadLine("target build?", null, buildPaths.Select(bp=>bp.BuildName).ToArray().Dump()); 
-	var buildDefinition =buildPaths.First(x=>x.BuildName == targetBuild);
+	var buildDefinition =buildPaths.First(x=>x.BuildName.IsIgnoreCaseMatch(targetBuild));
 	var buildSrc = System.IO.Path.Combine( buildDefinition.buildFolder,"src"); // our builds have the msbuild log files going into the src folder for the specific project
+	
 	var productFolder = System.IO.Path.Combine(buildSrc,"Products");
-	var slnFolder = System.IO.Path.Combine(productFolder,targetBuild.Contains("CV")?"CVS":"MarketOnce");
+	
+	var slnFolder = System.IO.Path.Combine(productFolder,targetBuild.Contains("CV", StringComparison.InvariantCultureIgnoreCase)?"CVS":"MarketOnce");
+	if(!System.IO.Directory.Exists(productFolder) && buildSrc.AsDirPath().GetFiles("*.sln").Any()){
+		productFolder=null;
+		slnFolder=buildSrc;
+	}
 	
 	Debug.Assert(System.IO.Directory.Exists(slnFolder),"Could not locate application slnFolder at "+slnFolder);
 	
@@ -52,10 +58,14 @@ void Main()
 			info.Dump("Empty logfile"+logFile);
 		}
 		var lines = System.IO.File.ReadLines(logFile) as IEnumerable<string>;
-		IEnumerator<string> enumerator = lines.GetEnumerator();
-		var cleaned=Htmlify(logFile,ReadBlock(enumerator,buildServer,null,string.Empty));
+		string cleaned;
+		using(IEnumerator<string> enumerator = lines.GetEnumerator()){
+		var content=ReadBlock(enumerator,buildServer,null,string.Empty);
+			cleaned=Htmlify(logFile,index,content);
+		}
 		
-		var tempFile = System.IO.Path.GetTempFileName().Dump();
+		cleaned.SplitLines().Take(100).Dump("cleaned html");
+		var tempFile = System.IO.Path.GetTempFileName();
 		var targetFileName= tempFile+".htm";
 		System.IO.File.Move(tempFile,targetFileName);
 		System.IO.File.WriteAllText(targetFileName,cleaned);
@@ -70,22 +80,21 @@ void Main()
 				
 		} else {
 			var p = Process.Start(targetFileName);
-			openLink= new{p.Id, p.MainModule.ModuleName} ;
+			Debug.Assert(p!=null,"process was null");
+			openLink= new{p.Id,ModuleName = p.MainModule!=null? p.MainModule.ModuleName:"null"} ;
 		}
 		
-		
-		new{ FileLink = targetFilePath.ToAHref(), ExplorerLink =targetFilePath.AsExplorerSelectLink("ExplorerLink"),
+		var logFileWrapper= logFile.AsFilePath();
+		new{LogLink= logFileWrapper.ToAHref() ,FileLink = targetFilePath.ToAHref(), ExplorerLink =targetFilePath.AsExplorerSelectLink("ExplorerLink"),
 		OpenLink= openLink}.Dump();
 		
 		
 		//write out the file as html grouping based on indention?
-		
-		
 	}
 	
 }
 
-public static string Htmlify(string title,string content){
+public static string Htmlify(string title, int lineCount,string content){
 	return "<!DOCTYPE html>\r\n<html><head>"+Environment.NewLine
 		+"<title>"
 		+System.Net.WebUtility.HtmlEncode(title)
@@ -94,6 +103,7 @@ public static string Htmlify(string title,string content){
 		+ IncludeInlineStyleSheet(".warn{ border-bottom:1px solid yellow;}")
 		+"</head><body>"
 		+Environment.NewLine
+		+"<h2>"+System.Net.WebUtility.HtmlEncode(title)+" "+ lineCount +" lines </h2>"
 		+content
 		+IncludeScript("http://netdna.bootstrapcdn.com/bootstrap/3.1.1/js/bootstrap.min.js")
 		+"</body></html>";
@@ -102,8 +112,9 @@ public static string Htmlify(string title,string content){
 // Define other methods and classes here
 public string ReadBlock (IEnumerator<string> lines,string buildServer,string parentLine, string prevIndent){
 	var sb = new StringBuilder();
-	const string openlist= "<ul>";
+	string openlist= "<ul title='line "+index+"'>";
 	const string closelist =" </ul>";
+	
 	var currentOpener = openlist;
 	var currentCloser = closelist;
 	if(parentLine!=null && parentLine.StartsWith("ForceNugetRestore:")){
@@ -111,9 +122,15 @@ public string ReadBlock (IEnumerator<string> lines,string buildServer,string par
 		currentOpener=BootstrapToggleButton("."+@class,"Collapse all "+@class)+"<div class='collapse "+@class+"'>"+openlist;
 		currentCloser = "</div>"+closelist;
 	}
+	if(parentLine!=null && parentLine.StartsWith("_CopyFilesMarkedCopyLocal:")){
+		var @class="_CopyFilesMarkedCopyLocal";
+		currentOpener=BootstrapToggleButton("."+@class,"Collapse all "+@class)+"<div class='collapse "+@class+"'>"+openlist;
+		currentCloser = "</div>"+closelist;
+	}
 	sb.Append(currentOpener);
 	
 	while(lines.MoveNext()){ 
+		index++;
 		var l = lines.Current;
 		var shallower =prevIndent!=string.Empty && l.StartsWith(prevIndent)==false;
 		var deeper = !shallower && l.After(prevIndent).IsMatch(@"^\s",false);
@@ -131,31 +148,32 @@ public string ReadBlock (IEnumerator<string> lines,string buildServer,string par
 				if(l.IsMatch("Copying",true))
 					classes.Add("copy");
 				
-				
 				var lineClass=classes.Any()?" class='"+classes.Delimit(" ") +"'":string.Empty;
 				var glyphText = glyphs.Any()?glyphs.Select(g=>"<span class='glyphicon "+g+"'></span>").Delimit(string.Empty):string.Empty;
 				
 				var reassembledLine = MarkupLine(l,buildServer);
 				
-				sb.AppendLine("<li"+lineClass+">"+glyphText+reassembledLine+"</li>"+_lineEndings);
-				 
-					
+				sb.AppendLine("<li"+lineClass+">"+glyphText+reassembledLine+"</li>");
 				
 			}
 			continue;
 		}
 		if(shallower){
-			if(sb.Length==currentOpener.Length)
+			Debug.Assert(sb.Length>=currentOpener.Length);
+			if(sb.Length<=currentOpener.Length)
 				return string.Empty;
-			sb.AppendLine(currentCloser+_lineEndings);
+			//new{ line=l, prevIndent,prevIndentLength=prevIndent.Length,Chars= prevIndent.ToCharArray().Select(c=>(int)c),index}.Dump("going shallower");	
+			sb.AppendLine(currentCloser);
 			return sb.ToString();
 		}
+		//new{ line=l, prevIndent,prevIndentLength=prevIndent.Length,Chars= prevIndent.ToCharArray().Select(c=>(int)c),index}.Dump("going deeper");	
 		// must be a deeper level
 		var indentLevel = prevIndent==string.Empty? Regex.Match(l,@"\s+").Value: Regex.Match(l.After(prevIndent),@"\s+").Value; // get the whitespace after the current indent level if there is one
 		//new {indentLevel, l}.Dump("going deeper!");
-		sb.Append(ReadBlock(lines,buildServer,l,indentLevel)+_lineEndings);
+		sb.AppendLine(System.Net.WebUtility.HtmlEncode(l.Trim()));
+		sb.Append(ReadBlock(lines,buildServer,l.Trim(),indentLevel));
 	}
-	sb.Append(currentCloser+_lineEndings);
+	sb.Append(currentCloser);
 	return sb.ToString();
 }
 public static string MarkupLine(string line,string server){
@@ -189,9 +207,9 @@ public static string MarkupFileReferences(string line,string server){
 		index+=fr.Length;
 	}
 	if(index<line.Length){
-		sb.AppendLine(System.Net.WebUtility.HtmlEncode(line.Substring(index))+_lineEndings);
+		sb.AppendLine(System.Net.WebUtility.HtmlEncode(line.Substring(index)));
 	} else {
-		sb.AppendLine(_lineEndings);
+		sb.AppendLine();
 	}
 	return sb.ToString();
 }
