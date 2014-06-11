@@ -1,10 +1,10 @@
 <Query Kind="Statements" />
 
-//bool debug=false;
+// check hint paths for files that don't exist or are absolute
+
 var baseDir=Util.ReadLine("Directory?",System.Environment.GetEnvironmentVariable("devroot"));
 var projects= System.IO.Directory.GetFiles(baseDir,"*.*proj", SearchOption.AllDirectories);
-//sample projFile
-//XDocument.Load(projects.Take(1).Single ( )).DumpFormatted(projects.Take(1).Single ());
+
 
 var csProjects=projects.Where(f=>f.EndsWith(".csproj") 
 		&& f.Contains("test", StringComparison.InvariantCultureIgnoreCase)==false //don't check testing projects
@@ -24,14 +24,14 @@ var nonPackageReferences = from i in baseQuery
 	
 	from ig in i.ProjNode.Elements(i.RootNs+"ItemGroup")
 	from r in ig.Elements(i.RootNs+"Reference")
-	let hp=r.Element(i.RootNs+"HintPath")
-	where hp!=null//&& hp.Value.Contains("packages")==false
-	let absPath=hp.Value.Contains(":")?hp.Value: System.IO.Path.GetFullPath((System.IO.Path.GetDirectoryName(i.Path)+"\\"+hp.Value))
+	let hintPath=r.Element(i.RootNs+"HintPath")
+	where hintPath!=null//&& hp.Value.Contains("packages")==false
+	let absPath=hintPath.Value.Contains(":")?hintPath.Value: System.IO.Path.GetFullPath((System.IO.Path.GetDirectoryName(i.Path)+"\\"+hintPath.Value))
 	let exists= System.IO.File.Exists(absPath) //TODO: solve for checking exists on network drives
-	where !exists || hp.Value.Contains(":") || hp.Value.Contains("\\\\") 
+	where !exists || hintPath.Value.Contains(":") || hintPath.Value.Contains("\\\\") 
 	orderby i.IsSlnProject descending
 	
-	select new{hp.Value,reference=r.ToString(),i.IsSlnProject,i.Path,
+	select new{hintPath.Value,reference=r.ToString(),i.IsSlnProject,i.Path,
 		absPath,
 		Exists=exists
 	};
