@@ -133,88 +133,88 @@ public static IEnumerable<T> AllValues<T>()
 
 public static Dictionary<W3CColumns,string> MakeW3cDictionary()
 {
-Func<string,string> removeSpecialCharacters= s=>s.RemoveCharacters(new[]{"_","(",")","-"});
+	Func<string,string> removeSpecialCharacters= s=>s.RemoveCharacters(new[]{"_","(",")","-"});
 
-var allcolumns=new[]{"LogFilename","LogRow","date","time","c-ip","cs-username","s-sitename","s-computername","s-ip","s-port","cs-method","cs-uri-stem","cs-uri-query","sc-status","sc-substatus","sc-win32-status","sc-bytes","cs-bytes","time-taken","cs-version","cs-host","cs(User-Agent)","cs(Cookie)","cs(Referer)","s-event","s-process-type","s-user-time","s-kernel-time","s-page-faults","s-total-procs","s-active-procs","s-stopped-procs"};
+	var allcolumns=new[]{"LogFilename","LogRow","date","time","c-ip","cs-username","s-sitename","s-computername","s-ip","s-port","cs-method","cs-uri-stem","cs-uri-query","sc-status","sc-substatus","sc-win32-status","sc-bytes","cs-bytes","time-taken","cs-version","cs-host","cs(User-Agent)","cs(Cookie)","cs(Referer)","s-event","s-process-type","s-user-time","s-kernel-time","s-page-faults","s-total-procs","s-active-procs","s-stopped-procs"};
 
-var byEnum=
-	from a in allcolumns.OrderBy(f=>f).Select(c=>new{ColumnName=c,Cleaned=removeSpecialCharacters(c)})
-	
-	join e in Enum.GetNames(typeof(W3CColumns)).Select(e=>new{Column=(W3CColumns) Enum.Parse(typeof(W3CColumns),e),Cleaned=removeSpecialCharacters(e)})
-		on a.Cleaned equals e.Cleaned
-		select new{e.Column,a.ColumnName};
-return byEnum.ToDictionary(a=>a.Column,a=>a.ColumnName);
+	var byEnum=
+		from a in allcolumns.OrderBy(f=>f).Select(c=>new{ColumnName=c,Cleaned=removeSpecialCharacters(c)})
+		
+		join e in Enum.GetNames(typeof(W3CColumns)).Select(e=>new{Column=(W3CColumns) Enum.Parse(typeof(W3CColumns),e),Cleaned=removeSpecialCharacters(e)})
+			on a.Cleaned equals e.Cleaned
+			select new{e.Column,a.ColumnName};
+	return byEnum.ToDictionary(a=>a.Column,a=>a.ColumnName);
 }
 
 public enum W3CColumns
 {/* I */
-///LogRow
-LogRow,
-///s-port
-s_port,
-///sc-status
-sc_status,
-///sc-substatus
-sc_substatus,
-///sc-win32-status
-sc_win32_status,
-///sc-bytes
-sc_bytes,
-///cs-bytes
-cs_bytes,
-///time-taken
-time_taken,
-///s-page-faults
-s_page_faults,
-///s-total-procs
-s_total_procs,
-///s-active-procs
-s_active_procs,
-///s-stopped-procs
-s_stopped_procs,  
-/* R */
-///s-user-time
-s_user_time,
-///s-kernel-time
-s_kernel_time,  
-/* S */
-///LogFilename
-LogFilename,
-///c-ip
-c_ip,
-///cs-username
-cs_username,
-///s-sitename
-s_sitename,
-///s-computername
-s_computername,
-///s-ip
-s_ip,
-///cs-method
-cs_method,
-///cs-uri-stem
-cs_uri_stem,
-///cs-uri-query
-cs_uri_query,
-///cs-version
-cs_version,
-///cs-host
-cs_host,
-///cs(User-Agent)
-cs_User_Agent,
-///cs(Cookie)
-cs_Cookie,
-///cs(Referer)
-cs_Referer,
-///s-event
-s_event,
-///s-process-type
-s_process_type,  
-/* T */
-///date
-date,
-///time
-time,  
+	///LogRow
+	LogRow,
+	///s-port
+	s_port,
+	///sc-status
+	sc_status,
+	///sc-substatus
+	sc_substatus,
+	///sc-win32-status
+	sc_win32_status,
+	///sc-bytes
+	sc_bytes,
+	///cs-bytes
+	cs_bytes,
+	///time-taken
+	time_taken,
+	///s-page-faults
+	s_page_faults,
+	///s-total-procs
+	s_total_procs,
+	///s-active-procs
+	s_active_procs,
+	///s-stopped-procs
+	s_stopped_procs,  
+	/* R */
+	///s-user-time
+	s_user_time,
+	///s-kernel-time
+	s_kernel_time,  
+	/* S */
+	///LogFilename
+	LogFilename,
+	///c-ip
+	c_ip,
+	///cs-username
+	cs_username,
+	///s-sitename
+	s_sitename,
+	///s-computername
+	s_computername,
+	///s-ip
+	s_ip,
+	///cs-method
+	cs_method,
+	///cs-uri-stem
+	cs_uri_stem,
+	///cs-uri-query
+	cs_uri_query,
+	///cs-version
+	cs_version,
+	///cs-host
+	cs_host,
+	///cs(User-Agent)
+	cs_User_Agent,
+	///cs(Cookie)
+	cs_Cookie,
+	///cs(Referer)
+	cs_Referer,
+	///s-event
+	s_event,
+	///s-process-type
+	s_process_type,  
+	/* T */
+	///date
+	date,
+	///time
+	time,  
 
 }
 
@@ -232,119 +232,103 @@ public enum ParserOutputType
 
 public static class StringExtensions
 {
-public static string RemoveCharacters(this string text, IEnumerable<string> items)
-	{
-	var sb=new System.Text.StringBuilder(text);
-	foreach(var item in items)
-	{
-	var oldVal=sb.ToString();
-	sb.Clear();
-	sb.Append(oldVal.Replace(item,string.Empty));
-	}
-	return sb.ToString();
-	}
-public static string RemoveMultipleWhitespaces(this string text)
-	{
-		return Regex.Replace(text,"\\s\\s+"," ");
-	}
-public static string TruncateTo(this string text, byte count)
-	{
-	if(text==null ||text.Length<=count)
-	return text;
-	return text.Substring(0,count);
-	
-	}
-public static bool HasValue(this string text)
-	{
-	return string.IsNullOrEmpty(text)==false;
-	}
-	
-	
-	
-	
-	
-	
+	public static string RemoveCharacters(this string text, IEnumerable<string> items)
+		{
+		var sb=new System.Text.StringBuilder(text);
+		foreach(var item in items)
+		{
+		var oldVal=sb.ToString();
+		sb.Clear();
+		sb.Append(oldVal.Replace(item,string.Empty));
+		}
+		return sb.ToString();
+		}
+	public static string RemoveMultipleWhitespaces(this string text)
+		{
+			return Regex.Replace(text,"\\s\\s+"," ");
+		}
+	public static string TruncateTo(this string text, byte count)
+		{
+		if(text==null ||text.Length<=count)
+		return text;
+		return text.Substring(0,count);
+		
+		}
+	public static bool HasValue(this string text)
+		{
+		return string.IsNullOrEmpty(text)==false;
+		}
 }
 public static class EnumerableExtensions
 {
-public enum Ordering
-	{
-	Ascending,
-	Descending
-	}
-	
-public static IOrderedEnumerable<T> ThenByPriority<T,TKey>(this IOrderedEnumerable<T> source,
-IEnumerable<TKey> priorities,Ordering ordering=Ordering.Ascending)
-	{
-		var prioritySort=priorities.ToArray();
-		if(ordering== Ordering.Ascending)
-		return source.ThenBy(s=>Array.IndexOf(prioritySort,s)*-1);
-		return source.ThenByDescending(s=>Array.IndexOf(prioritySort,s)*-1);
-	}
-public static IOrderedEnumerable<T> OrderByPriority<T,TKey>(this IEnumerable<T> source, IEnumerable<TKey> priorities,Func<T,TKey> keySelector,Ordering ordering=Ordering.Ascending)
-{
-var prioritySort=priorities.ToArray();
-return source.OrderBy(s=>Array.IndexOf(prioritySort,keySelector(s))*-1);
-
-}
-
-public static IEnumerable<TSource> ExceptBy<TSource,TKey>(this IEnumerable<TSource> first,IEnumerable<TSource> second,Func<TSource,TKey> keySelector,IEqualityComparer<TKey> keyComparer=null)
-	{
-		HashSet<TKey> keys=new HashSet<TKey>(second.Select(keySelector),keyComparer);
-		foreach(var element in first)
+	public enum Ordering
 		{
-		TKey key= keySelector(element);
-		if(keys.Contains(key))
-		continue;
-		yield return element;
-		keys.Add(key);
+		Ascending,
+		Descending
 		}
-	}
-public static IEnumerable<Tuple<T,int>> WithIndex<T>(this IEnumerable<T> enumerable)
+	
+	public static IOrderedEnumerable<T> ThenByPriority<T,TKey>(this IOrderedEnumerable<T> source,
+	IEnumerable<TKey> priorities,Ordering ordering=Ordering.Ascending)
+		{
+			var prioritySort=priorities.ToArray();
+			if(ordering== Ordering.Ascending)
+			return source.ThenBy(s=>Array.IndexOf(prioritySort,s)*-1);
+			return source.ThenByDescending(s=>Array.IndexOf(prioritySort,s)*-1);
+		}
+	public static IOrderedEnumerable<T> OrderByPriority<T,TKey>(this IEnumerable<T> source, IEnumerable<TKey> priorities,Func<T,TKey> keySelector,Ordering ordering=Ordering.Ascending)
 	{
-	return enumerable.Select((item,index)=>Tuple.Create(item,index));
-	}
-
-public static string Delimit(this IEnumerable<string> values, string delimiter)
-	{
-	return values.Aggregate ((s1,s2)=>s1+delimiter+s2);
+	var prioritySort=priorities.ToArray();
+	return source.OrderBy(s=>Array.IndexOf(prioritySort,keySelector(s))*-1);
+	
 	}
 	
+	public static IEnumerable<TSource> ExceptBy<TSource,TKey>(this IEnumerable<TSource> first,IEnumerable<TSource> second,Func<TSource,TKey> keySelector,IEqualityComparer<TKey> keyComparer=null)
+		{
+			HashSet<TKey> keys=new HashSet<TKey>(second.Select(keySelector),keyComparer);
+			foreach(var element in first)
+			{
+			TKey key= keySelector(element);
+			if(keys.Contains(key))
+			continue;
+			yield return element;
+			keys.Add(key);
+			}
+		}
+	public static IEnumerable<Tuple<T,int>> WithIndex<T>(this IEnumerable<T> enumerable)
+		{
+		return enumerable.Select((item,index)=>Tuple.Create(item,index));
+		}
+	
+	public static string Delimit(this IEnumerable<string> values, string delimiter)
+		{
+		return values.Aggregate ((s1,s2)=>s1+delimiter+s2);
+		}
+		
 }
 
 public static StreamOuts RunProcessRedirected(string filename,string arguments)
 {
-var psi=new ProcessStartInfo(filename){ RedirectStandardError=true, RedirectStandardOutput=true //,RedirectStandardInput=true 
+	var psi=new ProcessStartInfo(filename){ RedirectStandardError=true, RedirectStandardOutput=true //,RedirectStandardInput=true 
 		, UseShellExecute=false,ErrorDialog=false, CreateNoWindow=true} ; // WinMgmt or WMSvc?
 
-	 
 	 using(var ps=new Process(){ StartInfo=psi})
 	 {
-	
-	 return ps.RunProcessRedirected(arguments);
+	 	return ps.RunProcessRedirected(arguments);
 	 }
 }
 public static class Extensions
 {
 
-public static string ValueOrEmpty<T>(this T? nullable, Func<T,string> projection=null)
-where T:struct
-{
-	if(nullable.HasValue==false)
-	return String.Empty;
-	if(projection==null)
-	return nullable.Value.ToString();
-	return projection(nullable.Value);
-}
+	public static string ValueOrEmpty<T>(this T? nullable, Func<T,string> projection=null)
+	where T:struct
+	{
+		if(nullable.HasValue==false)
+		return String.Empty;
+		if(projection==null)
+		return nullable.Value.ToString();
+		return projection(nullable.Value);
+	}
 
-//public static IEnumerable<T> ContainedValues<T>(this Enum flagEnum)
-//	where T:struct
-//{
-//if(Enum.IsDefined(typeof(T),
-//	return from v in Enum.GetValues(typeof(T)).Cast<T>()
-//			where (flagEnum && (Enum)v)==(Enum)v
-//			select (T)v;
-//}
 // Define other methods and classes here
 //public static StreamOuts RunProcessRedirected(this Process ps, string arguments)
 //		{
