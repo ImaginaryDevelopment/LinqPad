@@ -1,19 +1,7 @@
 <Query Kind="FSharpProgram" />
 
 // no entity types up top only value types (no db persistance concerns)
-//type Month = 
-//	|January = 1
-//	|February = 2
-//	|March = 3
-//	|April = 4
-//	|May = 5
-//	|June = 6
-//	|July = 7
-//	|August = 8
-//	|September = 9
-//	|October = 10
-//	|November= 11
-//	|December= 12
+let isLinqPad = true
 DateTime.MinValue.Dump()
 type DoB = | DoB of System.DateTime
 let DoB (dt:DateTime) = // shadow constructor
@@ -123,30 +111,22 @@ type UserInvitationEntity = //entity
 
 // does not compile, as it should not
 // let emailAddress1 = Email 1
-let validateConstructor (f, seq ) = 
-	for (input,expected) in seq do
-		let actual = f input
-		match (actual,expected) with
-		| (Some(email),true) -> actual.Dump("is valid")
-		| (Some(email),false) -> Util.Highlight(actual).Dump("should not be valid")
-		| (None,true) -> Util.Highlight(input).Dump("should be valid")
-		| (None,false) -> input.Dump("is invalid")
+let validateConstructor<'i,'o> (f:'i->'o option, seq ) =
+	let map = fun (input:'i,expected) -> 
+		let aOption:'o option = f(input)
+		match (aOption,expected) with
+		| (Some(actual),false) -> 
+			if isLinqPad then Util.Highlight(actual).Dump("should not be valid")
+			failwithf "%A should not be valid" actual
+		| (Some(actual),true) -> (actual :> obj,"is valid")
+		| (None,true) ->
+			if isLinqPad then Util.Highlight(input).Dump("should be valid")
+			failwithf "%A should be valid" input
+		| (None,false) -> (input :> obj,"is invalid")
+	Seq.map map seq
 
-let emailConstructors = [|("hello",false);("hello@",false);("hello@goodbye.com",true);("@nospam.net",false)|];
-validateConstructor(Email,emailConstructors)
-//for (ec,expected) in emailConstructors do
-//	let em = Email ec
-//	match (em,expected) with 
-//	| (Some(email),true) -> email.Dump("is valid")
-//	| (Some(email),false) -> Util.Highlight(email).Dump("should not be valid")
-//	| (None,true) -> Util.Highlight(ec).Dump("should be valid")
-//	| (None,false) -> ec.Dump("is invalid")
-
-let dobConstructors = [(DateTime(1910,12,1),true);(DateTime(1900,1,1),false)]
-for (dobC,expected) in dobConstructors do
-	let dob = DoB dobC
-	match (dob,expected) with
-	| (Some(dt),true) -> dt.Dump("is valid")
-	| (Some(dt),false) -> Util.Highlight(dt).Dump("should not be valid")
-	| (None,true) -> Util.Highlight(dobC).Dump("should be valid")
-	| (None,false) -> dobC.Dump("is invalid")
+//validateConstructor(Email,[|("hello",false);("hello@",false);("hello@goodbye.com",true);("@nospam.net",false)|]).Dump()
+(Email,[|("hello",false);("hello@nospam",false);("hello@goodbye.com",true);("@nospam.net",false)|]) |> validateConstructor 
+	|> if isLinqPad then Dump else ignore
+(DoB,[|(DateTime(1910,12,1),true);(DateTime(1900,1,1),false)|]) |> validateConstructor 
+	|> if isLinqPad then Dump else ignore
