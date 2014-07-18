@@ -10,11 +10,12 @@
 
 void Main()
 {
+		var tfsServer = Environment.GetEnvironmentVariable("servers").Dump().Split(new []{";"},StringSplitOptions.RemoveEmptyEntries).Dump().FirstOrDefault(c=>c.Contains("tfs"));
+	var tfsUrl= "https://"+tfsServer;
+	var tfsUri= new Uri(tfsUrl); 
 	
-	var tfs08Uri= new Uri("https://tfs.oceansideten.com"); 
 	
-	
-	using(var tfsPc=new TfsTeamProjectCollection(tfs08Uri))
+	using(var tfsPc=new TfsTeamProjectCollection(tfsUri))
 	
 	{
 		//tfsPc.Dump();
@@ -59,7 +60,7 @@ public static IEnumerable<KeyValuePair<string,string>> lookup(IEnumerable<string
 
 using(var de=new System.DirectoryServices.DirectoryEntry())
 {
-	var customPath="LDAP://DC=RBIDev,DC=local";
+	var customPath="LDAP://DC="+Environment.UserDomainName+",DC=local";
 	de.Path=customPath;
 	de.AuthenticationType= System.DirectoryServices.AuthenticationTypes.Secure;
 	

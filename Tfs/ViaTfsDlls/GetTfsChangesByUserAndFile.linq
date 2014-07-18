@@ -5,13 +5,16 @@
   <Namespace>Microsoft.TeamFoundation.VersionControl.Client</Namespace>
 </Query>
 
-var tfsServer = Environment.GetEnvironmentVariable("servers").Dump().Split(new []{";"},StringSplitOptions.RemoveEmptyEntries).Dump().FirstOrDefault(c=>c.Contains("tfs"));
+var tfsServer = Environment.GetEnvironmentVariable("servers").Split(new []{";"},StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(c=>c.Contains("tfs"));
 var tfsUri= "https://"+tfsServer;
 var tfs=new Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(new Uri(tfsUri));
 var vcs=tfs.GetService<VersionControlServer>();
-vcs.Dump();
-//vcs.GetItems("*.user", RecursionType.Full).Dump();
+
 var tp=vcs.GetTeamProject("Development");
-var dev=vcs.GetItem("$/Development");
-var items = vcs.GetItems("$/Development/**.user", RecursionType.Full);
-items.Items.Select (i => i.ServerItem).Dump();
+
+vcs.QueryHistory("$/Development",VersionSpec.Latest,0, RecursionType.Full,Environment.UserName,null,null, Int32.MaxValue,true,false)
+	.Cast<Changeset>()
+	.Where(cs=>cs.Changes
+		.All(x=>x.Item.ServerItem.Contains("/Playground/"))==false)
+	.Select(cs=>new{cs.ChangesetId,cs.CreationDate, WorkItems=cs.AssociatedWorkItems.Select(wi=>new{wi.Id,wi.Title,wi.WorkItemType}),Changes=cs.Changes.Select(c=>c.Item.ServerItem)}).Dump("rollup on changeset/dat\ea");
+

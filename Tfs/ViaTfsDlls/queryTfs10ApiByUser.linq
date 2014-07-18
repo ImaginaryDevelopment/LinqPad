@@ -18,10 +18,9 @@ var onlyLocks=//false;
 	Util.ReadLine<bool>("only locked files?",true);
 var minDate=DateTime.Today.AddDays(-30);
 
-	Uri tfs10Uri= new Uri("https://tfs.oceansideten.com");
+	var tfsServer = Environment.GetEnvironmentVariable("servers").Dump().Split(new []{";"},StringSplitOptions.RemoveEmptyEntries).Dump().FirstOrDefault(c=>c.Contains("tfs"));
+	var tfsUri= "https://"+tfsServer;
 	
-	
-	var tfsUri=tfs10Uri;
 	using(var tfsPc=new TfsTeamProjectCollection(tfsUri))
 	
 	{
@@ -80,7 +79,7 @@ public static IEnumerable<KeyValuePair<string,string>> lookup(IEnumerable<string
 using(var de=new System.DirectoryServices.DirectoryEntry())
 {
 //CN=Brandon D'Imperio,OU=Development,OU=Oceanside Ten,DC=RBIDev,DC=local
-	var customPath="LDAP://DC=RBIDev,DC=local";
+	var customPath="LDAP://DC="+Environment.UserDomainName+",DC=local";
 	de.Path=customPath;
 	de.AuthenticationType= System.DirectoryServices.AuthenticationTypes.Secure;
 	

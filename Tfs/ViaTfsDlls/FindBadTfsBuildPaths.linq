@@ -2,8 +2,8 @@
 
 void Main()
 {
-
-	var localbase=@"\\Svrrbidevbuild01\c$\";
+	var buildServer = Environment.GetEnvironmentVariable("servers").Dump().Split(new []{";"},StringSplitOptions.RemoveEmptyEntries).Dump().FirstOrDefault(c=>c.Contains("build"));
+	var localbase=@"\\"+buildServer+@"\c$\";
 	var remotebase=@"C:\";
 	var relative=@"builds\1";
 	foreach(var item in RecurseFiles(localbase+relative))

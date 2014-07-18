@@ -1,6 +1,8 @@
 <Query Kind="FSharpProgram" />
 
 type String with 
+	member x.split ( [<ParamArray>] delimiters: string array) = 
+		x.Split(delimiters, StringSplitOptions.None)
 	member x.Before(delimiter:string) : string = 
 		x.Substring(0,x.IndexOf(delimiter))
 	member x.After(delimiter:string) : string =

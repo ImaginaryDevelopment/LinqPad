@@ -5,7 +5,10 @@
   <Namespace>Microsoft.TeamFoundation.VersionControl.Client</Namespace>
 </Query>
 
-var tfs=new Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(new Uri("https://tfs.oceansideten.com"));
+var tfsServer = Environment.GetEnvironmentVariable("servers").Dump().Split(new []{";"},StringSplitOptions.RemoveEmptyEntries).Dump().FirstOrDefault(c=>c.Contains("tfs"));
+var tfsUri= "https://"+tfsServer;
+var tfs=new Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(new Uri(tfsUri));
+
 //TeamFoundationServer tfs = TeamFoundationServerFactory.GetServer("https://tfs.oceansideten.com/");
 VersionControlServer versionControl = (VersionControlServer)tfs.GetService(typeof(VersionControlServer));
 //Workspace ws = versionControl.GetWorkspace(Environment.MachineName, Environment.UserName);

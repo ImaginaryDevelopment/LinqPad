@@ -3,8 +3,15 @@ void Main()
 {
 	// WorkItemChanges	.Where(wic=>wic.SystemId==3997)// wic.MicrosoftVSTSCommonResolvedBy=="Brandon D'Imperio")
 	//WorkItemsLatestAndWere.Where(i=>i.ID==3997).OrderByDescending(a=>a.ChangedDate).Take(10).Dump();
+	//this.Tbl_TeamConfigurationIterations.Dump();
+	//this.Tbl_Iterations.Dump();
 	var myPersonId= 4142;
-	var currentIterationId=314;
+	var qIteration = from wia in WorkItemsAres.Where(x=>x.AssignedTo==myPersonId && x.State!="Closed" && x.State!="Resolved")
+					join iLeft in Tbl_Iterations on wia.IterationID equals iLeft.SequenceId into iL
+					from iteration in iL.DefaultIfEmpty()
+					select new {iteration.Iteration,wia};
+	//qIteration.Dump();//.Select(x=>new{x.AreaID,x.IterationID, x.Title,x.WorkItemType}).Dump();
+	var currentIterationId=330;
 	
 	
 	var dic= new Dictionary<string,DateTime>{
@@ -20,11 +27,12 @@ void Main()
 	var totalHoursTracked=myWorkItemProjections.Sum(x=>x.Hours);
 	var trackedWorkByDay = myWorkItemProjections.GroupBy(x=>x.Changed,x=>x.Hours);//.Dump();	
 	var divisor=myWorkItemProjections.Select(x=>x.Changed).Distinct().Count();
-	var avgTrackedHoursPerDay =totalHoursTracked/(divisor>0?divisor:1) ;
+	var avgTrackedHoursPerDay =totalHoursTracked/(divisor>0?divisor:1);
 	new{ totalHoursTracked,avgTrackedHoursPerDay,trackedWorkByDay,myWorkItemProjections }.Dump(lbl,1);
 	}
 	//
 }
+
 public IEnumerable<Projection> GetMyWorkItemChangeProjections(int currentIterationId, int myPersonId,DateTime startDt){
 var workItemIdsThisIteration=WorkItemsLatests.Where(i=>i.IterationID==currentIterationId).Select(i=>i.ID).Distinct().ToArray();//.Dump("workItemIds");
 	//workItemIdsThisIteration=new[]{4004};
