@@ -125,3 +125,43 @@ type ClientSelectorCollection(keys) =
 	member x.AscxCs = sprintf """IDictionary<int, string> %s = GetInlineEdits("%s", Request.Form);""" keys.HiddenName keys.HiddenName
 	
 	
+for k in AllKeys do // TODO: account for tests that really should ensure items occur more than once
+	let csColl = ClientSelectorCollection(k)
+	
+	(k,csColl.Asp,csColl.Selectors,csColl.JsClientSelectors,csColl.JsBeforeReq,csColl.JsInitialize) |> Dump
+	printfn "Validating %s" k.Pascal
+//validation
+ 
+	
+	let targetJsTextValidation = 
+		
+		let text = System.IO.File.ReadAllText(targetJs)
+		let missingSelectors = 
+			csColl.Selectors
+			|>Seq.map (fun x->x.DataRole)
+			|>Seq.filter(fun x->text.Contains(x)=false)
+		if Seq.isEmpty(missingSelectors)=false then failwithf "some expected .js lines were missing %A" missingSelectors
+		let before,after = text.Before("prm.add_beginRequest"), text.After("prm.add_beginRequest")
+		if before.Contains(csColl.JsBeforeReq)=false then failwithf ".js: missing call in $saves %A" csColl.JsBeforeReq
+		if after.Contains(csColl.JsBeforeReq)=false then failwithf ".js: missing call in add_beginRequest %A" csColl.JsBeforeReq
+		if text.Contains(csColl.JsInitialize)= false then failwithf ".js: missing call(s) to InitializeHandler\r\n%A" csColl.JsInitialize
+		printfn "js tests passed"
+	let targetAspxValidation =
+		let text = System.IO.File.ReadAllText(targetAspx)
+		if text.Contains(csColl.Keys.HiddenDom)=false then failwithf ".aspx: missing %A" csColl.Keys.HiddenDom
+		printfn "aspx tests passed"
+	let targetAscxCsValidation = 
+		let text = System.IO.File.ReadAllText(targetAscx+".cs") 
+		if text.After("void SaveQuotaGroupEdits").Contains(csColl.AscxCs)=false then failwithf ".ascx.cs Save missing call %A" csColl.AscxCs
+		if text.Before("void SaveQuotaGroupEdits").Contains(csColl.AscxCs)=false then failwithf ".ascx.cs: Validate missing call %A" csColl.AscxCs
+		
+		printfn "ascxCs tests passed"
+	let targetAscxValidation = 
+		let text = System.IO.File.ReadAllText(targetAscx)
+		csColl.Selectors
+		//|> Seq.filter (fun s-> s.InlineComponent <> InlineEditorComponent.ItemChild)
+		|> Seq.iter (fun s ->
+			if text.Contains(s.Dom) = false then failwithf ".ascx: missing %A" s.Dom
+			)
+		printfn "ascx tests passed"
+	()
