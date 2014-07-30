@@ -4,7 +4,7 @@
 
 
 
-type Keys = {Header:string;Pascal:string;Camel:string;Field:string;DisplayAccessor:string;HiddenDom:string}
+type Keys = {Header:string;Pascal:string;Camel:string;Field:string;DisplayAccessor:string;HiddenName:string;HiddenDom:string;AddlDisplayAttrs:(string->string) option}
 
 let toPascalCase s = 
 	s
@@ -30,36 +30,42 @@ let humanize camel :string =
 //	|FormattedPositiveInt 
 //	|RequestedMembers
 
-let createKeys camel field header accessor =
+let createKeys (camel:string) field header accessor addlDisplayAttrs=
+	if(Char.IsUpper(camel.[0])) then failwithf "camel was not camel %s" camel
+	let hiddenName = sprintf "%sEdits" camel
 	let hidden = sprintf """<input type="hidden" name="%s"/>"""
 	{
 		Keys.Header=header
 		Field=field
-		DisplayAccessor = accessor
+		DisplayAccessor = accessor field
 		Camel=camel 
-		HiddenDom= hidden field
+		HiddenName = hiddenName
+		HiddenDom= hidden hiddenName
 		Pascal= toPascalCase camel //FromCamel
+		AddlDisplayAttrs= addlDisplayAttrs
 	}
-let keys = 
-	let camel="overQuotaCap"
-	let field="OverQuotaCap"
-	let header = "OverQuota Cap"
-	let defaultAccessor = sprintf """Eval("%s")"""
+
+let AllKeys = 
 	let formattedPositiveIntAccessor = sprintf """GetFormattedPositiveInt(Eval("%s"))"""
-	let reqMembersAccessor = sprintf """GetRequestedMembers(Eval("%s")) + (Convert.ToBoolean(Eval("IsQuotaCap")) ? "*" : "")"""
-	let accessor = formattedPositiveIntAccessor field
-	createKeys camel field header accessor
 	
+	let defaultAccessor = sprintf """Eval("%s")"""	
+	let reqMembersAccessor = sprintf """GetRequestedMembers(Eval("%s")) + (Convert.ToBoolean(Eval("IsQuotaCap")) ? "*" : "")"""	
+	let priceAccessor = sprintf """GetPrice(Eval("FinalPrice"), Eval("%s"))"""
+	let priceAttrs = sprintf """data-overrideprice="<%%#Eval("%s")%%>" data-finalprice="<%%#Eval("FinalPrice")%%>" """
+	seq {
+		yield(createKeys "overQuotaCap" "OverQuotaCap" "OverQuota Cap" formattedPositiveIntAccessor None)
+		yield(createKeys "reqCompletes" "RequestedMembers" "Requested Completes" reqMembersAccessor None)
+		yield(createKeys "price" "OverridePrice" "Price"  priceAccessor (Some(priceAttrs)))
+	}
 
-
-//						
 type InlineEditorComponent = 
 	|Display
 	|Editor
 	|EditLink
 	|ItemChild
 
-type ClientSelector(nameFun,inlineComponent:InlineEditorComponent) =
+
+type ClientSelector(inlineComponent:InlineEditorComponent,keys) =
 	//let roles = { InlineEditorRole.Display = sprintf "%sDisplay" keys.Pascal; Editor=sprintf "%sEditor" keys.Pascal;EditLink=sprintf "%sEditLink" keys.Pascal;ItemChild=sprintf "%sItemChild" keys.Pascal}
 	static member private makeRole c = match c with 
 										|Display -> sprintf "%sDisplay"
@@ -69,22 +75,29 @@ type ClientSelector(nameFun,inlineComponent:InlineEditorComponent) =
 	static member private dataRoleSelector = sprintf "%s: '[data-role=%s]'"
 	
 	member x.InlineComponent = inlineComponent
-	member x.Name = nameFun keys.Camel
+	member x.Name = ClientSelector.makeRole inlineComponent keys.Camel
 	member x.Role = ClientSelector.makeRole inlineComponent keys.Pascal
 	member x.DataRole = ClientSelector.dataRoleSelector x.Name x.Role
 	
 	member x.Dom = match inlineComponent with
-					|Display -> sprintf """<span data-role="%s" class="fieldDisplay"><%%#%s%%></span>""" x.Role keys.DisplayAccessor
+					|Display -> 
+						let displayAttrs =if keys.AddlDisplayAttrs.IsSome then " "+(keys.AddlDisplayAttrs.Value keys.Field) else ""
+						sprintf """<span data-role="%s" class="fieldDisplay"%s><%%#%s%%></span>""" x.Role displayAttrs keys.DisplayAccessor
 					|EditLink -> sprintf """<i  data-role="%s" class="onHover fa fa-pencil-square-o" title="edit"></i>""" x.Role
 					|Editor -> sprintf """<input data-role="%s" type="text" disabled="disabled" name="%s<%%# Eval("ProjectQuotaId") %%>" style="display:none;width:90px" value="" data-original-value="" data-quotaGroupId="<%%# Eval("ProjectQuotaId") %%>"/>""" x.Role keys.Pascal 
-					|ItemChild-> failwithf "Can't generate dom for itemChild directly" 
-
-module ClientEditable =
-	let display = ClientSelector(sprintf "%sDisplay",InlineEditorComponent.Display)
-	let editor = ClientSelector(sprintf "%sEditor",InlineEditorComponent.Editor)
-	let editLink = ClientSelector(sprintf "%sEditLink",InlineEditorComponent.EditLink)
-	let child = ClientSelector(sprintf "%sItemChild", InlineEditorComponent.ItemChild)
-	let asp = sprintf """ <asp:TemplateColumn HeaderText="%s">
+					|ItemChild-> sprintf"""<span data-role="%s">""" x.Role  //failwithf "Can't generate dom for itemChild directly" 
+					
+type HandlerArgs = {StorageKey:string; HiddenName:string; EditorSelector:string}
+type InitializeHandlerArgs = {EditLinkSelector:string;ChildSelector:string;}
+type ClientSelectorCollection(keys) =
+	
+	let createClient com = ClientSelector(com,keys)
+	member x.Keys = keys
+	member x.Display = createClient InlineEditorComponent.Display
+	member x.Editor = createClient InlineEditorComponent.Editor
+	member x.EditLink = createClient InlineEditorComponent.EditLink
+	member x.ItemChild = createClient InlineEditorComponent.ItemChild
+	member x.Asp = sprintf """ <asp:TemplateColumn HeaderText="%s">
                             <ItemTemplate>
                                  <span data-role="%s">
                                         %s
@@ -93,33 +106,22 @@ module ClientEditable =
                                     </span>
                                 
                             </ItemTemplate>
-                        </asp:TemplateColumn>""" keys.Header child.Role editLink.Dom display.Dom editor.Dom
-	let selectors = [
-			display
-			editor
-			editLink
-			child
+                        </asp:TemplateColumn>""" keys.Header x.ItemChild.Role x.EditLink.Dom x.Display.Dom x.Editor.Dom
+	member x.Selectors = [
+			x.Display
+			x.Editor
+			x.EditLink
+			x.ItemChild
 		]
-	
-let jsClientSelectors= 
-	sprintf """		%s, 
+	member x.JsClientSelectors = 
+		sprintf """		%s, 
 			%s,
 			%s,
-			%s""" ClientEditable.display.DataRole ClientEditable.editor.DataRole ClientEditable.editLink.DataRole ClientEditable.child.DataRole
+			%s""" x.Display.DataRole x.Editor.DataRole x.EditLink.DataRole x.ItemChild.DataRole
+	member x.HandlerArgs = {HandlerArgs.StorageKey=keys.Camel+"Edits"; HiddenName=keys.Camel+"Edits";EditorSelector = sprintf "%sEditor" keys.Camel}
+	member x.JsBeforeReq = //before save or updatePanel request starts
+		sprintf """beforeSavePostHandler(currentTabIsQuotaGroups, quotaGroupTabStorage, '%s', '%s', clientSelectors.%s, $qgGrid);""" x.HandlerArgs.StorageKey x.HandlerArgs.HiddenName x.HandlerArgs.EditorSelector	
+	member x.JsInitialize = sprintf """quotaGridInlineEditsInitializeHandler(clientSelectors.%s, clientSelectors.%s, clientSelectors.%s, clientSelectors.quotaGroupIdAttr, clientSelectors.%s, quotaGroupTabStorage, '%s');""" x.EditLink.Name x.ItemChild.Name x.Editor.Name x.Display.Name x.HandlerArgs.StorageKey
+	member x.AscxCs = sprintf """IDictionary<int, string> %s = GetInlineEdits("%s", Request.Form);""" keys.HiddenName keys.HiddenName
 	
-(* var createClient = function(target,camel, pascal) {
-        target[camel + 'Editor'] = "'[data-role=" + camel + "Editor]'";
-        target[camel+'Display'] = "'[data-role="
-    };
-	*)
-type HandlerArgs = {StorageKey:string; HiddenName:string; EditorSelector:string}
-let handlerArgs = {HandlerArgs.StorageKey=keys.Camel+"Edits"; HiddenName=keys.Camel+"Edits";EditorSelector = sprintf "%sEditor" keys.Camel}
-
-let jsBeforeReq=  //before save or updatePanel request starts
 	
-	sprintf """beforeSavePostHandler(currentTabIsQuotaGroups, quotaGroupTabStorage, '%s', '%s', clientSelectors.%s, $qgGrid);""" handlerArgs.StorageKey handlerArgs.HiddenName handlerArgs.EditorSelector
-type InitializeHandlerArgs = {EditLinkSelector:string;ChildSelector:string;}
-let jsInitialize = sprintf """quotaGridInlineEditsInitializeHandler(clientSelectors.%s, clientSelectors.%s, clientSelectors.%s, clientSelectors.quotaGroupIdAttr, clientSelectors.%s, quotaGroupTabStorage, '%s');""" ClientEditable.editLink.Name ClientEditable.child.Name ClientEditable.editor.Name ClientEditable.display.Name handlerArgs.StorageKey
-
-(keys,ClientEditable.asp,ClientEditable.selectors,jsClientSelectors,jsBeforeReq,jsInitialize) |> Dump
-
