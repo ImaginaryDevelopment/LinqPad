@@ -33,7 +33,7 @@ let humanize camel :string =
 let createKeys (camel:string) field header accessor addlDisplayAttrs=
 	if(Char.IsUpper(camel.[0])) then failwithf "camel was not camel %s" camel
 	let hiddenName = sprintf "%sEdits" camel
-	let hidden = sprintf """<input type="hidden" name="%s"/>"""
+	let hidden = sprintf """<input type="hidden" name="%s" />"""
 	{
 		Keys.Header=header
 		Field=field
@@ -51,11 +51,15 @@ let AllKeys =
 	let defaultAccessor = sprintf """Eval("%s")"""	
 	let reqMembersAccessor = sprintf """GetRequestedMembers(Eval("%s")) + (Convert.ToBoolean(Eval("IsQuotaCap")) ? "*" : "")"""	
 	let priceAccessor = sprintf """GetPrice(Eval("FinalPrice"), Eval("%s"))"""
-	let priceAttrs = sprintf """data-overrideprice="<%%#Eval("%s")%%>" data-finalprice="<%%#Eval("FinalPrice")%%>" """
+	let priceAttrs (s:string) = sprintf """data-overrideprice="<%%#Eval("%s")%%>" data-finalprice="<%%#Eval("FinalPrice")%%>%s""" s ("\"")
 	seq {
-		yield(createKeys "overQuotaCap" "OverQuotaCap" "OverQuota Cap" formattedPositiveIntAccessor None)
+		
 		yield(createKeys "reqCompletes" "RequestedMembers" "Requested Completes" reqMembersAccessor None)
 		yield(createKeys "price" "OverridePrice" "Price"  priceAccessor (Some(priceAttrs)))
+		yield(createKeys "overQuotaCap" "OverQuotaCap" "OverQuota Cap" formattedPositiveIntAccessor None)
+		yield(createKeys "completedCap" "CompletedCap" "Completed Cap" formattedPositiveIntAccessor None)
+		yield(createKeys "terminatedCap" "TerminatedCap" "Terminated Cap" formattedPositiveIntAccessor None)
+		yield(createKeys "quotaName" "QuotaName" "Name" defaultAccessor None)
 	}
 
 type InlineEditorComponent = 
@@ -83,8 +87,8 @@ type ClientSelector(inlineComponent:InlineEditorComponent,keys) =
 					|Display -> 
 						let displayAttrs =if keys.AddlDisplayAttrs.IsSome then " "+(keys.AddlDisplayAttrs.Value keys.Field) else ""
 						sprintf """<span data-role="%s" class="fieldDisplay"%s><%%#%s%%></span>""" x.Role displayAttrs keys.DisplayAccessor
-					|EditLink -> sprintf """<i  data-role="%s" class="onHover fa fa-pencil-square-o" title="edit"></i>""" x.Role
-					|Editor -> sprintf """<input data-role="%s" type="text" disabled="disabled" name="%s<%%# Eval("ProjectQuotaId") %%>" style="display:none;width:90px" value="" data-original-value="" data-quotaGroupId="<%%# Eval("ProjectQuotaId") %%>"/>""" x.Role keys.Pascal 
+					|EditLink -> sprintf """<i data-role="%s" class="onHover fa fa-pencil-square-o" title="edit"></i>""" x.Role
+					|Editor -> sprintf """<input data-role="%s" type="text" disabled="disabled" name="%s<%%# Eval("ProjectQuotaId") %%>" style="display: none; width: 90px" value="" data-original-value="" data-quotagroupid="<%%# Eval("ProjectQuotaId") %%>" />""" x.Role keys.HiddenName 
 					|ItemChild-> sprintf"""<span data-role="%s">""" x.Role  //failwithf "Can't generate dom for itemChild directly" 
 					
 type HandlerArgs = {StorageKey:string; HiddenName:string; EditorSelector:string}
@@ -123,7 +127,8 @@ type ClientSelectorCollection(keys) =
 		sprintf """beforeSavePostHandler(currentTabIsQuotaGroups, quotaGroupTabStorage, '%s', '%s', clientSelectors.%s, $qgGrid);""" x.HandlerArgs.StorageKey x.HandlerArgs.HiddenName x.HandlerArgs.EditorSelector	
 	member x.JsInitialize = sprintf """quotaGridInlineEditsInitializeHandler(clientSelectors.%s, clientSelectors.%s, clientSelectors.%s, clientSelectors.quotaGroupIdAttr, clientSelectors.%s, quotaGroupTabStorage, '%s');""" x.EditLink.Name x.ItemChild.Name x.Editor.Name x.Display.Name x.HandlerArgs.StorageKey
 	member x.AscxCs = sprintf """IDictionary<int, string> %s = GetInlineEdits("%s", Request.Form);""" keys.HiddenName keys.HiddenName
-	
+	member x.ValidateLine = sprintf """ValidateInlineEditInput("%s", "%s",""" keys.HiddenName keys.Header
+	member x.SaveIfLine = sprintf """if (%s != null && %s.ContainsKey(qgId))""" keys.HiddenName keys.HiddenName
 	
 for k in AllKeys do // TODO: account for tests that really should ensure items occur more than once
 	let csColl = ClientSelectorCollection(k)
@@ -152,8 +157,9 @@ for k in AllKeys do // TODO: account for tests that really should ensure items o
 		printfn "aspx tests passed"
 	let targetAscxCsValidation = 
 		let text = System.IO.File.ReadAllText(targetAscx+".cs") 
-		if text.After("void SaveQuotaGroupEdits").Contains(csColl.AscxCs)=false then failwithf ".ascx.cs Save missing call %A" csColl.AscxCs
-		if text.Before("void SaveQuotaGroupEdits").Contains(csColl.AscxCs)=false then failwithf ".ascx.cs: Validate missing call %A" csColl.AscxCs
+		if text.Contains(csColl.ValidateLine) = false then failwithf ".ascx.cs Validate missing call %A" csColl.ValidateLine
+		if text.Contains(csColl.AscxCs)=false then failwithf ".ascx.cs Save missing call %A" csColl.AscxCs
+		if text.Contains(csColl.SaveIfLine) = false then failwithf ".ascx.cs: Save missing if block %A" csColl.SaveIfLine
 		
 		printfn "ascxCs tests passed"
 	let targetAscxValidation = 
