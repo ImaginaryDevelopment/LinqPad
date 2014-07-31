@@ -3,7 +3,13 @@
 </Query>
 
 // clean Html for display elsewhere
-let input ="<!DOCTYPE html>"+System.Windows.Forms.Clipboard.GetText()
+
+let baseLoc =
+	"""http://foo.com/Pages/Projects/EditProject.aspx"""
+let input =
+	let clip =System.Windows.Forms.Clipboard.GetText()
+	if clip.StartsWith("<html")=false then failwithf "expected an html document instead of %s..." (clip.Substring(0,5))
+	"<!DOCTYPE html>"+clip
 printfn "was %i" input.Length
 let doc = HtmlAgilityPack.HtmlDocument()
 doc.LoadHtml(input)
@@ -45,5 +51,3 @@ for (e,attr,nodes) in getElementsWithAttrs relativeElements do
 //printfn "scripts removed: %i" doc.DocumentNode.OuterHtml.Length
 doc.DocumentNode.OuterHtml.Length
 doc.DocumentNode.OuterHtml.Dump("oh hai")
-
-
