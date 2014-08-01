@@ -8,18 +8,21 @@ open Microsoft.FSharp.Quotations
 open Microsoft.FSharp.Quotations.DerivedPatterns
 open Microsoft.FSharp.Quotations.Patterns
 
-//let expr : Expr<int> = <@ 1 + 1 @>
-//let (?) (this:'Source) (prop:string) : 'Result =
-//  let p = this.GetType().GetProperty(prop)
-//  p.GetValue(this,null) :?> 'Result
+//http://www.contactandcoil.com/software/dotnet/getting-a-property-name-as-a-string-in-f/
+
 type thing = 
     { First : int
-      Second : int }
+      Second : int;Hello:string;HelloOption:string option }
 
 let something = 
-    Some({ thing.First = 1
-           Second = 2 })
+    Some { thing.First = 1
+           Second = 2
+		   Hello="hello"
+		   HelloOption=Some("helloOption")
+		   }
 
+let somethingElse = 
+	Some({something.Value with Hello=null;HelloOption=None})
 let nothing = Option<thing>.None
 
 let (|SomeObj|_|) = // http://stackoverflow.com/a/6290897/57883
@@ -148,6 +151,13 @@ let maybe (expr : Expr) : Option<_> =
 
 printfn "%A" (maybe <@ something.Value.First @>)
 printfn "%A" (maybe <@ something.Value.Second @>)
+printfn "%A" (maybe <@ something.Value.Hello @>)
+printfn "%A" (maybe <@ something.Value.HelloOption @>)
+printfn "\r\n and now something else \r\n"
+printfn "%A" (maybe <@ somethingElse.Value.First @>)
+printfn "%A" (maybe <@ somethingElse.Value.Second @>)
+printfn "%A" (maybe <@ somethingElse.Value.Hello @>)
+printfn "%A" (maybe <@ somethingElse.Value.HelloOption @>)
 printfn "\r\n and now nothing \r\n"
 printfn "%A" (maybe <@ nothing.Value.First @>)
 //printfn "\r\n\r\n%A" <@ something.Value.First @>

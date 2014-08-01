@@ -78,8 +78,11 @@ type System.Xml.Linq.XElement with
 		let ancestors = el.Ancestors() |> Seq.map (relativeXPath)
 		//let reversed =
 		String.Concat(ancestors.Reverse()) + relativeXPath(el)
-		
-		
+
+let inline dump x = 
+	x |> Dump
+	x
+	
 type System.Xml.XmlNode with
 	member node.GetXElement =
 		let xDoc = XDocument()
