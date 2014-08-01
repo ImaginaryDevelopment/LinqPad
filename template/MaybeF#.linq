@@ -111,11 +111,15 @@ let maybe (expr : Expr) : Option<_> =
                 |Some(expr3) -> match expr3 with
                                 | null -> printfn "Null1!";None
                                 | SomeObj(t) -> printfn "found t! %A" t; None
+                                | y when y.GetType() = propOrValInfo.DeclaringType -> 
+                                    //printfn " yay types aligned %A" y; 
+                                    let value = propOrValInfo.GetValue(y,null)
+                                    Some(value)
                                 | _ as x -> 
-                                    printfn "found x! %A with %A" x propOrValInfo
-                                    printfn "propDeclaring %A" propOrValInfo.DeclaringType
-                                    //let evaluated = propOrValInfo.GetValue(x,[| |])
-                                    None
+                                    //printfn "found _ %A with %A" x propOrValInfo
+                                    //printfn "propDeclaring %A" propOrValInfo.DeclaringType
+                                    //printfn "x type is %A" (x.GetType())
+                                    Some(x)
                 |_ as x -> None
             //let value = propOrValInfo.GetValue(expr2,null)
             | None -> 
@@ -125,15 +129,10 @@ let maybe (expr : Expr) : Option<_> =
                     propOrValInfo.GetValue (null, null)
                 match value with
                 | null -> 
-                    printfn "Null2!"
+                    //printfn "Null2!"
                     None //None
                 | SomeObj(x1) -> 
                     Some(x1)
-                | x -> 
-                    printfn "_ %A" x
-                    printfn "%A" 
-                        (x.GetType())
-                    None
         //(propOrValInfo,propOrValInfo.GetType(),args).Dump("pi")
         | String(str) -> 
             printf "string %s" str
@@ -148,6 +147,7 @@ let maybe (expr : Expr) : Option<_> =
     visit expr
 
 printfn "%A" (maybe <@ something.Value.First @>)
+printfn "%A" (maybe <@ something.Value.Second @>)
 printfn "\r\n and now nothing \r\n"
 printfn "%A" (maybe <@ nothing.Value.First @>)
 //printfn "\r\n\r\n%A" <@ something.Value.First @>
