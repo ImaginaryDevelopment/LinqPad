@@ -88,7 +88,7 @@ type ClientSelector(inlineComponent:InlineEditorComponent,keys) =
 						let displayAttrs =if keys.AddlDisplayAttrs.IsSome then " "+(keys.AddlDisplayAttrs.Value keys.Field) else ""
 						sprintf """<span data-role="%s" class="fieldDisplay"%s><%%#%s%%></span>""" x.Role displayAttrs keys.DisplayAccessor
 					|EditLink -> sprintf """<i data-role="%s" class="onHover fa fa-pencil-square-o" title="edit"></i>""" x.Role
-					|Editor -> sprintf """<input data-role="%s" type="text" disabled="disabled" name="%s<%%# Eval("ProjectQuotaId") %%>" style="display: none; width: 90px" value="" data-original-value="" data-quotagroupid="<%%# Eval("ProjectQuotaId") %%>" />""" x.Role keys.HiddenName 
+					|Editor -> sprintf """<input data-role="%s" type="text" disabled="disabled" name="%s<%%# Eval("ProjectQuotaId") %%>" style="display: none" value="" data-original-value="" data-quotagroupid="<%%# Eval("ProjectQuotaId") %%>" />""" x.Role keys.HiddenName 
 					|ItemChild-> sprintf"""<span data-role="%s">""" x.Role  //failwithf "Can't generate dom for itemChild directly" 
 					
 type HandlerArgs = {StorageKey:string; HiddenName:string; EditorSelector:string}
@@ -165,9 +165,21 @@ for k in AllKeys do // TODO: account for tests that really should ensure items o
 	let targetAscxValidation = 
 		let text = System.IO.File.ReadAllText(targetAscx)
 		csColl.Selectors
-		//|> Seq.filter (fun s-> s.InlineComponent <> InlineEditorComponent.ItemChild)
+		//|> Seq.filter (fun s-> s.InlineComponent <> InlineEditorComponent.Editor)
 		|> Seq.iter (fun s ->
-			if text.Contains(s.Dom) = false then failwithf ".ascx: missing %A" s.Dom
+			match s.InlineComponent with
+				|Editor -> 
+					let delimiter = "display: none"
+					let containsFirstHalf = text.Contains(s.Dom.Before(delimiter))
+					let containsSecondHalf = text.Contains(s.Dom.After(delimiter))
+					if containsFirstHalf = false && containsSecondHalf=false 
+						then failwithf ".ascx: missing %A" s.Dom
+					elif not containsFirstHalf 
+						then failwithf ".ascx: missing %A" (s.Dom.Before(delimiter))
+					elif not containsSecondHalf
+						then failwithf ".ascx: missing %A" (s.Dom.After(delimiter))
+					else ()
+				|_ -> if text.Contains(s.Dom) = false then failwithf ".ascx: missing %A" s.Dom
 			)
 		printfn "ascx tests passed"
 	()
