@@ -13,6 +13,13 @@ void Main()
 	
 	//typeDte.Dump();
 	
+	// commands to remember
+	(new [] {
+		"ProjectandSolutionContextMenus.Item.MoveDown",
+		"ProjectandSolutionContextMenus.Item.MoveUp",
+		"ReSharper_Suspend",
+		"ReSharper_ToggleSuspended"
+	}).Dump("commands of previous interest");
 	
 	dte.FileName.Dump();
 	dte.Solution.FullName.Dump();
