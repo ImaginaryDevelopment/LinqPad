@@ -60,6 +60,7 @@ let AllKeys =
 		yield(createKeys "completedCap" "CompletedCap" "Completed Cap" formattedPositiveIntAccessor None)
 		yield(createKeys "terminatedCap" "TerminatedCap" "Terminated Cap" formattedPositiveIntAccessor None)
 		yield(createKeys "quotaName" "QuotaName" "Name" defaultAccessor None)
+		yield(createKeys "startsCap" "Starts" "Starts Cap" formattedPositiveIntAccessor None)
 	}
 
 type InlineEditorComponent = 
@@ -71,17 +72,24 @@ type InlineEditorComponent =
 
 type ClientSelector(inlineComponent:InlineEditorComponent,keys) =
 	//let roles = { InlineEditorRole.Display = sprintf "%sDisplay" keys.Pascal; Editor=sprintf "%sEditor" keys.Pascal;EditLink=sprintf "%sEditLink" keys.Pascal;ItemChild=sprintf "%sItemChild" keys.Pascal}
-	static member private makeRole c = match c with 
-										|Display -> sprintf "%sDisplay"
-										|Editor -> sprintf "%sEditor"
-										|EditLink -> sprintf "%sEditLink"
-										|ItemChild -> sprintf "%sItemChild"
-	static member private dataRoleSelector = sprintf "%s: '[data-role=%s]'"
+	static member private makeJsRole c = match c with 
+											|Display -> "display"
+											|Editor -> "editor"
+											|EditLink -> "editLink"
+											|ItemChild -> "itemChild"
+	
 	
 	member x.InlineComponent = inlineComponent
-	member x.Name = ClientSelector.makeRole inlineComponent keys.Camel
-	member x.Role = ClientSelector.makeRole inlineComponent keys.Pascal
-	member x.DataRole = ClientSelector.dataRoleSelector x.Name x.Role
+	member private x.jsRoleRaw = ClientSelector.makeJsRole inlineComponent
+	member x.JsRole = sprintf "'%s'" x.jsRoleRaw
+	member x.JsColumn = sprintf "'%s'" keys.Camel
+	member x.Name = sprintf "%s%s" <|| (keys.Camel, (toPascalCase <| ClientSelector.makeJsRole inlineComponent ))
+	
+	member x.Role = sprintf "%s%s" <|| (keys.Pascal, (toPascalCase <| ClientSelector.makeJsRole inlineComponent ))
+	
+	//member x.DataRole = ClientSelector.dataRoleSelector x.Name x.Role
+	
+	
 	
 	member x.Dom = match inlineComponent with
 					|Display -> 
@@ -91,7 +99,7 @@ type ClientSelector(inlineComponent:InlineEditorComponent,keys) =
 					|Editor -> sprintf """<input data-role="%s" type="text" disabled="disabled" name="%s<%%# Eval("ProjectQuotaId") %%>" style="display: none" value="" data-original-value="" data-quotagroupid="<%%# Eval("ProjectQuotaId") %%>" />""" x.Role keys.HiddenName 
 					|ItemChild-> sprintf"""<span data-role="%s">""" x.Role  //failwithf "Can't generate dom for itemChild directly" 
 					
-type HandlerArgs = {StorageKey:string; HiddenName:string; EditorSelector:string}
+type HandlerArgs = {HiddenNameAndStorageKey:string; EditorSelector:string}
 type InitializeHandlerArgs = {EditLinkSelector:string;ChildSelector:string;}
 type ClientSelectorCollection(keys) =
 	
@@ -117,23 +125,27 @@ type ClientSelectorCollection(keys) =
 			x.EditLink
 			x.ItemChild
 		]
-	member x.JsClientSelectors = 
-		sprintf """		%s, 
-			%s,
-			%s,
-			%s""" x.Display.DataRole x.Editor.DataRole x.EditLink.DataRole x.ItemChild.DataRole
-	member x.HandlerArgs = {HandlerArgs.StorageKey=keys.Camel+"Edits"; HiddenName=keys.Camel+"Edits";EditorSelector = sprintf "%sEditor" keys.Camel}
-	member x.JsBeforeReq = //before save or updatePanel request starts
-		sprintf """beforeSavePostHandler(currentTabIsQuotaGroups, quotaGroupTabStorage, '%s', '%s', clientSelectors.%s, $qgGrid);""" x.HandlerArgs.StorageKey x.HandlerArgs.HiddenName x.HandlerArgs.EditorSelector	
-	member x.JsInitialize = sprintf """quotaGridInlineEditsInitializeHandler(clientSelectors.%s, clientSelectors.%s, clientSelectors.%s, clientSelectors.quotaGroupIdAttr, clientSelectors.%s, quotaGroupTabStorage, '%s');""" x.EditLink.Name x.ItemChild.Name x.Editor.Name x.Display.Name x.HandlerArgs.StorageKey
+	
+	member x.JsRolesStart = "var roles = ["
+	
+	member x.JsColumnStart = sprintf "var columns = ["
+	 
+	member x.HandlerArgs = {HandlerArgs.HiddenNameAndStorageKey=keys.Camel+"Edits";EditorSelector = sprintf "%s.editor" keys.Camel}
+	member x.JsCleanup = //before save or updatePanel request starts
+		sprintf """beforeSavePostHandleClosure('%s', clientSelectors.%s);""" x.HandlerArgs.HiddenNameAndStorageKey x.HandlerArgs.EditorSelector
+		
+	member x.JsInitialize = sprintf """initializer(clientSelectors.%s, '%s');""" x.Keys.Camel x.HandlerArgs.HiddenNameAndStorageKey
+	
 	member x.AscxCs = sprintf """IDictionary<int, string> %s = GetInlineEdits("%s", Request.Form);""" keys.HiddenName keys.HiddenName
 	member x.ValidateLine = sprintf """ValidateInlineEditInput("%s", "%s",""" keys.HiddenName keys.Header
 	member x.SaveIfLine = sprintf """if (%s != null && %s.ContainsKey(qgId))""" keys.HiddenName keys.HiddenName
-	
+type InlineEditDiagnostic = { Keys:Keys;Asp:string;Selectors:ClientSelector list; SampleSelector: ClientSelector; JsCleanup:string;JsInit:string}	
 for k in AllKeys do // TODO: account for tests that really should ensure items occur more than once
 	let csColl = ClientSelectorCollection(k)
 	
-	(k,csColl.Asp,csColl.Selectors,csColl.JsClientSelectors,csColl.JsBeforeReq,csColl.JsInitialize) |> Dump
+	{InlineEditDiagnostic.Keys=k;Asp=csColl.Asp;Selectors=csColl.Selectors;SampleSelector=csColl.Display;JsCleanup=csColl.JsCleanup;JsInit=csColl.JsInitialize} |> Dump
+
+	
 	printfn "Validating %s" k.Pascal
 //validation
  
@@ -141,15 +153,22 @@ for k in AllKeys do // TODO: account for tests that really should ensure items o
 	let targetJsTextValidation = 
 		
 		let text = System.IO.File.ReadAllText(targetJs)
-		let missingSelectors = 
+		let roleSection = text.After(csColl.JsRolesStart).Before("]")
+		let missingRoles = 
+			csColl.Selectors 
+			|> Seq.map (fun x-> x.JsRole)
+			|> Seq.filter ( fun x->roleSection.Contains(x)=false)
+		if Seq.isEmpty(missingRoles)=false then failwithf ".js: missing %A" missingRoles
+		
+		let columnSection = text.After(csColl.JsColumnStart).Before("]")
+		let missingColumns = 
 			csColl.Selectors
-			|>Seq.map (fun x->x.DataRole)
-			|>Seq.filter(fun x->text.Contains(x)=false)
-		if Seq.isEmpty(missingSelectors)=false then failwithf "some expected .js lines were missing %A" missingSelectors
-		let before,after = text.Before("prm.add_beginRequest"), text.After("prm.add_beginRequest")
-		if before.Contains(csColl.JsBeforeReq)=false then failwithf ".js: missing call in $saves %A" csColl.JsBeforeReq
-		if after.Contains(csColl.JsBeforeReq)=false then failwithf ".js: missing call in add_beginRequest %A" csColl.JsBeforeReq
+			|>Seq.map (fun x-> x.JsColumn)
+			|>Seq.filter(fun x->columnSection.Contains(x)=false)
+		if Seq.isEmpty(missingColumns)=false then failwithf ".js: missing %A" missingColumns
+
 		if text.Contains(csColl.JsInitialize)= false then failwithf ".js: missing call(s) to InitializeHandler\r\n%A" csColl.JsInitialize
+		if text.Contains(csColl.JsCleanup)=false then failwithf ".js: missing call %A" csColl.JsCleanup
 		printfn "js tests passed"
 	let targetAspxValidation =
 		let text = System.IO.File.ReadAllText(targetAspx)
