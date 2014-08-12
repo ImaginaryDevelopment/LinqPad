@@ -6,15 +6,66 @@
   <Namespace>System.Web</Namespace>
 </Query>
 
-let dc = new TypedDataContext()
-
-dc.Settings.Context.DeferredLoadingEnabled <- false
-dc.Settings.Context.ObjectTrackingEnabled <- false
 type PartialUpdate<'a> =
 	| Ignore
 	| Clear
 	| Update of 'a
+	
+type UpdateQuotaGroupRequestF = {
+		QuotaGroupGuid:Guid
+		QuotaGroupName:PartialUpdate<String>
+		Closed:Nullable<bool>
+		RequestedCompletes:Nullable<int>
+		BidResponseRate:Nullable<decimal>
+		IncidenceRate:Nullable<decimal>
+		AllowDynamicSurveys:Nullable<bool>
+		PanelSources: int list
+		CompleteRewardOverride:Nullable<decimal>
+		TerminateRewardOverride:Nullable<decimal>
+		OverQuotaRewardOverride:Nullable<decimal>
+		AllowExternalSuppliers:Nullable<bool>
+	}
 
+type ScriptArgs = {Host:string;PostData:UpdateQuotaGroupRequestF;QgGuid:Guid;UseSprocCallToTestAuth:bool;Controller:string;ApiMethod:string}
+let scriptArgs = 
+	let qgGuid = System.Guid("f1e55caf-7102-49c7-806e-f24637dcb6e2")
+	let randomQuotaGroupName = 
+		sprintf "hello api %s" (DateTime.Now.ToString())
+	{
+	ScriptArgs.Host="http://localhost:18217/"
+	
+	PostData={
+				UpdateQuotaGroupRequestF.QuotaGroupGuid = qgGuid
+				QuotaGroupName = Update randomQuotaGroupName
+				Closed = Nullable<bool>(false)
+				RequestedCompletes = Nullable<int>()
+				BidResponseRate = Nullable<decimal>()
+				IncidenceRate = Nullable<decimal>()
+				AllowDynamicSurveys = Nullable<bool>()
+				PanelSources = list.Empty
+				CompleteRewardOverride = Nullable<decimal>()
+				TerminateRewardOverride = Nullable<decimal>()
+				OverQuotaRewardOverride = Nullable<decimal>()
+				AllowExternalSuppliers = Nullable<bool>()
+		}
+	QgGuid = qgGuid
+	UseSprocCallToTestAuth = false
+	Controller="QuotaGroups" // "SurveyInventory";
+	ApiMethod ="UpdateQuotaGroup"// "GetSurveysForExternalMember";
+	}
+
+
+(* **************** end settings section *********************** *)
+
+let dc = new TypedDataContext()
+
+dc.Settings.Context.DeferredLoadingEnabled <- false
+dc.Settings.Context.ObjectTrackingEnabled <- false
+
+let getQg()= dc.Quota_groups.First(fun qg-> qg.Project_quota_guid = scriptArgs.QgGuid)	
+let getQgm qgId = 
+	dc.Quota_group_metas.FirstOrDefault(fun qgm -> qgm.Project_quota_id = qgId)
+	
 let orgs = 
 	let orgApiLogins = query {
 		for oal in dc.Org_api_logins do
@@ -25,32 +76,46 @@ let orgs =
 	orgApiLogins
 	|> Seq.distinct 
 	
-// http://localhost:18217/Help/Api/POST-api-Api.V1.Controllers.Projects-CreateProject
+// http://localhost:18217/Help/Api/POST-api-Api.V1.Controllers.QuotaGroups-UpdateQuotaGroup
 type PostContent = 
 	| FormEncoded
 	| Json
 	| Xml
 	
-type UpdateQuotaGroupRequestF = {QuotaGroupGuid:Guid; QuotaGroupName:PartialUpdate<String>}
-
 let BuildPost postType (request:UpdateQuotaGroupRequestF):string*byte[]*string =
 	// http://stackoverflow.com/questions/14702902/post-form-data-using-httpwebrequest
+	let values:seq<string*obj> = 
+		seq {
+				yield "QuotaGroupGuid", request.QuotaGroupGuid.ToString():> obj
+				match request.QuotaGroupName with
+					| Ignore -> ()
+					| Clear -> yield "QuotaGroupName",upcast Unchecked.defaultof<string>
+					| Update(x) -> yield "QuotaGroupName",upcast  x
+				if request.Closed.HasValue then
+					yield "Closed", request.Closed
+				if request.RequestedCompletes.HasValue then
+					yield "RequestedCompletes", upcast request.RequestedCompletes
+				if request.BidResponseRate.HasValue then
+					yield "BidResponseRate", upcast request.BidResponseRate
+			}
 	let formEncode () = 
 		let sb = StringBuilder()
 		let buildPair name value = sprintf "%s=%s" name value
 		let encode (v:string) = HttpUtility.UrlEncode(v)
 		let pairs = 
-			seq {
-				yield buildPair "QuotaGroupGuid" <| encode (request.QuotaGroupGuid.ToString())
-				match request.QuotaGroupName with
-					| Ignore -> ()
-					| Clear -> yield buildPair "QuotaGroupName" <| Unchecked.defaultof<string>
-					| Update(x) -> yield buildPair "QuotaGroupName" <| encode x
-			} |> Seq.reduce (fun x y -> sprintf "%s&%s" x y)
+			values
+			|> Seq.map (fun (name,value) ->
+				match value with 
+				//| ?: int as i -> buildPair(name,value)
+				| :? string as s -> 
+					buildPair name (encode(s))
+				| _ -> buildPair name (value.ToString())
+				)
+			|> Seq.reduce (fun x y -> sprintf "%s&%s" x y)
 		sb.Append(pairs) |> ignore
 		sb.ToString(),"application/x-www-form-urlencoded"
 	let jsonEncode() = 
-		Newtonsoft.Json.JsonConvert.SerializeObject <| request,
+		Newtonsoft.Json.JsonConvert.SerializeObject <| (values.ToDictionary((fun s->fst s),(fun s-> snd s))),
 		"application/json"
 	let text,contentType = match postType with
 							| Json -> jsonEncode()
@@ -58,17 +123,9 @@ let BuildPost postType (request:UpdateQuotaGroupRequestF):string*byte[]*string =
 	let encoding = new ASCIIEncoding()
 	text,encoding.GetBytes(text),contentType
 
-let getQg,raw,postData,contentType = 
-	let qgGuid = System.Guid("f1e55caf-7102-49c7-806e-f24637dcb6e2")
-	let getQg()= 	
-		dc.Quota_groups.First(fun qg->qg.Project_quota_guid = qgGuid)	
-	let r,p,c = BuildPost Json {UpdateQuotaGroupRequestF.QuotaGroupGuid=qgGuid;QuotaGroupName=Ignore}
-	getQg, r, p, c
 
-let useSprocCallToTestAuth = false
-let host = "http://localhost:18217/"
+let raw,postData,contentType = BuildPost Json scriptArgs.PostData
 
-	
 orgs.Dump("orgApiLogins") // display to user so that the readLine input is easier to do
 	
 let targetOrg =
@@ -76,25 +133,22 @@ let targetOrg =
 	Util.ReadLine<int>("OrgId?",0, orgMap)
 let orgApiLogin = dc.Org_api_logins.First(fun oa -> oa.Org_id=targetOrg)
 
-let controller="QuotaGroups"; // "SurveyInventory";
-let apiMethod ="UpdateQuotaGroup";// "GetSurveysForExternalMember";
-
-if useSprocCallToTestAuth then 
-	let shouldLoginSucceed = dc.OrgApiLogin_Authenticate(orgApiLogin.Username,orgApiLogin.Password,"::1",controller,apiMethod)
+if scriptArgs.UseSprocCallToTestAuth then 
+	let shouldLoginSucceed = dc.OrgApiLogin_Authenticate(orgApiLogin.Username,orgApiLogin.Password,"::1",scriptArgs.Controller,scriptArgs.ApiMethod)
 	shouldLoginSucceed.Dump("authenticate")
 	
 	if shouldLoginSucceed.Tables.Count<1 || shouldLoginSucceed.Tables.[0].Rows.Count<1 then  failwith "login will probably fail"
 	
-let uri = host+"api/"+controller+"/"+apiMethod
+let uri = scriptArgs.Host+"api/"+scriptArgs.Controller+"/"+scriptArgs.ApiMethod
 
 
 let before = getQg()
-
+let beforeMeta = getQgm before.Project_quota_id
 type UpdateQuotaGroupResponseF = { QuotaGroupGuid:System.Guid;}	
 
 
 let updateQg (postData:byte[]) contentType = 
-	let wc = 
+	let webClient = 
 		let wc = System.Net.WebRequest.Create(uri)
 		let authInfo = Convert.ToBase64String <| Encoding.Default.GetBytes( orgApiLogin.Username+":"+orgApiLogin.Password)
 		wc.Headers.Add("Authorization: Basic "+authInfo)
@@ -103,7 +157,6 @@ let updateQg (postData:byte[]) contentType =
 		wc.Method <- "POST";
 		wc.ContentType <- contentType
 	
-	
 		wc.ContentLength <- postData.LongLength
 		use postStream = wc.GetRequestStream()
 		postStream.Write(postData,0,postData.Length);
@@ -111,7 +164,7 @@ let updateQg (postData:byte[]) contentType =
 		postStream.Close();
 		wc
 	try
-		use response = wc.GetResponse()
+		use response = webClient.GetResponse()
 		use rStream = response.GetResponseStream()
 		use r = new StreamReader(rStream,true)
 		let rawResults=
@@ -127,15 +180,11 @@ let updateQg (postData:byte[]) contentType =
 			"raw",raw :> obj
 			"response content",upcast r.ReadToEnd()
 			"ex", upcast ex
-			
 			].Dump()
 		failwith "response exception"
-		
-(raw,updateQg postData contentType).Dump("request+response")
-printf "before, after ->"
-[
-	before
-	getQg()
-]
-|> Dump
 
+type RawReqResponse = {Raw:string;Response:UpdateQuotaGroupResponseF}		
+{Raw=raw;Response=updateQg postData contentType}.Dump("request+response")
+printf "before, after ->"
+[ before ; 	getQg() ] |> Dump
+[ beforeMeta; 	getQgm(before.Project_quota_id) ] |> Dump
