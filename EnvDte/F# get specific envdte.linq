@@ -4,25 +4,29 @@
 
 // http://www.fssnip.net/raw/68
 module vs10macros =
-    open EnvDTE
-    open System.Runtime.InteropServices 
-    open System.Runtime.InteropServices.ComTypes
-    open System.Diagnostics
+	open EnvDTE
+	open System.Runtime.InteropServices 
+	open System.Runtime.InteropServices.ComTypes
+	open System.Diagnostics
+
+	[<DllImport("ole32.dll")>] 
+	extern int internal GetRunningObjectTable(uint32 reserved, IRunningObjectTable& pprot) 
  
-    [<DllImport("ole32.dll")>] 
-    extern int internal GetRunningObjectTable(uint32 reserved, IRunningObjectTable& pprot) 
- 
-    [<DllImport("ole32.dll")>] 
-    extern int internal CreateBindCtx(uint32 reserved, IBindCtx& pctx) 
- 
-    let getPidByWindowName (wn:string) =
-        let dvproc = Process.GetProcessesByName("devenv")
-        let p = Array.tryFind (fun (px:Process) -> 
-                             px.MainWindowTitle.ToLower().Contains(wn.ToLower())) dvproc
-        match p with
-        |Some x -> x.Id
-        |None -> failwith "No process contains a window with this title"
-         
+	[<DllImport("ole32.dll")>] 
+	extern int internal CreateBindCtx(uint32 reserved, IBindCtx& pctx) 
+	
+	let getWindowNames = 
+		let dvproc = Process.GetProcessesByName("devenv")
+		let p = Array.map (fun (px:Process) -> px.MainWindowTitle) dvproc
+		p
+	let getPidByWindowName (wn:string) =
+		let dvproc = Process.GetProcessesByName("devenv")
+		let p = Array.tryFind (fun (px:Process) -> 
+				px.MainWindowTitle.ToLower().Contains(wn.ToLower())) dvproc
+		match p with
+		|Some x -> x.Id
+		|None -> failwith "No process contains a window with this title"
+		 
     let getDte windowName  = 
        let mutable (prot:IRunningObjectTable) = null  
        let mutable (pmonkenum:IEnumMoniker) = null 
@@ -48,7 +52,17 @@ module vs10macros =
            if prot <> null then Marshal.ReleaseComObject(prot) |> ignore 
            if pmonkenum <> null then Marshal.ReleaseComObject(pmonkenum) |> ignore 
        (ret :?> EnvDTE.DTE)
-let dte = vs10macros.getDte "CVS - Microsoft Visual Studio (Administrator)"
+
+let dteTitles = vs10macros.getWindowNames
+let window = 
+	match dteTitles.Length with
+	| 0 -> failwithf "Failed to find any DevEnv instances running"
+	| 1 -> dteTitles.[0]
+	| _ ->
+		dteTitles.Dump("windows")
+		printfn "%A" dteTitles
+		Util.ReadLine("Dte?",dteTitles.[0],dteTitles)
+let dte = vs10macros.getDte window
 printfn "%A" dte
 printfn "%A" dte.FileName
 printfn "%A" dte.Solution.FullName

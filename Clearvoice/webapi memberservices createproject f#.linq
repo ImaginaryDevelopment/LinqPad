@@ -25,6 +25,8 @@
 
 let dc = new TypedDataContext()
 
+// http://localhost:18217/Help/Api/POST-api-Api.V1.Controllers.Projects-CreateProject
+
 let BuildPost (name:string, surveyurl:string, surveyLength:int, externalSurveyId:int option, partnerSalesperson, requestedCpi:decimal option):byte[] =
 	// http://stackoverflow.com/questions/14702902/post-form-data-using-httpwebrequest
 	let sb = new StringBuilder()
@@ -32,7 +34,7 @@ let BuildPost (name:string, surveyurl:string, surveyLength:int, externalSurveyId
 	let encode (v:string) = HttpUtility.UrlEncode(v)
 	let pairs = 
 		seq {
-			yield buildPair "Name" <| encode name
+			yield buildPair "ProjectName" <| encode name
 			yield buildPair "SurveyUrl" <| encode surveyurl
 			yield buildPair "SurveyLength" <| surveyLength.ToString()
 			if externalSurveyId.IsSome then 
