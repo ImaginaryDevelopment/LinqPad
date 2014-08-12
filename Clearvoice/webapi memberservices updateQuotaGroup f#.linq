@@ -10,9 +10,12 @@ let dc = new TypedDataContext()
 
 dc.Settings.Context.DeferredLoadingEnabled <- false
 dc.Settings.Context.ObjectTrackingEnabled <- false
+type PartialUpdate<'a> =
+	| Ignore
+	| Clear
+	| Update of 'a
 
 let orgs = 
-	dc.Org_api_logins.Dump("logins!")
 	let orgApiLogins = query {
 		for oal in dc.Org_api_logins do
 		join org in dc.Orgs on
@@ -21,14 +24,16 @@ let orgs =
 	}
 	orgApiLogins
 	|> Seq.distinct 
+	
 // http://localhost:18217/Help/Api/POST-api-Api.V1.Controllers.Projects-CreateProject
 type PostContent = 
 	| FormEncoded
 	| Json
 	| Xml
 	
-type UpdateQuotaGroupRequestF = {QuotaGroupGuid:Guid; QuotaGroupName:String}
-let BuildPost postType (quotaGroupGuid:Guid, quotaGroupName:string):string*byte[]*string =
+type UpdateQuotaGroupRequestF = {QuotaGroupGuid:Guid; QuotaGroupName:PartialUpdate<String>}
+
+let BuildPost postType (request:UpdateQuotaGroupRequestF):string*byte[]*string =
 	// http://stackoverflow.com/questions/14702902/post-form-data-using-httpwebrequest
 	let formEncode () = 
 		let sb = StringBuilder()
@@ -36,13 +41,16 @@ let BuildPost postType (quotaGroupGuid:Guid, quotaGroupName:string):string*byte[
 		let encode (v:string) = HttpUtility.UrlEncode(v)
 		let pairs = 
 			seq {
-				yield buildPair "QuotaGroupGuid" <| encode (quotaGroupGuid.ToString())
-				yield buildPair "QuotaGroupName" <| encode quotaGroupName
+				yield buildPair "QuotaGroupGuid" <| encode (request.QuotaGroupGuid.ToString())
+				match request.QuotaGroupName with
+					| Ignore -> ()
+					| Clear -> yield buildPair "QuotaGroupName" <| Unchecked.defaultof<string>
+					| Update(x) -> yield buildPair "QuotaGroupName" <| encode x
 			} |> Seq.reduce (fun x y -> sprintf "%s&%s" x y)
 		sb.Append(pairs) |> ignore
 		sb.ToString(),"application/x-www-form-urlencoded"
 	let jsonEncode() = 
-		Newtonsoft.Json.JsonConvert.SerializeObject <| {UpdateQuotaGroupRequestF.QuotaGroupGuid=quotaGroupGuid;QuotaGroupName= quotaGroupName},
+		Newtonsoft.Json.JsonConvert.SerializeObject <| request,
 		"application/json"
 	let text,contentType = match postType with
 							| Json -> jsonEncode()
@@ -50,11 +58,18 @@ let BuildPost postType (quotaGroupGuid:Guid, quotaGroupName:string):string*byte[
 	let encoding = new ASCIIEncoding()
 	text,encoding.GetBytes(text),contentType
 
+let getQg,raw,postData,contentType = 
+	let qgGuid = System.Guid("f1e55caf-7102-49c7-806e-f24637dcb6e2")
+	let getQg()= 	
+		dc.Quota_groups.First(fun qg->qg.Project_quota_guid = qgGuid)	
+	let r,p,c = BuildPost Json {UpdateQuotaGroupRequestF.QuotaGroupGuid=qgGuid;QuotaGroupName=Ignore}
+	getQg, r, p, c
+
 let useSprocCallToTestAuth = false
 let host = "http://localhost:18217/"
 
 	
-orgs.Dump("orgApiLogins")
+orgs.Dump("orgApiLogins") // display to user so that the readLine input is easier to do
 	
 let targetOrg =
 	let orgMap = orgs |> Seq.map (fun (id,name) -> id)
@@ -71,15 +86,13 @@ if useSprocCallToTestAuth then
 	if shouldLoginSucceed.Tables.Count<1 || shouldLoginSucceed.Tables.[0].Rows.Count<1 then  failwith "login will probably fail"
 	
 let uri = host+"api/"+controller+"/"+apiMethod
-let qgGuid = System.Guid("f1e55caf-7102-49c7-806e-f24637dcb6e2")
-let getQg()= 
-	
-	dc.Quota_groups.First(fun qg->qg.Project_quota_guid = qgGuid)	
+
+
 let before = getQg()
 
 type UpdateQuotaGroupResponseF = { QuotaGroupGuid:System.Guid;}	
 
-let raw,postData,contentType = BuildPost Json (qgGuid,"helloSurveyUrl"+ DateTime.Now.ToString())
+
 let updateQg (postData:byte[]) contentType = 
 	let wc = 
 		let wc = System.Net.WebRequest.Create(uri)
