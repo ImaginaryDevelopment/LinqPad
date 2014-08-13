@@ -11,7 +11,7 @@
 //alternative for 64 bit apps : http://download.microsoft.com/download/2/4/3/24375141-E08D-4803-AB0E-10F2E3A07AAA/AccessDatabaseEngine_x64.exe
 let RedirectAssembly shortName (targetVersion:Version) publicKeyToken = // http://blog.slaks.net/2013-12-25/redirecting-assembly-loads-at-runtime/
 	//https://dotnetfiddle.net/UnS2vU
-	let rec onResolveEvent = new ResolveEventHandler( fun sender evArgs ->
+	let rec onResolveEvent (_ : obj) (evArgs:ResolveEventArgs) = 
 		let requestedAssembly = AssemblyName(evArgs.Name)
 		printfn "trying to resolve requestedAssembly: %A" requestedAssembly
 		if requestedAssembly.Name <> shortName then
@@ -22,10 +22,10 @@ let RedirectAssembly shortName (targetVersion:Version) publicKeyToken = // http:
 			printfn "Redirecting to %A" requestedAssembly.Version
 			requestedAssembly.SetPublicKeyToken(AssemblyName(sprintf "x, PublicKeyToken=%s" publicKeyToken).GetPublicKeyToken())
 			requestedAssembly.CultureInfo <- System.Globalization.CultureInfo.InvariantCulture
-			AppDomain.CurrentDomain.remove_AssemblyResolve(onResolveEvent)
+			AppDomain.CurrentDomain.remove_AssemblyResolve (ResolveEventHandler(onResolveEvent))
 			Assembly.Load(requestedAssembly)
-			)
-	AppDomain.CurrentDomain.add_AssemblyResolve(onResolveEvent)
+			
+	AppDomain.CurrentDomain.add_AssemblyResolve(ResolveEventHandler(onResolveEvent))
 RedirectAssembly "FSharp.Core" (Version("4.3.1.0")) "b03f5f7f11d50a3a"
 //charting in linqpad issues (so far no go) http://blog.ploeh.dk/2014/01/30/how-to-use-fsharpcore-430-when-all-you-have-is-431/
 
