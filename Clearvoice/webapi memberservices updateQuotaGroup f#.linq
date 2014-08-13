@@ -92,7 +92,7 @@ let BuildPost postType (request:UpdateQuotaGroupRequestF):string*byte[]*string =
 					| Clear -> yield "QuotaGroupName",upcast Unchecked.defaultof<string>
 					| Update(x) -> yield "QuotaGroupName",upcast  x
 				if request.Closed.HasValue then
-					yield "Closed", request.Closed
+					yield "Closed", upcast request.Closed
 				if request.RequestedCompletes.HasValue then
 					yield "RequestedCompletes", upcast request.RequestedCompletes
 				if request.BidResponseRate.HasValue then
