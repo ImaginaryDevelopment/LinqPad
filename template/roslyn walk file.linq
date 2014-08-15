@@ -1,4 +1,7 @@
 <Query Kind="Statements">
+  <NuGetReference>ArchiMetrics.Analysis</NuGetReference>
+  <Namespace>Roslyn.Compilers</Namespace>
+  <Namespace>Roslyn.Compilers.CSharp</Namespace>
 </Query>
 
 //mate up calls to stored procedure with parameters passed
