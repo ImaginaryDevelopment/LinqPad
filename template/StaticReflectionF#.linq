@@ -15,6 +15,7 @@ let rec propName quot =
 	|PropertyGet (_, propInfo, _) -> propInfo.Name
 	|Lambda(param, body) -> propName body
 	| _ -> failwithf "not a property get quotation"
+	
 let rec methodName quot = 
 	match quot with
 	|Application (expr1,expr2) -> sprintf "%A |> %A" expr1 expr2
@@ -27,6 +28,8 @@ let rec methodName quot =
 		|None -> failwithf "Not a method call"
 	|Lambda (param, body) -> methodName body //failwithf "not accounted for lambda %A %A" param body
 	| _ as x -> failwithf "not accounted for quot %A" x
+	
+	
 let assertion(f:'a->'a->bool) (expected:'a) (actual:'a) =
 	let result = f expected actual
 	if result=false then failwithf "expected %A to %A (%A)" expected f actual else printfn "passed %A" actual
