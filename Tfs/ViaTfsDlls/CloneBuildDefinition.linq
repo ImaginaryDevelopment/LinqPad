@@ -9,7 +9,9 @@
 
 void Main()
 {
-	var tfs=new Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(new Uri("https://tfs.oceansideten.com"));
+	var tfsServer = Environment.GetEnvironmentVariable("servers").Dump().Split(new []{";"},StringSplitOptions.RemoveEmptyEntries).Dump().FirstOrDefault(c=>c.Contains("tfs"));
+	var tfsUri= "https://"+tfsServer;
+	var tfs=new Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(new Uri(tfsUri));
 	var vcs=tfs.GetService<VersionControlServer>();
 	var tfsbuild = tfs.GetService<IBuildServer>(); //http://stackoverflow.com/questions/2909416/how-can-i-copy-a-tfs-2010-build-definition
 	var buildToCopy=tfsbuild.GetBuildDefinition("Development","Cvr Dev Deploy").Dump();

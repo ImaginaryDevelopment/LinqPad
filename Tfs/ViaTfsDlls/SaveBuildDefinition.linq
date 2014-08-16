@@ -13,7 +13,9 @@
 void Main()
 {
 //unfinished? https://gist.github.com/jstangroome/6747950
-	var tfs=new Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(new Uri("https://tfs.oceansideten.com"));
+	var tfsServer = Environment.GetEnvironmentVariable("servers").Dump().Split(new []{";"},StringSplitOptions.RemoveEmptyEntries).Dump().FirstOrDefault(c=>c.Contains("tfs"));
+	var tfsUri= "https://"+tfsServer;
+	var tfs=new Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(new Uri(tfsUri));
 	var saveDir= @"C:\Development\Products\CVS\BuildDefinitions";
 	
 	var vcs=tfs.GetService<VersionControlServer>();

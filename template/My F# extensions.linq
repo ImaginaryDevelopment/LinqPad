@@ -1,6 +1,8 @@
 <Query Kind="FSharpProgram" />
 
 type String with 
+	member x.split ( [<ParamArray>] delimiters: string array) = 
+		x.Split(delimiters, StringSplitOptions.None)
 	member x.Before(delimiter:string) : string = 
 		x.Substring(0,x.IndexOf(delimiter))
 	member x.After(delimiter:string) : string =
@@ -76,8 +78,11 @@ type System.Xml.Linq.XElement with
 		let ancestors = el.Ancestors() |> Seq.map (relativeXPath)
 		//let reversed =
 		String.Concat(ancestors.Reverse()) + relativeXPath(el)
-		
-		
+
+let inline dump x = 
+	x |> Dump
+	x
+	
 type System.Xml.XmlNode with
 	member node.GetXElement =
 		let xDoc = XDocument()

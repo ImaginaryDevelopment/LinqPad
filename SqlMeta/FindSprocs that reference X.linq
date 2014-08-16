@@ -22,7 +22,9 @@ void Main()
 		where fieldsToFind.Any (tf => def.Contains(tf, StringComparison.InvariantCultureIgnoreCase)) 
 		//where operationsOfInterest.Any (oi =>Regex.IsMatch(def,oi+"[^\\w]", RegexOptions.IgnoreCase))
 		orderby s.SchemaName, s.Object.Name
-		select new{s.SchemaName,s.Object.Name, s.sprocInfo.ROUTINE_DEFINITION,s.sprocInfo.LAST_ALTERED};
+		select new{s.SchemaName,s.Object.Name,
+			RoutineDefinition=Util.HighlightIf(s.sprocInfo.ROUTINE_DEFINITION,x=>x.Length>3900),// things over 4k will be truncated
+			s.sprocInfo.LAST_ALTERED};
 		
 	joinedReferences.Dump("sprocs that probably reference a field of interest");
 	sprocs.Count ().Dump("sprocs");

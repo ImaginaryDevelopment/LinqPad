@@ -10,16 +10,17 @@
   <Namespace>System.DirectoryServices</Namespace>
 </Query>
 
+//join TFS to Active Directory
 void Main()
 {
 var srcpath=Util.ReadLine("SourcePath?","$/Development");
-var onlyLocks=false; //Util.ReadLine<bool>("only locked files?",true);
-var minDate=DateTime.Today.AddMonths(-1);
+var onlyLocks=//false; 
+	Util.ReadLine<bool>("only locked files?",true);
+var minDate=DateTime.Today.AddDays(-30);
 
+	var tfsServer = Environment.GetEnvironmentVariable("servers").Dump().Split(new []{";"},StringSplitOptions.RemoveEmptyEntries).Dump().FirstOrDefault(c=>c.Contains("tfs"));
+	var tfsUri= "https://"+tfsServer;
 	
-	Uri tfs08Uri= new Uri("https://tfs.oceansideten.com");
-	
-	var tfsUri=tfs08Uri;
 	using(var tfsPc=new TfsTeamProjectCollection(tfsUri))
 	
 	{
@@ -27,41 +28,49 @@ var minDate=DateTime.Today.AddMonths(-1);
 		
 		var srcRoot=vcs.GetItem(srcpath);
 		
-		
 		var pendings=vcs.QueryPendingSets(new[]{srcRoot.ServerItem}, RecursionType.Full,null,null).AsEnumerable();
 		if(onlyLocks)
 			pendings=pendings.Where(pq=>pq.PendingChanges.Any(pc=>pc.IsLock));
-		var pendingQuery=pendings
-			.Where(p=>p.PendingChanges.Any(pc=>pc.CreationDate>minDate)) 
+			
+			//get users that have pending changes started before the cutoff and still haven't checked in
+		var pendingQuery=pendings.Where(p=>p.PendingChanges
+			
+				.Any(pc=>pc.CreationDate<minDate && pc.Undone==false) )  
 			.OrderByDescending(p=>p.PendingChanges.Max(d=>d.CreationDate));
 			
 		var q= from pq in pendingQuery
-				from pc in pq.PendingChanges
-				//where pc.FileName.EndsWith(".refresh")==false
-				select new{pq.OwnerName,pq.Computer,pc.ServerItem,pc.CreationDate,pc.FileName, pc.LockLevelName};
-				var users=q.Select(u=>u.OwnerName).Distinct();
-				var joinedQuery= from pc in q
-					join l in lookup(users).ToList() on pc.OwnerName equals l.Key into luLeft
+				
+				select pq.OwnerName;
+			var users=q.Distinct();	
+			var qw= from u in users
+					join l in lookup(users).ToList() on u equals l.Key into luLeft
 					from lu in luLeft.DefaultIfEmpty()
-					let name=lu.Value??pc.OwnerName
-					let serverItem=pc.ServerItem.Length>=srcpath.Length? pc.ServerItem.Remove(0,srcpath.Length):pc.ServerItem
-					group  new{pc.CreationDate, pc.FileName,serverItem,pc.LockLevelName} by name into pcg
-					select pcg;
-					 joinedQuery.Dump();
-				
-				
-	
+					let w=vcs.QueryWorkspaces(null,u,null)
+					select new{u,lu,Workspaces=w.Select(ws=>new{ws.Name,ws.Computer,ws.OwnerName})};
+					
+			qw.Select(a=>new{user=a.lu.Value, userID=a.u,Workspaces=a.Workspaces.Select(b=>new{b.Name,b.Computer})}).Dump("workspaces");
+			var baseUndo="tf undo \"{0}\" /WORKSPACE:{1};{2} /recursive /server:{3}";
+
+						
+							
+							
+							
+			foreach(var u in qw.OrderBy(o=>o.lu.Value.IsNullOrEmpty()?"zz":
+				o.lu.Key.Contains("\\NBD") || o.lu.Key.Contains("\\NBS")?"z"+o.lu.Value:o.lu.Key))
+			{
+			
+			var sb=new StringBuilder();
+				foreach(var w in u.Workspaces)
+				{
+					sb.AppendLine(String.Format(baseUndo,srcpath,w.Name,u.u,tfsUri.ToString()));
+					
+				}
+				sb.ToString().Dump("undo command(s) for "+ u.lu.Value);
+			}
+
 		
 	}
 }
-//snippets
-//	var checkins=vcs.GetBranchHistory(new ItemSpec[]{new ItemSpec( gtpm.ServerItem, RecursionType.Full)},VersionSpec.Latest);
-	//	checkins.Count().Dump();
-	//var exclusionList=new [] {"*.suo","*.gpstate","svn","_svn",".svn","*Resharper*"};
-		//	vcs.GetItems("$/Gstar/Monitoring/*.suo/", Microsoft.TeamFoundation.VersionControl.Client.RecursionType.Full).Items
-		//		.Select(i=>i.ServerItem).Distinct().Dump();
-		//var workspaces=vcs.QueryWorkspaces(null,null,null).Where(w=>w.IsLocal==false & w.LastAccessDate>DateTime.Now.AddDays(-15)).Where(w=>w.Folders.Any(f=> f.ServerItem.StartsWith("$/PST")));
-		//workspaces.OrderByDescending(w=>w.LastAccessDate).Dump(1);
 
 public static IEnumerable<KeyValuePair<string,string>> lookup(IEnumerable<string> nbIds)
 {
@@ -69,7 +78,8 @@ public static IEnumerable<KeyValuePair<string,string>> lookup(IEnumerable<string
 
 using(var de=new System.DirectoryServices.DirectoryEntry())
 {
-	var customPath="LDAP://DC=RBIDev,DC=local";
+//CN=Brandon D'Imperio,OU=Development,OU=Oceanside Ten,DC=RBIDev,DC=local
+	var customPath="LDAP://DC="+Environment.UserDomainName+",DC=local";
 	de.Path=customPath;
 	de.AuthenticationType= System.DirectoryServices.AuthenticationTypes.Secure;
 	
@@ -79,12 +89,12 @@ using(var de=new System.DirectoryServices.DirectoryEntry())
 		var found=new Dictionary<string,string>( StringComparer.CurrentCultureIgnoreCase);
 		foreach(var ownerName in nbIds)
 			{
-			if(found.ContainsKey(ownerName))
+			if(found.Dump("found").ContainsKey(ownerName.Dump("ownername")))
 			yield return  found.First(k=>k.Key==ownerName);
 			var closure=ownerName;
 			if(closure.Contains("\\")) closure=closure.After("\\");
 			//closure.Dump();
-			deSearch.Filter="(&(objectClass=user)(SAMAccountName="+closure+"))";
+			deSearch.Filter="(&(objectClass=user)(SAMAccountname="+closure+"))";
 			string value;
 			try
 			{	        

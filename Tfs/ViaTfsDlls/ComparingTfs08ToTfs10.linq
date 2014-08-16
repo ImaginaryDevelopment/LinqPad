@@ -8,8 +8,8 @@ void Main()
 	var mappings=new List<Tuple<string,string>>(){
 		Tuple.Create(@"$/PST","$/PSA"),
 		};
-	var tfs08="http://tfs.bankofamerica.com:8080/";
-	var tfs10="http://g-tfs.bankofamerica.com:8080/tfs/";
+	var tfs08="http://tfs.foo.com:8080/";
+	var tfs10="http://g-tfs.foo.com:8080/tfs/";
 	
 	foreach(var mapping in mappings)
 	{

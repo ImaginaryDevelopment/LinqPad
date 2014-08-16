@@ -1,8 +1,11 @@
 <Query Kind="Statements" />
 
-// check hint paths for files that don't exist or are absolute
+// look for all references that contain a specific text
 
 var baseDir=Util.ReadLine("Directory?",System.Environment.GetEnvironmentVariable("devroot"));
+
+var referenceToSearchFor = Util.ReadLine("reference?");
+
 var projects= System.IO.Directory.GetFiles(baseDir,"*.*proj", SearchOption.AllDirectories);
 
 
@@ -36,23 +39,14 @@ var nonPackageReferences = from i in baseQuery
 		Exists=exists
 	};
 	
-//	nonPackageReferences
-//		.Where (pr => !pr.IsSlnProject)
-//		.GroupBy (pr => pr.Path,pr=>new{pr.Exists,Ref=Util.OnDemand(pr.Value,()=>new{pr.reference,pr.absPath})})	
-//		.Dump("nonpackage");
-	
-//	nonPackageReferences.Where (pr => pr.IsSlnProject==false)
-//		.GroupBy (pr => pr.Path,pr=>new{ pr.Value,pr.reference,pr.Exists})	
-//		.Dump("nonSlnNonPackage");
-	
 	
 var references= from i in baseQuery
 	from ig in i.ProjNode.Elements(i.RootNs+"ItemGroup")
 	select new{Project=i.Path,Condition=ig.Attribute(XNamespace.None+"Condition"),Items= ig.Nodes().Cast<XElement>()};
 	
 	
-references.Where (r => r.Items.Any (i => i.Attribute(XNamespace.None+"Include").Value.Contains("WebForms")))
-		.Select (r => new{r.Project,HibernateReferences=r.Items.Where (i => i.Attribute(XNamespace.None+"Include").Value.Contains("WebForms")).ToArray()})
+references.Where (r => r.Items.Any (i => i.Attribute(XNamespace.None+"Include").Value.Contains(referenceToSearchFor )))
+		.Select (r => new{r.Project,HibernateReferences=r.Items.Where (i => i.Attribute(XNamespace.None+"Include").Value.Contains(referenceToSearchFor )).ToArray()})
 		.Dump("webforms references")
 		;
 	//references.Dump("references");
