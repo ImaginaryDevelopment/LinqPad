@@ -1,6 +1,4 @@
 <Query Kind="FSharpProgram">
-  <Connection>
-  </Connection>
   <Reference>&lt;RuntimeDirectory&gt;\System.Web.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.Configuration.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\Microsoft.Build.Framework.dll</Reference>
@@ -43,7 +41,7 @@ let BuildPost (name:string, surveyurl:string, surveyLength:int, externalSurveyId
 				yield buildPair "PartnerSalesperson" <| encode partnerSalesperson
 		} |> Seq.reduce (fun x y -> sprintf "%s&%s" x y)
 	sb.Append(pairs) |> ignore
-	
+	printfn "request raw %A" (sb.ToString())
 	let encoding = new ASCIIEncoding()
 	encoding.GetBytes(sb.ToString())
 	
@@ -90,6 +88,7 @@ let wc =
 	postStream.Flush();
 	postStream.Close();
 	wc
+	
 type CreateProjectResponseF = { OrgGuid:System.Guid; ProjectGuid:System.Guid; ExternalSurveyId:int option}	
 
 let comparisonProjectId = 66620
@@ -98,7 +97,7 @@ let projectResponse =
 		use response = wc.GetResponse()
 		use rStream = response.GetResponseStream()
 		use r = new StreamReader(rStream,true)
-		let rawResults=
+		let rawResults =
 			let toDump = r.ReadToEnd()
 			toDump.Dump()
 			toDump
@@ -116,4 +115,3 @@ projectResponse.Dump("response")
 	dc.Projects.First(fun p->p.Project_id = comparisonProjectId)
 	dc.Projects.First(fun p->p.Project_guid = projectResponse.ProjectGuid)
 ].Dump("vs")
-	

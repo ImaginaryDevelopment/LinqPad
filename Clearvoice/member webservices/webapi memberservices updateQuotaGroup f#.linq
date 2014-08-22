@@ -1,6 +1,4 @@
 <Query Kind="FSharpProgram">
-  <Connection>
-  </Connection>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
   <Namespace>System.Net</Namespace>
   <Namespace>System.Web</Namespace>
