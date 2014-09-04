@@ -16,22 +16,22 @@ let highestMagicByFileMinimum = 6
 let useThresholds = true
 let useTakeLimits = Some(20)
 
-
+//let after (value:string) (delimiter:string) = 
 let endsWithIgnore (value:string ,test:string) = value.EndsWith(test,StringComparison.CurrentCultureIgnoreCase)
 let startsWithIgnore (value:string ,test:string) = value.StartsWith(test,StringComparison.CurrentCultureIgnoreCase)
 let fileExcludeEndings = ["designer.cs";"generated.cs";"codegen.cs"]
 
-//fileExclude= Func<string,bool> a=>
 let fileExclude	(a:string):bool = 
 	(a, "designer.cs") |> endsWithIgnore ||
 	(a,"jquery-") |> startsWithIgnore ||
-	startsWithIgnore("AssemblyInfo",StringComparison.CurrentCultureIgnoreCase)
+	(a, "AssemblyInfo") |> startsWithIgnore
 	
 let pathExcludeEndings = ["obj"; "Debug";".sonar";"ServerObjects";"Service References";"Web References";"PackageTmp";"TestResults";"packages";"$tf";".git";"bin" ]
 
 let pathExclude (a:string) :bool =
 	List.exists ( fun elem -> (a,elem)|> endsWithIgnore) pathExcludeEndings ||
 	a.Contains(@"NonSln") ||
+	a.Contains(".localhost") ||
 	a.Contains("Generated_C#_Source")
 
 //record, class, struct, or discriminated union?	
@@ -41,6 +41,7 @@ type  CountSettings = {
 	FileExclude: string -> bool
 	PathExclude: string-> bool
 	}
+	
 //instance of above type
 let currentSettings:CountSettings=	{
 	Path=
@@ -57,7 +58,7 @@ let currentSettings:CountSettings=	{
 	}
 	
 //set cwd (not a functional call, imperative?)
-System.Environment.CurrentDirectory<-currentSettings.Path
+System.Environment.CurrentDirectory <- currentSettings.Path
 
 let rec getDirectories (basePath:string) dirFilter= seq{
 	for d in Directory.EnumerateDirectories(basePath) do
@@ -114,7 +115,6 @@ type FileSummary(relativePath:string, fullPath:string,readerFunc:string->string[
 	member self.PotentialMagicNumbers=lazy(self.AllText.Value |> rgNumber.Matches |> fun x->x.Count)
 	
 let  asSummary (files:string[]) :seq<FileSummary> =
-	
 	let uriPath (r:string)= if r.Length>1 then "~"+r.Substring(1) else String.Empty //if relPath is .
 	let reader x = System.IO.File.ReadAllLines(x)
 	seq{
@@ -144,38 +144,50 @@ let makeLinq (path:string) (t:string) =
 	let wrapper (m:string) = "Process.Start(\"" + m.Replace(@"\",@"\\") + "\")"
 	let rawHtml (d:string) = "<a href=\""+d+"\">"+t+"</a>"
 	new Hyperlinq(QueryLanguage.Expression,wrapper(dirPath),t)
-
+	
+let buildLimitString f title threshold = 
+	let label = sprintf "%s%s%s" title (if useThresholds then " > "+ threshold.ToString() else "") (if useTakeLimits.IsSome then " (top "+useTakeLimits.Value.ToString()+")" else "")
+	f(threshold).Dump(label)
+	
 type HighestLinesByFile = {Filename:string; LineCount:int; Location:Hyperlinq}
 
-let getHighestLinesByFile = 
-	let noop condition ifTrue value = 
-		if condition then ifTrue value else value
+let getHighestLinesByFile threshold = 
 	summaries 
 	|> Seq.sortBy (fun x-> -x.LineCount - 1) 
-	|> noop (useLimits = LimitStrategy.Length) (fun e-> Seq.take(20) e)
+	|> (fun fs -> if useTakeLimits.IsSome then Seq.take(useTakeLimits.Value) fs else fs)
 	|> Seq.map (fun x -> {Filename=x.Filename;LineCount=x.LineCount;Location=makeLinq x.FullPath x.RelativePath })
 
-getHighestLinesByFile.Dump("HighestLines by file (top 20)")
+buildLimitString getHighestLinesByFile "HighestLines by file" highestLinesByFileMinimum
+
+// -------------- highest lines by folder ---------------
 
 type HighestLinesByFolderDetails = { Filename:string; LineCount:int; Nonspaces:int}
 
 type HighestLinesByFolder = { Path:string;TotalLines:int;Details:seq<HighestLinesByFolderDetails>}
 
-let getHighestLinesByFolder = 
+let getHighestLinesByFolder threshold = 
+	let getGroupLineCount (items:FileSummary seq) :int = 
+		items 
+		|> Seq.map(fun fs -> fs.LineCount)
+		|> Seq.sum
+	let filter (key:string,items:FileSummary seq) = 
+		(getGroupLineCount items) > threshold
 	summaries 
 	|> Seq.groupBy (fun x->x.RelativePath) 
+	|> (fun group -> if useThresholds then (Seq.filter filter group) else group )
+	|> (fun group -> if useTakeLimits.IsSome then Seq.take(useTakeLimits.Value) group else group)
 	|> Seq.map (fun (key,items) -> (key, items |> Seq.sumBy (fun i->i.LineCount) , items)) 
 	|> Seq.sortBy (fun (key,l,items)-> -l) 
+	
 	|> Seq.map (fun (key, l, items) -> 
 		{Path=key;TotalLines=l;Details=
 			(items |> Seq.map (fun i ->{Filename= i.Filename;LineCount=i.LineCount;Nonspaces=i.Nonspaces.Value}))})
-		
-
-getHighestLinesByFolder |> Seq.take(10) |> fun x->x.Dump("Highest lines by folder (top 10)" )
-
-//type StringGrouping = { Key:string; Lines:int; Files:string list}
 
 
+buildLimitString getHighestLinesByFolder "Highest lines by folder" highestLinesByFolderMinimum
+	 
+
+// -------------- highest lines by file base ---------------
 
 type FilenameDetail = {
 	Lines:int;
@@ -192,7 +204,7 @@ type FilenameGrouping = {
 	
 	}
 	
-let getHighestByFileBase () = 
+let getHighestByFileBase threshold = 
 	let asFilenameGrouping (key,summaries:FileSummary seq) = 
 		{ 
 			FilenameGrouping.File = key
@@ -203,25 +215,35 @@ let getHighestByFileBase () =
 				|> Seq.map (fun (x:FileSummary)-> {FilenameDetail.FileName = x.Filename; Lines = x.LineCount; RelativePath = x.RelativePath;Nonspaces =  x.Nonspaces.Value})
 				|> Seq.sortBy (fun x-> x.RelativePath)
 			}
+			
+	let getGroupLineCount (items:FileSummary seq) :int = 
+		items 
+		|> Seq.map(fun fs -> fs.LineCount)
+		|> Seq.sum
+	let filter (key:string,items:FileSummary seq) = 
+		(getGroupLineCount items) > threshold
+		
 	summaries
 	|> Seq.filter (fun f -> f.Filename.Contains("."))
 	|> Seq.groupBy (fun f-> f.Filename.Substring(0,f.Filename.IndexOf('.'))) //before '.'
+	|> (fun group -> if useThresholds then (Seq.filter filter group) else group )
 	|> Seq.map asFilenameGrouping
 	|> Seq.sortBy (fun f-> -f.Lines)
-	|> Seq.take (10)
-getHighestByFileBase().Dump("Highest lines by file base")
+	|> (fun group -> if useTakeLimits.IsSome then Seq.take(useTakeLimits.Value) group else group)
+	
+buildLimitString getHighestByFileBase "Highest lines by file base" highestLinesByFileMinimum
+
+
+// -------------- highest magic by file ---------------
+
 type MagicByFile = { RelativePath:string; Filename:string;PotentialMagicNumbers:int;DoubleQuotes:int;LineCount:int; Nonspaces:int}
 
-let getHighestMagicByFile () = 
+let getHighestMagicByFile threshold = 
 	let magic (fileSummary:FileSummary) = fileSummary.PotentialMagicNumbers.Value + fileSummary.DoubleQuotes.Value / 2
 	summaries
 	|> Seq.sortBy (fun fs -> -(magic fs))
-	|> Seq.take(10)
-getHighestMagicByFile().Dump("Highest magic by file")
-//public IEnumerable<FileSummary> GetHighestMagicByFile(IEnumerable<FileSummary> files)
-//{
-//	return files.Where(fi=>fi.PotentialMagicNumbers+(fi.DoubleQuotes/2)>HIGHEST_MAGIC_BY_FILE_MINIMUM). OrderByDescending (fi => fi.PotentialMagicNumbers+(fi.DoubleQuotes/2));
-//}
-
+	|> (fun group -> if useTakeLimits.IsSome then Seq.take(useTakeLimits.Value) group else group)
+	
+buildLimitString getHighestMagicByFile "Highest magic by file" highestMagicByFileMinimum
 
 ()
