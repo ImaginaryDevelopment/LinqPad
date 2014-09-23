@@ -4,14 +4,15 @@ void Main()
 	// WorkItemChanges	.Where(wic=>wic.SystemId==3997)// wic.MicrosoftVSTSCommonResolvedBy=="Brandon D'Imperio")
 	//WorkItemsLatestAndWere.Where(i=>i.ID==3997).OrderByDescending(a=>a.ChangedDate).Take(10).Dump();
 	//this.Tbl_TeamConfigurationIterations.Dump();
-	//this.Tbl_Iterations.Dump();
+	// per Oleg Mikhaylov: TreesAreUsed.Where(t=>t.ID == 310).Dump();
+	
 	var myPersonId= 4142;
 	var qIteration = from wia in WorkItemsAres.Where(x=>x.AssignedTo==myPersonId && x.State!="Closed" && x.State!="Resolved")
 					join iLeft in Tbl_Iterations on wia.IterationID equals iLeft.SequenceId into iL
 					from iteration in iL.DefaultIfEmpty()
 					select new {iteration.Iteration,wia};
-	//qIteration.Dump();//.Select(x=>new{x.AreaID,x.IterationID, x.Title,x.WorkItemType}).Dump();
-	var currentIterationId=330;
+	qIteration.OrderByDescending(qi=>qi.wia.ChangedDate).Dump();//.Select(x=>new{x.AreaID,x.IterationID, x.Title,x.WorkItemType}).Dump();
+	var currentIterationId=310;
 	
 	
 	var dic= new Dictionary<string,DateTime>{

@@ -1,6 +1,7 @@
 <Query Kind="FSharpProgram" />
 
 // check webforms pages for never referenced controls and pages
+// did not account for references in the master pages
 let onlySlnProjects = true
 let baseDir=Util.ReadLine("Directory?", System.Environment.GetEnvironmentVariable("devroot"))
 let projects= System.IO.Directory.GetFiles(baseDir,"*.*proj", SearchOption.AllDirectories)

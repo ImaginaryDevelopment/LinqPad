@@ -2,6 +2,7 @@
   <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 12.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.Build.Client.dll</Reference>
   <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 12.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.Client.dll</Reference>
   <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 12.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.VersionControl.Client.dll</Reference>
+  <Reference>C:\projects\Fsi\tfsmacros.dll</Reference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
   <Namespace>Microsoft.TeamFoundation.Build.Client</Namespace>
   <Namespace>Microsoft.TeamFoundation.Client</Namespace>
@@ -13,24 +14,22 @@
 void Main()
 {
 //unfinished? https://gist.github.com/jstangroome/6747950
-	var tfsServer = Environment.GetEnvironmentVariable("servers").Dump().Split(new []{";"},StringSplitOptions.RemoveEmptyEntries).Dump().FirstOrDefault(c=>c.Contains("tfs"));
-	var tfsUri= "https://"+tfsServer;
-	var tfs=new Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(new Uri(tfsUri));
+	var tfs = tfsMacros.getTfs();
+	
 	var saveDir= @"C:\Development\Products\CVS\BuildDefinitions";
 	
-	var vcs=tfs.GetService<VersionControlServer>();
-	var tp = vcs.GetTeamProjectForServerPath("$/Development");
-	var tfsbuild = tfs.GetService<IBuildServer>(); 
-	var collection =tfsbuild.TeamProjectCollection;
-	var builds=tfsbuild.QueryBuildDefinitions(tp.Name);
 	
+	var teamProjectName = "Development";
+	var builds = tfsMacros.Build.getBuildDefinitions(tfs, teamProjectName);
+	// var tp = vcs.GetTeamProjectForServerPath("$/Development");
+	var teamProjectCollectionUri = tfsMacros.Build.getBuildServer(tfs).TeamProjectCollection.Uri;
 	var buildToSave=Util.ReadLine("Build?","Cvr Dev Deploy",builds.Select (b => b.Name).Dump("options") );
 	
-	var buildToDump=tfsbuild.GetBuildDefinition(tp.Name,buildToSave);
+	var buildToDump=tfsMacros.Build.getBuildDefinition(tfs, teamProjectName, buildToSave);
 	
 	var buildDefinition= new {
 			Uri=buildToDump.Uri, Id=buildToDump.Id, TeamProject=buildToDump.TeamProject,
-			CollectionUri=tfsbuild.TeamProjectCollection.Uri,
+			CollectionUri=teamProjectCollectionUri,
 			Name=buildToDump.Name,
 			Description=buildToDump.Description,
 			QueueStatus= buildToDump.QueueStatus,
