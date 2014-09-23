@@ -17,19 +17,19 @@ let useThresholds = true
 let useTakeLimits = Some(20)
 
 //let after (value:string) (delimiter:string) = 
-let endsWithIgnore (value:string ,test:string) = value.EndsWith(test,StringComparison.CurrentCultureIgnoreCase)
-let startsWithIgnore (value:string ,test:string) = value.StartsWith(test,StringComparison.CurrentCultureIgnoreCase)
+let endsWithIgnore (test:string) (value:string) = value.EndsWith(test,StringComparison.CurrentCultureIgnoreCase)
+let startsWithIgnore (test:string) (value:string) = value.StartsWith(test,StringComparison.CurrentCultureIgnoreCase)
 let fileExcludeEndings = ["designer.cs";"generated.cs";"codegen.cs"]
 
 let fileExclude	(a:string):bool = 
-	(a, "designer.cs") |> endsWithIgnore ||
-	(a,"jquery-") |> startsWithIgnore ||
-	(a, "AssemblyInfo") |> startsWithIgnore
+	endsWithIgnore "designer.cs" a ||
+	startsWithIgnore "jquery-" a ||
+	startsWithIgnore "AssemblyInfo" a
 	
 let pathExcludeEndings = ["obj"; "Debug";".sonar";"ServerObjects";"Service References";"Web References";"PackageTmp";"TestResults";"packages";"$tf";".git";"bin" ]
 
 let pathExclude (a:string) :bool =
-	List.exists ( fun elem -> (a,elem)|> endsWithIgnore) pathExcludeEndings ||
+	List.exists ( fun elem -> endsWithIgnore elem a) pathExcludeEndings ||
 	a.Contains(@"NonSln") ||
 	a.Contains(".localhost") ||
 	a.Contains("Generated_C#_Source")
@@ -103,7 +103,7 @@ metaData.Dump("before line counts")
 
 type FileSummary(relativePath:string, fullPath:string,readerFunc:string->string[]) = 
 	let rgNumber = new Regex(@"\.?[0-9]+(\.[0-9]+)?", RegexOptions.Compiled)
-	let prepend="~"+if relativePath.StartsWith("\\") then "" else "\\" 
+	let prepend="~" + if relativePath.StartsWith("\\") then "" else "\\" 
 	member self.FullPath with get() = fullPath
 	member self.Filename with get() = System.IO.Path.GetFileName(self.FullPath)
 	member self.RelativePath with get() = prepend+relativePath.Substring(0,relativePath.Length-self.Filename.Length)

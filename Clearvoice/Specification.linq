@@ -82,6 +82,7 @@ type ProjectType =
 	| Complimentary // no revenue associated 
 	
 type Project = {ProjectType:ProjectType; Name:string; CvrProjectManager: string option}
+
 //let project1 = {ProjectType=ProjectType.PanelOwner; Name="project1"; CvrProjectManager = None}
 //let project2 = {project1 with Name="project2"}
 type QuotaGroup = { Project:Project; Name:string; QuotaGroupType:QuotaGroupType}
@@ -124,6 +125,14 @@ type MemberEntity = //entity
 type UserInvitationEntity = //entity
 	| UserInvitationId of int 
 	| UserInvitationGuid of Guid
+
+type Org = // Organization
+	|Panel
+	|Client
+	|Vendor
+
+
+// ****************************************************************************
 
 // ---- tests --------------------------------------------------
 //type stringExpectation = {Input:string;Expected:bool};

@@ -25,38 +25,38 @@ var changedHours =
 		//.Dump()
 		;
 
-var display = from chwi in changedHours
-			from revision in chwi.Revisions.Cast<Revision>()
-			let actualHoursField = revision.Fields.TryGetById(ActualHours)
-			where actualHoursField !=null && actualHoursField.Value !=null
-			
-			let revisionDateField = revision.Fields.TryGetById(-5)
-			where revisionDateField  !=null && actualHoursField.Value!=null
-			
-			let revisionDate =  (revisionDateField.Value as DateTime?)
-			let actualHours = (int) actualHoursField.Value
-			let originalHours = ((int?) actualHoursField.OriginalValue).GetValueOrDefault()
-			let worked = actualHours - originalHours
-			where worked >0 && revisionDate < new DateTime(2100,1,1) // some dates were 1/1/9999
-			
-			//let originalHours = (int?) actualHoursField.OriginalValue
-			//let workHours = ((int?)actualHoursField.Value) - ((int?)actualHoursField.OriginalValue).GetValueOrDefault()
-			orderby revisionDate descending
-			select new {chwi.Id, chwi.Title, chwi.AreaId, chwi.AreaPath,chwi.IterationId, chwi.IterationPath, Worked=worked, 
-			// NewActualHours = actualHours, OriginalHours=originalHours,
-				RevisionDate = revisionDate};
+var display = 
+	from chwi in changedHours
+	from revision in chwi.Revisions.Cast<Revision>()
+	let actualHoursField = revision.Fields.TryGetById(ActualHours)
+	where actualHoursField !=null && actualHoursField.Value !=null
+	
+	let revisionDateField = revision.Fields.TryGetById(-5)
+	where revisionDateField  !=null && actualHoursField.Value!=null
+	
+	let revisionDate =  (revisionDateField.Value as DateTime?)
+	let actualHours = (int) actualHoursField.Value
+	let originalHours = ((int?) actualHoursField.OriginalValue).GetValueOrDefault()
+	let worked = actualHours - originalHours
+	where worked >0 && revisionDate < new DateTime(2100,1,1) // some dates were 1/1/9999
+	
+	orderby revisionDate descending
+	select new {chwi.Id, chwi.Title, chwi.AreaId, chwi.AreaPath,chwi.IterationId, chwi.IterationPath, Worked=worked, 
+		RevisionDate = revisionDate};
 				
 display.Count().Dump("working revisions");			
-//display.Dump();
+
 var dic= new Dictionary<string,DateTime>{
 		{"today",DateTime.Today},
 		{"last24Hours",DateTime.Today.AddDays(-1)},
 		{"lastWeek",DateTime.Now.StartOfWeek( DayOfWeek.Monday).AddDays(-7)},
 		{"last30Days",DateTime.Today.AddDays(-30)}
 	};
-
-var changedToday = display.Where(r=> r.RevisionDate > DateTime.Today).Dump("Today");
-display.Where(r=>r.RevisionDate > DateTime.Today.AddDays(-1)).Dump("last 24 hours");
-
-		// [ /* 10100  "Actual Hours"*/].IsChangedByUser)).Dump();
-//workItems.GetPersonNameById(4142).Dump();
+	
+var q= from d in display
+		from timeframe in dic.Keys
+		where d.RevisionDate > dic[timeframe]
+		group d by timeframe into g
+		select g;
+		
+q.Dump();		
