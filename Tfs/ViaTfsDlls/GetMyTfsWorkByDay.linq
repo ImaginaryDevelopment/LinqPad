@@ -7,10 +7,11 @@
   <Namespace>Microsoft.TeamFoundation.Client</Namespace>
   <Namespace>Microsoft.TeamFoundation.VersionControl.Client</Namespace>
   <Namespace>Microsoft.TeamFoundation.WorkItemTracking.Client</Namespace>
+  <Namespace>Macros</Namespace>
 </Query>
 
-var tfs = tfsMacros.getTfs();
-var workItemStore = tfs.GetService<WorkItemStore>();
+var tfs = new TFS();
+var workItemStore = tfs.Tfs.GetService<WorkItemStore>();
 const int ActualHours = 10100;
 var projectName = "Development";
 var variables = new Dictionary<string,string>(){ {"project",projectName}};
@@ -59,4 +60,4 @@ var q= from d in display
 		group d by timeframe into g
 		select g;
 		
-q.Dump();		
+q.Dump();

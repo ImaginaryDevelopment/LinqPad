@@ -6,6 +6,7 @@
   <NuGetReference>Newtonsoft.Json</NuGetReference>
   <Namespace>Microsoft.TeamFoundation.Client</Namespace>
   <Namespace>Microsoft.TeamFoundation.VersionControl.Client</Namespace>
+  <Namespace>Macros</Namespace>
 </Query>
 
 void Main()
@@ -21,23 +22,19 @@ void Main()
 	var tfsServer = Environment.GetEnvironmentVariable("servers").Split(new []{";"},StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(c=>c.Contains("tfs"));
 	var tfsUri = "https://"+tfsServer;
 	
-	var tfs = new Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(new Uri(tfsUri));
+	var tfs = new TFS(tfsServer,8080,"Development");
 	
-	var queryPath = GetQueryPath(tfs, useDeeperPath,queryPathBase);
+	var queryPath = GetQueryPath(tfs.Tfs, useDeeperPath,queryPathBase);
 	
 	// subPath.Dump("subPath");
-	var tfsChanges = tfsMacros.CSharp.getTfsChangesWithoutWorkItems(tfs, userName,queryPath, 0);
+	var tfsChanges = tfs.GetChangesWithoutWorkItems(userName,queryPath, 0);
 	// tfsChanges.Dump();
 	
 	tfsChanges
 		.Select(cs=>new{ cs.Owner,
-			ChangeSetId=new Hyperlinq(tfsMacros.getChangesetLink(cs.ChangesetId), cs.ChangesetId.ToString()),
+			ChangeSetId=new Hyperlinq(tfs.GetChangesetLink(cs.ChangesetId), cs.ChangesetId.ToString()),
 			cs.CreationDate, 
-			WorkItems=cs.AssociatedWorkItems.Select(wi=>new{
-				Id=new Hyperlinq(tfsMacros.getWorkItemLink(wi.Item1),wi.Item1.ToString()),
-				Title= wi.Item2,
-				WorkItemType = wi.Item3}),
-			Changes=cs.Changes.Select(c=>new Hyperlinq(tfsMacros.getItemLink(cs.ChangesetId,System.Net.WebUtility.UrlEncode(c)),c))
+			Changes=cs.Changes.Select(c=>new Hyperlinq(tfs.GetItemLink(cs.ChangesetId,System.Net.WebUtility.UrlEncode(c)),c))
 		}).Dump("rollup on changeset/date");
 }
 

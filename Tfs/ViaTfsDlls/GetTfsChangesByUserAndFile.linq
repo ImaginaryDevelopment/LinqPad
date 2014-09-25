@@ -5,6 +5,7 @@
   <NuGetReference>Newtonsoft.Json</NuGetReference>
   <Namespace>Microsoft.TeamFoundation.Client</Namespace>
   <Namespace>Microsoft.TeamFoundation.VersionControl.Client</Namespace>
+  <Namespace>Macros</Namespace>
 </Query>
 
 void Main()
@@ -18,17 +19,17 @@ void Main()
 	var teamProject = "Development";
 	
 	// tfs is needed to let user provide a subPath if desired
-	var tfs = new Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(new Uri(tfsUri));
+	var tfs =new TFS(tfsServer,teamProject,null);  //new Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(new Uri(tfsUri));
 	
 	var queryPathBase = "$/"+teamProject+"/";
-	var queryPath = GetQueryPath(tfs, useDeeperPath,queryPathBase);
+	var queryPath = GetQueryPath(tfs.Tfs, useDeeperPath,queryPathBase);
 	
-	var tfsChanges = tfsMacros.CSharp.getTfsChangesByUserAndFile(tfs, userName,queryPath, 0);
+	var tfsChanges = tfs.GetChangesByUserAndFile(userName,queryPath, 0);
 	var items = tfsChanges.Item2;
 	items
-		.Select(cs=>new{ChangeSetId=new Hyperlinq(tfsMacros.getChangesetLink(cs.ChangesetId), cs.ChangesetId.ToString()),cs.CreationDate, 
-		WorkItems=cs.AssociatedWorkItems.Select(wi=>new{Id=new Hyperlinq(tfsMacros.getWorkItemLink(wi.Item1),wi.Item1.ToString()),wi.Item2,wi.Item3}),
-			Changes=cs.Changes.Select(c=>new Hyperlinq(tfsMacros.getItemLink(cs.ChangesetId,System.Net.WebUtility.UrlEncode(c)),c))}).Dump("rollup on changeset/date");
+		.Select(cs=>new{ChangeSetId=new Hyperlinq(tfs.GetChangesetLink(cs.ChangesetId), cs.ChangesetId.ToString()),cs.CreationDate, 
+		WorkItems=cs.AssociatedWorkItems.Select(wi=>new{Id=new Hyperlinq(tfs.GetWorkItemLink(wi.Item1),wi.Item1.ToString()),wi.Item2,wi.Item3}),
+			Changes=cs.Changes.Select(c=>new Hyperlinq(tfs.GetItemLink(cs.ChangesetId,System.Net.WebUtility.UrlEncode(c)),c))}).Dump("rollup on changeset/date");
 }
 
 // Define other methods and classes here

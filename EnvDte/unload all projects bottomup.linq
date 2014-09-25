@@ -2,8 +2,6 @@
   <Reference>&lt;RuntimeDirectory&gt;\System.Runtime.InteropServices.dll</Reference>
   <GACReference>EnvDTE, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
   <NuGetReference>Rx-Main</NuGetReference>
-  <NuGetReference>Rx-Main</NuGetReference>
-  <NuGetReference>Rx-Main</NuGetReference>
   <Namespace>EnvDTE</Namespace>
   <Namespace>System</Namespace>
   <Namespace>System.Runtime.InteropServices</Namespace>
@@ -63,6 +61,7 @@ void Main()
 	unloaded.Dump("unloaded");
 	
 }
+
 public object GetDisplay(UIHierarchyItem item)
 {
 
@@ -89,6 +88,7 @@ public object GetDisplay(UIHierarchyItem item)
 			}
 	return display;
 }
+
 public IEnumerable<UIHierarchyItem> GetChildItems(UIHierarchyItem parent,bool topdown)
 {
 	

@@ -4,6 +4,7 @@
   <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 12.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.VersionControl.Client.dll</Reference>
   <Reference>C:\projects\Fsi\tfsmacros.dll</Reference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
+  <Namespace>Macros</Namespace>
   <Namespace>Microsoft.TeamFoundation.Build.Client</Namespace>
   <Namespace>Microsoft.TeamFoundation.Client</Namespace>
   <Namespace>Microsoft.TeamFoundation.VersionControl.Client</Namespace>
@@ -14,18 +15,18 @@
 void Main()
 {
 //unfinished? https://gist.github.com/jstangroome/6747950
-	var tfs = tfsMacros.getTfs();
-	
+	var tfs = TFS.GetTfs();
+	var build =new TfsBuild( Build.GetBuildServer(tfs));
 	var saveDir= @"C:\Development\Products\CVS\BuildDefinitions";
 	
 	
 	var teamProjectName = "Development";
-	var builds = tfsMacros.Build.getBuildDefinitions(tfs, teamProjectName);
+	var builds = build.GetBuildDefinitions(teamProjectName);
 	// var tp = vcs.GetTeamProjectForServerPath("$/Development");
-	var teamProjectCollectionUri = tfsMacros.Build.getBuildServer(tfs).TeamProjectCollection.Uri;
+	var teamProjectCollectionUri = Build.GetBuildServer(tfs).TeamProjectCollection.Uri;
 	var buildToSave=Util.ReadLine("Build?","Cvr Dev Deploy",builds.Select (b => b.Name).Dump("options") );
 	
-	var buildToDump=tfsMacros.Build.getBuildDefinition(tfs, teamProjectName, buildToSave);
+	var buildToDump=build.GetBuildDefinition(teamProjectName, buildToSave);
 	
 	var buildDefinition= new {
 			Uri=buildToDump.Uri, Id=buildToDump.Id, TeamProject=buildToDump.TeamProject,
