@@ -21,7 +21,7 @@ var minDate=DateTime.Today.AddDays(-30);
 	var tfsServer = Environment.GetEnvironmentVariable("servers").Dump().Split(new []{";"},StringSplitOptions.RemoveEmptyEntries).Dump().FirstOrDefault(c=>c.Contains("tfs"));
 	var tfsUri= "https://"+tfsServer;
 	
-	using(var tfsPc=new TfsTeamProjectCollection(tfsUri))
+	using(var tfsPc=new TfsTeamProjectCollection(new Uri(tfsUri)))
 	
 	{
 		var vcs=tfsPc.GetService<Microsoft.TeamFoundation.VersionControl.Client.VersionControlServer>();

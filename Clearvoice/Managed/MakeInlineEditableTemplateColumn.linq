@@ -60,7 +60,7 @@ let AllKeys =
 		yield(createKeys "completedCap" "CompletedCap" "Completed Cap" formattedPositiveIntAccessor None)
 		yield(createKeys "terminatedCap" "TerminatedCap" "Terminated Cap" formattedPositiveIntAccessor None)
 		yield(createKeys "quotaName" "QuotaName" "Name" defaultAccessor None)
-		yield(createKeys "startCap" "StartCap" "Starts Cap" formattedPositiveIntAccessor None)
+		yield(createKeys "startedCap" "StartedCap" "Started Cap" formattedPositiveIntAccessor None)
 	}
 
 type InlineEditorComponent = 

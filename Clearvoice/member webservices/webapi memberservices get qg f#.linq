@@ -1,4 +1,24 @@
 <Query Kind="FSharpProgram">
+  <Reference>&lt;RuntimeDirectory&gt;\System.Web.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Configuration.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\Microsoft.Build.Framework.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.ComponentModel.DataAnnotations.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Runtime.Caching.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Web.ApplicationServices.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Web.Services.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\Microsoft.Build.Utilities.v4.0.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Security.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.DirectoryServices.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.DirectoryServices.Protocols.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.EnterpriseServices.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Design.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\Microsoft.Build.Tasks.v4.0.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.ServiceProcess.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Web.RegularExpressions.dll</Reference>
+  <NuGetReference>Newtonsoft.Json</NuGetReference>
+  <Namespace>System.Net</Namespace>
+  <Namespace>System.Web</Namespace>
 </Query>
 
 let dc = new TypedDataContext()
@@ -54,4 +74,3 @@ let apiResponse =
 		r.ReadToEnd().Dump("response ex")
 		ex.Dump()
 		failwith "response exception"
-		

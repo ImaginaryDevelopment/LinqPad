@@ -2,6 +2,7 @@
   <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 12.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.Client.dll</Reference>
   <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 12.0\Common7\IDE\ReferenceAssemblies\v2.0\Microsoft.TeamFoundation.VersionControl.Client.dll</Reference>
   <Reference>C:\projects\Fsi\tfsmacros.dll</Reference>
+  <GACReference>Microsoft.TeamFoundation.VersionControl.Common, Version=12.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
   <Namespace>Microsoft.TeamFoundation.Client</Namespace>
   <Namespace>Microsoft.TeamFoundation.VersionControl.Client</Namespace>
@@ -10,26 +11,31 @@
 
 void Main()
 {
+	// find check-ins without tickets
+	var anyUser = false;
 	var selectUser = false;
 	var useDeeperPath = false;
 	
-	var userName = selectUser? Util.ReadLine("UserName?",Environment.UserName) : Environment.UserName;
+	var userName =anyUser? null : selectUser? Util.ReadLine("UserName?",Environment.UserName) : Environment.UserName;
+	var queryPathBase = "$/Development/";
+	
 	var tfsServer = Environment.GetEnvironmentVariable("servers").Split(new []{";"},StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(c=>c.Contains("tfs"));
 	var tfsUri = "https://"+tfsServer;
-	var teamProject = "Development";
 	
-	// tfs is needed to let user provide a subPath if desired
-	var tfs =new TFS(tfsServer,teamProject,null);  //new Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(new Uri(tfsUri));
+	var tfs = new TFS(tfsServer,8080,"Development");
 	
-	var queryPathBase = "$/"+teamProject+"/";
 	var queryPath = GetQueryPath(tfs.Tfs, useDeeperPath,queryPathBase);
 	
-	var tfsChanges = tfs.GetChangesByUserAndFile(userName,queryPath, 0);
-	var items = tfsChanges.Item2;
-	items
-		.Select(cs=>new{ChangeSetId=new Hyperlinq(tfs.GetChangesetLink(cs.ChangesetId), cs.ChangesetId.ToString()),cs.CreationDate, 
-		WorkItems=cs.AssociatedWorkItems.Select(wi=>new{Id=new Hyperlinq(tfs.GetWorkItemLink(wi.Item1),wi.Item1.ToString()),wi.Item2,wi.Item3}),
-			Changes=cs.Changes.Select(c=>new Hyperlinq(tfs.GetItemLink(cs.ChangesetId,System.Net.WebUtility.UrlEncode(c)),c))}).Dump("rollup on changeset/date");
+	// subPath.Dump("subPath");
+	var tfsChanges = tfs.GetChangesWithoutWorkItems(userName,queryPath, 0);
+	// tfsChanges.Dump();
+	
+	tfsChanges
+		.Select(cs=>new{ cs.Owner,
+			ChangeSetId=new Hyperlinq(tfs.GetChangesetLink(cs.ChangesetId), cs.ChangesetId.ToString()),
+			cs.CreationDate, 
+			Changes=cs.Changes.Select(c=>new Hyperlinq(tfs.GetItemLink(cs.ChangesetId,System.Net.WebUtility.UrlEncode(c)),c))
+		}).Dump("rollup on changeset/date");
 }
 
 // Define other methods and classes here
