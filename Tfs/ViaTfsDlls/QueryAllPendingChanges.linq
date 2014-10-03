@@ -14,7 +14,7 @@ void Main()
 {
 var srcpath=Util.ReadLine("SourcePath?","$/");
 var onlyLocks=false; //Util.ReadLine<bool>("only locked files?",true);
-DateTime? minDate=DateTime.Today.AddMonths(-12);
+DateTime? minDate=null ; //DateTime.Today.AddMonths(-12);
 
 	var tfsServer = Environment.GetEnvironmentVariable("servers")
 		.Dump()
@@ -32,9 +32,11 @@ DateTime? minDate=DateTime.Today.AddMonths(-12);
 		var vcs=tfsPc.GetService<Microsoft.TeamFoundation.VersionControl.Client.VersionControlServer>();
 		
 		var srcRoot=vcs.GetItem(srcpath);
-		
-		
-		var pendings=vcs.QueryPendingSets(new[]{srcRoot.ServerItem}, RecursionType.Full,null,null).AsEnumerable();
+		//var myUser = Environment.UserDomainName+"\\"+ Environment.UserName;
+		//myUser.Dump();
+		var pendings=vcs.QueryPendingSets(new[]{srcRoot.ServerItem}, RecursionType.Full,null,null).AsEnumerable()
+		//.Where(p=>p.OwnerName.Equals(myUser,StringComparison.CurrentCultureIgnoreCase))
+		;
 		if(onlyLocks)
 			pendings=pendings.Where(pq=>pq.PendingChanges.Any(pc=>pc.IsLock));
 		if(minDate.HasValue)
@@ -43,7 +45,5 @@ DateTime? minDate=DateTime.Today.AddMonths(-12);
 			.OrderByDescending(p=>p.PendingChanges.Max(d=>d.CreationDate));
 		pendingQuery.Dump("pending");	
 		
-		
 	}
 }
-
