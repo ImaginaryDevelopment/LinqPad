@@ -8,7 +8,8 @@ static bool runRedirected = true;
 void Main()
 {
 
-DateTime? backdateForAnalysis = new DateTime(2013,11,19);
+DateTime? backdateForAnalysis = new DateTime(2014,1,31);
+backdateForAnalysis.Dump("back dated");
 string slnPath;
 var sonarRunnerHome = System.Environment.ExpandEnvironmentVariables("%SONAR_RUNNER_HOME%").Dump("sonar runner home");
 //// sonar wants to create a temp directory to write things into
@@ -34,24 +35,16 @@ slnDirectory.Dump();
 
 var propertiesPath=System.IO.Path.Combine(slnDirectory,"sonar-project.properties");
 
-//if(System.IO.File.Exists(propertiesPath))
-//	EditSonarProperties(propertiesPath);
-//else
 	CreateSonarProperties(propertiesPath, System.IO.Path.GetFileName(slnPath),backdateForAnalysis);
 
 	RunSonarRunner(slnDirectory);
 	
-	
 } //main
 
-//public static void EditSonarProperties(string propertiesPath)
-//{
-//
-//}
 
 public static void RunSonarRunner(string slnDirectory)
 {
-var psi=new ProcessStartInfo(@"C:\projects\sonar\sonar-runner-2.4\bin\sonar-runner.bat"){ RedirectStandardError=runRedirected, RedirectStandardOutput=runRedirected//,RedirectStandardInput=true 
+	var psi=new ProcessStartInfo(@"C:\projects\sonar\sonar-runner-2.4\bin\sonar-runner.bat"){ RedirectStandardError=runRedirected, RedirectStandardOutput=runRedirected//,RedirectStandardInput=true 
 		, UseShellExecute=!runRedirected,ErrorDialog=false, CreateNoWindow= !debug} ; // WinMgmt or WMSvc?
 
 	using (var ps=new Process())
@@ -61,34 +54,33 @@ var psi=new ProcessStartInfo(@"C:\projects\sonar\sonar-runner-2.4\bin\sonar-runn
 	//var input=ps.StandardInput;
 	 var queryOutputs=ps.RunProcessRedirected(debug? "-X": string.Empty); //string.Empty);
 	if(queryOutputs.Errors.HasValue()) return;
-	} else {
-	
-	ps.Start();
-	
-	//ps.StandardError.ReadToEnd().Dump("stderr");
-	//ps.StandardOutput.ReadToEnd().Dump("stdout");
-	
+	} else 
+	{
+		ps.Start();
+		if(psi.RedirectStandardError)
+			ps.StandardError.ReadToEnd().Dump("stderror");
+		if(psi.RedirectStandardOutput)
+			ps.StandardOutput.ReadToEnd().Dump("stdout");
 	}
-	
-	//	startOutput=ps.RunProcessRedirected(@"\\"+server+" "+current+" "+toStart);
-		
 	}	//ps disposed
 	
 	
 }
 
 public static void CreateSonarProperties(string propertiesPath, string projectName, DateTime? projectDate = null)
-{ // https://github.com/SonarSource/sonar-examples/blob/master/projects/languages/csharp/sonar-project.properties
+{ 
+	// https://github.com/SonarSource/sonar-examples/blob/master/projects/languages/csharp/sonar-project.properties
 	propertiesPath.Dump();
 	// http://docs.codehaus.org/display/SONAR/Analysis+Parameters
 	var settingLines = new List<string>(){
-		"sonar.projectKey=com.clearvoice",
-	"sonar.projectName="+projectName,
-"sonar.projectVersion=0.1",
-// "sonar.sourceEncoding=UTF-8",
-"sonar.sources=.",
-"sonar.exclusions=obj/**;NonSln/**"
+		"sonar.projectKey=com.cvs",
+		"sonar.projectName="+projectName,
+		"sonar.projectVersion=0.1",
+		// "sonar.sourceEncoding=UTF-8",
+		"sonar.sources=.",
+		"sonar.exclusions=obj/**;NonSln/**"
 	};
+	
 	if(projectDate.HasValue)
 		settingLines.Add("sonar.projectDate=" + projectDate.Value.ToString("yyyy-MM-dd"));
 	System.IO.File.WriteAllLines(propertiesPath,settingLines.ToArray());
@@ -96,7 +88,6 @@ public static void CreateSonarProperties(string propertiesPath, string projectNa
 
 public static IEnumerable<ScQueryOutput> TransformScQuery(string output)
 {
-	
 	var grouped=output.SplitLines().SkipWhile (o => string.IsNullOrEmpty(o)).GroupLinesBy("SERVICE_NAME");
 	foreach(var line in grouped
 				.Select (g => g.SplitLines()
@@ -144,16 +135,11 @@ public string Output{get;set;}
 // Define other methods and classes here
 public static class EnumerableExtensions
 {
-//
-//public static string Delimit(this IEnumerable<string> values, string delimiter)
-//	{
-//	return values.Aggregate ((s1,s2)=>s1+delimiter+s2);
-//	}
-	
+
 	public static IEnumerable<IEnumerable<T>> BufferByCount<T>(this IEnumerable<T> values, int chunkSize)
 	{
 		var total=0;
-var current=values;
+		var current=values;
 		while(current.Any ())
 		{
 		yield return current.Take(chunkSize);
@@ -202,15 +188,6 @@ public static string TruncateTo(this string text, byte count)
 	return text.Substring(0,count);
 	
 	}
-//public static bool HasValue(this string text)
-//	{
-//	return string.IsNullOrEmpty(text)==false;
-//	}
-	
-//	public static string[] SplitLines(this string text)
-//	{
-//		return text.Split(new string[] {"\r\n","\n"}, StringSplitOptions.None);
-//	}
 	
 	public static string StringAfter(this string text, string delimiter)
 	{
@@ -229,19 +206,7 @@ public static string TruncateTo(this string text, byte count)
 
 public static class Extensions
 {
-//
-//public static StreamOuts RunProcessRedirected(this Process ps, string arguments)
-//	{
-//		ps.StartInfo.Arguments=arguments;
-//	ps.Start();
-//	var output=ps.StandardOutput.ReadtoEndAndDispose();
-//	var errors=ps.StandardError.ReadtoEndAndDispose();
-//	
-//	ps.WaitForExit(2000);
-//	if(errors.Length>0) 	Util.Highlight(errors).Dump("errors");
-//	return new StreamOuts(){ Errors=errors, Output=output };
-//	}
-	
+
 	
 public static string ReadtoEndAndDispose(this StreamReader reader)
 	{
