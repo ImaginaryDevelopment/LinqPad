@@ -1,10 +1,8 @@
 <Query Kind="Program">
   <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.dll</Reference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
-  <NuGetReference>Rstrmgr.Helper</NuGetReference>
   <NuGetReference>Rx-Core</NuGetReference>
   <NuGetReference>Rx-Main</NuGetReference>
-  <Namespace>Rstrmgr.Helper</Namespace>
   <Namespace>System</Namespace>
   <Namespace>System.Reactive</Namespace>
   <Namespace>System.Reactive.Concurrency</Namespace>
@@ -16,14 +14,16 @@
 </Query>
 
 #define LINQPAD
-static bool debug = false;
-
+static bool debug = true;
+static bool ignoreLanguageDetectionDebug = true;
+static bool tryFxCop = false;
+static bool tryStyleCop = false;
 void Main()
 {
 	
 	DateTime? backdateForAnalysis = null; //new DateTime(2014,10,2);
 	backdateForAnalysis.Dump("backdate");
-	var skipPatterns = new [] {"obj/**","**/obj/**","NonSln/**"};
+	var skipPatterns = new [] {"**/*.Tests/**","**/obj/**","NonSln/**","**/Reference.cs","**/*.Designer.cs"};
 	string slnPath;
 	var sonarRunnerHome = System.Environment.ExpandEnvironmentVariables("%SONAR_RUNNER_HOME%").Dump("sonar runner home");
 	//// sonar wants to create a temp directory to write things into
@@ -53,7 +53,7 @@ void Main()
 	DateTime.Now.Dump("starting process");
 	
 	RunSonarRunner(slnDirectory);
-	"RunSonarRunner finished".Dump();	
+	DateTime.Now.Dump("RunSonarRunner finished");	
 		
 } //main
 
@@ -63,7 +63,9 @@ public static void RunSonarRunner(string slnDirectory)
 	var psi=new ProcessStartInfo(@"C:\projects\sonar\sonar-runner-2.4\bin\sonar-runner.bat"){ RedirectStandardError=false, RedirectStandardOutput=false
 		, UseShellExecute=false,ErrorDialog=false, CreateNoWindow= true,
 		Arguments = debug?"-X" : null} ; // WinMgmt or WMSvc?
-
+	int startedProcessId;
+	int startedJavaProcessId;
+	
 	using (var ps=new Process())
 	{
 		var exited = Observable.FromEventPattern<EventHandler,EventArgs>(
@@ -72,47 +74,68 @@ public static void RunSonarRunner(string slnDirectory)
 			.Select(e=>{"exited!".Dump(); return true;});
 		
 	ps.StartInfo=psi;
-	var output = StandardOutputObservable(ps,exited).DumpLive("standardout");
-	var cleanedOutput = output.Where(s=>s.IsNullOrEmpty() == false && !(s.StartsWith("\t") || s.StartsWith(" ") || s.Contains(" Parse error at line")));
+	
+	const string infoMarker = " INFO  - ";
+	const string debugMarker = " DEBUG - ";
+	
+	var output = StandardOutputObservable(ps,exited);
+	StandardErrorObservable(ps,exited).Dump("errors");
+	
+//	errorObservable.Where(data=>data !=null && data.Dump("where data").Contains("is locked by another process")).Do(s=>{
+//		var locked = s.Before(" is locked by another process").After("file ").Dump("locked");
+//		FileUtil.WhoIsLocking(locked).Dump("locking");
+//	});
+	var sanitizedOutput= output.Where(s=>s.IsNullOrEmpty() == false && !(s.StartsWith("\t") || s.StartsWith(" ") || s.Contains(" Parse error at line")));
+	
+	
+	
+	var nonDebugOutput = sanitizedOutput.Where(s=> s.Contains(debugMarker )==false && s.Contains(infoMarker)==false);
+	
+	
+	
 	const string transitionMarker = " source files to be analyzed";
-	cleanedOutput
+	
+	nonDebugOutput 
 		.TakeWhile(s=>!s.TrimEnd().EndsWith(transitionMarker))
 		.Dump("starting up");
+		
+		
+	sanitizedOutput.Where(s=> s.Contains(infoMarker))
+		//.DumpLive("TimedInfo")
+		.Dump("TimedInfo");
 	
-	cleanedOutput
+	var debugOutput = sanitizedOutput.Where(s=> s.Contains(debugMarker ) && !ignoreLanguageDetectionDebug || s.Contains("Language of file")==false)
+		//.DumpLive("Debug")
+		.Dump("debug");	
+	
+	const string parseFailureMarker = "Unable to parse file:";
+	
+	nonDebugOutput 
 		.SkipWhile(s=> !s.TrimEnd().EndsWith(transitionMarker))
-		.Where(s=> s.Contains("Unable to parse file:"))
-		.Select(parseError => parseError.After("Unable to parse file:").AfterOrSelf(slnDirectory).Trim())
+		.Where(s=> s.Contains(parseFailureMarker))
+		.Select(parseError => parseError.After(parseFailureMarker).AfterOrSelf(slnDirectory).Trim())
 		.Dump("parseErrors");
 	
-	cleanedOutput
+	nonDebugOutput 
 		.SkipWhile(s=>!s.TrimEnd().EndsWith(" source files to be analyzed"))
-		.Where(s=> !s.Contains("Unable to parse file:"))
+		.Where(s=> !s.Contains(parseFailureMarker))
 		.Dump("after startup")
 		.Then(_ => {
 			"cancelling".Dump();
-			ps.CancelOutputRead();
+			if(ps.HasExited==false)
+				ps.CancelOutputRead();
 			return "finished";
 			});
-			
-	var errorObservable = StandardErrorObservable(ps,exited);
-	errorObservable.DumpLive("errors");
-	errorObservable.Dump("errors");
-	
-	errorObservable.Where(data=>data !=null && data.Dump("where data").Contains("is locked by another process")).Do(s=>{
-		var locked = s.Before(" is locked by another process").After("file ").Dump("locked");
-		FileUtil.WhoIsLocking(locked).Dump("locking");
-	});
 	
 	var existingJavas = GetProcInfo(Process.GetProcessesByName("java")).Dump();
 	
 	new Hyperlinq(()=>GetProcInfo(Process.GetProcessesByName("java")),"check running java processes",true).Dump();
 	
 	ps.Start();
-	var psId = ps.Id.Dump("processId");
+	startedProcessId = ps.Id.Dump("processId");
 	new Hyperlinq(()=>{ 
-		if(Process.GetProcesses().Any(running => running.Id == psId)){
-		Process.GetProcessById(psId).Dump("killing").Kill(); }
+		if(Process.GetProcesses().Any(running => running.Id == startedProcessId)){
+		Process.GetProcessById(startedProcessId).Dump("killing").Kill(); }
 		else "Already finished".Dump();
 		},"kill process").Dump();
 	
@@ -123,7 +146,7 @@ public static void RunSonarRunner(string slnDirectory)
 	System.Threading.Thread.Sleep(500);
 	GetProcInfo(Process.GetProcessesByName("java").Where(p=> existingJavas .Select(j=>j.Id).Contains(p.Id)==false)).Dump("new javas!");
 	// ps wait for exit seems to cause the live observable to wait for exit before it appears =(
-	//// ps.WaitForExit();
+	ps.WaitForExit();
 	
 	}	// ps disposed
 	
@@ -132,20 +155,44 @@ public static void RunSonarRunner(string slnDirectory)
 
 public static void CreateSonarProperties(string propertiesPath,string[] exclusionPatterns, string projectName, DateTime? projectDate = null)
 { 
+	var startupPath = System.IO.Path.GetDirectoryName(propertiesPath);
 	// https://github.com/SonarSource/sonar-examples/blob/master/projects/languages/csharp/sonar-project.properties
 	propertiesPath.Dump();
 	// http://docs.codehaus.org/display/SONAR/Analysis+Parameters
+	var keyName = projectName + (tryStyleCop? ".style":string.Empty) + (tryFxCop? ".fx":string.Empty);
 	var settingLines = new List<string>(){
-		"sonar.projectKey="+projectName,
-		"sonar.projectName="+projectName,
+		"sonar.projectKey="+keyName,
+		"sonar.projectName="+keyName,
 		"sonar.projectVersion=0.1",
-		// "sonar.sourceEncoding=UTF-8",
+		"sonar.sourceEncoding=UTF-8",
 		"sonar.sources=.",
-		"sonar.exclusions=" + string.Join(",", exclusionPatterns)
+		"sonar.exclusions=" + string.Join(",", exclusionPatterns),
+		"sonar.language=cs",
+		"sonar.dotnet.visualstudio.solution.file="+projectName,
+		
 	};
+	if(!tryStyleCop){
+		settingLines.Add("sonar.stylecop.projectFilePath=");
+		settingLines.Add("sonar.stylecop.mode=skip");
+		
+	} else {
+		var includedProjects = from projectfile in System.IO.Directory.GetFiles(startupPath, "*.csproj", SearchOption.AllDirectories)
+					where exclusionPatterns.Any(ep => projectfile.IsMatch(ep.Replace("**",".*").Replace("*.","[^\\\\]*").Replace("/","\\\\"),true))==false
+					select projectfile.Replace("\\","/");
+		settingLines.Add("sonar.stylecop.projectFilePath="+string.Join(",", includedProjects));
+		
+		// one per project?
+		//"sonar.stylecop.projectFilePath="+projectName
+	}
+	
+	if (!tryFxCop) {
+		settingLines.Add("sonar.fxcop.mode=skip");
+	}
 	
 	if(projectDate.HasValue)
 		settingLines.Add("sonar.projectDate=" + projectDate.Value.ToString("yyyy-MM-dd"));
+		
+	settingLines.Dump("settings");
 	System.IO.File.WriteAllLines(propertiesPath,settingLines.ToArray());
 }
 
