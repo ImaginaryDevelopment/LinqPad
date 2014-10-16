@@ -4,8 +4,10 @@
   <Namespace>HtmlAgilityPack</Namespace>
 </Query>
 
-let fileName = Util.ReadLine("html path?")
-
+let fileName = 
+	let autoPath = System.IO.Path.Combine(Environment.ExpandEnvironmentVariables("%USERPROFILE%"),"Desktop","helpers.html")
+	if System.IO.File.Exists autoPath then autoPath else
+		Util.ReadLine("html path?")
 let cssInjector href = 
 	sprintf """
 	<script>
