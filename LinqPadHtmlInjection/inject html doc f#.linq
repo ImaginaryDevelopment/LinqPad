@@ -4,10 +4,13 @@
   <Namespace>HtmlAgilityPack</Namespace>
 </Query>
 
+// filename to your html
 let fileName = 
 	let autoPath = System.IO.Path.Combine(Environment.ExpandEnvironmentVariables("%USERPROFILE%"),"Desktop","helpers.html")
 	if System.IO.File.Exists autoPath then autoPath else
 		Util.ReadLine("html path?")
+		
+// inject a css stylesheet link into the head element
 let cssInjector href = 
 	sprintf """
 	<script>
@@ -18,6 +21,7 @@ let cssInjector href =
 		document.getElementsByTagName("head")[0].appendChild(link);
 	</script>""" href
 	
+// add classes to the body tag via injected javascript	
 let htmlClassInjector className = 
 	sprintf """
 	<script>
@@ -34,7 +38,7 @@ let htmlClassInjector className =
 			target.setAttributeNode(att);
 		}
 	</script>""" className className className
-
+// add a css class marker to the body tag so the script can decide how to do things
 Util.RawHtml(htmlClassInjector "linqPad").Dump()
 
 let makeLinqPadable (file:string) = 
@@ -43,19 +47,18 @@ let makeLinqPadable (file:string) =
 		if  attrib = null || attrib.Value = null then
 			System.String.Empty
 		else attrib.Value
-		
+	// get the head elements, and the body elements for injection	
 	let headLines,bodyLines = 
 		let raw = new HtmlDocument()
 		raw.Load(file)
-		// raw.Dump()
+		
 		let head,bodies=raw.DocumentNode.SelectNodes("//head/*"),raw.DocumentNode.SelectNodes("//body/*")
-		// bodies |> (fun e->e.Dump("bodies!"))
-		//(head,bodies).Dump()
 		head,bodies
+	// return the list of things to inject into body (including scripts that will inject DOM into the head
 	[
 		for h in headLines do
 			match h with 
-			| script when script.OuterHtml.StartsWith("<script") -> yield script.OuterHtml // these shouldn't require head injection
+			| script when script.Name ="script" -> yield script.OuterHtml // these shouldn't require head injection
 			| link when link.Name="link" && (getAttribValOrEmpty link "rel") = "stylesheet" && (getAttribValOrEmpty link "href") <> System.String.Empty ->
 				let href = link.Attributes.["href"].Value
 				printfn "css injecting into head %s" href
@@ -65,7 +68,7 @@ let makeLinqPadable (file:string) =
 				yield h.OuterHtml // hope it will work outside of head
 		yield! bodyLines |> Seq.map(fun e->e.OuterHtml)
 	]
-
+// inject one by one, in case the XHTML parser is unhappy we'll have more context to shim with
 for toDump in (makeLinqPadable fileName) do
 	Util.RawHtml(toDump).Dump()
 
