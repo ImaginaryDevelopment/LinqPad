@@ -32,10 +32,10 @@ from d in p.Documents
 let semanticModel = d.GetSemanticModel()
 let tree = semanticModel.SyntaxTree
 let root = tree.GetRoot()
-from c in root.DescendantNodes().OfType<ClassDeclarationSyntax>() // BinaryExpressionSyntax for looking for Count calls
-from method in c.Members.OfType<MethodDeclarationSyntax>()
-select new{Project = p.Name, File=d.Name, Class=c.Identifier.Value, Method=method.Identifier.Value}
-).Dump();
+from c in root.DescendantNodes().OfType<InvocationExpressionSyntax>() // BinaryExpressionSyntax for looking for Count calls
+where c.Expression is MemberAccessExpressionSyntax
+select new{Project = p.Name, File=d.Name, Expr=c.GetText().ToString()}
+).Take(5).Dump();
 
 
 
