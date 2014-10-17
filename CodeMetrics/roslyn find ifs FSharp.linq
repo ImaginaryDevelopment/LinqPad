@@ -6,7 +6,9 @@
 
 // find all ifs that have the return on the same line
 // http://blog.filipekberg.se/2011/10/20/using-roslyn-to-parse-c-code-files/
+
 type StringTransform = (string->string)
+
 type SearchOptions =
 	|Absolute of string
 	|RelativeFile of StringTransform
@@ -16,9 +18,12 @@ type SearchOptions =
 	|AskForAbsoluteDir of (unit-> string)
 	
 let analysisSearchOption = SearchOptions.UseEnvironmentalBase
+
 let getFilesToAnalyze so = 
+
 	let baseSearchDir = lazy(System.Environment.ExpandEnvironmentVariables "%devroot%")
 	let searchDir d = System.IO.Directory.GetFiles(d,"*.cs", SearchOption.AllDirectories)
+	
 	match so with
 	| UseEnvironmentalBase -> [yield! searchDir baseSearchDir.Value]
 	| Absolute(p) -> [ p]
@@ -31,11 +36,11 @@ let getConditionalTokens (p:string) =
 	let myConditional = 
 		let syntaxTree = SyntaxTree.ParseFile p
 		let root = syntaxTree.GetRoot()
-		//let rawText = root.GetText().ToString()
 		let descendIntoChildren : System.Func<SyntaxNode,bool> = null
 		let nodes = root.DescendantNodes(descendIntoChildren,false)
 		nodes.OfType<IfStatementSyntax>()
 	myConditional
+	
 let getSingleLineIfReturns (ifStatementNodes:IfStatementSyntax seq) =
 	let ifReturnPattern = @"if\s*\(.*\).*return "
 	ifStatementNodes
@@ -43,11 +48,14 @@ let getSingleLineIfReturns (ifStatementNodes:IfStatementSyntax seq) =
 	|> Seq.map(fun iss-> iss.GetText())
 	|> Seq.filter(fun text -> text.ToString().IsMatch(ifReturnPattern,false))
 	|> Seq.map(fun text -> text.ToString())
+	
 let replace t (r:string) (str:string) = str.Replace(t,r)
+
 let showNewLines text =
 	text 
 	|> replace "\r" "\\r"
 	|> replace "\n" "\\n"
+	
 let files =
 	getFilesToAnalyze analysisSearchOption
 		//.SkipWhile(f=>f.Contains("Validation")==false)
@@ -59,7 +67,3 @@ let files =
 	|> Seq.map(fun (f,c) -> (f, c |> Seq.map showNewLines))
 	
 files.Dump()
-
-//public static string ShowNewLines(string input){
-//	return input.Replace("\r","\\r").Replace("\n","\\n");
-//}
