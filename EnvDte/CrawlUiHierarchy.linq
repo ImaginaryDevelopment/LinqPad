@@ -9,18 +9,19 @@
   <GACReference>Microsoft.VisualStudio.Shell.12.0, Version=12.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
   <GACReference>Microsoft.VisualStudio.Shell.Interop, Version=7.1.40304.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
   <GACReference>Microsoft.VisualStudio.Shell.Interop.12.0, Version=12.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
+  <NuGetReference>Com.Helper</NuGetReference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
   <NuGetReference>Rx-Main</NuGetReference>
   <Namespace>EnvDTE</Namespace>
   <Namespace>EnvDTE80</Namespace>
   <Namespace>EnvDTE90</Namespace>
   <Namespace>Microsoft.VisualStudio</Namespace>
+  <Namespace>Microsoft.VisualStudio.OLE.Interop</Namespace>
   <Namespace>Microsoft.VisualStudio.Platform.WindowManagement.DTE</Namespace>
   <Namespace>Microsoft.VisualStudio.Shell</Namespace>
   <Namespace>Microsoft.VisualStudio.Shell.Interop</Namespace>
   <Namespace>System</Namespace>
   <Namespace>System.Runtime.InteropServices</Namespace>
-  <Namespace>Microsoft.VisualStudio.OLE.Interop</Namespace>
 </Query>
 
 const string SolutionFolder="{66A26720-8FB5-11D2-AA7E-00C04F688DDE}";
@@ -106,107 +107,4 @@ void Main()
 		
 }
 
- public class ComHelper 
-    { 
-        /// <summary> 
-        /// Returns a string value representing the type name of the specified COM object. 
-        /// </summary> 
-        /// <param name="comObj">A COM object the type name of which to return.</param> 
-        /// <returns>A string containing the type name.</returns> 
-        public static string GetTypeName(object comObj) 
-        { 
  
-            if (comObj == null) 
-                return String.Empty; 
- 
-            if (!Marshal.IsComObject(comObj)) 
-                //The specified object is not a COM object 
-                return String.Empty; 
- 
-            IDispatch dispatch = comObj as IDispatch; 
-            if (dispatch == null) 
-                //The specified COM object doesn't support getting type information 
-                return String.Empty; 
- 
-            System.Runtime.InteropServices.ComTypes.ITypeInfo typeInfo = null; 
-            try 
-            { 
-                try 
-                { 
-                    // obtain the ITypeInfo interface from the object 
-                    dispatch.GetTypeInfo(0, 0, out typeInfo); 
-                } 
-                catch (Exception ex) 
-                { 
-				ex.Dump();
-                    //Cannot get the ITypeInfo interface for the specified COM object 
-                    return String.Empty; 
-                } 
- 
-                string typeName = ""; 
-                string documentation, helpFile; 
-                int helpContext = -1; 
- 
-                try 
-                { 
-                    //retrieves the documentation string for the specified type description 
-                    typeInfo.GetDocumentation(-1, out typeName, out documentation, 
-                        out helpContext, out helpFile); 
-                } 
-                catch (Exception ex) 
-                { 
-                    // Cannot extract ITypeInfo information 
-                    return String.Empty; 
-                } 
-                return typeName; 
-            } 
-            catch (Exception ex) 
-            { 
-                // Unexpected error 
-                return String.Empty; 
-            } 
-            finally 
-            { 
-                if (typeInfo != null) Marshal.ReleaseComObject(typeInfo); 
-            } 
-        } 
-    } 
- 
-    /// <summary> 
-    /// Exposes objects, methods and properties to programming tools and other 
-    /// applications that support Automation. 
-    /// </summary> 
-    [ComImport()] 
-    [Guid("00020400-0000-0000-C000-000000000046")] 
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)] 
-    interface IDispatch 
-    { 
-        [PreserveSig] 
-        int GetTypeInfoCount(out int Count); 
- 
-        [PreserveSig] 
-        int GetTypeInfo( 
-            [MarshalAs(UnmanagedType.U4)] int iTInfo, 
-            [MarshalAs(UnmanagedType.U4)] int lcid, 
-            out System.Runtime.InteropServices.ComTypes.ITypeInfo typeInfo); 
- 
-        [PreserveSig] 
-        int GetIDsOfNames( 
-            ref Guid riid, 
-            [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] 
-            string[] rgsNames, 
-            int cNames, 
-            int lcid, 
-            [MarshalAs(UnmanagedType.LPArray)] int[] rgDispId); 
- 
-        [PreserveSig] 
-        int Invoke( 
-            int dispIdMember, 
-            ref Guid riid, 
-            uint lcid, 
-            ushort wFlags, 
-            ref System.Runtime.InteropServices.ComTypes.DISPPARAMS pDispParams, 
-            out object pVarResult, 
-            ref System.Runtime.InteropServices.ComTypes.EXCEPINFO pExcepInfo, 
-            IntPtr[] pArgErr); 
-    }

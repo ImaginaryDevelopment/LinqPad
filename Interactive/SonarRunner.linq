@@ -2,18 +2,23 @@
   <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.dll</Reference>
 </Query>
 
+static bool debug = true;
+static bool runRedirected = true;
+
 void Main()
 {
+
+DateTime? backdateForAnalysis = new DateTime(2014,1,31);
+backdateForAnalysis.Dump("back dated");
 string slnPath;
+var sonarRunnerHome = System.Environment.ExpandEnvironmentVariables("%SONAR_RUNNER_HOME%").Dump("sonar runner home");
+//// sonar wants to create a temp directory to write things into
+//Environment.CurrentDirectory = sonarRunnerHome;
 using(var ofd=new System.Windows.Forms.OpenFileDialog())
 {
-	if(System.IO.Directory.Exists(@"D:\projects"))
-	ofd.InitialDirectory=@"D:\projects";
-	else if(System.IO.Directory.Exists(@"C:\projects"))
-	ofd.InitialDirectory=@"C:\projects";
-	else
-	ofd.InitialDirectory=@"C:\";
-	
+	var devroot = System.Environment.ExpandEnvironmentVariables("%devroot%");
+	if(System.IO.Directory.Exists(devroot))
+	ofd.InitialDirectory=devroot;
 	if(ofd.ShowDialog()!= System.Windows.Forms.DialogResult.OK)
 	{
 		"Process cancelled".Dump();
@@ -23,59 +28,66 @@ using(var ofd=new System.Windows.Forms.OpenFileDialog())
 }
 
 var slnDirectory=System.IO.Path.GetDirectoryName(slnPath);
+
+Environment.CurrentDirectory = slnDirectory;
+
 slnDirectory.Dump();
+
 var propertiesPath=System.IO.Path.Combine(slnDirectory,"sonar-project.properties");
-if(System.IO.File.Exists(propertiesPath))
-	EditSonarProperties(propertiesPath);
-else
-CreateSonarProperties(propertiesPath);
+
+	CreateSonarProperties(propertiesPath, System.IO.Path.GetFileName(slnPath),backdateForAnalysis);
 
 	RunSonarRunner(slnDirectory);
 	
-	
 } //main
-public static void EditSonarProperties(string propertiesPath)
-{
 
-}
+
 public static void RunSonarRunner(string slnDirectory)
 {
-var psi=new ProcessStartInfo(@"D:\projects\sonar-runner-1.1\bin\sonar-runner.bat"){ RedirectStandardError=true, RedirectStandardOutput=true //,RedirectStandardInput=true 
-		, UseShellExecute=false,ErrorDialog=false, CreateNoWindow=true} ; // WinMgmt or WMSvc?
-	 IEnumerable<ScQueryOutput> queryResult;
-	 StreamOuts startOutput=default(StreamOuts);
-	 bool startHadError=false;
-	 string toStart=null;
+	var psi=new ProcessStartInfo(@"C:\projects\sonar\sonar-runner-2.4\bin\sonar-runner.bat"){ RedirectStandardError=runRedirected, RedirectStandardOutput=runRedirected//,RedirectStandardInput=true 
+		, UseShellExecute=!runRedirected,ErrorDialog=false, CreateNoWindow= !debug} ; // WinMgmt or WMSvc?
+
 	using (var ps=new Process())
 	{
 	ps.StartInfo=psi;
-	
+	if(runRedirected){
 	//var input=ps.StandardInput;
-	 var queryOutputs=ps.RunProcessRedirected(string.Empty);
+	 var queryOutputs=ps.RunProcessRedirected(debug? "-X": string.Empty); //string.Empty);
 	if(queryOutputs.Errors.HasValue()) return;
-
-	
-	//	startOutput=ps.RunProcessRedirected(@"\\"+server+" "+current+" "+toStart);
-		
+	} else 
+	{
+		ps.Start();
+		if(psi.RedirectStandardError)
+			ps.StandardError.ReadToEnd().Dump("stderror");
+		if(psi.RedirectStandardOutput)
+			ps.StandardOutput.ReadToEnd().Dump("stdout");
+	}
 	}	//ps disposed
 	
-	if(startOutput.Errors.HasValue() || startOutput.Output.Contains("FAILED 1060:"))
-		startHadError=true;
- 	
-		//Util.ClearResults();
-		
-	//Util.Highlight(startOutput.Output.Trim()).Dump("attempted to "+current+":"+toStart);
-	if(toStart.HasValue()==false|| startHadError)
-		"Found Error".Dump("no value, and start had error");
 	
 }
-public static void CreateSonarProperties(string propertiesPath)
-{
+
+public static void CreateSonarProperties(string propertiesPath, string projectName, DateTime? projectDate = null)
+{ 
+	// https://github.com/SonarSource/sonar-examples/blob/master/projects/languages/csharp/sonar-project.properties
+	propertiesPath.Dump();
+	// http://docs.codehaus.org/display/SONAR/Analysis+Parameters
+	var settingLines = new List<string>(){
+		"sonar.projectKey=com.cvs",
+		"sonar.projectName="+projectName,
+		"sonar.projectVersion=0.1",
+		// "sonar.sourceEncoding=UTF-8",
+		"sonar.sources=.",
+		"sonar.exclusions=obj/**;NonSln/**"
+	};
 	
+	if(projectDate.HasValue)
+		settingLines.Add("sonar.projectDate=" + projectDate.Value.ToString("yyyy-MM-dd"));
+	System.IO.File.WriteAllLines(propertiesPath,settingLines.ToArray());
 }
+
 public static IEnumerable<ScQueryOutput> TransformScQuery(string output)
 {
-	
 	var grouped=output.SplitLines().SkipWhile (o => string.IsNullOrEmpty(o)).GroupLinesBy("SERVICE_NAME");
 	foreach(var line in grouped
 				.Select (g => g.SplitLines()
@@ -83,10 +95,13 @@ public static IEnumerable<ScQueryOutput> TransformScQuery(string output)
 				.ToArray()))
 	{
 	
-	var serviceName=line[0];
-	yield return new ScQueryOutput(){ ServiceName=serviceName,
-	 DisplayName=line[1], State=line[3]+line[4], Type=line[2],
-	Unmapped=line.Skip(4).Delimit(Environment.NewLine) };
+		var serviceName=line[0];
+		yield return new ScQueryOutput(){ 
+			ServiceName=serviceName,
+			DisplayName=line[1], 
+			State=line[3]+line[4], 
+			Type=line[2],
+			Unmapped=line.Skip(4).Delimit(Environment.NewLine) };
 	
 	}
 
@@ -95,11 +110,12 @@ public static IEnumerable<ScQueryOutput> TransformScQuery(string output)
 public static IEnumerable<T> AllValues<T>()
 	where T:struct
 {
-foreach(var item in Enum.GetNames(typeof(T)).Select(v=>(T)Enum.Parse(typeof(T),v)))
-{
-	yield return item;
+	foreach(var item in Enum.GetNames(typeof(T)).Select(v=>(T)Enum.Parse(typeof(T),v)))
+	{
+		yield return item;
+	}
 }
-}
+
 #region structs
 public struct ScQueryOutput
 {
@@ -120,15 +136,10 @@ public string Output{get;set;}
 public static class EnumerableExtensions
 {
 
-public static string Delimit(this IEnumerable<string> values, string delimiter)
-	{
-	return values.Aggregate ((s1,s2)=>s1+delimiter+s2);
-	}
-	
 	public static IEnumerable<IEnumerable<T>> BufferByCount<T>(this IEnumerable<T> values, int chunkSize)
 	{
 		var total=0;
-var current=values;
+		var current=values;
 		while(current.Any ())
 		{
 		yield return current.Take(chunkSize);
@@ -177,20 +188,12 @@ public static string TruncateTo(this string text, byte count)
 	return text.Substring(0,count);
 	
 	}
-public static bool HasValue(this string text)
-	{
-	return string.IsNullOrEmpty(text)==false;
-	}
-	
-	public static string[] SplitLines(this string text)
-	{
-		return text.Split(new string[] {"\r\n","\n"}, StringSplitOptions.None);
-	}
 	
 	public static string StringAfter(this string text, string delimiter)
 	{
 		return text.Substring( text.IndexOf(delimiter)+delimiter.Length);
 	}
+	
 	public static string StringAfterOrSelf(this string text, string delimiter)
 	{
 	if(text.Contains(delimiter)==false)
@@ -204,18 +207,6 @@ public static bool HasValue(this string text)
 public static class Extensions
 {
 
-public static StreamOuts RunProcessRedirected(this Process ps, string arguments)
-	{
-		ps.StartInfo.Arguments=arguments;
-	ps.Start();
-	var output=ps.StandardOutput.ReadtoEndAndDispose();
-	var errors=ps.StandardError.ReadtoEndAndDispose();
-	
-	ps.WaitForExit(2000);
-	if(errors.Length>0) 	Util.Highlight(errors).Dump("errors");
-	return new StreamOuts(){ Errors=errors, Output=output };
-	}
-	
 	
 public static string ReadtoEndAndDispose(this StreamReader reader)
 	{
@@ -227,3 +218,4 @@ public static string ReadtoEndAndDispose(this StreamReader reader)
 	
 	
 }
+// unused but may be useful: http://www.wrightfully.com/setting-up-sonar-analysis-for-c-projects/
