@@ -60,11 +60,9 @@ let solution:ISolution =
 			
 		reraise()
 
-
 let checkforCountIssue document (node:CommonSyntaxNode) token =
 	match node with
 	| As (binaryExpression:BinaryExpressionSyntax) ->
-		let binaryExpression = node :?> BinaryExpressionSyntax
 		let isCallToEnumerableCount (document:IDocument, expr:ExpressionSyntax, cancellationToken) = 
 			let invocation = match expr with
 								| As (i:InvocationExpressionSyntax) -> Some i
@@ -112,7 +110,10 @@ let checkforCountIssue document (node:CommonSyntaxNode) token =
 					yield CodeIssue(CodeIssueKind.Info, binaryExpression.Span,sprintf "Change %A to use .Any() instead of .Count() to avoid possible enumeration of entire sequence." binaryExpression)
 		}
 	| _ -> Seq.empty
-		
+	
+// printfn "end of line trivia is %i" (int(SyntaxKind.EndOfLineTrivia)) 8395
+// failed to get this to work https://roslyn.codeplex.com/discussions/570098#editor for non-regex, should try from C# with some intellisense
+
 let getSingleLineIfReturns (node:CommonSyntaxNode) =
 	let ifReturnPattern = @"if\s*\(.*\).*return "
 	seq {
