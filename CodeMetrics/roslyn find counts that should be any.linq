@@ -52,12 +52,9 @@ let isCallToEnumerableCount (document:IDocument, expr:ExpressionSyntax, cancella
 	if invocation.IsNone then
 		false
 	else
-		printfn "found invocation! %A" invocation.Value
-		invocation.Value.Dump("invocation!")
 		let semanticModel = document.GetSemanticModel(cancellationToken)
 		let methodSymbol = semanticModel.GetSymbolInfo(expr, cancellationToken)
 		let ms = methodSymbol.Symbol :?> MethodSymbol
-		printfn "checking in semantic with symbols for ms %A" ms
 		if ms = null || ms.Name <> "Count" || ms.ConstructedFrom = null then
 			false
 		else
@@ -88,54 +85,43 @@ let isRelevantLeftSideComparison(document:IDocument, expression:ExpressionSyntax
 		(fun v -> kind = SyntaxKind.LessThanExpression && v = 0 || kind = SyntaxKind.LessThanOrEqualExpression && v = 1),
 		token
 	)
-	
-let getIssues(document:IDocument, node:CommonSyntaxNode, token:CancellationToken) =
+
+let checkforCountIssue document (node:CommonSyntaxNode) token =
 	let binaryExpression = node :?> BinaryExpressionSyntax
 	let left,right,kind = binaryExpression.Left, binaryExpression.Right, binaryExpression.Kind
-	[
-		if binaryExpression.ToString().Contains("Count()") then 
-			binaryExpression.Dump()
-			printfn "iscallto enumerablecount? %A" (isCallToEnumerableCount(document, left, token))
-			printfn "left, right, kind = %A,%A,%A" left right kind
+	seq{
+
 		if isCallToEnumerableCount(document, left, token) && isRelevantRightSideComparison(document, right, kind, token) ||
 			isCallToEnumerableCount(document,right,token) && isRelevantLeftSideComparison(document,left,kind,token) then
 				yield CodeIssue(CodeIssueKind.Info, binaryExpression.Span,sprintf "Change %A to use Any() instead of Count() to avoid possible enumeration of entire sequence." binaryExpression)
-	]
+	}
+	
+let getIssues(document:IDocument, node:CommonSyntaxNode, token:CancellationToken) =
+	seq{
+		yield! checkforCountIssue document node token
+	}
 	
 type IssueInformation = {ProjectName:string; DocumentName:string;IssueNodes:CodeIssue seq}				
-			
+let any l = Seq.exists (fun _ -> true) l
 let pData = 
-	solution.Projects
-	|> Seq.map (fun p-> 
-		p.Documents 
-		|> Seq.filter( fun d-> d.Name.Contains("Redirect"))
-		|> Seq.map (fun d ->
-			printfn "analyzing %s.%s" p.Name d.Name
-			let semantic = d.GetSemanticModel()
-			let tree = semantic.SyntaxTree
-			let nodes = 
-				tree.GetRoot().DescendantNodes()
-				|> Seq.filter (fun x -> x :? BinaryExpressionSyntax) 
-				|> Seq.cast<BinaryExpressionSyntax>
-			[
-			for binaryNode in nodes do
-				let issues = getIssues(d,binaryNode, CancellationToken())
-				//if issues |> Seq.exists( fun i -> true) then
-				yield! issues
-			]
-			)
-		)
+	seq {
+		for p in filteredProjects do
+			for d in p.Documents do
+				let semantic = d.GetSemanticModel()
+				let tree = semantic.SyntaxTree
+				let nodes = 
+					tree.GetRoot().DescendantNodes()
+					|> Seq.filter (fun x -> x :? BinaryExpressionSyntax) 
+					|> Seq.cast<BinaryExpressionSyntax>
+				for binaryNode in nodes do
+					let issues = getIssues(d,binaryNode, CancellationToken())
+					if issues |> any then
+						printfn "issues: %A" issues
+						yield {IssueInformation.ProjectName = p.Name; DocumentName= d.Name; IssueNodes= issues}
+						//yield! issues
+	}
+
 	
 pData 
-//|> Seq.filter ( fun projs -> projs |> Seq.exists (fun docs -> docs |> Seq.exists (fun i -> true)))
 //|> Seq.head 
 |> Dump
-
-	
-
-			
-let replace t (r:string) (str:string) = str.Replace(t,r)
-let showNewLines text =
-	text 
-	|> replace "\r" "\\r"
-	|> replace "\n" "\\n"
