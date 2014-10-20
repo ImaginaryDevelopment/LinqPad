@@ -97,6 +97,11 @@ let getIssues(document:IDocument, node:CommonSyntaxNode, token:CancellationToken
 	let binaryExpression = node :?> BinaryExpressionSyntax
 	let left,right,kind = binaryExpression.Left, binaryExpression.Right, binaryExpression.Kind
 	[
+		printfn "checking binaryExpression %A" (binaryExpression.ToString())
+		if binaryExpression.ToString().Contains("Count()") then 
+			binaryExpression.Dump()
+			printfn "iscallto enumerablecount? %A" (isCallToEnumerableCount(document, left, token))
+			printfn "left, right, kind = %A,%A,%A" left right kind
 		if isCallToEnumerableCount(document, left, token) && isRelevantRightSideComparison(document, right, kind, token) ||
 			isCallToEnumerableCount(document,right,token) && isRelevantLeftSideComparison(document,left,kind,token) then
 				yield CodeIssue(CodeIssueKind.Info, binaryExpression.Span,sprintf "Change %A to use Any() instead of Count() to avoid possible enumeration of entire sequence." binaryExpression)
@@ -108,28 +113,28 @@ let pData =
 	solution.Projects
 	|> Seq.map (fun p-> 
 		p.Documents 
+		|> Seq.filter( fun d-> d.Name.Contains("Redirect"))
 		|> Seq.map (fun d ->
+			printfn "analyzing %s.%s" p.Name d.Name
 			let semantic = d.GetSemanticModel()
 			let tree = semantic.SyntaxTree
-			d,semantic,tree,(tree.GetRoot().DescendantNodes() 
+			let nodes = 
+				tree.GetRoot().DescendantNodes()
 				|> Seq.filter (fun x -> x :? BinaryExpressionSyntax) 
-				|> Seq.cast<BinaryExpressionSyntax>)
+				|> Seq.cast<BinaryExpressionSyntax>
+			[
+			for binaryNode in nodes do
+				let issues = getIssues(d,binaryNode, CancellationToken())
+				//if issues |> Seq.exists( fun i -> true) then
+				yield! issues
+			]
 			)
-		|> Seq.filter (fun (_,_,_,nodes) -> Seq.exists ( fun e -> true) nodes)
-		|> Seq.map (fun (d,semantic,tree,nodes) ->
-			{ProjectName=p.Name;DocumentName=d.Name; IssueNodes = 
-			//p.Name,d.Name,semantic,tree,// nodes, 
-				[ 
-					for i in nodes |> Seq.map (fun n->  getIssues(d, n,CancellationToken())) do
-					yield! i
-				]
-			}
-			)
-		|> Seq.filter (fun (* (pname,dname,semantic,tree,  nodes, *) issueInfo  -> (issueInfo.IssueNodes |> Seq.exists( fun e-> true)))
 		)
-	|> Seq.filter (fun (* (pname, dname, semantic, tree, nodes, *) issueNodes -> (issueNodes |> Seq.exists( fun e -> true)))
 	
-pData |> Seq.head |> Dump
+pData 
+//|> Seq.filter ( fun projs -> projs |> Seq.exists (fun docs -> docs |> Seq.exists (fun i -> true)))
+//|> Seq.head 
+|> Dump
 
 	
 
