@@ -10,6 +10,21 @@
 
 // find all ifs that have the return on the same line
 // http://blog.filipekberg.se/2011/10/20/using-roslyn-to-parse-c-code-files/
+module Seq =
+	let ofType<'a> (source : System.Collections.IEnumerable) : seq<'a> =
+   		let resultType = typeof<'a>
+   		seq {
+			for item in source do
+				match item with
+					| null -> ()
+					| _ ->
+					if resultType.IsAssignableFrom (item.GetType ())
+					then
+			            yield (downcast item)
+   		}
+	let any source = 
+		Seq.exists( fun f-> true) source
+
 type StringTransform = (string->string)
 type SearchOptions =
 	|Absolute of string
@@ -58,7 +73,6 @@ let isCallToEnumerableCount (document:IDocument, expr:ExpressionSyntax, cancella
 		if ms = null || ms.Name <> "Count" || ms.ConstructedFrom = null then
 			false
 		else
-			printfn "checking enumerable!"
 			let enumerable = semanticModel.Compilation.GetTypeByMetadataName(typeof<Enumerable>.FullName)
 			enumerable <> null && ms.ConstructedFrom.ContainingType.Equals(enumerable)
 				
@@ -102,23 +116,22 @@ let getIssues(document:IDocument, node:CommonSyntaxNode, token:CancellationToken
 	}
 	
 type IssueInformation = {ProjectName:string; DocumentName:string;IssueNodes:CodeIssue seq}				
-let any l = Seq.exists (fun _ -> true) l
+
 let pData = 
 	seq {
+		let filteredProjects = 
+			solution.Projects 
 		for p in filteredProjects do
 			for d in p.Documents do
 				let semantic = d.GetSemanticModel()
 				let tree = semantic.SyntaxTree
-				let nodes = 
+				let binarynodes = 
 					tree.GetRoot().DescendantNodes()
-					|> Seq.filter (fun x -> x :? BinaryExpressionSyntax) 
-					|> Seq.cast<BinaryExpressionSyntax>
-				for binaryNode in nodes do
+					|> Seq.ofType<BinaryExpressionSyntax>
+				for binaryNode in binarynodes do
 					let issues = getIssues(d,binaryNode, CancellationToken())
-					if issues |> any then
-						printfn "issues: %A" issues
+					if issues |> Seq.any then
 						yield {IssueInformation.ProjectName = p.Name; DocumentName= d.Name; IssueNodes= issues}
-						//yield! issues
 	}
 
 	
