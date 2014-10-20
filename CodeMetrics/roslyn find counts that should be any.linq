@@ -52,22 +52,18 @@ let isCallToEnumerableCount (document:IDocument, expr:ExpressionSyntax, cancella
 	if invocation.IsNone then
 		false
 	else
-		let call = match invocation.Value with 
-					| As( m:MemberAccessExpressionSyntax) -> Some m
-					| _ -> None
-		if call.IsNone then
+		printfn "found invocation! %A" invocation.Value
+		invocation.Value.Dump("invocation!")
+		let semanticModel = document.GetSemanticModel(cancellationToken)
+		let methodSymbol = semanticModel.GetSymbolInfo(expr, cancellationToken)
+		let ms = methodSymbol.Symbol :?> MethodSymbol
+		printfn "checking in semantic with symbols for ms %A" ms
+		if ms = null || ms.Name <> "Count" || ms.ConstructedFrom = null then
 			false
 		else
-			let semanticModel = document.GetSemanticModel(cancellationToken)
-			let methodSymbol = semanticModel.GetSymbolInfo(expr, cancellationToken)
-			let ms = methodSymbol.Symbol :?> MethodSymbol
-			// printfn "checking in semantic with symbols"
-			if ms = null || ms.Name <> "Count" || ms.ConstructedFrom = null then
-				false
-			else
-				printfn "checking enumerable!"
-				let enumerable = semanticModel.Compilation.GetTypeByMetadataName(typeof<Enumerable>.FullName)
-				enumerable <> null && ms.ConstructedFrom.ContainingType.Equals(enumerable)
+			printfn "checking enumerable!"
+			let enumerable = semanticModel.Compilation.GetTypeByMetadataName(typeof<Enumerable>.FullName)
+			enumerable <> null && ms.ConstructedFrom.ContainingType.Equals(enumerable)
 				
 let isRelevantComparison (document:IDocument, expression:ExpressionSyntax, validator:int->bool,token) =
 	let semantic = document.GetSemanticModel(token)
@@ -97,7 +93,6 @@ let getIssues(document:IDocument, node:CommonSyntaxNode, token:CancellationToken
 	let binaryExpression = node :?> BinaryExpressionSyntax
 	let left,right,kind = binaryExpression.Left, binaryExpression.Right, binaryExpression.Kind
 	[
-		printfn "checking binaryExpression %A" (binaryExpression.ToString())
 		if binaryExpression.ToString().Contains("Count()") then 
 			binaryExpression.Dump()
 			printfn "iscallto enumerablecount? %A" (isCallToEnumerableCount(document, left, token))
