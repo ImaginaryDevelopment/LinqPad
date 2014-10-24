@@ -2,6 +2,12 @@
   <NuGetReference>Newtonsoft.Json</NuGetReference>
   <NuGetReference>HtmlAgilityPack</NuGetReference>
   <Namespace>HtmlAgilityPack</Namespace>
+  <Namespace>Newtonsoft.Json</Namespace>
+  <Namespace>Newtonsoft.Json.Bson</Namespace>
+  <Namespace>Newtonsoft.Json.Converters</Namespace>
+  <Namespace>Newtonsoft.Json.Linq</Namespace>
+  <Namespace>Newtonsoft.Json.Schema</Namespace>
+  <Namespace>Newtonsoft.Json.Serialization</Namespace>
 </Query>
 
 let dumpRaw (xhtml:string) = Util.RawHtml(xhtml).Dump()
@@ -92,9 +98,10 @@ let renderChart (hc:HighChart) =
 		hc.Series 
 		|> Seq.map(fun ser -> match ser with |Json j -> j | Series s -> s.ToString())
 		|> (fun items -> "series:["+ String.Join(",",items)+"]")
-	seriesSection.Dump("seriesSection")
-	let scriptFormat = 
-		sprintf """var chart = new Highcharts.Chart({%s,
+	let varWrapper s = sprintf "var chart = new Highcharts.Chart(%s);" s
+	let objectFormat = 
+		
+		sprintf """{%s,
         
         tooltip: {
             valueSuffix: '°C'
@@ -105,7 +112,18 @@ let renderChart (hc:HighChart) =
             verticalAlign: 'middle',
             borderWidth: 0
         }
-		});"""
+		}"""
+	
+	let scriptFormat s : string = 
+		// http://codebork.com/2011/08/17/pretty-printing-json-jsonnet.html
+		// alternatives: http://stackoverflow.com/questions/4580397/json-formatter-in-c
+		let deserialize s = JsonConvert.SerializeObject(s, Formatting.Indented)
+		let serializePretty (s: JObject) = s.ToString(Formatting.Indented)
+		let pipe1 = objectFormat >>  Newtonsoft.Json.Linq.JObject.Parse >> serializePretty >>  varWrapper
+		let pipe2 = objectFormat >> JsonConvert.DeserializeObject >> deserialize >> varWrapper
+		let notPretty = objectFormat >> varWrapper
+		Util.OnDemand("Prettified", Func<string>(fun () -> pipe1 s)).Dump()
+		notPretty s
 	let scriptText = 
 		String.Join(",", 
 			[
@@ -117,7 +135,7 @@ let renderChart (hc:HighChart) =
 			] |> Seq.filter( fun e -> e <> String.Empty))
 		|> scriptFormat
 	
-        
+    
 	printfn "%s" scriptText
 	scriptInjector <| Inline scriptText
 let series = 
@@ -131,7 +149,8 @@ let series =
         	{ Name ="London"; Data = seriesTransform [3.9; 4.2; 5.7; 8.5; 11.9; 15.2; 17.0; 16.6; 14.2; 10.3; 6.6; 4.8]}
 	]
 	|> Seq.map (fun s -> Series s)
-
+	
+// http://jsfiddle.net/gh/get/jquery/1.9.1/highslide-software/highcharts.com/tree/master/samples/highcharts/demo/line-basic/
 renderChart { 
 	RenderTo= "container"
 	Title= Some "Monthly Average Temperature"
