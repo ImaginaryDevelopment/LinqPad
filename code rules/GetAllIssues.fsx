@@ -1,4 +1,4 @@
-#r "System.Runtime"
+﻿#r "System.Runtime"
 #r "System.IO"
 #r "System.Collections"
 #r "System.Text.Encoding"
@@ -172,7 +172,7 @@ let getIssues(document:Document, node:SyntaxNode) : Diagnostic seq =
         yield! getSingleLineIfReturns node
     }
     
-type IssueInformation = {ProjectName:string; DocumentName:string;IssueNodes:Diagnostic seq}                
+type IssueInformation = {ProjectName:string; DocumentName:string;IssueNodes:Diagnostic seq}
 
 let pData = 
     seq {
