@@ -13,6 +13,7 @@
 void Main()
 {
 	lookup(new[]{"Brandon D'Imperio","brandon.dimperio"}).Dump();
+System.Security.Principal.WindowsIdentity.GetCurrent().Dump();
 }
 
 // Define other methods and classes here
@@ -25,6 +26,7 @@ public static IEnumerable<KeyValuePair<string,string>> lookup(IEnumerable<string
 	//CN=Brandon D'Imperio,OU=Development,OU=Oceanside Ten,DC=RBIDev,DC=local
 		var customPath="LDAP://DC=RBIDev,DC=local";
 		de.Path=customPath;
+		
 		de.AuthenticationType= System.DirectoryServices.AuthenticationTypes.Secure;
 		
 		using(var deSearch=new System.DirectoryServices.DirectorySearcher())

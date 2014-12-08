@@ -7,6 +7,7 @@
 </Query>
 
 open System
+let randomSampleInvitationLimit = 25
 let dc = new TypedDataContext()
 let isNullOrEmpty s = System.String.IsNullOrEmpty(s)
 let isNotNullOrEmpty s = not <| isNullOrEmpty s
@@ -19,6 +20,7 @@ type InviteDisplayWrapper(environment, path, invitationGuid,invitationId, orgId)
 	member x.InvitationGuid:Guid = invitationGuid
 	member x.InvitationId:int = invitationId
 	member x.SurveyLink = new LINQPad.Hyperlinq("http://" + environment + path + invitationGuid.ToString())
+	member x.DynamicLink = new LINQPad.Hyperlinq("http://" + environment + "/dynamicoffers/start?uiid="+invitationGuid.ToString())
 	member x.GizmoLink = new LINQPad.Hyperlinq("http://www.surveygizmo.com/s3/1114681/TEST-TPDS-DEV/?vid=" + invitationGuid.ToString())
 
 type InviteDisplayWrapper2(environment, path, invitationGuid, invitationId, orgId) =
@@ -95,12 +97,14 @@ if isNotNullOrEmpty emailAddress then
 	
 	if Util.ReadLine<bool>("Show result?(Take Survey before answering this)") then
 		dc.User_invitations.Context.Refresh( RefreshMode.OverwriteCurrentValues,user.Ui)
-		if user.Ui.Prelim_survey_status_code <> 'U' then
+		if user.Ui.Invitation_response_dt = null then
+			user.Ui.Dump("response date was not updated, survey does not appear to have registered the start")
+		elif user.Ui.Prelim_survey_status_code <> 'U' then
 			user.Ui.Dump("after survey")
 		else
 			user.Ui.Dump("survey does not appear updated")
 else
-	let display = q.Take(15).ToArray()
+	let display = q.Take(randomSampleInvitationLimit).ToArray()
 	let removeLink mem = Hyperlinq(Action (fun () -> removeSmsValidation(mem)),"TryRemoveSms",false)
 	if q.Select(fun a -> a.Email_address).Count() <> q.Select( fun a-> a.Email_address).Distinct().Count() then
 		display.GroupBy( (fun s ->s.Email_address),
