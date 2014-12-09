@@ -6,6 +6,8 @@
   </Connection>
 </Query>
 
+var kdiffLocation = @"C:\Program Files (x86)\KDiff3\kdiff3.exe";
+var compareLocation = System.IO.File.Exists(kdiffLocation)? kdiffLocation : Util.ReadLine("kdiff location?");
 var query = 
 	from o in  sys.Objects.Where(o => !o.Is_ms_shipped && o.Type=="P")
 	join oSchema in sys.Schemas on o.Schema_id equals oSchema.Schema_id
@@ -25,7 +27,6 @@ using(var devcmd = devcn.CreateCommand())
 		dev = r.Select(rec => new {SchemaName = r["SchemaName"].ToString(), ProcName = r["ProcName"] is DBNull ? null : r["ProcName"].ToString(), Definition = r["Definition"].ToString()}
 		).ToList();
 //			while(r.NextResult()){
-
 }
 
 var missingFromAOrDifferent = 
@@ -34,17 +35,20 @@ var missingFromAOrDifferent =
 	from qaSproc in qaLeft.DefaultIfEmpty()
 	select new{devSproc.SchemaName, devSproc.ProcName,
 		compare = qaSproc!=null ? Util.OnDemand ("generateComparisonFiles",() => {
-		var args = new[] {
-			devSproc.Definition.ToTempFile().RawPath +" "+ qaSproc.Definition.ToTempFile().RawPath,
-			"--L1 dev", "--L2 QA"
-		};
-		return My.ProcessStartLink( @"C:\Program Files (x86)\KDiff3\kdiff3.exe",string.Join(" ",args),"kdiff");}):null, 
+				var args = new[] {
+					devSproc.Definition.ToTempFile().RawPath +" "+ qaSproc.Definition.ToTempFile().RawPath,
+					"--L1 dev", "--L2 QA"
+				};
+				var cmd = compareLocation +" " + string.Join(" ",args);
+				return new {KDiff= My.ProcessStartLink( @"C:\Program Files (x86)\KDiff3\kdiff3.exe",string.Join(" ",args),"kdiff"),cmd};
+			}):null, 
 		devSproc = devSproc.Definition, 
 		qaSproc = qaSproc != null? qaSproc.Definition : null
+		
 		};
 	
 var missingOrDifferent = missingFromAOrDifferent.ToArray();
 
 missingFromAOrDifferent.Where( m => m.qaSproc == null).Select(m => m.SchemaName+"."+m.ProcName).Dump("missing from ");
-missingFromAOrDifferent.Where( m => m.qaSproc != null).Dump("different");
+missingFromAOrDifferent.Where( m => m.qaSproc !=null && !m.qaSproc.RemoveMultipleWhitespaces().Trim().Equals(m.devSproc.RemoveMultipleWhitespaces().Trim(), StringComparison.InvariantCultureIgnoreCase)).Dump("different");
  
