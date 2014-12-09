@@ -2,18 +2,16 @@
   <Namespace>System.Net</Namespace>
 </Query>
 
-//type String with
-//	member self.Before(delimiter:string) =
-//		self.Substring(0,self.IndexOf(delimiter))
-//	member self.After(delimiter:string) =
-//		self.Substring(self.IndexOf(delimiter)+delimiter.Length)
+
+#region "string helpers"
 let indexOf (delimiter:string) (s:string) :int = 
 	s.IndexOf delimiter
-indexOf "test" "hellotest" |> Dump
 let lastIndexOf (delimiter:string) (s:string) :int =
 	s.LastIndexOf delimiter
+let trim (s:string) = s.Trim()
+let split (delimiters: string[]) (options:StringSplitOptions) (s:string) = 
+	s.Split(delimiters,options)
 
-	
 let private b4 f (s:string) = 
 	s.Substring(0,f s)
 let private aft f (s:string) = 
@@ -45,37 +43,47 @@ let tests =
 	if beforeLast "world" "helloworldworld" |> (<>) "helloworld" then failwithf "beforeLast is wrong"
 	test <| afterLast "hello" "helloworldhelloworld" <| (<>) <| "world"
 	
-let xOrSelf func delimiter (s:string) = 
-	if s.Contains delimiter then func s else s
+//let xOrSelf func delimiter (s:string) = 
+//	if s.Contains delimiter then func s else s
+
 let beforeOrSelf delimiter (s:string) = 
 	if s.Contains(delimiter) then
 		before delimiter s
 	else s
-	
-let trim (s:string) = s.Trim()
+#endregion	"string helpers"
 
-let split (delimiters: string[]) (options:StringSplitOptions) (s:string) = 
-	s.Split(delimiters,options)
-	
 type Response =
 	| Success of response:string
 	| Error of ex:WebException * error:string
 	| AspException of references:seq<string> * ex:WebException
-	
+
+let (|Gac|_|) (path:string) : (string*string*string*string) option = 
+	let gacDelimiter = "\\GAC_"
+	if path.Contains gacDelimiter then
+		let afterDelimiter:string = path |> after gacDelimiter |> after "\\"
+		let delimiter:string = path |> after gacDelimiter |> before "\\" |> (+) gacDelimiter
+		Some <| (before gacDelimiter path, delimiter,afterDelimiter |> beforeLast "\\", afterDelimiter |> afterLast "\\"  |> before "\"")
+	else None
+let appData = Environment.GetFolderPath Environment.SpecialFolder.LocalApplicationData
+(appData,Environment.ExpandEnvironmentVariables("%localappdata%")).Dump("appData")
 let (|TempAsp|_|) (path:string) = 
 	let tempAspDelimiter = "\\Temporary ASP.NET Files\\"
 	if path.Contains tempAspDelimiter then
 		let rest = after tempAspDelimiter path
-		Some <| (before tempAspDelimiter path, tempAspDelimiter, beforeLast "\\" rest,afterLast "\\" rest |> before "\"")
+		let start = if path.StartsWith appData then "%localappdata%" + (path |> before tempAspDelimiter |> after appData ) else path |> before tempAspDelimiter
+		Some <| (start, tempAspDelimiter, beforeLast "\\" rest,afterLast "\\" rest |> before "\"")
 	else None
 	
 let parse (referencePath:string) = 
 	match referencePath with
-	| TempAsp(start,delim,_,fileName) -> start,delim,fileName
-	| _ -> referencePath |> beforeLast "\\" ,String.Empty, referencePath|> afterLast "\\"
+	| TempAsp(start,delim,_,filename) -> start,delim,filename
+	| Gac(start, delim, _, filename) -> start,delim,filename
+	| _ -> referencePath |> beforeLast "\\" ,String.Empty, referencePath|> afterLast "\\" |> before "\""
+	
 type WebReply = 
 	| Response of string
 	| ErrResponse of string * int * WebException // can we get the status code?
+	
 let getResponse (site:string) = 
 	use wc =new WebClient()
 	try        
@@ -96,28 +104,27 @@ let GetResponse (site:string)=
 		let (|CompilationErrorPage|_|) (input:string) = 
 			if input.Contains("id=\"compilerOutputDiv\"") then
 				let codeSections = response |> after "id=\"compilerOutputDiv\"" |> after "<code>"
-				
 				let codeSection = codeSections |> before "</code>"
-				let decoded = WebUtility.HtmlDecode codeSection
+				let compilerOutput = WebUtility.HtmlDecode codeSection
 				let compilationSource = WebUtility.HtmlDecode <| codeSections |> after "id=\"dynamicCodeDiv" |> after "<code><pre>"
 				let fileName = compilationSource |> before "Line 2:" |> beforeOrSelf "\" \"{" |> after "checksum \""
-				Some(decoded,fileName,compilationSource)
+				Some(compilerOutput,fileName,compilationSource)
 			else None
 			
 		match response with
 			| CompilationErrorPage(compilerOutput,filename,compilationSource) -> 
-				// decoded.Dump("decodedraw")
 				let refs = 
-					// assumes /out is not followed by any refs /R:
+					// assumes /out is not followed by any refs (/R:)
 					compilerOutput 
 					|> before "Microsoft (R) Visual C#"
 					|> after "<pre>"
 					|> before "/out:"
 					|> trim 
-					|> split [|"/R:";"/out:"|] StringSplitOptions.None
-					|> Seq.sortBy id (* id is a reserved word or keyword *)
+					|> split [|"/R:\"";"/out:"|] StringSplitOptions.None
 					|> Seq.skip 1 // csc.exe call
+					//|> Seq.sortBy id (* id is a reserved word or keyword *)
 					|> Seq.map parse
+					|> Seq.sortBy (fun (_,_,filename) -> filename)
 				refs.Dump(filename)
 			| _ -> 
 				response.Dump("no compilerOutputDiv")
