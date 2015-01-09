@@ -26,7 +26,8 @@ let gitSave appliedAction =
 	
 	Util.Cmd("git","stash apply").Dump()
 	// make modifications
-	appliedAction()
+	appliedAction() // probably a commit on the command line, or gui
+	
 	// warning reset hard if for some reason stash failed, is super dangerous, I'm super cereal
 	Util.Cmd("git","reset --hard").Dump()
 	Util.Cmd("git","stash pop").Dump("pop")
@@ -56,6 +57,7 @@ let modifyFiles (files:string seq) =
 				else line,redactCount
 			) (line,0)
 			
+		(* for lines that should be blacklisted if the word blacklister did not redact.
 		//let redactableLineBlackLists = ["osx"] *)
 		let text = System.IO.File.ReadAllText f
 		let lines = text.SplitLines() |> dumpf "length" Seq.length
