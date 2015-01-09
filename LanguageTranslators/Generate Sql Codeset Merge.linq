@@ -6,23 +6,31 @@
 </Query>
 
 // generate merge from table
+/* set identity_insert admin.org_panel_pixel_codeset ON
+	go */
+	
+var table = Demographic_alias;
 var rowType = table.GetType().GetGenericArguments()[0];
 var tableName = rowType.GetCustomAttribute<TableAttribute>().Name;
 
 var tableColumns = rowType
 	.GetFields(BindingFlags.Instance | BindingFlags.Public )
-	.Select(p=>new{p.Name,Getter= ((Func<object,object>) (r => p.GetValue(r))),ColumnAttr= p.GetCustomAttribute<ColumnAttribute>()});
-	
+	.Select(p=>new{p.Name,Getter= ((Func<object,object>) p.GetValue),ColumnAttr= p.GetCustomAttribute<ColumnAttribute>(),UseQuotes = p.FieldType.IsClass }); // have not accounted for enums here
+//tableColumns.Dump();	
 string.Format("--merge statement for table {0}",tableName).Dump();
-string.Format("merge into {0} as target{1}using (values",tableName,Environment.NewLine).Dump();
-var identity = tableColumns.FirstOrDefault(c => c.ColumnAttr !=null && c.ColumnAttr.IsDbGenerated && c.ColumnAttr.CanBeNull == false);
+var identity = tableColumns.FirstOrDefault(c => c.ColumnAttr !=null && c.ColumnAttr.IsDbGenerated && c.ColumnAttr.IsPrimaryKey /* does not seem to properly reflect nullable c.ColumnAttr.CanBeNull == false */);
+
 if(identity !=null)
 	string.Format("set identity_insert {0} ON{1}go",tableName,Environment.NewLine).Dump();
+string.Format("merge into {0} as target{1}using (values",tableName,Environment.NewLine).Dump();
+//tableColumns.Dump();
+
 	
 var values = table.ToArray().Select(r=> string.Format("\t({0})",string.Join(",", 
 	tableColumns
-		.Select(tc => tc.Getter(r))
-		.Select(v => v != null ? v.ToString():(string)null)
+		.Select(tc =>new{tc.UseQuotes,Value= tc.Getter(r)})
+		.Select(v => v.Value != null ? v.UseQuotes? "'" + v.Value.ToString() +"'" :
+			v.Value.ToString():(string)null)
 	)));
 string.Join(","+Environment.NewLine,values).Dump();
 var columnNames = tableColumns.Select(tc =>tc.ColumnAttr.Name).ToArray();

@@ -8,23 +8,27 @@
 
 open System
 let randomSampleInvitationLimit = 25
-let dc = new TypedDataContext()
+let findDemographicAliasInvites = true
+let dc = 
+	new TypedDataContext()
+
 let isNullOrEmpty s = System.String.IsNullOrEmpty(s)
 let isNotNullOrEmpty s = not <| isNullOrEmpty s
 
 let firstOption items = Seq.tryFind (fun item -> true) items
 type InviteWrapper = {Org_id:int; Email_address:string ;Ui:User_invitation;Member:Member_member}
 
-type InviteDisplayWrapper(environment, path, invitationGuid,invitationId, orgId) = 
+type InviteDisplayWrapper(environment, path, invitationGuid,invitationId,invitationUrl, orgId) = 
 	member x.OrgId:int = orgId
 	member x.InvitationGuid:Guid = invitationGuid
 	member x.InvitationId:int = invitationId
 	member x.SurveyLink = new LINQPad.Hyperlinq("http://" + environment + path + invitationGuid.ToString())
 	member x.DynamicLink = new LINQPad.Hyperlinq("http://" + environment + "/dynamicoffers/start?uiid="+invitationGuid.ToString())
 	member x.GizmoLink = new LINQPad.Hyperlinq("http://www.surveygizmo.com/s3/1114681/TEST-TPDS-DEV/?vid=" + invitationGuid.ToString())
+	member x.IntegrationUrl = invitationUrl
 
-type InviteDisplayWrapper2(environment, path, invitationGuid, invitationId, orgId) =
-	inherit InviteDisplayWrapper(environment, path, invitationGuid, invitationId, orgId)
+type InviteDisplayWrapper2(environment, path, invitationGuid, invitationId, invitationUrl, orgId) =
+	inherit InviteDisplayWrapper(environment, path, invitationGuid, invitationId, invitationUrl, orgId)
 	member val RemoveSms:Hyperlinq = null with get,set
 	member val EmailAddress= String.Empty with get,set
 	
@@ -45,12 +49,15 @@ let removeSmsValidation (user:Member_member) =
 	dc.Sms_validations.Where(fun v -> v.Member_id = user.Member_id).DumpIf((fun s->s.Any()),"should be empty") |> ignore
 	
 let filterMembers(members:IQueryable<Member_member>):IQueryable<Member_member> =
+	
 	members.Where( fun m -> 
 		m.Org_id = 1 
-				&& not m.Is_fraud 
-				&& m.Is_active
+			&& not m.Is_fraud 
+			&& m.Is_active
 				// && m.Add_dt > DateTime(2014,1,1)
-				&& not (m.Email_address.StartsWith("trialpay")))
+				// screen trialpay possibilities:
+				// && not (m.Email_address.StartsWith("trialpay")))
+			)
 
 let environments = 
 	["dev.";"qa.";"stage.";String.Empty]
@@ -83,7 +90,7 @@ if isNotNullOrEmpty emailAddress then
 		match mem with 
 		| None -> printfn "no member found for email %s" emailAddress; raise (Exception("not found"))
 		| Some foundUser -> foundUser
-	InviteDisplayWrapper(environment = environment,path= path, invitationGuid = user.Ui.User_invitation_guid, invitationId = user.Ui.User_invitation_id, orgId = user.Org_id).Dump("display wrapper")
+	InviteDisplayWrapper(environment = environment,path= path, invitationGuid = user.Ui.User_invitation_guid, invitationId = user.Ui.User_invitation_id, invitationUrl = user.Ui.Invite_url, orgId = user.Org_id).Dump("display wrapper")
 	
 	if (user.Member.Verified_bit_field > 0s || anySms user.Member.Member_id) && Util.ReadLine<bool>("remove sms validation?") then
 		// remove verified 
@@ -97,9 +104,10 @@ if isNotNullOrEmpty emailAddress then
 	
 	if Util.ReadLine<bool>("Show result?(Take Survey before answering this)") then
 		dc.User_invitations.Context.Refresh( RefreshMode.OverwriteCurrentValues,user.Ui)
-		if user.Ui.Invitation_response_dt = null then
-			user.Ui.Dump("response date was not updated, survey does not appear to have registered the start")
-		elif user.Ui.Prelim_survey_status_code <> 'U' then
+		user.Ui.GetType().Dump()
+		//if user.Ui.Invitation_response_dt = null then
+		//	user.Ui.Dump("response date was not updated, survey does not appear to have registered the start")
+		if user.Ui.Prelim_survey_status_code <> 'U' then
 			user.Ui.Dump("after survey")
 		else
 			user.Ui.Dump("survey does not appear updated")
@@ -108,7 +116,7 @@ else
 	let removeLink mem = Hyperlinq(Action (fun () -> removeSmsValidation(mem)),"TryRemoveSms",false)
 	if q.Select(fun a -> a.Email_address).Count() <> q.Select( fun a-> a.Email_address).Distinct().Count() then
 		display.GroupBy( (fun s ->s.Email_address),
-						fun i ->i.Member, InviteDisplayWrapper(environment = environment,path= path, invitationGuid = i.Ui.User_invitation_guid, invitationId = i.Ui.User_invitation_id, orgId = i.Org_id))
+						fun i ->i.Member, InviteDisplayWrapper(environment = environment,path= path, invitationGuid = i.Ui.User_invitation_guid, invitationId = i.Ui.User_invitation_id, invitationUrl = i.Ui.Invite_url, orgId = i.Org_id))
 					.OrderBy( fun g -> g.Key)
 					.Select(fun g ->
 									let memberUser = g.First() |> (fun(m,d) -> m)
