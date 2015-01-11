@@ -1,8 +1,4 @@
-<Query Kind="Statements">
 <Query Kind="Program">
-  <Connection>
-    <IncludeSystemObjects>true</IncludeSystemObjects>
-  </Connection>
   <NuGetReference>ArchiMetrics.Analysis</NuGetReference>
   <Namespace>Roslyn.Compilers</Namespace>
   <Namespace>Roslyn.Compilers.CSharp</Namespace>
