@@ -13,6 +13,7 @@ void Main()
 	//mate up calls to stored procedure with parameters passed
 	
 	var dirToSearch = 
+	//var singleFile = 	dirToSearch+@"\Managers\Member\MemberManager.cs";
 	var files = System.IO.Directory.GetFiles(dirToSearch,"*.cs", SearchOption.AllDirectories);
 		//new []{ singleFile};
 	

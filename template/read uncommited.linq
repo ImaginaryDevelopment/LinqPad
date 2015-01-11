@@ -1,5 +1,6 @@
 <Query Kind="Statements" />
 
+// ReadUncommitted =~ NOLOCK
 using(var txn = new TransactionScope( TransactionScopeOption.Required, new System.Transactions.TransactionOptions{ IsolationLevel=System.Transactions.IsolationLevel.ReadUncommitted}))
 {
 	(from m in Member_members.Where (m =>m.Update_dt>DateTime.Today.AddDays(-1) || m.Is_active==false && m.Org_id==1 && (m.Is_deleted || m.Complaint_count>0 || m.Dnc_dt.HasValue || m.Is_dnc || m.Bounce_dt.HasValue || m.Is_bounce || m.Scrub_dt.HasValue || m.Is_scrub))

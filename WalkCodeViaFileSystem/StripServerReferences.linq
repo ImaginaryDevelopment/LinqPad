@@ -1,5 +1,7 @@
 <Query Kind="Program">
   <Reference>&lt;RuntimeDirectory&gt;\System.Web.dll</Reference>
+  <NuGetReference>HtmlAgilityPack</NuGetReference>
+  <NuGetReference>Newtonsoft.Json</NuGetReference>
 </Query>
 
 //using html agility pack
@@ -13,8 +15,8 @@
 void Main()
 {
 	
-	
-	var pagePath=DetermineDefaultBasePath();
+	var appPagePath=DetermineAppAndPagePath();
+	var pagePath = System.IO.Path.Combine(appPagePath.Item1, appPagePath.Item2);
 	if(!System.IO.File.Exists(pagePath))
 	{
 		("Could not find page:"+pagePath).Dump();
@@ -22,7 +24,7 @@ void Main()
 	}
 	var scripts=LocateScriptTags(pagePath);
 	
-	var jsPath=LocateExternalScriptReferencePath(scripts,pagePath);
+	var jsPath=LocateExternalScriptReferencePath(scripts,appPagePath.Item1, appPagePath.Item2);
 	
 	var oldScript = System.IO.File.ReadAllText(jsPath);
 	if(Regex.IsMatch(oldScript,ServerTagPattern, RegexOptions.IgnorePatternWhitespace)==false)
@@ -36,7 +38,7 @@ void Main()
 		.Dump("newscript");
 	var hasErrorTags=newScript.Contains("<%") || newScript.Contains("<asp:");
 	if(hasErrorTags)
-	hasErrorTags.Dump("has error tags");
+		hasErrorTags.Dump("has error tags");
 	if(newScript.Contains("@"))
 	{
 		"newScript has warning tags".Dump();
@@ -51,27 +53,28 @@ void Main()
 	
 	jsPath.Dump("Written to");
 }
+
 public IEnumerable<string> TransformTags(IEnumerable<Match> items)
 {
-foreach(var item in items)
-{
-Debug.Assert(item.Groups[2].Value=="ClientID");
+	foreach(var item in items)
+	{
+		Debug.Assert(item.Groups[2].Value=="ClientID");
+	}
+	foreach(var m in items.Select(s=>s.Groups[1].Value).Distinct().OrderBy(s=>s))
+	{
+		//uwgDealRegions = { ClientID: "<%=uwgDealRegions.ClientID%>" };
+		yield return m+"={ClientID: \"<%="+m+".ClientID%>\" };";	
+	}
 }
-foreach(var m in items.Select(s=>s.Groups[1].Value).Distinct().OrderBy(s=>s))
-{
-//uwgDealRegions = { ClientID: "<%=uwgDealRegions.ClientID%>" };
-	yield return m+"={ClientID: \"<%="+m+".ClientID%>\" };";
-	
-}
-}
+
 // Define other methods and classes here
-public string DetermineDefaultBasePath()
+public Tuple<string,string> DetermineAppAndPagePath()
 {
-var defaultDrive=System.IO.Directory.Exists(@"D:\Projects")? "D":"C";
-	var baseDir=defaultDrive+@":\Projects\";
-	var defaultPage=@"Pages\ClientProfilewithDeals.aspx";
-	var page=LINQPad.Util.ReadLine("Page location?",baseDir+defaultPage); //
-	return page;
+	var defaultDrive=System.IO.Directory.Exists(@"D:\Development")? "D":"C";
+	var baseDir=defaultDrive+@":\Development\";
+	var defaultPage=@"Pages\Admin\EditOrg.aspx";
+	var page=LINQPad.Util.ReadLine("Page location?",defaultPage); //
+	return Tuple.Create(appPath,page);
 }
 
 public HtmlAgilityPack.HtmlNodeCollection LocateScriptTags(string pagePath)
@@ -94,14 +97,21 @@ public HtmlAgilityPack.HtmlNodeCollection LocateScriptTags(string pagePath)
 	return scripts;
 }
 
-public string LocateExternalScriptReferencePath(HtmlAgilityPack.HtmlNodeCollection scripts,string pagePath)
+public string LocateExternalScriptReferencePath(HtmlAgilityPack.HtmlNodeCollection scripts,string appPath, string pagePath)
 {
-	var srcLocator=scripts.First(s=>s.HasAttributes && s.Attributes.AttributesWithName("src").Any()).Attributes["src"].Value;
+	var fullPagePath = System.IO.Path.Combine(appPath,pagePath);
+	var scriptsWithSrcTags = scripts.Where(s=>s.HasAttributes && s.Attributes.AttributesWithName("src").Any()).Select(s=>s.Attributes).Dump("scripts");
+	var srcLocator=scripts.First(s=>s.HasAttributes && s.Attributes.AttributesWithName("src").Any() && !s.Attributes.AttributesWithName("src").First().Value.StartsWith("//")).Attributes["src"].Value;
 	srcLocator.Dump("jsSource");
+	
 	//var insertLocation=scripts.FirstOrDefault(s=>s.Attributes.AttributesWithName("src").Any()==false);
-	Path.GetDirectoryName(pagePath).Dump("page path");
-	srcLocator.Replace('/','\\').Dump("srcLocator");
-	var srcPath=System.IO.Path.Combine(Path.GetDirectoryName(pagePath),srcLocator.Replace('/','\\')).Dump("srcPath");
+	Path.GetDirectoryName(fullPagePath).Dump("full page path");
+	srcLocator.Replace('/','\\').Dump("jsSrcLocator");
+	
+	var srcPath=
+		(srcLocator.StartsWith("~")?
+			System.IO.Path.Combine(appPath,srcLocator.After("~/").Replace('/','\\')) :
+		System.IO.Path.Combine(Path.GetDirectoryName(pagePath),srcLocator.Replace('/','\\'))).Dump("jsSrcPath");
 	return srcPath;
 }
 

@@ -86,7 +86,7 @@ using(var de=new System.DirectoryServices.DirectoryEntry())
 	using(var deSearch=new System.DirectoryServices.DirectorySearcher())
 	{
 		deSearch.SearchRoot=de;
-		var found=new Dictionary<string,string>( StringComparer.CurrentCultureIgnoreCase);
+		var found = new Dictionary<string,string>( StringComparer.CurrentCultureIgnoreCase);
 		foreach(var ownerName in nbIds)
 			{
 			if(found.Dump("found").ContainsKey(ownerName.Dump("ownername")))
@@ -96,16 +96,18 @@ using(var de=new System.DirectoryServices.DirectoryEntry())
 			//closure.Dump();
 			deSearch.Filter="(&(objectClass=user)(SAMAccountname="+closure+"))";
 			string value;
+			
 			try
 			{	        
 				var me=deSearch.FindOne();	
 				value= me.Properties["name"][0].ToString();
-				//value.Dump();
+				// me.Properties.Dump("properties of "+ownerName);
 			}
 			catch(Exception)
 			{
 				value= null;
 			}
+			
 			 found.Add(ownerName,value);
 			yield return new KeyValuePair<string,string>(ownerName,value);
 		}

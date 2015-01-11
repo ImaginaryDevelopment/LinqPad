@@ -43,7 +43,7 @@ var display =
 	
 	orderby revisionDate descending
 	select new {chwi.Id, chwi.Title, chwi.AreaId, chwi.AreaPath,chwi.IterationId, chwi.IterationPath, Worked=worked, 
-		RevisionDate = revisionDate};
+		RevisionDate = revisionDate, Day = revisionDate.Value.DayOfWeek};
 				
 display.Count().Dump("working revisions");			
 
