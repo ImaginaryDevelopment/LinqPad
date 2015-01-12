@@ -31,13 +31,10 @@ var qg = (from sproc in q
 //	//.Delimit(Environment.NewLine)
 	.Dump();
 
-var qg2 = q.GroupBy(g=> new{g.thread},g=> g.Sproc).Select(g=>new{Thread=g.Key,Count= g.Count(),
-	Sprocs = g.OrderByDescending(g1=>g1)
-		.Select(g2=>new{g2,Count=g2.Count()}).Distinct()}
+var qg2 = q
+	.GroupBy(g=> g.thread,g=>new{g.Sproc})
+	.Select(g=>
+		new{Thread=g.Key,ThreadCallCount= g.Count(),Sprocs=g.Select(g1=>new{g1.Sproc,Count= g.Count(i=>i.Sproc==g1.Sproc)}).Distinct().OrderByDescending(s=>s.Count)}
 		).Dump("by thread");
-		
-var qg3 =  q.GroupBy(g=> new{g.thread},g=> g.Sproc).Select(g=>new{Thread=g.Key,Count= g.Count(),
-	Sprocs =q.Where(all=> all.thread==g.Key.thread).GroupBy(a1=>a1.Sproc,a1=>a1).Select(a2=>new{a2.Key,Calls=a2.Count()}).OrderByDescending(a=>a.Calls)}
-		).Dump("by thread");
-		
-	input.Dump("input");
+	new Hyperlinq(()=> System.Windows.Forms.Clipboard.SetText(String.Join(Environment.NewLine, input)),"re-copy input").Dump();
+	Util.OnDemand("input", ()=> input).Dump();
