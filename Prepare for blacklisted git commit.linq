@@ -12,9 +12,11 @@ let cmdq (s:string) (args:string) (quiet:bool) = Util.Cmd(s,args,quiet)
 let dump a =
 	a |> Dump
 	a
-let dumps t a=
-    printfn "%s" t
-    printfn "%A" a
+let dumps (t:string) a=
+    //printfn "%s" t
+    //printfn "%A" a
+	a.Dump(t)
+	a
 	
 let dumpf (t:string) f a = 
 	(f a) |> dumps t
@@ -47,7 +49,6 @@ let uncommitted () =
 	//|> Seq.map (fun (modType, relativePath) -> modType,relativePath, lazy(System.IO.Path.Combine(targetDir,relativePath)))
 	
 let wordBlacklists:IDictionary<string,string->string> = dict ["oceanside", fun _ -> "[redacted]"]
-let regexTextMap:IDictionary<Regex,string->string option> = dict[Regex("<Connection>\s+<ID>\s+</Connection>",RegexOptions.Multiline), fun _ -> None]
 let fileBlacklists:IDictionary<string,string->string option> = dict ["Prepare for blacklisted git commit.linq", fun  _-> None]
 let itemsWithCount (a:('a*int) list ) : 'a list * int = 
     List.foldBack (fun (str, i) (strs, sum) -> str :: strs, i + sum) a ([], 0)
@@ -64,23 +65,31 @@ let redact (line:string) :string*int= // instead, consider using Some Vs. none t
             ) (line,0)
 let modifyFile (filename:string) :string*int = 
         let lineBlacklists = ["<Server>"]
-
+		let textTransforms = [Regex("<Connection>\s+<ID>.*</ID>(.|\n)+</Connection>",RegexOptions.Multiline)]
         (* for lines that should be blacklisted if the word blacklister did not redact.
         //let redactableLineBlackLists = ["osx"] *)
         let text = System.IO.File.ReadAllText filename
-        let lines = text.SplitLines() // |> dumpf "length" Seq.length
+		
+		let transformsToRun:Regex seq = textTransforms|>  Seq.filter (fun k -> k.IsMatch(text))
+		let transformedText = 
+			if Seq.isEmpty transformsToRun then	
+				Seq.fold (fun (acc:string) (elem:Regex) -> elem.Replace(acc,String.Empty)) text transformsToRun
+					//|> (fun (s:string) -> s.SplitLines())
+				else text
+			
+				
+        let lines = transformedText.SplitLines() // |> dumpf "length" Seq.length
         let length = Seq.length lines
-        let redacted : string*int = 
+        let redacted,count : string*int = 
             lines 
             |> Seq.filter ( fun e->not <| lineBlacklists.All( fun lb -> lb.Equals(e)))
             |> Seq.map redact
             |> List.ofSeq
             //|> dump
-            //TODO: put the lines back together while summing the redaction counts, to roll them up by file
             //|> fun line count -> String.Join(Environment.NewLine,line),count //Seq.fold (fun acc elem -> acc+elem) String.Empty
             |> itemsWithCount
             |> (fun (lines,count) -> String.Join(Environment.NewLine,lines),count)
-        redacted
+        redacted,count + if Seq.isEmpty transformsToRun then 0 else 1
 let modificationMap (f:string->string*int) (filename:string) : string*string*int =
 	let mc = f filename
 	let modified,count = mc // expand
@@ -92,10 +101,13 @@ let modifyFiles (modification:string->string*int) (files:string seq)  : (string*
     |> Seq.map modifyMap //(fun (filename:string) -> modifyMap filename)
 	
 printfn "executing from %s" Environment.CurrentDirectory
-uncommitted()
-|> dump
-|> Seq.filter (fun filename -> fileBlacklists.Keys.Any(fun fb-> filename.Contains(fb))=false)
-|> dump
-|> modifyFiles modifyFile
-|> Seq.filter(fun (_,_,c) -> c > 0)
-|> Dump
+let modifications = 
+	uncommitted()
+	//|> dump
+	|> Seq.filter (fun filename -> fileBlacklists.Keys.Any(fun fb-> filename.Contains(fb))=false)
+	//|> dump
+	|> modifyFiles modifyFile
+	|> Seq.filter(fun (_,_,c) -> c > 0)
+	|> dumps "after transform,redact, and filtering for only files that were modified"
+(* end read model, begin actual writing of changes *)
+
