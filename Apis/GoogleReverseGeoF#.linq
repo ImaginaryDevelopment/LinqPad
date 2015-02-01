@@ -14,7 +14,7 @@ let getFromApi debug (mashapekey:string option) (uri:string) =
 	json
 
 //Util.SetPassword("Google+ApiKey",Util.ReadLine("password"))
-let lat,lon = (40.714224, -73.961452)
+let lat,lon = (34.75, -77.43)
 let mappedUri = uri lat lon (Util.GetPassword("Google+ApiKey"))
 (map lat lon).Dump("mapLink")
 mappedUri.Dump("uri")
