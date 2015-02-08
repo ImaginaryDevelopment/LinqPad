@@ -8,5 +8,7 @@
 var input=System.Windows.Forms.Clipboard.GetText();
 input.Replace("\\","\\\\").Replace("\"","\\\"").Dump("escape 1");
 input.Replace("\"","\\\"").Dump("escape 2");
-
+input.Replace("\"","\"\"").Dump("escape for c# verbatim string");
 input.Replace("\\","/").Dump();
+
+input.Dump("original");
