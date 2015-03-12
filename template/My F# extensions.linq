@@ -1,20 +1,31 @@
 <Query Kind="FSharpProgram" />
 
 type String with 
-	member x.split ( [<ParamArray>] delimiters: string array) = 
-		x.Split(delimiters, StringSplitOptions.None)
-	member x.Before(delimiter:string) : string = 
-		x.Substring(0,x.IndexOf(delimiter))
+
+	member this.Before(delimiter:string) : string = 
+		this.Substring(0,this.IndexOf(delimiter))
+				
 	member x.After(delimiter:string) : string =
-		x.Substring(x.IndexOf(delimiter)+delimiter.Length)
-	member x.BeforeOrSelf(delimiter:string) : string =
-		match x with 
-		| x when x.Contains(delimiter) -> x.Before(delimiter)
-		| _ -> x
+		x.Substring(x.IndexOf(delimiter) + delimiter.Length)
+	
+	// inferred types
+	member x.BeforeOrSelf delimiter =
+		if x.Contains(delimiter) then x.Before(delimiter) else x
+		
+	// pattern matching option
 	member x.AfterOrSelf(delimiter:string) : string =
 		match x with
-		| x when x.Contains(delimiter) -> x.After(delimiter)
+		| y when x.Contains(delimiter) -> y.After(delimiter)
 		| _ -> x
+		
+	// extension method
+	member x.IsNullOrEmpty () = 
+		String.IsNullOrEmpty(x)
+	// extension property
+	member x.IsNullOrWhiteSpace =
+		String.IsNullOrWhiteSpace(x)
+	member x.split ( [<ParamArray>] delimiters: string array) = 
+		x.Split(delimiters, StringSplitOptions.None)
 //[<AbstractClass; Sealed>] // http://stackoverflow.com/questions/13101995/defining-static-classes-in-f
 //[<Obsolete("not necessary in F#")>]
 //type LambdaOp private () =
