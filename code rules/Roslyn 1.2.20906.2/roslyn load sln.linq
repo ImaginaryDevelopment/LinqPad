@@ -7,7 +7,7 @@
 
 var devRoot = Environment.ExpandEnvironmentVariables("%devroot%");
 // HACK: to avoid hard coding paths to test sln
-var sln = System.IO.Directory.GetFiles(devRoot,"*.sln",SearchOption.AllDirectories).SkipWhile(d=>d.Contains("Playground")==false).SkipWhile(d=>d.Contains("Playground")).First().Dump("sln file");
+var sln = System.IO.Directory.GetFiles(devRoot,"*.sln",SearchOption.AllDirectories).First().Dump("sln file");
 ISolution solution;
 try
 {	        
