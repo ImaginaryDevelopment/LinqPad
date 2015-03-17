@@ -25,7 +25,8 @@ void Main()
 	var func = deserialized.Compile();
 	func.Dump();
 	//var searchExpr = SearchExpression<Foo>(deserialized).Dump("whut whut!");
-	Util.HorizontalRun(false, expr.ToString(), deserialized.ToString()).Dump("expression");
+	new{ OriginalExpression = expr.ToString(), Deserialized = deserialized.ToString()}.Dump();
+	//Util.HorizontalRun(true, expr.ToString(), deserialized.ToString()).Dump("expression,deserializedExpression");
 	
 	func(new Foo(){ Hellop = "Hello", IsSet=true}.Dump("foo")).Dump("should be true");
 	func(new Foo(){ Hellop = "Helloa"}.Dump("foo")).Dump("should be false");
@@ -65,6 +66,23 @@ public ConstantExpression DeserializeConstant(JObject n)
 	return Expression.Constant(value);
 }
 
+public LambdaExpression DeserializeLambda<T>(JObject n, ParameterExpression entity)
+{
+	/* kwilla's option for orderby serialization */
+	var targetEntityType = typeof(T);
+	var body = CreateNode<T>((JObject) n["Body"],entity);
+	var returnTypeName = n["ReturnType"].ToString();
+	var returnType = Type.GetType(returnTypeName);
+	var funcDelegateType = typeof (Func<,>).MakeGenericType(targetEntityType, returnType);
+
+	return Expression.Lambda(funcDelegateType, body, entity);
+}
+
+public LambdaExpression DeserializeLambdaPredicate<T>( JObject n, ParameterExpression entity){
+	var body = CreateNode<T>((JObject) n["Body"],entity);
+	return Expression.Lambda<Func<Foo,bool>>(body,entity);
+}
+
 public Expression CreateNode<T>(JObject serializedNode,ParameterExpression entity = null) {
 	
 	var nodeType = serializedNode["NodeType"].ToString();
@@ -75,9 +93,7 @@ public Expression CreateNode<T>(JObject serializedNode,ParameterExpression entit
 	switch(exprType)
 	{
 		case ExpressionType.Lambda:
-			
-			var body = CreateNode<T>((JObject)serializedNode["Body"],entity);
-			return Expression.Lambda<Func<Foo,bool>>(body,entity);
+			return DeserializeLambdaPredicate<T>(serializedNode,entity);
 		case ExpressionType.Equal:
 			var left = CreateNode<T>((JObject)serializedNode["Left"],entity);
 			var right = CreateNode<T>((JObject)serializedNode["Right"],entity);
@@ -89,6 +105,7 @@ public Expression CreateNode<T>(JObject serializedNode,ParameterExpression entit
 //				return Expression.Equal(left,right,liftToNull, method);
 //			} */
 			return Expression.Equal(left,right);
+			
 		case ExpressionType.MemberAccess:
 			var member = (JObject)serializedNode["Member"];
 			var name = (string)member["Name"];
@@ -101,27 +118,34 @@ public Expression CreateNode<T>(JObject serializedNode,ParameterExpression entit
 			serializedNode.ToString().Dump("deserializing non-entity member access");
 			var expression = (JObject)serializedNode["Expression"];
 			return Expression.Constant(expression["Value"][name].ToString());
+			
 		case ExpressionType.Constant:
 			return DeserializeConstant(serializedNode);
+			
 		case ExpressionType.AndAlso:
 			left = CreateNode<T>((JObject)serializedNode["Left"],entity);
 			right = CreateNode<T>((JObject) serializedNode["Right"],entity);
 			return Expression.AndAlso(left,right);
+			
 		case ExpressionType.And:
 			left = CreateNode<T>((JObject)serializedNode["Left"],entity);
 			right = CreateNode<T>((JObject) serializedNode["Right"],entity);
 			return Expression.And(left,right);
+			
 		case ExpressionType.Or:
 			left = CreateNode<T>((JObject)serializedNode["Left"],entity);
 			right = CreateNode<T>((JObject) serializedNode["Right"],entity);
 			return Expression.Or(left,right);
+			
 		case ExpressionType.OrElse:
 			left = CreateNode<T>((JObject)serializedNode["Left"],entity);
 			right = CreateNode<T>((JObject) serializedNode["Right"],entity);
 			return Expression.OrElse(left,right);
+			
 		case ExpressionType.Not:
 			var operand = CreateNode<T>((JObject)serializedNode["Operand"],entity);
 			return Expression.Not(operand);
+			
 		case ExpressionType.Call:
 			//TODO
 		default:
