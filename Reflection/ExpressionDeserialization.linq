@@ -46,7 +46,7 @@ var entity = Expression.Parameter(typeof(T),"f");
 	
 	var valueExpr = Expression.Constant(compareValue);
 	
-	var properties = typeof(Foo).GetProperties().Select((info,i) => new {Index = i, Name = info.Name, PropExpression = Expression.Property(entity,info)}).ToArray();
+	var properties = typeof(T).GetProperties().Select((info,i) => new {Index = i, Name = info.Name, PropExpression = Expression.Property(entity,info)}).ToArray();
 	//var meth = MethodCallExpression.Call(typeof(string).GetMethod("op_Equality"),properties.First(p=> p.Name == "Hellop").PropExpression,value);
 	var meth = Expression.Equal(properties.First(p=>p.Name == propName).PropExpression,valueExpr);
 	var lam = Expression.Lambda<Func<T,bool>>(meth,entity);
@@ -80,7 +80,7 @@ public LambdaExpression DeserializeLambda<T>(JObject n, ParameterExpression enti
 
 public LambdaExpression DeserializeLambdaPredicate<T>( JObject n, ParameterExpression entity){
 	var body = CreateNode<T>((JObject) n["Body"],entity);
-	return Expression.Lambda<Func<Foo,bool>>(body,entity);
+	return Expression.Lambda<Func<T,bool>>(body,entity);
 }
 
 public Expression CreateNode<T>(JObject serializedNode,ParameterExpression entity = null) {
@@ -111,7 +111,7 @@ public Expression CreateNode<T>(JObject serializedNode,ParameterExpression entit
 			var name = (string)member["Name"];
 			var className = member["ClassName"].ToString();
 			if(className == targetEntityType.FullName){
-				var properties = typeof(Foo).GetProperties().Select((info,i) => new {Index = i, Name = info.Name,Info=info, PropExpression = Expression.Property(entity,info)}).ToArray();
+				var properties = typeof(T).GetProperties().Select((info,i) => new {Index = i, Name = info.Name,Info=info, PropExpression = Expression.Property(entity,info)}).ToArray();
 				
 				return Expression.MakeMemberAccess(entity,properties.First(p=>p.Name==name).Info);
 			}

@@ -2,13 +2,11 @@
   <Namespace>Newtonsoft.Json.Linq</Namespace>
 </Query>
 
-//public LambdaExpression DeserializeLambdaPredicate<T>( JObject n, ParameterExpression entity){
-//	var body = CreateNode<T>((JObject) n["Body"],entity);
-//	return Expression.Lambda<Func<Foo,bool>>(body,entity);
-//}
+
 
 let inline toJObj (x:JToken) = 
 	x :?> JObject
+
 
 let rec createNode<'t> (entity:ParameterExpression option) (serializedNode:JObject) :Expression = 
 	let nodeType = serializedNode.["NodeType"].ToString();
@@ -16,19 +14,71 @@ let rec createNode<'t> (entity:ParameterExpression option) (serializedNode:JObje
 	//nodeType.Dump("expr Type simple");
 	let exprType = Enum.Parse(typeof<System.Linq.Expressions.ExpressionType>,nodeType) :?> ExpressionType
 	let entity = if entity.IsSome then entity else Some <| Expression.Parameter(targetEntityType,"f")
+	let getSides () = 
+		let left = createNode <| entity <| toJObj serializedNode.["Left"]
+		let right = createNode <| entity <| toJObj serializedNode.["Right"]
+		left,right
 	match exprType with
 	| ExpressionType.Lambda -> 
 		let bodyNode = serializedNode.["Body"] :?> JObject
-		let body = createNode<'t> entity <| bodyNode
+		let body = createNode entity <| bodyNode
 		upcast Expression.Lambda<Func<'t,bool>>(body,entity.Value)
 	| ExpressionType.Equal ->
 		let left = 
 			toJObj serializedNode.["Left"]
-			|> createNode<'t> entity
+			|> createNode entity
 		let right = 
 			toJObj serializedNode.["Right"]
-			|> createNode<'t> entity
+			|> createNode entity
 		upcast Expression.Equal(left,right)
+	| ExpressionType.MemberAccess ->
+		let memberN = toJObj serializedNode.["Member"]
+		let name = memberN.["Name"].ToString()
+		let className = memberN.["ClassName"].ToString()
+		if className = targetEntityType.FullName then
+			let property:PropertyInfo = typeof<'t>.GetProperties().First( fun info -> 
+				info.Name = name)
+			upcast Expression.MakeMemberAccess(entity.Value,property)
+		else
+			let expression = toJObj serializedNode.["Expression"]
+			upcast Expression.Constant(expression.["Value"].[name].ToString())
+	| ExpressionType.Constant ->
+		let cType = serializedNode.["Type"].ToString()
+		let value = 
+			match serializedNode.["Value"] with
+			| :? JObject as valueJ -> valueJ.ToString()
+			| _ as x -> x.ToString()
+		upcast Expression.Constant(value)
+	| ExpressionType.AndAlso ->
+		let left,right = getSides()
+		upcast Expression.AndAlso(left,right)
+	| ExpressionType.And ->
+		let left,right = getSides()
+		upcast Expression.And(left,right)
+	| ExpressionType.Or ->
+		let left,right = getSides()
+		upcast Expression.Or(left,right)
+	| ExpressionType.OrElse ->
+		let left,right = getSides()
+		upcast Expression.OrElse(left,right)
+	| ExpressionType.Not ->
+		let operand = createNode entity <| toJObj serializedNode.["Operand"]
+		upcast Expression.Not(operand)
+	| ExpressionType.Call //TODO
+	| _ ->
+		serializedNode.ToString().Dump("failing to deserialize")
+		raise <| new NotImplementedException(exprType.ToString())
+		
+type PropertyExpr = {(* Index:int; *) Name:string; Info:PropertyInfo; PropExpression: ParameterExpression}
+let deserializeLambdaPredicate<'t> 	(entity:ParameterExpression) (serializedNode:JObject) :Expression<Func<'t,bool>> =
+	let body = createNode <| Some entity <| toJObj serializedNode.["Body"]
+	Expression.Lambda<Func<'t,bool>>(body,entity)
+type Foo = { Hello:string;IsSet:bool}
+
+let x = "Hello"
+//let expr :Expression<Func<Foo,bool>> = Expression.Lambda
+
+
 //void Main()
 //{
 //	var x = "Hello";
@@ -61,10 +111,7 @@ let rec createNode<'t> (entity:ParameterExpression option) (serializedNode:JObje
 //}
 //
 //// Define other methods and classes here
-//public class Foo{
-//	public string Hellop{get;set;}
-//	public bool IsSet {get;set;}
-//}
+
 ////public MethodInfo GetMethodInfo(JObject serializedMethodNode){
 ////	return null;
 ////}
@@ -80,18 +127,6 @@ let rec createNode<'t> (entity:ParameterExpression option) (serializedNode:JObje
 //	return lam;
 //}
 //
-//public ConstantExpression DeserializeConstant(JObject n)
-//{
-//	var type = (string)n["Type"];
-//	object value = null;
-//	var valueJ = n["Value"] as JObject;
-//	if(valueJ !=null)
-//		value = valueJ.ToString();
-//	else 
-//		value = n["Value"].ToString();
-//	new{ type,value}.Dump("making constant");
-//	return Expression.Constant(value);
-//}
 //
 //public LambdaExpression DeserializeLambda<T>(JObject n, ParameterExpression entity)
 //{
@@ -106,73 +141,3 @@ let rec createNode<'t> (entity:ParameterExpression option) (serializedNode:JObje
 //}
 //
 //
-//public Expression CreateNode<T>(JObject serializedNode,ParameterExpression entity = null) {
-//	
-//	var nodeType = serializedNode["NodeType"].ToString();
-//	var targetEntityType = typeof(T);
-//	//nodeType.Dump("expr Type simple");
-//	var exprType = (ExpressionType) Enum.Parse(typeof(System.Linq.Expressions.ExpressionType),nodeType);
-//	entity = entity ?? Expression.Parameter(targetEntityType,"f");
-//	switch(exprType)
-//	{
-//		case ExpressionType.Lambda:
-//			return DeserializeLambdaPredicate<T>(serializedNode,entity);
-//		case ExpressionType.Equal:
-//			var left = CreateNode<T>((JObject)serializedNode["Left"],entity);
-//			var right = CreateNode<T>((JObject)serializedNode["Right"],entity);
-//			//TODO: consider method path:
-///*			var methodNode = serializedNode["Method"] as JObject;
-////			if(methodNode !=null){
-////				var liftToNull = (bool)serializedNode["IsLiftedToNull"];
-////				var method = GetMethodInfo(methodNode);
-////				return Expression.Equal(left,right,liftToNull, method);
-////			} */
-//			return Expression.Equal(left,right);
-//			
-//		case ExpressionType.MemberAccess:
-//			var member = (JObject)serializedNode["Member"];
-//			var name = (string)member["Name"];
-//			var className = member["ClassName"].ToString();
-//			if(className == targetEntityType.FullName){
-//				var properties = typeof(Foo).GetProperties().Select((info,i) => new {Index = i, Name = info.Name,Info=info, PropExpression = Expression.Property(entity,info)}).ToArray();
-//				
-//				return Expression.MakeMemberAccess(entity,properties.First(p=>p.Name==name).Info);
-//			}
-//			serializedNode.ToString().Dump("deserializing non-entity member access");
-//			var expression = (JObject)serializedNode["Expression"];
-//			return Expression.Constant(expression["Value"][name].ToString());
-//			
-//		case ExpressionType.Constant:
-//			return DeserializeConstant(serializedNode);
-//			
-//		case ExpressionType.AndAlso:
-//			left = CreateNode<T>((JObject)serializedNode["Left"],entity);
-//			right = CreateNode<T>((JObject) serializedNode["Right"],entity);
-//			return Expression.AndAlso(left,right);
-//			
-//		case ExpressionType.And:
-//			left = CreateNode<T>((JObject)serializedNode["Left"],entity);
-//			right = CreateNode<T>((JObject) serializedNode["Right"],entity);
-//			return Expression.And(left,right);
-//			
-//		case ExpressionType.Or:
-//			left = CreateNode<T>((JObject)serializedNode["Left"],entity);
-//			right = CreateNode<T>((JObject) serializedNode["Right"],entity);
-//			return Expression.Or(left,right);
-//			
-//		case ExpressionType.OrElse:
-//			left = CreateNode<T>((JObject)serializedNode["Left"],entity);
-//			right = CreateNode<T>((JObject) serializedNode["Right"],entity);
-//			return Expression.OrElse(left,right);
-//			
-//		case ExpressionType.Not:
-//			var operand = CreateNode<T>((JObject)serializedNode["Operand"],entity);
-//			return Expression.Not(operand);
-//			
-//		case ExpressionType.Call:
-//			//TODO
-//		default:
-//			serializedNode.ToString().Dump("failing to deserialize");
-//		throw new NotImplementedException(exprType.ToString());
-//	}
-//}
