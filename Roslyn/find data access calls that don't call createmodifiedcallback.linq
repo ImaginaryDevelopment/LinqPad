@@ -28,7 +28,6 @@ void Main()
 			
 			fileToClassesToInterfaces[file]= interfaces;
 		}
-		
 	}
 	
 	var q= 
@@ -44,7 +43,12 @@ void Main()
 		let tree = CSharpSyntaxTree.ParseText(text)
 		let root = (CompilationUnitSyntax) tree.GetRoot()
 		select new{ c, cls, /* bases, */ targetFilename, CreationMethods = GetObjectCreationsOfType(root,cls)};
-	q.Dump();
+	q.OrderByDescending(q1 => q1.CreationMethods
+		.Any(cm => cm.CallsCreate == false))
+		.Select(q1=> new{ q1.c, q1.cls,q1.targetFilename, CreationMethods= 
+			q1.CreationMethods.Select(cm => 
+				new{ cm.Type,cm.MethodName, CallsCreate = Util.HighlightIf(cm.CallsCreate,cc=> !cc)}
+			)}).Dump();
 }
 
 static string FindFile(string rootPath, string targetFilename){
@@ -61,9 +65,13 @@ static bool CallsCreateModifiedCallback(IEnumerable<SyntaxNode> methodNodes){
 		.OfType<IdentifierNameSyntax>()
 		.Any(s=> s.Identifier.ValueText =="CreateModifiedCallback");
 }
-	
-			
-public static IEnumerable<object> GetObjectCreationsOfType(CompilationUnitSyntax node, string name){
+
+class ObjectCreationMethodInfo {
+	public string Type{get;set;}
+	public string MethodName {get;set;}
+	public bool CallsCreate{get;set;}
+}
+ static IEnumerable<ObjectCreationMethodInfo> GetObjectCreationsOfType(CompilationUnitSyntax node, string name){
 	var methodsThatCreateSpecifiedType = from m in node.DescendantNodes().OfType<MethodDeclarationSyntax>()
 			
 			from ctor in m.DescendantNodes().OfType<ObjectCreationExpressionSyntax>()
@@ -71,7 +79,8 @@ public static IEnumerable<object> GetObjectCreationsOfType(CompilationUnitSyntax
 			where type != null
 			let typeName = type.Identifier.ValueText
 			where typeName == name
-			select new{Type=name, MethodName = m.Identifier.Value,CallsCreate =Util.HighlightIf( CallsCreateModifiedCallback(m.DescendantNodes()),s=>!s)}
+			let callsCreate = CallsCreateModifiedCallback(m.DescendantNodes())
+			select new ObjectCreationMethodInfo(){Type=name, MethodName = m.Identifier.ValueText,CallsCreate = callsCreate}
 				//.Dump()
 		;
 		return methodsThatCreateSpecifiedType.ToArray();

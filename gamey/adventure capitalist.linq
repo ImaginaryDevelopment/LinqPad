@@ -26,22 +26,24 @@ type Investment =
 let inline guard x f z = 
 	let result = f x
 	if result <> z then failwithf "expected f %A to be %A, but was %A" x <| commas z <| commas result
-let k x = x * 1000M
-let m x = k x * 1000M
-let b x = m x * 1000M
-let t x = b x * 1000M
+
+
 
 let thousand x = BoundedValue.Small <| x * 1000M
 let million x = BoundedValue.Million <| x * 1M<m>
 let billion x = BoundedValue.Billion <| x * 1M<b>
 let quadrillion x = BoundedValue.Quadrillion <| x * 1M<q>
 
-
-
-guard 1M k 1000M
-guard 1M m 1000000M
-guard 1M b 1000000000M
-guard 1M t 1000000000000M
+let runGuards() =
+	let k x = x * 1000M
+	let m x = k x * 1000M
+	let b x = m x * 1000M
+	let t x = b x * 1000M
+	guard 1M k 1000M
+	guard 1M m 1000000M
+	guard 1M b 1000000000M
+	guard 1M t 1000000000000M
+runGuards()
 
 let investments = [ 
 	{Name="Lemonade Stand"; Time= TimeSpan(0,0,1); Amount= 400; Profit = 10.8M |> thousand}
