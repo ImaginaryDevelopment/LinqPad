@@ -39,12 +39,10 @@ let analysisSearchOption = SearchOptions.UseEnvironmentalBase
 let devRoot = Environment.ExpandEnvironmentVariables("%devroot%")
 let slnPath = 
 	System.IO.Directory.GetFiles(devRoot,"*.sln",SearchOption.AllDirectories)
-	|> Seq.skipWhile(fun d->d.Contains("Playground")=false)
-	|> Seq.skipWhile(fun d->d.Contains("Playground"))
+	|> Seq.skip 1
 	|> Seq.head
 	|> fun e-> e.Dump("sln file"); e
 
-	
 // active pattern : http://stackoverflow.com/a/25243799/57883
 let (|As|_|) (p:'T) : 'U option =
     let p = p :> obj
