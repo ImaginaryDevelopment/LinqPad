@@ -2,6 +2,7 @@
 
 Environment.GetEnvironmentVariable("path").Dump();
 var oldPath=Environment.GetEnvironmentVariable("path", EnvironmentVariableTarget.Machine).Dump();
+var paths = oldPath.Split(new []{";"}, StringSplitOptions.RemoveEmptyEntries).Select(p => new{ Path=p,Exists = Directory.Exists(p)}).Dump();
 //var newPath= oldPath.Before("casper").Dump()+"casper\\bin";
 var toAdd=Util.ReadLine("path");
 if(System.IO.Directory.Exists(toAdd)==false)
