@@ -16,18 +16,39 @@ void Main()
 	var selectUser = false;
 	var useDeeperPath = false;
 	
-	var userName =anyUser? null : selectUser? Util.ReadLine("UserName?",Environment.UserName) : Environment.UserName;
-	var queryPathBase = "$/Development/";
+	
+	var queryPathBase = "$/XpressCharts/";
 	
 	var tfsServer = Environment.GetEnvironmentVariable("servers").Split(new []{";"},StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(c=>c.Contains("tfs"));
-	var tfsUri = "https://"+tfsServer;
 	
-	var tfs = new TFS(tfsServer,8080,"Development");
+	var tfs = new Macros.TFS(tfsServer,"XpressCharts",webport:8080,protocol:"http",path:"tfs"); //Macros.TfsModule.GetTfs(new Uri(tfsUri));
 	
-	var queryPath = GetQueryPath(tfs.Tfs, useDeeperPath,queryPathBase);
+		
+	var queryPath = GetQueryPath(tfs.TfsPC, useDeeperPath,queryPathBase).Dump("querypath");
+	Util.OnDemand("tfs",() => tfs).Dump("tfs");
+	//var vcs1 = tfs.TfsPC.GetService<VersionControlServer>();
+	//var vcs = Macros.TfsModule.GetVcs(tfs.TfsPC);
+	
+	var userName = anyUser? null : selectUser? Util.ReadLine("UserName?",Environment.UserName) : tfs.TfsPC.AuthorizedIdentity.UniqueName.AfterOrSelf("\\");
+	Util.OnDemand("identity", () =>
+	new {
+		userName,
+		TfsCredentials = tfs.TfsPC.AuthorizedIdentity,
+		Environment.UserDomainName,
+		Environment.UserName,
+		PrincipalIdentity = System.Threading.Thread.CurrentPrincipal.Identity,
+		NetworkCredentials = System.Net.CredentialCache.DefaultNetworkCredentials,
+		DefaultCredentials = System.Net.CredentialCache.DefaultCredentials,
+		TfsUri = tfs.TfsPC.Uri,
+		CurrentWinIdentity = System.Security.Principal.WindowsIdentity.GetCurrent(),
+		TfsCredentialCache = System.Net.CredentialCache.DefaultNetworkCredentials.GetCredential(tfs.TfsPC.Uri, "Basic")
+		
+		}).Dump("identity");
 	
 	// subPath.Dump("subPath");
-	var tfsChanges = tfs.GetChangesWithoutWorkItems(userName,queryPath, 0);
+	var tfsChanges = tfs.GetChangesWithoutWorkItems(userName,queryPath, 0)
+		.Dump("all changes")
+		;
 	// tfsChanges.Dump();
 	
 	tfsChanges
