@@ -35,7 +35,7 @@ while(doContinue){
 		toCapture.Dump("not found");
 		continue;
 	}
-	var replaceDefault == toCapture.StartsWith("\"") && toCapture.EndsWith("\"") ?@"(?<name>""\w+"")" : @"(?<name>\w+)" ;
+	var replaceDefault = toCapture.StartsWith("\"") && toCapture.EndsWith("\"") ?@"(?<name>""\w+"")" : @"(?<name>\w+)" ;
 	var toReplace = Util.ReadLine("captured replacement?",replaceDefault);
 	var namedReplacement = toReplace.Contains("(?<")? @"\k<" + toReplace.After("(?<").Before(">") +">" : string.Empty;
 	var isSingleReplace =toReplace.Contains("(?<") &&  output.IndexOf(toCapture) >=0 && output.IndexOf(toCapture,output.IndexOf(toCapture)) == -1;

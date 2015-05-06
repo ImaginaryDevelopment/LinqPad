@@ -13,13 +13,13 @@
 //join TFS to Active Directory
 void Main()
 {
-var srcpath=Util.ReadLine("SourcePath?","$/Development");
-var onlyLocks=//false; 
-	Util.ReadLine<bool>("only locked files?",true);
-var minDate=DateTime.Today.AddDays(-30);
+	var srcpath=Util.ReadLine("SourcePath?","$/XpressCharts");
+	var onlyLocks=//false; 
+		Util.ReadLine<bool>("only locked files?",true);
+	var minDate=DateTime.Today.AddDays(-30);
 
 	var tfsServer = Environment.GetEnvironmentVariable("servers").Dump().Split(new []{";"},StringSplitOptions.RemoveEmptyEntries).Dump().FirstOrDefault(c=>c.Contains("tfs"));
-	var tfsUri= "https://"+tfsServer;
+	var tfsUri= "http://"+tfsServer+":8080/tfs";
 	
 	using(var tfsPc=new TfsTeamProjectCollection(new Uri(tfsUri)))
 	

@@ -21,7 +21,6 @@ class ModelCollector : CSharpSyntaxWalker
 		
 		public static IDictionary<string,List<string>> VisitProperties(string text){
 			var tree = CSharpSyntaxTree.ParseText(text);
-	
 			var root = (CompilationUnitSyntax) tree.GetRoot();
 			var mc = new ModelCollector();
 			mc.Visit(root);

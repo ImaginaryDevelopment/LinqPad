@@ -11,8 +11,10 @@ type BoundedValue =
 	| Billion of decimal<b>
 	| Trillion of decimal<t>
 	| Quadrillion of decimal<q>
+	
 let commas (x:decimal<_>) = 
 	(decimal x).ToString("C")
+	
 let formatBounded x = 
 	match x with
 	|Small x -> sprintf "%s" <| commas x
@@ -20,14 +22,14 @@ let formatBounded x =
 	|Billion x -> sprintf "%s %s" <| commas x <| "Billion"
 	|Trillion x -> sprintf "%s %s" <| commas x <| "Trillion"
 	|Quadrillion x -> sprintf "%s %s" <| commas x <| "Quadrillion"
+	
 type Investment = 
 	{ Name:string; Time:TimeSpan; Amount: int; Profit: BoundedValue}
 	with member x.Display = formatBounded x.Profit
+	
 let inline guard x f z = 
 	let result = f x
 	if result <> z then failwithf "expected f %A to be %A, but was %A" x <| commas z <| commas result
-
-
 
 let thousand x = BoundedValue.Small <| x * 1000M
 let million x = BoundedValue.Million <| x * 1M<m>

@@ -1,31 +1,30 @@
 <Query Kind="FSharpProgram" />
 
 // check hint paths for files that don't exist or are absolute
-let onlySlnProjects = true
+//let onlySlnProjects = true
+
 let baseDir=Util.ReadLine("Directory?",System.Environment.GetEnvironmentVariable("devroot"))
 let projects= System.IO.Directory.GetFiles(baseDir,"*.*proj", SearchOption.AllDirectories);
-
 
 let csProjects=projects.Where(fun f->f.EndsWith(".csproj") && f.Contains("test", StringComparison.InvariantCultureIgnoreCase)=false //don't check testing projects
 		//&& nonSlnProjects.All(non=>f.EndsWith(non)==false)
 		
 		)//.Take(2);
 csProjects.Count().Dump ("checking projects")
-type BaseItem = {Path:string;Doc:XDocument;RootNs:XNamespace;ProjNode:XElement;IsSlnProject:bool}
+type BaseItem = {Path:string;Doc:XDocument;RootNs:XNamespace;ProjNode:XElement}
 let baseItems=
 		let baseQuery = query {
 			for i in csProjects	do
-			let isSlnProject=i.Contains("NonSln")=false && i.Contains("playground")=false
+			//let isSlnProject=i.Contains("NonSln")=false && i.Contains("playground")=false
 			let doc=XDocument.Load(i)
 			let rootns=doc.Root.Name.Namespace
 			let proj=doc.Element(rootns+"Project") //.DumpIf(fun x->x=null,i+" has no project element")
 			where (proj<>null)
-			sortBy isSlnProject
-			select { Path=i; Doc=doc;RootNs=rootns;ProjNode=proj;IsSlnProject=isSlnProject}
+			select { Path=i; Doc=doc;RootNs=rootns;ProjNode=proj}
 		}
 		baseQuery.ToArray()
 
-type Reference = {HintPath:string;Reference:string;IsSlnProject:bool;Path:string;AbsPath:string;Exists:bool}
+type Reference = {HintPath:string;Reference:string;Path:string;AbsPath:string;Exists:bool}
 let nonPackageReferences = 
 		let mySeq= seq{
 			for i in baseItems do
@@ -36,14 +35,14 @@ let nonPackageReferences =
 							let absPath=if hintPath.Value.Contains(":") then hintPath.Value else System.IO.Path.GetFullPath((System.IO.Path.GetDirectoryName(i.Path)+"\\"+hintPath.Value))
 							let exists= System.IO.File.Exists(absPath) //TODO: solve for checking exists on network drives
 							if not exists || hintPath.Value.Contains(":") || hintPath.Value.Contains("\\\\") then
-								yield {HintPath=hintPath.Value;Reference=r.ToString();IsSlnProject=i.IsSlnProject;Path=i.Path;AbsPath=absPath;Exists=exists}	
+								yield {HintPath=hintPath.Value;Reference=r.ToString();Path=i.Path;AbsPath=absPath;Exists=exists}	
 		}
-		mySeq |> Seq.sortBy (fun x -> not x.IsSlnProject) //orderby i.IsSlnProject descending
+		mySeq
 
 type GroupedReferenceValue = {Exists:bool; Ref:Object}	
  
 ( 
-	let npr=(if onlySlnProjects then nonPackageReferences |> Seq.filter ( fun pr -> not pr.IsSlnProject) else nonPackageReferences) |>
+	let npr=nonPackageReferences |>
 				Seq.groupBy (fun pr-> pr.Path) |>
 				Seq.map (fun (k,group) -> 
 					(k,group|>
