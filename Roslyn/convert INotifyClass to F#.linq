@@ -8,7 +8,6 @@
   <NuGetReference>Newtonsoft.Json</NuGetReference>
 </Query>
 
-
 open System
 open System.Collections.Generic
 open System.IO
@@ -21,6 +20,9 @@ open System.IO
 #I @"C:\Program Files (x86)\Microsoft Web Tools\DNX\dnx-clr-win-x64.1.0.0-beta4\bin\"
 #r @"Microsoft.CodeAnalysis.dll"
 #r @"Microsoft.CodeAnalysis.CSharp.dll"
+#elif LINQPAD
+// doesn't work, maybe linqpad will get this feature for F# instead of just C#
+printfn "we're in linqpad!"
 #endif
 type Identifier = | Identifier of string
 type Path = |Path of string
@@ -62,7 +64,7 @@ module Seq =
 	#if INTERACTIVE
     let inline iterDump items = items |> Seq.iter (fun i-> printfn "%A" i)
 	let inline iterDumpInd indent items = items |> Seq.iter( fun i -> printfn "%s%A" indent i)
-	#else
+	#elif LINQPAD
 	let inline iterDump items = items.Dump(1)
 	let inline iterDumpInd indent items = 
 		Util.WithStyle(items,"font-size:large;margin-left:60px").Dump(1)
