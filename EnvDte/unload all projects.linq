@@ -16,7 +16,7 @@ void Main()
 	const string SolutionExplorerWindow="{3AE79031-E1BC-11D0-8F78-00A0C9110057}";
 	const string SolutionFolder="{66A26720-8FB5-11D2-AA7E-00C04F688DDE}";
 	//EnvDTE.DTE
-	var dte = (EnvDTE.DTE)System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE");
+	var dte = (EnvDTE.DTE)System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE.12.0");
 	dte.Dump();
 	dte.FileName.Dump();
 	dte.Solution.FullName.Dump();

@@ -1,4 +1,6 @@
-<Query Kind="Program" />
+<Query Kind="Program">
+</Query>
+
 
 void Main()
 {
@@ -6,14 +8,16 @@ void Main()
  var start="start";
 var stop="stop";
 var query="query";
+
 var options= new[]{start,stop,query};
 var current=Util.ReadLine("Desired action?",query,options);
-	var server=Util.ReadLine("Server?","jaxpdoextream",Enum.GetNames(typeof(MyNetwork)));
+var servers=System.Environment.GetEnvironmentVariable("servers", EnvironmentVariableTarget.User).Split(';');
+	var server=Util.ReadLine("Server?",servers[0],servers);
 	
 	var psi=new ProcessStartInfo("sc"){ RedirectStandardError=true, RedirectStandardOutput=true //,RedirectStandardInput=true 
 		, UseShellExecute=false,ErrorDialog=false, CreateNoWindow=true} ; // WinMgmt or WMSvc?
 	 IEnumerable<ScQueryOutput> queryResult;
-	 StreamOuts startOutput=default(StreamOuts);
+	 var startOutput=default(My.StreamOuts);
 	 bool startHadError=false;
 	 string toStart=null;
 	using (var ps=new Process())
@@ -63,7 +67,7 @@ var current=Util.ReadLine("Desired action?",query,options);
 
 public static IEnumerable<ScQueryOutput> TransformScQuery(string output)
 {
-	
+	output.Dump();
 	var grouped=output.SplitLines().SkipWhile (o => string.IsNullOrEmpty(o)).GroupLinesBy("SERVICE_NAME");
 	foreach(var line in grouped
 				.Select (g => g.SplitLines()
@@ -72,6 +76,7 @@ public static IEnumerable<ScQueryOutput> TransformScQuery(string output)
 	{
 	
 	var serviceName=line[0];
+	serviceName.Dump();
 	yield return new ScQueryOutput(){ ServiceName=serviceName,
 	 DisplayName=line[1], State=line[3]+line[4], Type=line[2],
 	Unmapped=line.Skip(4).Delimit(Environment.NewLine) };

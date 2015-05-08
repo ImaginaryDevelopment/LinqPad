@@ -1,13 +1,8 @@
 <Query Kind="Program" />
 
 IDictionary<deploySites,string> _sites=new Dictionary<deploySites,string>{
-	{deploySites.sitwebDeploy,@"\\gtpm-init1-sit\sites$\gtpm-init1\wwwroot\Site\" }, // @"\\crprdnii1i7\sites$\Gtpm-init1\wwwroot\Site\"},
-	{deploySites.ditWebDeploy,@"\\crprdnii1i4\sites\Gtpm-init1\wwwroot\Site\"},
-	{deploySites.ditsvcDeploy,@"\\crprdnii1i4\sites\Gtpm-init1\wwwroot\services\"},
-	//{deploySites.uatwebDeploy,@""},
-	{ deploySites.prodDeploy,@"\\crprdnii1h9\sites$\Gtpm-init1\wwwroot\"},
-	{deploySites.prod2Deploy,@"\\crprdnii1h8\sites$\Gtpm-init1\wwwroot\"},
-	{deploySites.unknown,@"\\crprdnii1g7\sites$\Gtpm\wwwroot\"},
+	
+	{deploySites.unknown,@"\\server\sites$\wwwroot\"},
 };
 bool debug=false;
 void Main()

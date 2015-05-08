@@ -1,14 +1,12 @@
 <Query Kind="Program">
-  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 10.0\Common7\IDE\PublicAssemblies\EnvDTE.dll</Reference>
-  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 10.0\Common7\IDE\PublicAssemblies\EnvDTE80.dll</Reference>
-  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 10.0\Common7\IDE\PublicAssemblies\EnvDTE90.dll</Reference>
-  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 11.0\VSSDK\VisualStudioIntegration\Common\Assemblies\v2.0\Microsoft.VisualStudio.OLE.Interop.dll</Reference>
-  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 11.0\VSSDK\VisualStudioIntegration\Common\Assemblies\v4.0\Microsoft.VisualStudio.Shell.11.0.dll</Reference>
-  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 11.0\VSSDK\VisualStudioIntegration\Common\Assemblies\v2.0\Microsoft.VisualStudio.Shell.Interop.10.0.dll</Reference>
-  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 11.0\VSSDK\VisualStudioIntegration\Common\Assemblies\v2.0\Microsoft.VisualStudio.Shell.Interop.8.0.dll</Reference>
-  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 11.0\VSSDK\VisualStudioIntegration\Common\Assemblies\v2.0\Microsoft.VisualStudio.Shell.Interop.9.0.dll</Reference>
-  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 11.0\VSSDK\VisualStudioIntegration\Common\Assemblies\v2.0\Microsoft.VisualStudio.Shell.Interop.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.Runtime.InteropServices.dll</Reference>
+  <GACReference>EnvDTE, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
+  <GACReference>EnvDTE80, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
+  <GACReference>EnvDTE90, Version=9.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
+  <GACReference>Microsoft.VisualStudio.OLE.Interop, Version=7.1.40304.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
+  <GACReference>Microsoft.VisualStudio.Shell.12.0, Version=12.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
+  <GACReference>Microsoft.VisualStudio.Shell.Interop, Version=7.1.40304.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
+  <GACReference>Microsoft.VisualStudio.Shell.Interop.12.0, Version=12.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
   <NuGetReference>Rx-Main</NuGetReference>
   <NuGetReference>Rx-Main</NuGetReference>
   <NuGetReference>Rx-Main</NuGetReference>
@@ -25,6 +23,8 @@
   <NuGetReference>Rx-Main</NuGetReference>
   <NuGetReference>Rx-Main</NuGetReference>
   <Namespace>EnvDTE</Namespace>
+  <Namespace>EnvDTE80</Namespace>
+  <Namespace>EnvDTE90</Namespace>
   <Namespace>Microsoft.VisualStudio</Namespace>
   <Namespace>Microsoft.VisualStudio.Shell</Namespace>
   <Namespace>Microsoft.VisualStudio.Shell.Interop</Namespace>
@@ -37,32 +37,21 @@ const string ProjectGuid="{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}";
 
 void Main()
 {
+//projects to keep loaded
 	var keeps=new []{"ProviderPortal.csproj",
-		"PaySpan.Apps.Contracts.csproj",
-		"PaySpan.CareFirst.Contracts.csproj",
-		"PaySpan.Provider.Services.csproj",
-		"PaySpan.Entities.csproj",
-		"Payformance.Core.csproj",
-		"Payformance.PaySpan.Contracts.csproj",
-		"Payformance.PaySpan.DataAccess.csproj",
-		"Payformance.PaySpan.Logging.csproj",
-		"Payformance.PaySpan.Security.csproj",
-		"Payformance.PaySpan.ServiceContracts.csproj",
-		"Payformance.PaySpan.ServiceContracts.ObjectMapper.csproj",
 		"QueryBroker.Core.csproj",
 		"dtsinterface.csproj",
-		"NPS.WebServices.Interface.csproj",
-		"PaySpan.Hpx.Web.csproj","PaySpan.Core.csproj","PaySpan.Web.csproj"};
+		};
 	bool topdown=false;
 	const string SolutionExplorerWindow="{3AE79031-E1BC-11D0-8F78-00A0C9110057}";
 	
 	
 	//EnvDTE.DTE
-	var dte = (EnvDTE.DTE)System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE");
+	var dte = (EnvDTE.DTE)System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE.12.0");
 	Microsoft.VisualStudio.Shell.Interop.IVsUIHierarchyWindow hierarchy;
 	ServiceProvider sp = new ServiceProvider((Microsoft.VisualStudio.OLE.Interop.IServiceProvider)dte);
 	IVsSolution sol = (IVsSolution)sp.GetService(typeof(SVsSolution));
-	//var uih=dte.ActiveWindow.Object as UIHierarchy;
+	var uih=dte.ActiveWindow.Object as UIHierarchy;
 	//hierarchy=(IVsUIHierarchyWindow) sp.GetService(typeof(IVsUIHierarchyWindow));
 	
 	foreach (ProjInfo info in GetProjectInfo(sol))
