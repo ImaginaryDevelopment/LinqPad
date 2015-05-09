@@ -272,6 +272,7 @@ let rec mapNode (memberNames:Set<string>) (getDebugOpt: DebugDelegate) (node:Syn
     match node with
     | null -> failwithf "null node"
     | :? BlockSyntax as bs -> "BlockSyntax", mapChildren "\r\n" bs
+    | :? ElseClauseSyntax as ecs -> "ElseClauseSyntax", sprintf " else %s " (mapNodeP ecs.Statement)
     | :? ReturnStatementSyntax as rss -> "ReturnStatementSyntax", mapChildren  "\r\n" rss
     | :? InvocationExpressionSyntax as ies -> 
         
@@ -322,11 +323,11 @@ let rec mapNode (memberNames:Set<string>) (getDebugOpt: DebugDelegate) (node:Syn
             if gpk <> SyntaxKind.CaseSwitchLabel && ggpFull |>  String.contains "decimal" && full |> String.contains "." |> not then 
                 "NumericLiteralExpression.decimal", (full + "m")
             else 
-                printNodeDiagnostics les
-                dump "NLE ggp" ggpFull
-                dump "NLE gpk" gpk
-                dump "NLE pk" <| les.Parent.Kind()
-                dump "NLE" full
+                //printNodeDiagnostics les
+                //dump "NLE ggp" ggpFull
+                //dump "NLE gpk" gpk
+                //dump "NLE pk" <| les.Parent.Kind()
+                //dump "NLE" full
 
                 "NumericLiteralExpression", full 
         | _ -> "NullableTypeSyntax", (toFull les)
@@ -393,7 +394,7 @@ let rec mapNode (memberNames:Set<string>) (getDebugOpt: DebugDelegate) (node:Syn
         let ident = ins.Identifier
         if ident.ValueText = null then failwithf "no ValueText for ins %s" (toFull ins)
         let value = mapName ins.Identifier.ValueText
-        dump "ins" <| sprintf "(parentType %A, parent %A, isVar %A, arity %A,identifier %A,kind %A)" (ins.Parent.GetType()) ins.Parent ins.IsVar ins.Arity ins.Identifier (ins.Kind())
+        //dump "ins" <| sprintf "(parentType %A, parent %A, isVar %A, arity %A,identifier %A,kind %A)" (ins.Parent.GetType()) ins.Parent ins.IsVar ins.Arity ins.Identifier (ins.Kind())
         if memberNames.Contains(value) && value.Contains(".") = false && ins.Parent :? MemberAccessExpressionSyntax = false then
             "Ins:(propName)", sprintf "x.%s" value
         else
