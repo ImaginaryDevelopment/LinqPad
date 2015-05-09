@@ -11,6 +11,16 @@ open System.IO
 #r @"Microsoft.CodeAnalysis.dll"
 #r @"Microsoft.CodeAnalysis.CSharp.dll"
 #endif
+type System.String with
+    static member before (d:string) (s:string) = s.Substring(0, s.IndexOf(d))
+    static member after (d:string) (s:string) = s.Substring( s.IndexOf(d) + d.Length)
+    static member contains d (s:string) = s.Contains(d)
+    static member beforeOrSelf d (s:string) = if s |> String.contains d then s|> String.before d else s
+    static member trim (s:string) = s.Trim()
+    static member join d (items:string seq) = String.Join(d,items |> Array.ofSeq)
+    static member replace (d:string) r (s:string)= s.Replace(d,r)
+
+
 type Identifier = | Identifier of string
 type Path = |Path of string
 type Code = |Code of (Path option) * string
@@ -54,10 +64,14 @@ module ScriptOptions =
     let rec startDebugState state vote : DebugOpt * DebugDelegate =
         let state = 
             match state,vote with
+            | Some(x), Abstain -> x
+            | None, Abstain -> DebugOpt.No
             | Some (DebugOpt.Yes), Promote -> DebugOpt.Indent spacing
             | Some (DebugOpt.Indent spc), Promote -> DebugOpt.Indent(spc + spacing)
             | Some (DebugOpt.No), Promote -> DebugOpt.Yes
-            | Some(DebugOpt.Yes), Abstain -> DebugOpt.Yes
+            | Some (DebugOpt.Indent spc), Demote -> if spc.Length > spacing.Length then DebugOpt.Indent (String.before spacing spc) else DebugOpt.Yes
+            | _, Demote -> DebugOpt.No
+            | _, Promote -> DebugOpt.Yes
             
         let dd = DebugDelegate (fun vote -> startDebugState (Some state) vote)
         state,dd
@@ -129,14 +143,6 @@ module Helpers =
         | Indent spc -> Seq.iterDumpInd spc lines
         | No -> ()
     
-type System.String with
-    static member before (d:string) (s:string) = s.Substring(0, s.IndexOf(d))
-    static member after (d:string) (s:string) = s.Substring( s.IndexOf(d) + d.Length)
-    static member contains d (s:string) = s.Contains(d)
-    static member beforeOrSelf d (s:string) = if s |> String.contains d then s|> String.before d else s
-    static member trim (s:string) = s.Trim()
-    static member join d (items:string seq) = String.Join(d,items |> Array.ofSeq)
-    static member replace (d:string) r (s:string)= s.Replace(d,r)
 
     
     // alternate implementation
@@ -269,7 +275,7 @@ let rec mapNode (memberNames:Set<string>) (getDebugOpt: DebugDelegate) (node:Syn
     | :? ReturnStatementSyntax as rss -> "ReturnStatementSyntax", mapChildren  "\r\n" rss
     | :? InvocationExpressionSyntax as ies -> 
         
-        let expr = mapNodeP ies
+        let expr = mapNodeP ies.Expression
         if expr.Contains("AddMinutes") then
             dump "IES:AddMinutes" ies.ArgumentList.Arguments.[0]
         let ignoredResult = expr.StartsWith("builder.Append")
