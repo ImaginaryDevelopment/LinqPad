@@ -29,11 +29,20 @@ open Microsoft.CodeAnalysis.CSharp.Syntax
 
 //type DebugPredicate = |ByName of (string -> DebugOpt) |ByExpr of (SyntaxNode -> DebugOpt)
 module ScriptOptions = 
+    let searchLinqPadQueriesForSample() =
+        let myDocs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+        Path.Combine(myDocs,"LINQPad Queries","Roslyn")
+
     #if INTERACTIVE
-    let srcPath = @"C:\TFS\Pm-Rewrite\Source-dev-rewrite\PracticeManagement\PracticeManagement.Foundation\DataModels" (*  Environment.ExpandEnvironmentVariables("%devroot%"); *) 
+    let srcPath = 
+        let workTarget = @"C:\TFS\Pm-Rewrite\Source-dev-rewrite\PracticeManagement\PracticeManagement.Foundation\DataModels"
+        if File.Exists(workTarget) then 
+            workTarget (*  Environment.ExpandEnvironmentVariables("%devroot%"); *) 
+        else
+            //TODO: consider checking devroot next?
+            searchLinqPadQueriesForSample()
     #else
-    let myDocs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
-    let srcPath = Path.Combine(myDocs,"LINQPad Queries","Roslyn")
+    let srcPath = searchLinqPadQueriesForSample()
     #endif
     printfn "searching path %s" srcPath
     let source = CodeSources.Directory (Path srcPath (*  Environment.ExpandEnvironmentVariables("%devroot%"); *) )
@@ -49,6 +58,7 @@ module ScriptOptions =
             | Some (DebugOpt.Indent spc), Promote -> DebugOpt.Indent(spc + spacing)
             | Some (DebugOpt.No), Promote -> DebugOpt.Yes
             | Some(DebugOpt.Yes), Abstain -> DebugOpt.Yes
+            
         let dd = DebugDelegate (fun vote -> startDebugState (Some state) vote)
         state,dd
     let getNextDebugState debugDelegate vote =
@@ -515,9 +525,7 @@ module FieldConversion =
     open Declarations 
     
     let convertFileFields (fileInfoB:FileInfoB) (getDebugOpt:DebugDelegate) =
-        let debugOption, getDebugOpt = ScriptOptions.getNextDebugState getDebugOpt (ScriptOptions.isDebugCode fileInfoB.File)
         let cls = fileInfoB
-
         let debugOption, getDebugOpt = ScriptOptions.getNextDebugState getDebugOpt  (ScriptOptions.isDebugClass cls.Class')
         
         let typeText = new System.Text.StringBuilder()
@@ -647,7 +655,8 @@ module PropConversion =
         let getDebugPropOptions name = ScriptOptions.getNextDebugState getDebugOpt  (ScriptOptions.isDebugPropPred name)
         let inline debugPropLines name expr lines:unit = 
             let debugOpt, getDebugOpt = getDebugPropOptions(name)
-            let debugOpt,getDebugOpt =ScriptOptions.getNextDebugState getDebugOpt (ScriptOptions.isDebugPropPred expr)
+
+            let debugOpt,getDebugOpt =if Option.isSome expr then ScriptOptions.getNextDebugState getDebugOpt (ScriptOptions.isDebugNode expr.Value) else debugOpt,getDebugOpt
             debugLines debugOpt lines //  let debugLines debug (lines:string seq) = 
         //let mapIndent expr = mapNode memberNames (debugIndented expr) expr
         let mapNode x :string = mapNode getDebugOpt x
@@ -666,7 +675,7 @@ module PropConversion =
 
             let mapped = String.join ScriptOptions.spacing mapped
             let mapped = if mapped.Contains("\r\n") then "\r\n" + mapped else mapped
-            dump "Mapnodesresult" mapped debugOption
+            dump "Mapnodesresult" mapped debugOpt
             mapped
 
         let mapGetter name = mapAccessor name "getter"
@@ -675,6 +684,7 @@ module PropConversion =
         match pib.IsINotify, pib.IsSimpleGet, pib.FieldName with
         | true,true, Some fieldName -> fDec pib.FieldName (Some (iNotifyProp fieldName pib.PropertyName)) "SimpleINotify"
         | _ -> 
+            
             let spacing = ScriptOptions.spacing + ScriptOptions.spacing + ScriptOptions.spacing
             let mapAccessor map childnodes = childnodes |> Seq.toArray |> map pib.PropertyName |> String.replace "\r\n" (sprintf "\r\n%s" spacing) |> Some
             let mapGetter (getter:AccessorDeclarationSyntax) = getter.ChildNodes()|> mapAccessor mapGetter
@@ -682,7 +692,8 @@ module PropConversion =
             match pib.Getter,pib.Setter with
             | AutoProperty -> 
                 let value = match pib.Type with | "bool" -> "false" | _ -> "null"
-                debugPropLines None [sprintf "AutoProperty type,value:(%s,%s)" pib.Type value]
+
+                debugPropLines pib.PropertyName None [sprintf "AutoProperty type,value:(%s,%s)" pib.Type value]
                 sprintf "%smember val %s : %s = %s with get, set\r\n" ScriptOptions.spacing pib.PropertyName pib.Type value
             | Some getter, Some setter ->
                 let getter = mapGetter getter
@@ -691,6 +702,7 @@ module PropConversion =
                     let match' = System.Text.RegularExpressions.Regex.Match(full,@"set\s*{\s*this\.SetAndNotify\(\(\)\s*=>\s*this\.(?<name>\w+),\s*ref\s*_\k<name>,\s*value\);\s*}")
                     if match'.Success then
                         let fieldName = match pib.FieldName with | Some fn -> fn | _ -> ("_" + match'.Groups.[1].Value)
+                        let debugPropLines = debugPropLines pib.PropertyName
                         let result = iNotifyProp fieldName pib.PropertyName
                         let sSetter = setter :> SyntaxNode |> Some
                         debugPropLines sSetter [
@@ -707,19 +719,20 @@ module PropConversion =
             | _ -> sprintf "  // could not generate property for %A\r\n" pib.PropertyName
 
     let convertProperties (fileInfoB:FileInfoB) = 
-        let getDebugFilePropertyOptions name expr debugOpt:DebugOpt = ScriptOptions.debugOptions (Some fileInfoB.Class') (Some "Property") name expr debugOpt
+        let debugOpt,getDebugOpt = ScriptOptions.startDebugState None (ScriptOptions.isDebugCode fileInfoB.File)
         let propNames = fileInfoB.Properties|> Seq.map(fun p -> mapName p.PropertyName) |> Set.ofSeq
         
         let props = fileInfoB.Properties |> Seq.map(fun p -> {p with PropertyName=mapName p.PropertyName;Type=toFType p.Type}) |> Seq.sortBy ( fun p -> p.PropertyName) 
         // toFProp (propertyNames:Set<string>) (pib:PropertyInfoB) (getDebugOpt:#SyntaxNode option -> DebugOpt -> DebugOpt) = 
-        let inline getPropDebugOptions propName expr debugOpt:DebugOpt = getDebugFilePropertyOptions propName expr debugOpt
-        let f (prop:PropertyInfoB) = toFProp propNames prop (getPropDebugOptions (Some prop.PropertyName))
+        
+        let f (prop:PropertyInfoB) = toFProp propNames prop getDebugOpt
         props |> Seq.map f
 
 let convertFile (cls:FileInfoB) = 
+    let debugOpt,getDebugOpt = ScriptOptions.startDebugState None (ScriptOptions.isDebugCode cls.File)
     let text = "[<AllowNullLiteral>]\r\ntype " + cls.Class' + "() = \r\n  inherit FSharp.ViewModule.ViewModelBase()\r\n\r\n"
     let text = new System.Text.StringBuilder(text)
-    let fieldText = FieldConversion.convertFileFields cls
+    let fieldText = FieldConversion.convertFileFields cls getDebugOpt
     let props = PropConversion.convertProperties cls
     text.AppendLine(fieldText).AppendLine(String.Join("\r\n",props)).ToString()
 
