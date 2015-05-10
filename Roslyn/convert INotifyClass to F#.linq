@@ -49,6 +49,7 @@ open Microsoft.CodeAnalysis.CSharp.Syntax
 
 //type DebugPredicate = |ByName of (string -> DebugOpt) |ByExpr of (SyntaxNode -> DebugOpt)
 module ScriptOptions = 
+    let TypeAttributes = []
     let searchLinqPadQueriesForSample() =
         let myDocs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
         Path.Combine(myDocs,"LINQPad Queries","Roslyn")
@@ -282,10 +283,11 @@ let rec mapNode (memberNames:Set<string>) (getDebugOpt: DebugDelegate) (node:Syn
     match node with
     | null -> failwithf "null node"
     | :? BlockSyntax as bs -> "BlockSyntax", mapChildren "\r\n" bs
+    | :? ElseClauseSyntax as ecs -> "ElseClauseSyntax", sprintf " else %s " (mapNodeP ecs.Statement)
     | :? ReturnStatementSyntax as rss -> "ReturnStatementSyntax", mapChildren  "\r\n" rss
     | :? InvocationExpressionSyntax as ies -> 
         
-        let expr = mapNodeP ies
+        let expr = mapNodeP ies.Expression
         if expr.Contains("AddMinutes") then
             dump "IES:AddMinutes" ies.ArgumentList.Arguments.[0]
         let ignoredResult = expr.StartsWith("builder.Append")
@@ -332,23 +334,23 @@ let rec mapNode (memberNames:Set<string>) (getDebugOpt: DebugDelegate) (node:Syn
             if gpk <> SyntaxKind.CaseSwitchLabel && ggpFull |>  String.contains "decimal" && full |> String.contains "." |> not then 
                 "NumericLiteralExpression.decimal", (full + "m")
             else 
-                printNodeDiagnostics les
-                dump "NLE ggp" ggpFull
-                dump "NLE gpk" gpk
-                dump "NLE pk" <| les.Parent.Kind()
-                dump "NLE" full
+                //printNodeDiagnostics les
+                //dump "NLE ggp" ggpFull
+                //dump "NLE gpk" gpk
+                //dump "NLE pk" <| les.Parent.Kind()
+                //dump "NLE" full
 
                 "NumericLiteralExpression", full 
         | _ -> "NullableTypeSyntax", (toFull les)
     | :? SwitchStatementSyntax as sss ->
-        let sections =  "\r\n" + (Array.ofSeq sss.Sections |> Seq.map mapNodeP |> String.join "\r\n")
+        let sections =  "(*switchstatement start*)\r\n" + (Array.ofSeq sss.Sections |> Seq.map mapNodeP |> String.join String.Empty)
         "SwitchStatementSyntax", sprintf "match %s with %s" (mapNodeP sss.Expression) sections
     | :? IfStatementSyntax as ifss -> 
         let statement = mapNodeP ifss.Statement
         let elseblock = if ifss.Else <> null then mapNodeP ifss.Else |> Some else None
         let elseblock,matchType = match elseblock with Some text -> sprintf " %s" text,"IfElseStatementSyntax" | _ -> String.Empty,"IfStatementSyntax"
         
-        let statements = if statement.Contains("\r\n") then "\r\n" + ScriptOptions.spacing + (String.replace "\r\n" ("\r\n" + ScriptOptions.spacing) statement) else statement 
+        let statements = if statement.Contains("\r\n") then "(*switchstatement multiline*)\r\n" + ScriptOptions.spacing + (String.replace "\r\n" ("\r\n" + ScriptOptions.spacing) statement) else statement 
         matchType, sprintf "if %s then %s%s" (mapNodeP ifss.Condition) statements elseblock
     | :? PrefixUnaryExpressionSyntax as pues -> "PrefixUnaryExpressionSyntax", sprintf "not <| ( %s )" (mapNodeP pues.Operand) 
     | :? SwitchSectionSyntax as sss ->
@@ -359,12 +361,12 @@ let rec mapNode (memberNames:Set<string>) (getDebugOpt: DebugDelegate) (node:Syn
             if Seq.isEmpty statements then 
                 "SwitchSectionSyntax.nostatements", sprintf "%s" label
             else
-                let statement = statements |> Seq.map mapNodeP |> String.join ("\r\n" + ScriptOptions.spacing)
+                let statement = statements |> Seq.map mapNodeP |> String.join ("(*switch section end*)\r\n" + ScriptOptions.spacing)
                 let statement = ScriptOptions.spacing + statement
                 if String.IsNullOrEmpty(statement) then 
                     "SwitchSectionSyntax.labelOnly", sprintf "%s" label
                 else
-                    "SwitchSectionSyntax", sprintf"%s ->\r\n%s" label statement
+                    "SwitchSectionSyntax", sprintf"%s ->%s" label statement
     | :? DefaultSwitchLabelSyntax as dsls -> "DefaultSwitchLabelSyntax", "|_"
     | :? SwitchLabelSyntax as sls ->
         printNodeDiagnostics sls
@@ -403,7 +405,7 @@ let rec mapNode (memberNames:Set<string>) (getDebugOpt: DebugDelegate) (node:Syn
         let ident = ins.Identifier
         if ident.ValueText = null then failwithf "no ValueText for ins %s" (toFull ins)
         let value = mapName ins.Identifier.ValueText
-        dump "ins" <| sprintf "(parentType %A, parent %A, isVar %A, arity %A,identifier %A,kind %A)" (ins.Parent.GetType()) ins.Parent ins.IsVar ins.Arity ins.Identifier (ins.Kind())
+        //dump "ins" <| sprintf "(parentType %A, parent %A, isVar %A, arity %A,identifier %A,kind %A)" (ins.Parent.GetType()) ins.Parent ins.IsVar ins.Arity ins.Identifier (ins.Kind())
         if memberNames.Contains(value) && value.Contains(".") = false && ins.Parent :? MemberAccessExpressionSyntax = false then
             "Ins:(propName)", sprintf "x.%s" value
         else
@@ -614,7 +616,7 @@ module FieldConversion =
             |_ -> 
                 let children = vDeclaration.ChildNodes() |> Array.ofSeq
                 let inline debugLines node items = debugLines node items
-                match vDeclaration.DescendantNodes() |> Array.ofSeq with
+                match vDeclaration.DescendantNodes() |> Array.ofSeq with //descendant nodes was a poor choice, but it's serving some purpose now
                 | NullableSimplerInit -> fDec eqNullable  "NullableSimplerInit"
                 | NullableSimpleInit -> fDec eqNullable  "NullableSimpleInit"
                 | SimplerInit(_,_) -> fDec  (if type'.Contains("Nullable") then eqNullable  else  "=null") "simpler init" //(Some (fun shouldLift -> if shouldLift then "Nullable()" else fDec "null"))
@@ -746,7 +748,8 @@ module PropConversion =
 
 let convertFile (cls:FileInfoB) = 
     let debugOpt,getDebugOpt = ScriptOptions.startDebugState None (ScriptOptions.isDebugCode cls.File)
-    let text = "[<AllowNullLiteral>]\r\ntype " + cls.Class' + "() = \r\n  inherit FSharp.ViewModule.ViewModelBase()\r\n\r\n"
+    let attrs = ScriptOptions.TypeAttributes |> Seq.map (fun ta -> sprintf "[<%s>]" ta) |> String.join "\r\n" 
+    let text = sprintf "%s\r\ntype %s() = \r\n  inherit FSharp.ViewModule.ViewModelBase()\r\n\r\n" attrs cls.Class' 
     let text = new System.Text.StringBuilder(text)
     let fieldText = FieldConversion.convertFileFields cls getDebugOpt
     let props = PropConversion.convertProperties cls

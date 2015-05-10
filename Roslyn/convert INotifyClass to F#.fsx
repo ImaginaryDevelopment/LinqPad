@@ -11,6 +11,7 @@ open System.IO
 #r @"Microsoft.CodeAnalysis.dll"
 #r @"Microsoft.CodeAnalysis.CSharp.dll"
 #endif
+
 type System.String with
     static member before (d:string) (s:string) = s.Substring(0, s.IndexOf(d))
     static member after (d:string) (s:string) = s.Substring( s.IndexOf(d) + d.Length)
@@ -19,7 +20,7 @@ type System.String with
     static member trim (s:string) = s.Trim()
     static member join d (items:string seq) = String.Join(d,items |> Array.ofSeq)
     static member replace (d:string) r (s:string)= s.Replace(d,r)
-
+    static member splitLines (s:string) = s.Split(["\r\n"]|> Array.ofSeq, StringSplitOptions.RemoveEmptyEntries)
 
 type Identifier = | Identifier of string
 type Path = |Path of string
@@ -39,6 +40,7 @@ open Microsoft.CodeAnalysis.CSharp.Syntax
 
 //type DebugPredicate = |ByName of (string -> DebugOpt) |ByExpr of (SyntaxNode -> DebugOpt)
 module ScriptOptions = 
+    let TypeAttributes = []
     let searchLinqPadQueriesForSample() =
         let myDocs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
         Path.Combine(myDocs,"LINQPad Queries","Roslyn")
@@ -60,7 +62,14 @@ module ScriptOptions =
     let promoteUninitializedStructsToNullable = true
     let includeOriginalInComments = true
     let includeMatchTypeInComments = true
+    let selfIdentifier = "x"
     let spacing = "  "
+    let isDebugFieldPred name = if name ="_AppointmentEndTime" then Promote else Demote
+    let isDebugPropPred name = if name = "LOS" then Promote else Demote
+    let isDebugCode code = match code with | Code(p,s) -> Abstain 
+    let isDebugClass name =name |> ignore; Abstain
+    let isDebugNode (node: #SyntaxNode) = Abstain
+    let isDebugNodeResult text= Abstain // if String.contains text "AddMinutes" then Promote else Abstain
     let rec startDebugState state vote : DebugOpt * DebugDelegate =
         let state = 
             match state,vote with
@@ -77,12 +86,6 @@ module ScriptOptions =
         state,dd
     let getNextDebugState debugDelegate vote =
         match debugDelegate with |DebugDelegate getDebugOpt -> getDebugOpt vote
-    let selfIdentifier = "x"
-    let isDebugCode code = match code with | Code(p,s) -> Abstain 
-    let isDebugClass name =name |> ignore; Abstain
-    let isDebugFieldPred name = if name ="_AppointmentEndTime" then Promote else Demote
-    let isDebugPropPred name = if name = "AppointmentStartDate" then Promote else Demote
-    let isDebugNode (node: #SyntaxNode) = Abstain
     //let private debugIndent spc debug = match debug with |Yes -> Indent spc |Indent indent -> Indent (indent + spc) | No -> No
     
     let childGetDebugOptions (dd: DebugDelegate) (f:unit->DebugVote):DebugOpt*DebugDelegate =
@@ -126,6 +129,11 @@ module Helpers =
     let readAllText filePath = File.ReadAllText(filePath)
     let inline flip f arg1 arg2 = f arg2 arg1
     
+    // let test = <@ typeof<BlockSyntax> @>
+    let typeToString= function
+        |FSharp.Quotations.Patterns.Call (e,r,children) -> printfn "Call %A,%A,%A" e (r.GetGenericArguments()) children
+        |_ as x -> failwithf "call must match typeof<Foo> %A" x
+
     let inline sprintForDump title o = sprintf "%s:%A" title o
     
     #if INTERACTIVE
@@ -133,17 +141,19 @@ module Helpers =
     #else
     let inline private dumps' (s:string) (o:'a) : 'a = o.Dump(s,Nullable(1)); o
     #endif
-    let dumps s o debugOpt = 
+    let dumps s debugOpt o = 
         match debugOpt with | Yes -> dumps' s o | Indent spc -> dumps' (sprintf "%s%s" spc s) o | No -> o
-    let dump title o debugOpt = 
-        dumps title o debugOpt |> ignore
+    let dump title debugOpt o  = 
+        dumps title debugOpt o |> ignore
+    let dumpf t debugOpt f s = 
+        let shouldBeUnit = f s |> dumps t debugOpt
+        shouldBeUnit|> ignore // ignore f of s, return s
+        s
     let debugLines debug (lines:string seq) = 
         match debug with
         | Yes -> Seq.iterDump lines
         | Indent spc -> Seq.iterDumpInd spc lines
         | No -> ()
-    
-
     
     // alternate implementation
     //let ofType<'a> (items: _ seq) = items |> Seq.filter(fun x -> box x :? 'a) |> Seq.cast<'a>
@@ -251,7 +261,7 @@ let toSyntaxNodeOpt x = match x with | Some n -> n :> SyntaxNode |> Some | None 
 
 let rec mapNode (memberNames:Set<string>) (getDebugOpt: DebugDelegate) (node:SyntaxNode) =
     let debugOption, getDebugOpt = ScriptOptions.getNextDebugState getDebugOpt (ScriptOptions.isDebugNode node)
-    let inline dumps title (o:'a) :'a = dumps title o debugOption
+    let inline dumps title (o:'a) :'a = dumps title debugOption o
     let inline dump title o : unit = dumps title o |> ignore
     
     let printNodeDiagnostics (n: #SyntaxNode) =
@@ -262,11 +272,8 @@ let rec mapNode (memberNames:Set<string>) (getDebugOpt: DebugDelegate) (node:Syn
         dump "HasTrivia" (n.HasLeadingTrivia, n.HasStructuredTrivia, n.HasTrailingTrivia)
         dump "missing,isstructured" (n.IsMissing, n.IsStructuredTrivia)
 
-    let dumpf t f s = 
-        f s |> dumps t |> ignore // ignore f of s, return s
-        s
     let mapNodeP node = mapNode memberNames getDebugOpt node
-    let dumpResult matchType r = dumpf matchType (fun r-> (node.GetType().Name + "," + matchType + "," + node.Kind().ToString()) + "=\""+ r.ToString()+"\"") r
+    
     let mapChildren delimiter (node:#SyntaxNode) = node.ChildNodes() |> Seq.map mapNodeP |> String.join delimiter
     
     match node with
@@ -277,7 +284,8 @@ let rec mapNode (memberNames:Set<string>) (getDebugOpt: DebugDelegate) (node:Syn
     | :? InvocationExpressionSyntax as ies -> 
         
         let expr = mapNodeP ies.Expression
-        if expr.Contains("AddMinutes") then
+
+        if  expr.Contains("AddMinutes") then
             dump "IES:AddMinutes" ies.ArgumentList.Arguments.[0]
         let ignoredResult = expr.StartsWith("builder.Append")
         
@@ -298,7 +306,7 @@ let rec mapNode (memberNames:Set<string>) (getDebugOpt: DebugDelegate) (node:Syn
 
         | _ -> 
             dump "ldss" <| sprintf "%A" (ldss.Declaration.Type, ldss.Declaration.Variables.Count, ldss.Declaration.Variables.[0])
-            "LocalDeclarationStatementSyntax", ldss |> dumpf "ldl" (fun n -> n.ChildNodes()) |> toFull |> String.replace "var " "let " |> String.trim
+            "LocalDeclarationStatementSyntax", ldss |> toFull |> String.replace "var " "let " |> String.trim
     | :? ConditionalExpressionSyntax as ces ->
         "ConditionalExpressionSyntax", sprintf "(if %s then %s else %s )" (mapNodeP ces.Condition) (mapNodeP ces.WhenTrue) (mapNodeP ces.WhenFalse)
     | :? ParenthesizedExpressionSyntax as pes ->
@@ -332,17 +340,21 @@ let rec mapNode (memberNames:Set<string>) (getDebugOpt: DebugDelegate) (node:Syn
                 "NumericLiteralExpression", full 
         | _ -> "NullableTypeSyntax", (toFull les)
     | :? SwitchStatementSyntax as sss ->
-        let sections =  "\r\n" + (Array.ofSeq sss.Sections |> Seq.map mapNodeP |> String.join "\r\n")
+        let sections =  "(*switchstatement start*)\r\n" + (Array.ofSeq sss.Sections |> Seq.map mapNodeP |> String.join String.Empty)
         "SwitchStatementSyntax", sprintf "match %s with %s" (mapNodeP sss.Expression) sections
+
     | :? IfStatementSyntax as ifss -> 
         let statement = mapNodeP ifss.Statement
-        let elseblock = if ifss.Else <> null then mapNodeP ifss.Else |> Some else None
+        let elseblock = if ifss.Else <> null then dumps "found else!" <| mapNodeP ifss.Else |> Some else None
         let elseblock,matchType = match elseblock with Some text -> sprintf " %s" text,"IfElseStatementSyntax" | _ -> String.Empty,"IfStatementSyntax"
-        
-        let statements = if statement.Contains("\r\n") then "\r\n" + ScriptOptions.spacing + (String.replace "\r\n" ("\r\n" + ScriptOptions.spacing) statement) else statement 
+        let statements = if statement.Contains("\r\n") then "(*switchstatement multiline*)\r\n" + ScriptOptions.spacing + (String.replace "\r\n" ("\r\n" + ScriptOptions.spacing) statement) + "\r\n" else statement 
         matchType, sprintf "if %s then %s%s" (mapNodeP ifss.Condition) statements elseblock
+
     | :? PrefixUnaryExpressionSyntax as pues -> "PrefixUnaryExpressionSyntax", sprintf "not <| ( %s )" (mapNodeP pues.Operand) 
     | :? SwitchSectionSyntax as sss ->
+            let indentReplace text = 
+                let indent text =ScriptOptions.spacing + text + "\r\n" 
+                if String.trim text |> String.contains "\r\n" then "\r\n" +  text |> String.splitLines |> Seq.map (fun s -> ScriptOptions.spacing + s) |> String.join "\r\n"  else text
             let labels,statements = sss.Labels |> Array.ofSeq, sss.Statements |> Array.ofSeq
             let label = labels |> Seq.map mapNodeP |> Array.ofSeq
             let label = String.join String.Empty label
@@ -350,20 +362,27 @@ let rec mapNode (memberNames:Set<string>) (getDebugOpt: DebugDelegate) (node:Syn
             if Seq.isEmpty statements then 
                 "SwitchSectionSyntax.nostatements", sprintf "%s" label
             else
-                let statement = statements |> Seq.map mapNodeP |> String.join ("\r\n" + ScriptOptions.spacing)
-                let statement = ScriptOptions.spacing + statement
+                let statement = statements |> Seq.map mapNodeP |> String.join ("(*switch section end*)\r\n") |> indentReplace 
+                //let statement = ScriptOptions.spacing + statement
                 if String.IsNullOrEmpty(statement) then 
                     "SwitchSectionSyntax.labelOnly", sprintf "%s" label
+                else if statement |> String.trim |> String.contains "\r\n" then
+                    "SwitchSectionSyntax.multiStatement", sprintf "%s ->\r\n%s" label statement
                 else
-                    "SwitchSectionSyntax", sprintf"%s ->\r\n%s" label statement
+                    "SwitchSectionSyntax", sprintf"%s ->%s" label statement
     | :? DefaultSwitchLabelSyntax as dsls -> "DefaultSwitchLabelSyntax", "|_"
     | :? SwitchLabelSyntax as sls ->
         printNodeDiagnostics sls
         let children = sls.ChildNodes() |> Array.ofSeq
         if children.Length = 1 then
-            "SwitchLabelSyntax", sprintf "|%s" (mapNodeP children.[0])
+            if children.[0] :? BlockSyntax then
+                "SwitchLabelSyntax(bs)", sprintf "|%s" (mapNodeP children.[0])
             else
-                "SwitchLabelSyntax", toFull sls
+                dump "SwitchLabelChild" children.[0]
+                "SwitchLabelSyntax(1)", sprintf "|%s" (mapNodeP children.[0])
+        else
+            dump "SwitchLabelChildren" children
+            "SwitchLabelSyntax", toFull sls
     | :? AssignmentExpressionSyntax as aes -> "AssignmentExpressionSyntax", sprintf "%s <- %s" (mapNodeP aes.Left) (mapNodeP aes.Right)
     | :? BreakStatementSyntax as bss ->
         "BreakStatementSyntax", String.Empty
@@ -414,7 +433,10 @@ let rec mapNode (memberNames:Set<string>) (getDebugOpt: DebugDelegate) (node:Syn
             //result |> dumps "mapNode:AddExpressionText" |> ignore
         "AddExpression", result
     | _ -> "default",node |> toFull
-    |> fun (t,o) -> dumpResult (sprintf "%s.%s" t <| node.Kind().ToString()) o
+    |> fun (t,o) -> 
+        let debugOption,getDebugOpt = ScriptOptions.getNextDebugState getDebugOpt (ScriptOptions.isDebugNodeResult o)
+        let dumpResult matchType r = dumpf matchType debugOption (fun r-> (node.GetType().Name + "," + matchType + "," + node.Kind().ToString()) + "=\""+ r.ToString()+"\"") r
+        dumpResult (sprintf "%s.%s" t <| node.Kind().ToString()) o
 
 let mapNodeChildren (memberNames:Set<string>) (getDebugOpt:DebugDelegate) delimiter (node:#SyntaxNode) = 
     let debugOption, getDebugOpt = ScriptOptions.getNextDebugState getDebugOpt (ScriptOptions.isDebugNode node)
@@ -605,7 +627,7 @@ module FieldConversion =
             |_ -> 
                 let children = vDeclaration.ChildNodes() |> Array.ofSeq
                 let inline debugLines node items = debugLines node items
-                match vDeclaration.DescendantNodes() |> Array.ofSeq with
+                match vDeclaration.DescendantNodes() |> Array.ofSeq with //descendant nodes was a poor choice, but it's serving some purpose now
                 | NullableSimplerInit -> fDec eqNullable  "NullableSimplerInit"
                 | NullableSimpleInit -> fDec eqNullable  "NullableSimpleInit"
                 | SimplerInit(_,_) -> fDec  (if type'.Contains("Nullable") then eqNullable  else  "=null") "simpler init" //(Some (fun shouldLift -> if shouldLift then "Nullable()" else fDec "null"))
@@ -669,7 +691,9 @@ module PropConversion =
         let mapNode x :string = mapNode getDebugOpt x
         let mapAccessor name type' (nodes:SyntaxNode[]) = 
             
-            nodes |> Seq.map(fun n -> n.Kind()) |> (dumps <| sprintf "%s nodes for %s" type' pib.PropertyName) |> ignore
+            let dumpNodeKindInfo =
+                nodes |> Seq.map(fun n -> n.Kind()) |> (dumps <| sprintf "%s nodes for %s" type' pib.PropertyName <| debugOpt) 
+                |> ignore
             if Seq.isEmpty nodes then //autoprop
                 failwithf "map %s is not set up for empty nodes" type'
             //let mapped = nodes |> Seq.map mapNode // why are you a warning? the type has been constrainted to be SyntaxNode
@@ -682,8 +706,7 @@ module PropConversion =
 
             let mapped = String.join ScriptOptions.spacing mapped
             let mapped = if mapped.Contains("\r\n") then "\r\n" + mapped else mapped
-            dump "Mapnodesresult" mapped debugOpt
-            mapped
+            dumps "MapAccessorNodesResult" debugOpt mapped
 
         let mapGetter name = mapAccessor name "getter"
         let mapSetter name = mapAccessor name "setter"
@@ -695,7 +718,7 @@ module PropConversion =
             let spacing = ScriptOptions.spacing + ScriptOptions.spacing + ScriptOptions.spacing
             let mapAccessor map childnodes = childnodes |> Seq.toArray |> map pib.PropertyName |> String.replace "\r\n" (sprintf "\r\n%s" spacing) |> Some
             let mapGetter (getter:AccessorDeclarationSyntax) = getter.ChildNodes()|> mapAccessor mapGetter
-            let mapSetter (setter:AccessorDeclarationSyntax) = setter.ChildNodes() |> mapAccessor mapSetter 
+            let mapSetter (setter:AccessorDeclarationSyntax) = setter.ChildNodes()|> mapAccessor mapSetter
             match pib.Getter,pib.Setter with
             | AutoProperty -> 
                 let value = match pib.Type with | "bool" -> "false" | _ -> "null"
@@ -737,7 +760,8 @@ module PropConversion =
 
 let convertFile (cls:FileInfoB) = 
     let debugOpt,getDebugOpt = ScriptOptions.startDebugState None (ScriptOptions.isDebugCode cls.File)
-    let text = "[<AllowNullLiteral>]\r\ntype " + cls.Class' + "() = \r\n  inherit FSharp.ViewModule.ViewModelBase()\r\n\r\n"
+    let attrs = ScriptOptions.TypeAttributes |> Seq.map (fun ta -> sprintf "[<%s>]" ta) |> String.join "\r\n" 
+    let text = sprintf "%s\r\ntype %s() = \r\n  inherit FSharp.ViewModule.ViewModelBase()\r\n\r\n" attrs cls.Class' 
     let text = new System.Text.StringBuilder(text)
     let fieldText = FieldConversion.convertFileFields cls getDebugOpt
     let props = PropConversion.convertProperties cls
