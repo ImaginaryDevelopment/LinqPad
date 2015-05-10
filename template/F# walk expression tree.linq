@@ -10,7 +10,11 @@
 //	p.GetValue(this,null) :?> 'Result
 	
 type thing = {First:int; Second: int}
-
+// let test = <@ typeof<BlockSyntax> @>
+let typeToString= function
+        |FSharp.Quotations.Patterns.Call (e,r,children) -> printfn "Call %A,%A,%A" e (r.GetGenericArguments().[0].Name) children
+        |_ as x -> failwithf "call must match typeof<Foo> %A" x
+		
 let something = Some({thing.First = 1; Second = 2})
 let nothing = Option<thing>.None
 let maybe (expr:Expr<_>) : unit = 
