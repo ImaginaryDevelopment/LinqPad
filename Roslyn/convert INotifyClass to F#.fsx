@@ -7,6 +7,7 @@ open System.IO
 #r "System.Text.Encoding"
 #r "System.IO"
 #if MONO
+#r "./usr/lib/mono/4.5/Facades/System.Runtime.dll"
 #r "./packages/System.Collections.Immutable.1.1.33-beta/lib/portable-net45+win8+wp8+wpa81/System.Collections.Immutable"
 #else
 #r "System.Collections.Immutable"
