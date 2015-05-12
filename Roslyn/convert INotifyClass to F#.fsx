@@ -2,7 +2,6 @@
 open System.Collections.Generic
 open System.IO
 #if INTERACTIVE
-#r "System.Runtime"
 #r "System.Threading.Tasks"
 #r "System.Text.Encoding"
 #r "System.IO"
@@ -10,6 +9,7 @@ open System.IO
 #r "/usr/lib/mono/4.5/Facades/System.Runtime.dll"
 #r "./packages/System.Collections.Immutable.1.1.33-beta/lib/portable-net45+win8+wp8+wpa81/System.Collections.Immutable"
 #else
+#r "System.Runtime"
 #r "System.Collections.Immutable"
 #I @"C:\Program Files (x86)\Microsoft Web Tools\DNX\dnx-clr-win-x64.1.0.0-beta4\bin\"
 #r @"Microsoft.CodeAnalysis.dll"
