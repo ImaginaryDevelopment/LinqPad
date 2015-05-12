@@ -2,10 +2,9 @@
 open System.Collections.Generic
 open System.IO
 #if INTERACTIVE
-#r "System.Threading.Tasks"
 #r "System.Text.Encoding"
-#r "System.IO"
 #if MONO
+#I "System.IO"/usr/lib/mono/4.5/Facades/"
 #r "/usr/lib/mono/4.5/Facades/System.Runtime.dll"
 #r "./packages/System.Collections.Immutable.1.1.33-beta/lib/portable-net45+win8+wp8+wpa81/System.Collections.Immutable"
 #else
@@ -15,6 +14,7 @@ open System.IO
 #r @"Microsoft.CodeAnalysis.dll"
 #r @"Microsoft.CodeAnalysis.CSharp.dll"
 #endif
+#r "System.Threading.Tasks"
 #endif
 
 
