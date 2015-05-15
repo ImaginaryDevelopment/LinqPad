@@ -2,9 +2,8 @@
 open System.Collections.Generic
 open System.IO
 #if INTERACTIVE
-#r "System.Text.Encoding"
 #if MONO
-#I "System.IO"/usr/lib/mono/4.5/Facades/"
+#I "/usr/lib/mono/4.5/Facades/"
 #r "/usr/lib/mono/4.5/Facades/System.Runtime.dll"
 #r "./packages/System.Collections.Immutable.1.1.33-beta/lib/portable-net45+win8+wp8+wpa81/System.Collections.Immutable"
 #else
@@ -14,6 +13,7 @@ open System.IO
 #r @"Microsoft.CodeAnalysis.dll"
 #r @"Microsoft.CodeAnalysis.CSharp.dll"
 #endif
+#r "System.Text.Encoding"
 #r "System.Threading.Tasks"
 #endif
 
@@ -110,7 +110,7 @@ module Helpers =
     
     // let test = <@ typeof<BlockSyntax> @>
     let typeToString= function
-        |FSharp.Quotations.Patterns.Call (e,r,children) -> printfn "Call %A,%A,%A" e (r.GetGenericArguments().[0].Name) children
+        |Microsoft.FSharp.Quotations.Patterns.Call (e,r,children) -> printfn "Call %A,%A,%A" e (r.GetGenericArguments().[0].Name) children
         |_ as x -> failwithf "call must match typeof<Foo> %A" x
 
     let inline sprintForDump title o = sprintf "%s:%A" title o
@@ -525,7 +525,7 @@ let q() =
 
 
 let findModel name fileInfoBseq  = 
-    fileInfoBseq |> Seq.tryFind(fun fib -> fib.Class' = name ||fib.Class'.StartsWith(name))
+    fileInfoBseq |> Seq.tryFind(fun fib -> fib.Class' = name || fib.Class'.StartsWith(name))
 module Declarations = 
     let (|EmptyEnumerable|NonEmpty|) (items: _ IEnumerable) =
         if Seq.isEmpty items then EmptyEnumerable else NonEmpty
