@@ -84,34 +84,32 @@ let createIncLive desc =
 	let inc,src,completed =createIncObservable()
 	src.DumpLatest(desc,true) |> ignore
 	inc,completed
-//let directoriesChecked = 
-//	let source = new ObservableSource<int>()
-//	source.AsObservable.DumpLatest("directoriesChecked",true) |> ignore
-//	source
-//let mutable directoriesCheckedint = 0
 
 let directoryChecked,directoriesCompleted =createIncLive "directoriesChecked"
 
-let filesChecked = 
-	let source = new ObservableSource<int>()
-	source.AsObservable.DumpLatest("filesChecked",true) |> ignore
-	source
+let fileChecked, filesCompleted = createIncLive "filesChecked"
 
 let rec findDupes code dir =
-	//dir.Dump("checking")
 	directoryChecked()
-//	directoriesCheckedint <- directoriesCheckedint + 1
-//	directoriesChecked.Next(directoriesCheckedint)
 	seq {
 		for f in getFiles dir do
 			let text = tryGetText f
 			match text with
-			|Success text -> if text.Contains(code) then yield (DupeFound, f)
+			|Success text -> 
+				fileChecked()
+				if text.Contains(code) then yield (DupeFound, f)
 			|Failure ex -> yield (FileReadFailure ex, f)
 		for d in getDirs dir do
 			yield! findDupes code d
-	}	
+	}
 	
-findDupes smallSample dir |> Dump
-directoriesCompleted()
-filesChecked.Completed()
+let findAsync () = 
+	let r = async {
+		return findDupes smallSample dir
+		
+		}
+	r.GetType().Dump()
+	
+	r.Dump()
+	directoriesCompleted()
+	filesCompleted()
