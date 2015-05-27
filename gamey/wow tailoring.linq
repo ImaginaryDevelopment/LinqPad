@@ -17,6 +17,7 @@ var wiki= Util.Cache( () => {
 	html = null;
 	GC.Collect();
 	//var nav =doc.CreateNavigator();
+	// http://stackoverflow.com/questions/1604471/how-can-i-find-an-element-by-css-class-with-xpath
 	return doc.DocumentNode.SelectNodes("//table[contains(concat(' ',@class,' '),' darktable ')]//tr").ToArray();
 	//return nav;
 });
