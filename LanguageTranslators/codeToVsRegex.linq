@@ -17,9 +17,21 @@ var output = input
 	.Replace("+",@"\+")
 	.Replace("\r",@"\r")
 	.Replace("\n",@"\n")
+	.Replace("|",@"\|")
 	.Dump("initialConversion")
 	;
 // cmd\.Parameters\.Add\("(?<name>\w+)", SqlDbType\..*\)\.Value = (.*);
+
+// awesomeness: \(reader\[(?<name>"\w+")\] == DBNull\.Value\) \? (.+) : Convert\.(\w+)\(reader\[\k<name>\]\)
+// 	replacement: reader.ReadValueMap($3, Convert.$2) ?? $1
+
+// toString: \(reader\[(?<name>"\w+")\] == DBNull\.Value\) \? (.*) : \(reader\[\k<name>\]\.ToString\(\){1,2}
+// 	replacement: reader.ReadToString($2) ?? $1
+// as: \(reader\[(?<name>"\w+")\] == DBNull\.Value\) \? null : reader\[\k<name>\] as ([^;]+)
+// 	replacement: reader.ReadMap($2, o => o as $1)
+
+// complex?: \(reader\[(?<name>"\w+")\] == DBNull\.Value \|\| reader\[\k<name>\]\.ToString\(\) == string\.Empty\) \? (.+) : Convert\.(\w+)\(reader\[\k<name>\]\)
+// 	replacement: reader.ReadValueMapIf($3, o => o.ToString() != string.Empty, Convert.$2) ?? $1
 bool doContinue = true;
 while(doContinue){
 	var suggestions = input.Contains("\"")? input.Replace("(",string.Empty).Replace(")",string.Empty).Split('"').ToArray() : Enumerable.Empty<string>();
