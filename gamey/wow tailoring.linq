@@ -3,6 +3,12 @@
   <NuGetReference>Newtonsoft.Json</NuGetReference>
 </Query>
 
+// purpose, determine how many of what are required to make bags
+// without hardcoding the bag types and components
+// i.e. someone asks for a silk bag, this returns how many silk cloth would be needed (optionally any thing else required to make the bag)
+
+
+// Util.Cache tells linqpad to pull this variable in once, and reuse the variable on every execution, instead of everytime the script runs
 var wiki= Util.Cache( () => {
 	var src ="http://www.wowhead.com/skill=197/tailoring";
 	//item lookup? http://www.wowhead.com/item=2589&power
@@ -53,7 +59,7 @@ var recipeRows = wiki
 	.Select(x => x.Before("new Listview(").BeforeLast("}") +"}")
 	.Select(x => x.Replace("name: LANG.tab_recipes, tabs: tabsRelated,",string.Empty))
 	.Select(x => Regex.Replace(x,@"note: \$WH.sprintf\([^)]+\),",String.Empty))
-	//.Dump()
+	
 	
 	.Select(x => 
 		new{ Mapped= 
@@ -63,29 +69,62 @@ var recipeRows = wiki
 						new {cat=1,creates=new int []{},id=1,learnedat=1,name="",reagents = new int[][]{}
 					}	
 				}, 
-				//new Newtonsoft.Json.JsonSerializerSettings(){ TypeNameHandling= Newtonsoft.Json.TypeNameHandling.None, PreserveReferencesHandling= Newtonsoft.Json.PreserveReferencesHandling.None, MissingMemberHandling= Newtonsoft.Json.MissingMemberHandling.Ignore 
 				}),
 		x})
+	//.Dump("rRow")
+		//throw away raw view, select just the mapped data
 	.SelectMany(x =>
 		x.Mapped.data)
 	.Where(x => x.name.EndsWith("Bag") || x.name.Contains("Bolt"))	
-	.Select(x => new {x.cat,Creates = x.creates[0], x.id,x.learnedat, Name=x.name.Substring(1),Reagents = x.reagents.Select(r =>new KeyValuePair<int,int>(r[0],r[1]))})
+	.Select(x => new {x.cat,Creates =x.creates !=null? x.creates[0]:0, x.id,x.learnedat, Name=x.name.Substring(1),Reagents = x.reagents.Select(r =>new KeyValuePair<int,int>(r[0],r[1]))})
+	.OrderByDescending(x => x.Name.EndsWith("Bag"))
+	.ThenByDescending(x=>x.learnedat)
+	//.Dump("recipe rows")
+	;
 	
-	.Dump();
-var q = from r in recipeRows
+	
+var bagRecipes = from r in recipeRows
 	let reagents = 
 		from reag in r.Reagents 
-		join i in itemRows 
-		on reag.Key equals i.id 
-		//let //clothForBolts = //i.Mapped.name_enus.Contains("Bolt") ? 
-		let subcomponents = 
-			//recipeRows.Where(boltRecipes => boltRecipes.id == i.id).Select(br => br.Reagents).First(): Enumerable.Empty<KeyValuePair<int,int>>()
-			recipeRows.Where(br => br.Creates == reag.Key).Select(rr => new { reag.Key, rr.Name,rr.Reagents}).FirstOrDefault()
-		let total = subcomponents!=null && subcomponents.Reagents.Any()? (subcomponents.Reagents.Sum(subReag =>subReag.Value * reag.Value )) : 0
-		select new{i.id,reag.Value,i.Mapped.name_enus,subcomponents
-		,Total = total
+		join itemL in itemRows
+		on reag.Key equals itemL.id into itemLeft
+		from itemRow in itemLeft.DefaultIfEmpty()
+		select new{
+			Id=reag.Key,
+			Count = reag.Value,
+			Name=itemRow != null? itemRow.Mapped.name_enus : null
+		
+		//,Total = total
 		}
 	
-	select new{r.id, r.Name,reagents};
+	select new{
+		r.id,
+		r.Name,
+		Requirements =reagents
+		//, r.Reagents
+	};
 	
-	q.Dump();
+	bagRecipes.Dump();
+
+var bagRecipesDisplay = 
+	from br in bagRecipes
+	let cloths = br.Requirements.FirstOrDefault(brr => brr.Name != null)
+	select new{ Name=new Hyperlinq("http://www.wowhead.com/spell="+br.id+"&power", br.Name), br.id, br.Requirements, cloths};
+	
+	bagRecipesDisplay.Dump();
+//	
+//		//let parts = recipeRows.Where(p => p.id== 
+//		let subcomponents = // things that can be created with tailoring
+//			//recipeRows.Where(boltRecipes => boltRecipes.id == i.id).Select(br => br.Reagents).First(): Enumerable.Empty<KeyValuePair<int,int>>()
+//			recipeRows
+//			.Where(br => br.Creates == reag.Key)
+//			.Dump("recipe row")
+//			.Select(rr => 
+//				rr.Reagents.Select(subR =>
+//					new{Count= subR.Value,Item=itemRows.Select(subI => new{subI.id,Name= subI.Mapped.name_enus }).First(subI => subI.id == subR.Key)}
+//					)
+//			) //.FirstOrDefault()
+//		let cloths = subcomponents.FirstOrDefault(sc => sc.FirstOrDefault(sc1 => sc1.Item.Name.EndsWith("Cloth")) != null)
+//		//let reagentKeys = reagents.Select(reag => reag.id).ToArray()
+//		let cloth = cloths !=null? cloths.Select(c => new {c.Count, c.Item.Name}).FirstOrDefault() : null
+//		//let total = 
