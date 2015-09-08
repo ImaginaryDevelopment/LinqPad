@@ -1,12 +1,15 @@
-﻿open System
+﻿// configuration of autorun options is done in module ScriptOptions
+open System
 open System.Collections.Generic
-
+#if INTERACTIVE
 #r "System.IO.Compression.FileSystem"
+#I __SOURCE_DIRECTORY__
+
 open System.IO
 
 let srcDir = __SOURCE_DIRECTORY__
 let srcFile = __SOURCE_FILE__
-#I __SOURCE_DIRECTORY__
+
 if String.IsNullOrEmpty srcDir = false && Directory.Exists srcDir then
     Environment.CurrentDirectory <- srcDir
 //needs package
@@ -86,7 +89,6 @@ let getPackageForReference packageLocation dllRelPath dll =
 getPackageForReference (PackageLocation.ById("Microsoft.CodeAnalysis.CSharp")) @"lib\net45\" "Microsoft.CodeAnalysis.CSharp"
 getPackageForReference (PackageLocation.ById("Microsoft.CodeAnalysis.Common")) @"lib\net45\" "Microsoft.CodeAnalysis"
 
-#if INTERACTIVE
 #if MONO
 
 #I "/usr/lib/mono/4.5/Facades/"
@@ -125,7 +127,7 @@ let (|Null|Empty|Single|Multiline|) (s:string)=
     match s with 
     | null -> Null
     | _ when String.IsNullOrEmpty(s) -> Empty
-    | x when String.trim s |> String.contains "\r\n" -> Multiline
+    | _ when String.trim s |> String.contains "\r\n" -> Multiline
     | _ -> Single
 
 type Identifier = | Identifier of string
@@ -152,11 +154,6 @@ open Microsoft.CodeAnalysis.CSharp
 open Microsoft.CodeAnalysis.CSharp.Syntax
 type TypeSpecification = | Type of Type | Kind of SyntaxKind
 
-
-
-//type DebugPredicate = |ByName of (string -> DebugOpt) |ByExpr of (SyntaxNode -> DebugOpt)
-
-        
 type ClassDeclaration = { ClassAttributes: string list; Name:string; BaseClass :string option; Fields: string list; Members: ClassMember list} with
     member x.AttributeText() = x.ClassAttributes |> Seq.map (fun ta -> sprintf "[<%s>]" ta) |> String.join "\r\n" 
     member x.FieldText spacing = x.Fields |> Seq.map (fun f -> spacing + f) |> String.join "\r\n"
@@ -218,10 +215,6 @@ module Helpers =
         | Yes -> Seq.iterDump lines
         | Indent spc -> Seq.iterDumpInd spc lines
         | No -> ()
-    
-    // alternate implementation
-    //let ofType<'a> (items: _ seq) = items |> Seq.filter(fun x -> box x :? 'a) |> Seq.cast<'a>
-
 
 module FileWalker = 
 
@@ -268,7 +261,6 @@ module FileWalker =
         if classesToBases.Count > 0 then
             Some (code,root,classesToBases)
         else None
-
 
 let files source = 
     let codeSourceMap cs = cs |> FileWalker.getSrcCode |> FileWalker.walkCode
@@ -361,6 +353,7 @@ module ScriptOptions =
         files
         |> Seq.choose id
         |> Array.ofSeq
+
 let toFType promoteUninitializedStructsToNullable (t:string) = 
             match String.trim t with
             | nullable when nullable.Contains("?") -> nullable |> String.before "?" |> sprintf "Nullable<%s>"
@@ -591,6 +584,7 @@ let getProperties (root:CompilationUnitSyntax) =
     |> Seq.map mapPropertyDeclaration
 
 type FileInfoB = {File:Code; Class':string; Bases: string list;Fields:FieldDeclarationSyntax list; Properties: PropertyInfoB list}
+
 let q() = 
     let files' = files ScriptOptions.source
     let files' = files' |> Seq.choose id |> Array.ofSeq
@@ -611,6 +605,7 @@ let q() =
 
 let findModel name fileInfoBseq  = 
     fileInfoBseq |> Seq.tryFind(fun fib -> fib.Class' = name || fib.Class'.StartsWith(name))
+
 module Declarations = 
     let (|EmptyEnumerable|NonEmpty|) (items: _ IEnumerable) =
         if Seq.isEmpty items then EmptyEnumerable else NonEmpty
@@ -629,7 +624,7 @@ module Declarations =
             && simpleKinds |> Seq.contains ( nodes.[3].Kind()) then
                 Some (nodes.[0] :?> PredefinedTypeSyntax, nodes.[1] :?> VariableDeclaratorSyntax, nodes.[2] :?> EqualsValueClauseSyntax, nodes.[3] )
             else None
-    
+
     let (|ArrayMatch|_|) (typeSpecifications: TypeSpecification[]) (nodes:SyntaxNode[]) =
         if nodes.Length = typeSpecifications.Length then
             let zipped = Seq.zip typeSpecifications nodes
@@ -669,6 +664,7 @@ module Declarations =
             | EmptyEnumerable,EmptyEnumerable -> Some ()
             | _ -> None
         | _ -> None
+
 module FieldConversion =
     open Declarations 
     type FieldInfoB = {Type:string; Name:string; Initial:string option; Declaration:VariableDeclarationSyntax}
@@ -721,6 +717,7 @@ module FieldConversion =
                 } )
             |> Seq.sortBy (fun f-> f.Name)
             |> Array.ofSeq
+
         let toFField (memberNames:Set<string>) (getDebugOpt:DebugDelegate) (fieldInfoB:FieldInfoB) = 
             let name,type',initial,vDeclaration = mapName fieldInfoB.Name, fieldInfoB.Type, fieldInfoB.Initial, fieldInfoB.Declaration
             //printfn "starting field %s" name
@@ -886,7 +883,6 @@ module PropConversion =
         let f (prop:PropertyInfoB) = toFProp promoteUninitializedStructsToNullable spacing propNames prop getDebugOpt
         props |> Seq.map f
 
-    
 let convertFile promoteUninitializedStructsToNullable (cls:FileInfoB) = 
     let debugOpt,getDebugOpt = ScriptOptions.startDebugState None (ScriptOptions.isDebugCode cls.File)
     let spacing = ScriptOptions.spacing

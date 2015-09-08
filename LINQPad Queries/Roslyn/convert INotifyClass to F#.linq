@@ -3,30 +3,118 @@
   <Reference>&lt;RuntimeDirectory&gt;\System.Text.Encoding.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.Threading.Tasks.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.dll</Reference>
-  <NuGetReference>Microsoft.CodeAnalysis.CSharp</NuGetReference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
+  <NuGetReference>Microsoft.CodeAnalysis.CSharp</NuGetReference>
 </Query>
 
+// configuration of autorun options is done in module ScriptOptions
 open System
 open System.Collections.Generic
-open System.IO
 #if INTERACTIVE
-#r "System.Runtime"
-#r "System.Threading.Tasks"
-#r "System.Text.Encoding"
-#r "System.IO"
+#r "System.IO.Compression.FileSystem"
+#I __SOURCE_DIRECTORY__
+
+open System.IO
+
+let srcDir = __SOURCE_DIRECTORY__
+let srcFile = __SOURCE_FILE__
+
+if String.IsNullOrEmpty srcDir = false && Directory.Exists srcDir then
+    Environment.CurrentDirectory <- srcDir
+//needs package
+
+let flip f x1 x2 = f x2 x1
+let combine basePath segment= Path.Combine(basePath,segment)
+let combine2 basePath segment1 segment2 = Path.Combine(basePath,segment1,segment2)
+let combine3 basePath segment1 segment2 segment3 = Path.Combine(basePath,segment1,segment2,segment3)
+let packagesTemp = combine (Path.GetTempPath()) (Path.GetFileNameWithoutExtension srcFile)
+
+type PackageLocation = 
+    | ById of string
+    | ByIdVer of string * string
+    | NameAndUrl of string * string
+
+let getPackage packageLocation = //http://stackoverflow.com/a/14895173/57883
+    let filename,url = 
+        match packageLocation with
+        | ById packageId -> sprintf "%s.zip" packageId, sprintf "https://www.nuget.org/api/v2/package/%s/" packageId
+        | ByIdVer (packageId,ver) -> sprintf "%s.%s.zip" packageId ver,sprintf "https://www.nuget.org/api/v2/package/%s/%s" packageId ver
+        | NameAndUrl (name,loc) -> name, loc
+    if Directory.Exists packagesTemp = false then
+        Directory.CreateDirectory packagesTemp |> ignore
+    let targetPath = combine packagesTemp filename 
+    printfn "targetPath for package is %s" targetPath
+    if File.Exists(targetPath) = false then
+        printfn "downloading package from %s" url
+        printfn "downloading package to %s as %s" packagesTemp filename
+        use wc = new System.Net.WebClient()
+        wc.DownloadFile(url,targetPath)
+        printfn "downloaded package to %s" targetPath
+    targetPath
+
+let extractPackage fullPath = 
+    printfn "extractPackage from %s" fullPath
+    if Path.IsPathRooted fullPath = false then
+        failwithf "unrooted path passed to extract package: %s" fullPath
+    if fullPath.EndsWith(".zip") = false && fullPath.EndsWith(".nupkg") = false then
+        failwithf "package path must be a full package path including the extension %s" fullPath
+    if File.Exists fullPath = false then
+        failwithf "package must exist: %s" fullPath
+
+    let target = combine (Path.GetDirectoryName fullPath) (Path.GetFileNameWithoutExtension fullPath)
+    if Path.IsPathRooted target = false then
+        failwithf "unrooted path to extract package to : %s" fullPath
+
+    printfn "extracting package to %s" target
+    Compression.ZipFile.ExtractToDirectory(fullPath,target)
+    if Directory.Exists target = false then
+        failwithf "Extraction occurred but did not create dir: %s" target
+    printfn "extracted to %s" target
+
+let copyPackageDll packageFullPath dllRelPath (dll:string) = 
+    if Path.IsPathRooted packageFullPath = false then
+        failwithf "packagePath must be absolute and rooted:%s" packageFullPath
+    let dll = if dll.EndsWith(".dll") then dll else dll + ".dll"
+    if File.Exists(dll) = false then
+        printfn "starting copy from package %s" packageFullPath
+        let packageExtractedPath = combine (Path.GetDirectoryName packageFullPath) (Path.GetFileNameWithoutExtension(packageFullPath))
+        if Directory.Exists packageExtractedPath = false then
+            extractPackage(packageFullPath)
+        let dll = if dll.EndsWith(".dll") then dll else dll + ".dll"
+        let fileTarget = combine2 packageExtractedPath dllRelPath dll
+        printfn "copying from %s" fileTarget
+        printfn "copying to %s" (Path.GetFullPath dll)
+        if Directory.Exists (Path.GetDirectoryName fileTarget) = false then
+            failwithf "file copy from parentDir does not exist: %s" (Path.GetDirectoryName fileTarget)
+        File.Copy(fileTarget,dll)
+        printfn "copied package dll to %s" (Path.GetFullPath(dll))
+
+let getPackageForReference packageLocation dllRelPath dll =
+    printfn "Checking %s and %s for %s" Environment.CurrentDirectory srcDir dll
+    if File.Exists dll = false && File.Exists (combine srcDir dll) = false then
+        let packageFullPath = getPackage packageLocation
+        copyPackageDll packageFullPath dllRelPath dll
+
+getPackageForReference (PackageLocation.ById("Microsoft.CodeAnalysis.CSharp")) @"lib\net45\" "Microsoft.CodeAnalysis.CSharp"
+getPackageForReference (PackageLocation.ById("Microsoft.CodeAnalysis.Common")) @"lib\net45\" "Microsoft.CodeAnalysis"
+
 #if MONO
+
+#I "/usr/lib/mono/4.5/Facades/"
+#r "/usr/lib/mono/4.5/Facades/System.Runtime.dll"
 #r "./packages/System.Collections.Immutable.1.1.33-beta/lib/portable-net45+win8+wp8+wpa81/System.Collections.Immutable"
 #else
+#r "System.Runtime"
 #r "System.Collections.Immutable"
-#I @"C:\Program Files (x86)\Microsoft Web Tools\DNX\dnx-clr-win-x64.1.0.0-beta4\bin\"
+
+//#I @"C:\Program Files (x86)\Microsoft Web Tools\DNX\dnx-clr-win-x64.1.0.0-beta4\bin\"
 #r @"Microsoft.CodeAnalysis.dll"
 #r @"Microsoft.CodeAnalysis.CSharp.dll"
 #endif
+#r "System.Text.Encoding"
+#r "System.Threading.Tasks"
 #endif
 
-
-    
 type System.String with
     static member before (d:string) (s:string) = s.Substring(0, s.IndexOf(d))
     static member after (d:string) (s:string) = s.Substring( s.IndexOf(d) + d.Length)
@@ -48,7 +136,7 @@ let (|Null|Empty|Single|Multiline|) (s:string)=
     match s with 
     | null -> Null
     | _ when String.IsNullOrEmpty(s) -> Empty
-    | x when String.trim s |> String.contains "\r\n" -> Multiline
+    | _ when String.trim s |> String.contains "\r\n" -> Multiline
     | _ -> Single
 
 type Identifier = | Identifier of string
@@ -75,11 +163,6 @@ open Microsoft.CodeAnalysis.CSharp
 open Microsoft.CodeAnalysis.CSharp.Syntax
 type TypeSpecification = | Type of Type | Kind of SyntaxKind
 
-
-
-//type DebugPredicate = |ByName of (string -> DebugOpt) |ByExpr of (SyntaxNode -> DebugOpt)
-
-        
 type ClassDeclaration = { ClassAttributes: string list; Name:string; BaseClass :string option; Fields: string list; Members: ClassMember list} with
     member x.AttributeText() = x.ClassAttributes |> Seq.map (fun ta -> sprintf "[<%s>]" ta) |> String.join "\r\n" 
     member x.FieldText spacing = x.Fields |> Seq.map (fun f -> spacing + f) |> String.join "\r\n"
@@ -118,7 +201,7 @@ module Helpers =
     
     // let test = <@ typeof<BlockSyntax> @>
     let typeToString= function
-        |FSharp.Quotations.Patterns.Call (e,r,children) -> printfn "Call %A,%A,%A" e (r.GetGenericArguments().[0].Name) children
+        |Microsoft.FSharp.Quotations.Patterns.Call (e,r,children) -> printfn "Call %A,%A,%A" e (r.GetGenericArguments().[0].Name) children
         |_ as x -> failwithf "call must match typeof<Foo> %A" x
 
     let inline sprintForDump title o = sprintf "%s:%A" title o
@@ -141,10 +224,6 @@ module Helpers =
         | Yes -> Seq.iterDump lines
         | Indent spc -> Seq.iterDumpInd spc lines
         | No -> ()
-    
-    // alternate implementation
-    //let ofType<'a> (items: _ seq) = items |> Seq.filter(fun x -> box x :? 'a) |> Seq.cast<'a>
-
 
 module FileWalker = 
 
@@ -191,7 +270,6 @@ module FileWalker =
         if classesToBases.Count > 0 then
             Some (code,root,classesToBases)
         else None
-
 
 let files source = 
     let codeSourceMap cs = cs |> FileWalker.getSrcCode |> FileWalker.walkCode
@@ -284,6 +362,7 @@ module ScriptOptions =
         files
         |> Seq.choose id
         |> Array.ofSeq
+
 let toFType promoteUninitializedStructsToNullable (t:string) = 
             match String.trim t with
             | nullable when nullable.Contains("?") -> nullable |> String.before "?" |> sprintf "Nullable<%s>"
@@ -514,6 +593,7 @@ let getProperties (root:CompilationUnitSyntax) =
     |> Seq.map mapPropertyDeclaration
 
 type FileInfoB = {File:Code; Class':string; Bases: string list;Fields:FieldDeclarationSyntax list; Properties: PropertyInfoB list}
+
 let q() = 
     let files' = files ScriptOptions.source
     let files' = files' |> Seq.choose id |> Array.ofSeq
@@ -533,7 +613,8 @@ let q() =
 
 
 let findModel name fileInfoBseq  = 
-    fileInfoBseq |> Seq.tryFind(fun fib -> fib.Class' = name ||fib.Class'.StartsWith(name))
+    fileInfoBseq |> Seq.tryFind(fun fib -> fib.Class' = name || fib.Class'.StartsWith(name))
+
 module Declarations = 
     let (|EmptyEnumerable|NonEmpty|) (items: _ IEnumerable) =
         if Seq.isEmpty items then EmptyEnumerable else NonEmpty
@@ -552,7 +633,7 @@ module Declarations =
             && simpleKinds |> Seq.contains ( nodes.[3].Kind()) then
                 Some (nodes.[0] :?> PredefinedTypeSyntax, nodes.[1] :?> VariableDeclaratorSyntax, nodes.[2] :?> EqualsValueClauseSyntax, nodes.[3] )
             else None
-    
+
     let (|ArrayMatch|_|) (typeSpecifications: TypeSpecification[]) (nodes:SyntaxNode[]) =
         if nodes.Length = typeSpecifications.Length then
             let zipped = Seq.zip typeSpecifications nodes
@@ -592,6 +673,7 @@ module Declarations =
             | EmptyEnumerable,EmptyEnumerable -> Some ()
             | _ -> None
         | _ -> None
+
 module FieldConversion =
     open Declarations 
     type FieldInfoB = {Type:string; Name:string; Initial:string option; Declaration:VariableDeclarationSyntax}
@@ -644,6 +726,7 @@ module FieldConversion =
                 } )
             |> Seq.sortBy (fun f-> f.Name)
             |> Array.ofSeq
+
         let toFField (memberNames:Set<string>) (getDebugOpt:DebugDelegate) (fieldInfoB:FieldInfoB) = 
             let name,type',initial,vDeclaration = mapName fieldInfoB.Name, fieldInfoB.Type, fieldInfoB.Initial, fieldInfoB.Declaration
             //printfn "starting field %s" name
@@ -809,7 +892,6 @@ module PropConversion =
         let f (prop:PropertyInfoB) = toFProp promoteUninitializedStructsToNullable spacing propNames prop getDebugOpt
         props |> Seq.map f
 
-    
 let convertFile promoteUninitializedStructsToNullable (cls:FileInfoB) = 
     let debugOpt,getDebugOpt = ScriptOptions.startDebugState None (ScriptOptions.isDebugCode cls.File)
     let spacing = ScriptOptions.spacing
