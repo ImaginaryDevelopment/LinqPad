@@ -1,93 +1,94 @@
 ﻿// configuration of autorun options is done in module ScriptOptions
 open System
 open System.Collections.Generic
+open System.IO
+
 #if INTERACTIVE
 #r "System.IO.Compression.FileSystem"
 #I __SOURCE_DIRECTORY__
+module NugetAlternative = 
 
-open System.IO
+    let srcDir = __SOURCE_DIRECTORY__
+    let srcFile = __SOURCE_FILE__
 
-let srcDir = __SOURCE_DIRECTORY__
-let srcFile = __SOURCE_FILE__
+    if String.IsNullOrEmpty srcDir = false && Directory.Exists srcDir then
+        Environment.CurrentDirectory <- srcDir
+    //needs package
 
-if String.IsNullOrEmpty srcDir = false && Directory.Exists srcDir then
-    Environment.CurrentDirectory <- srcDir
-//needs package
+    let flip f x1 x2 = f x2 x1
+    let combine basePath segment= Path.Combine(basePath,segment)
+    let combine2 basePath segment1 segment2 = Path.Combine(basePath,segment1,segment2)
+    let combine3 basePath segment1 segment2 segment3 = Path.Combine(basePath,segment1,segment2,segment3)
+    let packagesTemp = combine (Path.GetTempPath()) (Path.GetFileNameWithoutExtension srcFile)
 
-let flip f x1 x2 = f x2 x1
-let combine basePath segment= Path.Combine(basePath,segment)
-let combine2 basePath segment1 segment2 = Path.Combine(basePath,segment1,segment2)
-let combine3 basePath segment1 segment2 segment3 = Path.Combine(basePath,segment1,segment2,segment3)
-let packagesTemp = combine (Path.GetTempPath()) (Path.GetFileNameWithoutExtension srcFile)
+    type PackageLocation = 
+        | ById of string
+        | ByIdVer of string * string
+        | NameAndUrl of string * string
 
-type PackageLocation = 
-    | ById of string
-    | ByIdVer of string * string
-    | NameAndUrl of string * string
+    let getPackage packageLocation = //http://stackoverflow.com/a/14895173/57883
+        let filename,url = 
+            match packageLocation with
+            | ById packageId -> sprintf "%s.zip" packageId, sprintf "https://www.nuget.org/api/v2/package/%s/" packageId
+            | ByIdVer (packageId,ver) -> sprintf "%s.%s.zip" packageId ver,sprintf "https://www.nuget.org/api/v2/package/%s/%s" packageId ver
+            | NameAndUrl (name,loc) -> name, loc
+        if Directory.Exists packagesTemp = false then
+            Directory.CreateDirectory packagesTemp |> ignore
+        let targetPath = combine packagesTemp filename 
+        printfn "targetPath for package is %s" targetPath
+        if File.Exists(targetPath) = false then
+            printfn "downloading package from %s" url
+            printfn "downloading package to %s as %s" packagesTemp filename
+            use wc = new System.Net.WebClient()
+            wc.DownloadFile(url,targetPath)
+            printfn "downloaded package to %s" targetPath
+        targetPath
 
-let getPackage packageLocation = //http://stackoverflow.com/a/14895173/57883
-    let filename,url = 
-        match packageLocation with
-        | ById packageId -> sprintf "%s.zip" packageId, sprintf "https://www.nuget.org/api/v2/package/%s/" packageId
-        | ByIdVer (packageId,ver) -> sprintf "%s.%s.zip" packageId ver,sprintf "https://www.nuget.org/api/v2/package/%s/%s" packageId ver
-        | NameAndUrl (name,loc) -> name, loc
-    if Directory.Exists packagesTemp = false then
-        Directory.CreateDirectory packagesTemp |> ignore
-    let targetPath = combine packagesTemp filename 
-    printfn "targetPath for package is %s" targetPath
-    if File.Exists(targetPath) = false then
-        printfn "downloading package from %s" url
-        printfn "downloading package to %s as %s" packagesTemp filename
-        use wc = new System.Net.WebClient()
-        wc.DownloadFile(url,targetPath)
-        printfn "downloaded package to %s" targetPath
-    targetPath
+    let extractPackage fullPath = 
+        printfn "extractPackage from %s" fullPath
+        if Path.IsPathRooted fullPath = false then
+            failwithf "unrooted path passed to extract package: %s" fullPath
+        if fullPath.EndsWith(".zip") = false && fullPath.EndsWith(".nupkg") = false then
+            failwithf "package path must be a full package path including the extension %s" fullPath
+        if File.Exists fullPath = false then
+            failwithf "package must exist: %s" fullPath
 
-let extractPackage fullPath = 
-    printfn "extractPackage from %s" fullPath
-    if Path.IsPathRooted fullPath = false then
-        failwithf "unrooted path passed to extract package: %s" fullPath
-    if fullPath.EndsWith(".zip") = false && fullPath.EndsWith(".nupkg") = false then
-        failwithf "package path must be a full package path including the extension %s" fullPath
-    if File.Exists fullPath = false then
-        failwithf "package must exist: %s" fullPath
+        let target = combine (Path.GetDirectoryName fullPath) (Path.GetFileNameWithoutExtension fullPath)
+        if Path.IsPathRooted target = false then
+            failwithf "unrooted path to extract package to : %s" fullPath
 
-    let target = combine (Path.GetDirectoryName fullPath) (Path.GetFileNameWithoutExtension fullPath)
-    if Path.IsPathRooted target = false then
-        failwithf "unrooted path to extract package to : %s" fullPath
+        printfn "extracting package to %s" target
+        Compression.ZipFile.ExtractToDirectory(fullPath,target)
+        if Directory.Exists target = false then
+            failwithf "Extraction occurred but did not create dir: %s" target
+        printfn "extracted to %s" target
 
-    printfn "extracting package to %s" target
-    Compression.ZipFile.ExtractToDirectory(fullPath,target)
-    if Directory.Exists target = false then
-        failwithf "Extraction occurred but did not create dir: %s" target
-    printfn "extracted to %s" target
-
-let copyPackageDll packageFullPath dllRelPath (dll:string) = 
-    if Path.IsPathRooted packageFullPath = false then
-        failwithf "packagePath must be absolute and rooted:%s" packageFullPath
-    let dll = if dll.EndsWith(".dll") then dll else dll + ".dll"
-    if File.Exists(dll) = false then
-        printfn "starting copy from package %s" packageFullPath
-        let packageExtractedPath = combine (Path.GetDirectoryName packageFullPath) (Path.GetFileNameWithoutExtension(packageFullPath))
-        if Directory.Exists packageExtractedPath = false then
-            extractPackage(packageFullPath)
+    let copyPackageDll packageFullPath dllRelPath (dll:string) = 
+        if Path.IsPathRooted packageFullPath = false then
+            failwithf "packagePath must be absolute and rooted:%s" packageFullPath
         let dll = if dll.EndsWith(".dll") then dll else dll + ".dll"
-        let fileTarget = combine2 packageExtractedPath dllRelPath dll
-        printfn "copying from %s" fileTarget
-        printfn "copying to %s" (Path.GetFullPath dll)
-        if Directory.Exists (Path.GetDirectoryName fileTarget) = false then
-            failwithf "file copy from parentDir does not exist: %s" (Path.GetDirectoryName fileTarget)
-        File.Copy(fileTarget,dll)
-        printfn "copied package dll to %s" (Path.GetFullPath(dll))
+        if File.Exists(dll) = false then
+            printfn "starting copy from package %s" packageFullPath
+            let packageExtractedPath = combine (Path.GetDirectoryName packageFullPath) (Path.GetFileNameWithoutExtension(packageFullPath))
+            if Directory.Exists packageExtractedPath = false then
+                extractPackage(packageFullPath)
+            let dll = if dll.EndsWith(".dll") then dll else dll + ".dll"
+            let fileTarget = combine2 packageExtractedPath dllRelPath dll
+            printfn "copying from %s" fileTarget
+            printfn "copying to %s" (Path.GetFullPath dll)
+            if Directory.Exists (Path.GetDirectoryName fileTarget) = false then
+                failwithf "file copy from parentDir does not exist: %s" (Path.GetDirectoryName fileTarget)
+            File.Copy(fileTarget,dll)
+            printfn "copied package dll to %s" (Path.GetFullPath(dll))
 
-let getPackageForReference packageLocation dllRelPath dll =
-    printfn "Checking %s and %s for %s" Environment.CurrentDirectory srcDir dll
-    if File.Exists dll = false && File.Exists (combine srcDir dll) = false then
-        let packageFullPath = getPackage packageLocation
-        copyPackageDll packageFullPath dllRelPath dll
+    let getPackageForReference packageLocation dllRelPath dll =
+        printfn "Checking %s and %s for %s" Environment.CurrentDirectory srcDir dll
+        if File.Exists dll = false && File.Exists (combine srcDir dll) = false then
+            let packageFullPath = getPackage packageLocation
+            copyPackageDll packageFullPath dllRelPath dll
 
-getPackageForReference (PackageLocation.ById("Microsoft.CodeAnalysis.CSharp")) @"lib\net45\" "Microsoft.CodeAnalysis.CSharp"
-getPackageForReference (PackageLocation.ById("Microsoft.CodeAnalysis.Common")) @"lib\net45\" "Microsoft.CodeAnalysis"
+    getPackageForReference (PackageLocation.ById("Microsoft.CodeAnalysis.CSharp")) @"lib\net45\" "Microsoft.CodeAnalysis.CSharp"
+    getPackageForReference (PackageLocation.ById("Microsoft.CodeAnalysis.Common")) @"lib\net45\" "Microsoft.CodeAnalysis"
 
 #if MONO
 
@@ -97,8 +98,6 @@ getPackageForReference (PackageLocation.ById("Microsoft.CodeAnalysis.Common")) @
 #else
 #r "System.Runtime"
 #r "System.Collections.Immutable"
-
-//#I @"C:\Program Files (x86)\Microsoft Web Tools\DNX\dnx-clr-win-x64.1.0.0-beta4\bin\"
 #r @"Microsoft.CodeAnalysis.dll"
 #r @"Microsoft.CodeAnalysis.CSharp.dll"
 #endif
@@ -246,7 +245,7 @@ module FileWalker =
         | File (Path path) -> path |> readAllText |> (fun c -> Code (Some(Path path),c))
 
     let walkCode code = 
-        let src = match code with |Code (p,src) -> src
+        let src = match code with |Code (_,src) -> src
         let tree = CSharpSyntaxTree.ParseText(src)
         let root = tree.GetRoot() :?> CompilationUnitSyntax
 
@@ -255,7 +254,7 @@ module FileWalker =
             let dic = ModelCollector.VisitClassInterfaces root
             dic
             //|> Seq.dumps "interfaces!"
-            |> Seq.filter (fun i -> i.Key <> null && (i.Value |> (* Seq.dumps "bases" |> *) Seq.exists (fun v -> v = "DataModelBase")))
+            |> Seq.filter (fun i -> i.Key <> null) // && (i.Value |> (* Seq.dumps "bases" |> *) Seq.exists (fun v -> v = "DataModelBase")))
             |> Seq.iter (fun kvp -> clsToBases.Add(kvp.Key, kvp.Value))
             clsToBases
         if classesToBases.Count > 0 then
@@ -295,6 +294,7 @@ let mapName s=
         | "" -> failwithf "name cannot be empty"
         | Id when Id.EndsWith("ID") -> Id |> String.before "ID" |> flip (+) "Id"
         | _ as s -> s
+
 module ScriptOptions = 
     let propertyOptions = PropertyOptions.NoNotify
     let typeAttributes = ["AllowNullLiteral"]
@@ -883,7 +883,7 @@ module PropConversion =
         let f (prop:PropertyInfoB) = toFProp promoteUninitializedStructsToNullable spacing propNames prop getDebugOpt
         props |> Seq.map f
 
-let convertFile promoteUninitializedStructsToNullable (cls:FileInfoB) = 
+let convertFileInfoB promoteUninitializedStructsToNullable (cls:FileInfoB) = 
     let debugOpt,getDebugOpt = ScriptOptions.startDebugState None (ScriptOptions.isDebugCode cls.File)
     let spacing = ScriptOptions.spacing
     let classD = {
@@ -903,6 +903,27 @@ let convertFile promoteUninitializedStructsToNullable (cls:FileInfoB) =
     let text = new System.Text.StringBuilder(text)
     text.AppendLine(classD.FieldText spacing).AppendLine(String.join "\r\n" props).ToString()
 
+let convertFile path = 
+    let code = Path path |> File |> FileWalker.getSrcCode 
+    let files' = code |> FileWalker.walkCode
+    printfn "files %A" files'
+    let file,root,clsToBases = match files' with | Some f -> f | None -> failwithf "could not find classes in %s" path
+    let fileInfoBs = 
+        query{
+            for cls in clsToBases.Keys do
+            let bases = clsToBases.[cls]
+        
+            // (* already done on line 54 *) 
+            // where(Seq.contains "DataModelBase" bases)
+            let properties = getProperties(root) |> List.ofSeq
+            select {FileInfoB.File=file;Class'=cls;Bases =bases;Fields= root.DescendantNodes() |> Seq.ofType<FieldDeclarationSyntax> |> List.ofSeq ;Properties=properties}
+        }
+        |> Array.ofSeq
+    
+    printfn "file to convert: %s using %A" path (fileInfoBs|> Array.ofSeq)
+    fileInfoBs
+    |> Seq.map (convertFileInfoB true)
+
 let convert limit =
     let mutable lines = 0
     let mutable classes = 0
@@ -914,7 +935,7 @@ let convert limit =
         
         for cls in items do
             //printfn "Starting conversion %s" cls.Class'
-            let text = convertFile ScriptOptions.promoteUninitializedStructsToNullable cls
+            let text = convertFileInfoB ScriptOptions.promoteUninitializedStructsToNullable cls
             let split = text.Split([| "\r\n" |], StringSplitOptions.RemoveEmptyEntries)
             lines <- lines +  (split |> Seq.length)
             classes <- classes + 1
@@ -922,20 +943,21 @@ let convert limit =
         } |> Array.ofSeq
     printfn "converted %i classes, %i lines" classes lines
     converted
+
 let pdm' fileInfos = 
     let pdm = findModel "PatientDataModel" fileInfos
-    let pdm' = pdm |> Option.map (convertFile ScriptOptions.promoteUninitializedStructsToNullable)
+    let pdm' = pdm |> Option.map (convertFileInfoB ScriptOptions.promoteUninitializedStructsToNullable)
     pdm'
 let apm' fileInfos =
     let apm = findModel "AppointmentDataModel"  fileInfos
-    let apm' = apm |> Option.map (convertFile ScriptOptions.promoteUninitializedStructsToNullable)
+    let apm' = apm |> Option.map (convertFileInfoB ScriptOptions.promoteUninitializedStructsToNullable)
     apm'
     
 #if INTERACTIVE
 #r "System.Windows.Forms"
 #endif
 
-let getClip text = System.Windows.Forms.Clipboard.GetText()
+let getClip() = System.Windows.Forms.Clipboard.GetText()
 let setClip text = if text <> null then System.Windows.Forms.Clipboard.SetText(text)
 
 let getClassToClip f = f() |> Option.iter setClip
