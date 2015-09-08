@@ -3,8 +3,7 @@
   <Reference>&lt;RuntimeDirectory&gt;\System.Text.Encoding.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.Threading.Tasks.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.dll</Reference>
-  <GACReference>System.Collections.Immutable, Version=1.1.33.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
-  <NuGetReference Prerelease="true">Microsoft.CodeAnalysis.CSharp</NuGetReference>
+  <NuGetReference>Microsoft.CodeAnalysis.CSharp</NuGetReference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
 </Query>
 

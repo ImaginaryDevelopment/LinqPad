@@ -41,7 +41,8 @@ var itemRows= wiki
 	.Select(x => 
 		new { x.id,
 		Mapped=
-			Newtonsoft.Json.JsonConvert.DeserializeAnonymousType(x.Json,new{name_enus="", quality=1, icon="",screenshot=1, attainable=0, jsonEquip=new {avgBuyout=new Nullable<int>(),BuyPrice=new Nullable<int>(),SellPrice=1,reqskill=new Nullable<int>()}})
+			Newtonsoft.Json.JsonConvert.DeserializeAnonymousType(x.Json,
+				new{name_enus="", quality=1, icon="",screenshot=1, attainable=0, jsonEquip=new {avgBuyout=new Nullable<int>(),BuyPrice=new Nullable<int>(),SellPrice=1,reqskill=new Nullable<int>()}})
 			
 		,x}
 			
@@ -109,6 +110,7 @@ var bagRecipes = from r in recipeRows
 var bagRecipesDisplay = 
 	from br in bagRecipes
 	let cloths = br.Requirements.FirstOrDefault(brr => brr.Name != null)
+	// http://www.wowhead.com/item=24262&xml
 	select new{ Name=new Hyperlinq("http://www.wowhead.com/spell="+br.id+"&power", br.Name), br.id, br.Requirements, cloths};
 	
 	bagRecipesDisplay.Dump();
@@ -127,4 +129,4 @@ var bagRecipesDisplay =
 //		let cloths = subcomponents.FirstOrDefault(sc => sc.FirstOrDefault(sc1 => sc1.Item.Name.EndsWith("Cloth")) != null)
 //		//let reagentKeys = reagents.Select(reag => reag.id).ToArray()
 //		let cloth = cloths !=null? cloths.Select(c => new {c.Count, c.Item.Name}).FirstOrDefault() : null
-//		//let total = 
+//		//let total =
