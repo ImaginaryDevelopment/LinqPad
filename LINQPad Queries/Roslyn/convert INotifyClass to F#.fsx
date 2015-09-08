@@ -16,14 +16,19 @@ let combine2 basePath segment1 segment2 = Path.Combine(basePath,segment1,segment
 let combine3 basePath segment1 segment2 segment3 = Path.Combine(basePath,segment1,segment2,segment3)
 let packagesTemp = Path.GetTempPath()
 
-let getPackage id ver = //http://stackoverflow.com/a/14895173/57883
+type PackageLocation = 
+    | ById of string
+    | ByIdVer of string * string
+    | NameAndUrl of string * string
+
+let getPackage packageLocation = //http://stackoverflow.com/a/14895173/57883
     let filename,url = 
-        match ver with
-        | Some v -> sprintf "%s.%s.zip" id v,sprintf "https://www.nuget.org/api/v2/package/%s/%s" id v
-        | None -> sprintf "%s.zip" id, sprintf "https://www.nuget.org/api/v2/package/%s/" id
+        match packageLocation with
+        | ById packageId -> sprintf "%s.zip" packageId, sprintf "https://www.nuget.org/api/v2/package/%s/" packageId
+        | ByIdVer (packageId,ver) -> sprintf "%s.%s.zip" packageId ver,sprintf "https://www.nuget.org/api/v2/package/%s/%s" packageId ver
+        | NameAndUrl (name,loc) -> name, loc
     let targetPath = combine packagesTemp filename 
     printfn "targetPath for package is %s" targetPath
-    Directory.CreateDirectory(Path.GetFileNameWithoutExtension targetPath) |> ignore
     if File.Exists(targetPath) = false then
         printfn "downloading package from %s" url
         printfn "downloading package to %s as %s" packagesTemp filename
@@ -60,7 +65,7 @@ let copyPackageDll packagePath dllRelPath (dll:string) =
         let packageExtractedPath = combine packagesTemp packagePath
         printfn "Checking for package extraction at %s" packageExtractedPath
         if Directory.Exists packageExtractedPath = false then
-            extractPackage(packageExtractedPath + ".zip")
+            extractPackage(packageExtractedPath)
         let dll = if dll.EndsWith(".dll") then dll else dll + ".dll"
         let fileTarget = combine3 packagesTemp packagePath dllRelPath dll
         printfn "copying from %s" fileTarget
@@ -70,16 +75,14 @@ let copyPackageDll packagePath dllRelPath (dll:string) =
         File.Copy(fileTarget,dll)
         printfn "copied package dll to %s" (Path.GetFullPath(dll))
 
-let getPackageForReference packagePath dllRelPath id ver dll =
+let getPackageForReference packageLocation dllRelPath dll =
     printfn "Checking %s and %s for %s" Environment.CurrentDirectory srcDir dll
-    let packageFullPath = combine packagesTemp packagePath
     if File.Exists dll = false && File.Exists (combine srcDir dll) = false then
-        if File.Exists(packageFullPath) = false then
-            getPackage id ver |> ignore
+        let packageFullPath = getPackage packageLocation
         copyPackageDll packageFullPath dllRelPath dll
 
-getPackageForReference "Microsoft.CodeAnalysis.CSharp" @"package\lib\net45\" "Microsoft.CodeAnalysis.CSharp" None "Microsoft.CodeAnalysis.CSharp"
-getPackageForReference "Microsoft.CodeAnalysis.Common" @"lib\net45\" "Microsoft.CodeAnalysis.Common" None "Microsoft.CodeAnalysis"
+getPackageForReference (PackageLocation.ById("Microsoft.CodeAnalysis.CSharp")) @"package\lib\net45\" "Microsoft.CodeAnalysis.CSharp"
+getPackageForReference (PackageLocation.ById("Microsoft.CodeAnalysis.Common")) @"lib\net45\" "Microsoft.CodeAnalysis"
 
 #if INTERACTIVE
 #if MONO
