@@ -5,6 +5,7 @@ open System.Collections.Generic
 open System.IO
 
 let srcDir = __SOURCE_DIRECTORY__
+let srcFile = __SOURCE_FILE__
 #I __SOURCE_DIRECTORY__
 if String.IsNullOrEmpty srcDir = false && Directory.Exists srcDir then
     Environment.CurrentDirectory <- srcDir
@@ -14,7 +15,7 @@ let flip f x1 x2 = f x2 x1
 let combine basePath segment= Path.Combine(basePath,segment)
 let combine2 basePath segment1 segment2 = Path.Combine(basePath,segment1,segment2)
 let combine3 basePath segment1 segment2 segment3 = Path.Combine(basePath,segment1,segment2,segment3)
-let packagesTemp = Path.GetTempPath()
+let packagesTemp = combine (Path.GetTempPath()) (Path.GetFileNameWithoutExtension srcFile)
 
 type PackageLocation = 
     | ById of string
@@ -27,6 +28,8 @@ let getPackage packageLocation = //http://stackoverflow.com/a/14895173/57883
         | ById packageId -> sprintf "%s.zip" packageId, sprintf "https://www.nuget.org/api/v2/package/%s/" packageId
         | ByIdVer (packageId,ver) -> sprintf "%s.%s.zip" packageId ver,sprintf "https://www.nuget.org/api/v2/package/%s/%s" packageId ver
         | NameAndUrl (name,loc) -> name, loc
+    if Directory.Exists packagesTemp = false then
+        Directory.CreateDirectory packagesTemp |> ignore
     let targetPath = combine packagesTemp filename 
     printfn "targetPath for package is %s" targetPath
     if File.Exists(targetPath) = false then
@@ -41,10 +44,10 @@ let extractPackage fullPath =
     printfn "extractPackage from %s" fullPath
     if Path.IsPathRooted fullPath = false then
         failwithf "unrooted path passed to extract package: %s" fullPath
+    if fullPath.EndsWith(".zip") = false && fullPath.EndsWith(".nupkg") = false then
+        failwithf "package path must be a full package path including the extension %s" fullPath
     if File.Exists fullPath = false then
         failwithf "package must exist: %s" fullPath
-    if fullPath.EndsWith(".zip") = false && fullPath.EndsWith(".nupkg") = false then
-        failwithf "package path must be a full package path including the extension"
 
     let target = combine (Path.GetDirectoryName fullPath) (Path.GetFileNameWithoutExtension fullPath)
     if Path.IsPathRooted target = false then
@@ -56,18 +59,17 @@ let extractPackage fullPath =
         failwithf "Extraction occurred but did not create dir: %s" target
     printfn "extracted to %s" target
 
-let copyPackageDll packagePath dllRelPath (dll:string) = 
-    if Path.IsPathRooted packagePath = false then
-        failwithf "packagePath must be absolute and rooted:%s" packagePath
+let copyPackageDll packageFullPath dllRelPath (dll:string) = 
+    if Path.IsPathRooted packageFullPath = false then
+        failwithf "packagePath must be absolute and rooted:%s" packageFullPath
     let dll = if dll.EndsWith(".dll") then dll else dll + ".dll"
     if File.Exists(dll) = false then
-        printfn "starting copy from package %s" packagePath
-        let packageExtractedPath = combine packagesTemp packagePath
-        printfn "Checking for package extraction at %s" packageExtractedPath
+        printfn "starting copy from package %s" packageFullPath
+        let packageExtractedPath = combine (Path.GetDirectoryName packageFullPath) (Path.GetFileNameWithoutExtension(packageFullPath))
         if Directory.Exists packageExtractedPath = false then
-            extractPackage(packageExtractedPath)
+            extractPackage(packageFullPath)
         let dll = if dll.EndsWith(".dll") then dll else dll + ".dll"
-        let fileTarget = combine3 packagesTemp packagePath dllRelPath dll
+        let fileTarget = combine2 packageExtractedPath dllRelPath dll
         printfn "copying from %s" fileTarget
         printfn "copying to %s" (Path.GetFullPath dll)
         if Directory.Exists (Path.GetDirectoryName fileTarget) = false then
@@ -81,7 +83,7 @@ let getPackageForReference packageLocation dllRelPath dll =
         let packageFullPath = getPackage packageLocation
         copyPackageDll packageFullPath dllRelPath dll
 
-getPackageForReference (PackageLocation.ById("Microsoft.CodeAnalysis.CSharp")) @"package\lib\net45\" "Microsoft.CodeAnalysis.CSharp"
+getPackageForReference (PackageLocation.ById("Microsoft.CodeAnalysis.CSharp")) @"lib\net45\" "Microsoft.CodeAnalysis.CSharp"
 getPackageForReference (PackageLocation.ById("Microsoft.CodeAnalysis.Common")) @"lib\net45\" "Microsoft.CodeAnalysis"
 
 #if INTERACTIVE
