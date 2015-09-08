@@ -1,15 +1,97 @@
 ﻿open System
 open System.Collections.Generic
+
+#r "System.IO.Compression.FileSystem"
 open System.IO
+
+let srcDir = __SOURCE_DIRECTORY__
+#I __SOURCE_DIRECTORY__
+if String.IsNullOrEmpty srcDir = false && Directory.Exists srcDir then
+    Environment.CurrentDirectory <- srcDir
+//needs package
+
+let flip f x1 x2 = f x2 x1
+let combine basePath segment= Path.Combine(basePath,segment)
+let combine2 basePath segment1 segment2 = Path.Combine(basePath,segment1,segment2)
+let combine3 basePath segment1 segment2 segment3 = Path.Combine(basePath,segment1,segment2,segment3)
+let packagesTemp = Path.GetTempPath()
+
+let getPackage id ver = //http://stackoverflow.com/a/14895173/57883
+    let filename,url = 
+        match ver with
+        | Some v -> sprintf "%s.%s.zip" id v,sprintf "https://www.nuget.org/api/v2/package/%s/%s" id v
+        | None -> sprintf "%s.zip" id, sprintf "https://www.nuget.org/api/v2/package/%s/" id
+    let targetPath = combine packagesTemp filename 
+    printfn "targetPath for package is %s" targetPath
+    Directory.CreateDirectory(Path.GetFileNameWithoutExtension targetPath) |> ignore
+    if File.Exists(targetPath) = false then
+        printfn "downloading package from %s" url
+        printfn "downloading package to %s as %s" packagesTemp filename
+        use wc = new System.Net.WebClient()
+        wc.DownloadFile(url,targetPath)
+        printfn "downloaded package to %s" targetPath
+    targetPath
+
+let extractPackage fullPath = 
+    printfn "extractPackage from %s" fullPath
+    if Path.IsPathRooted fullPath = false then
+        failwithf "unrooted path passed to extract package: %s" fullPath
+    if File.Exists fullPath = false then
+        failwithf "package must exist: %s" fullPath
+    if fullPath.EndsWith(".zip") = false && fullPath.EndsWith(".nupkg") = false then
+        failwithf "package path must be a full package path including the extension"
+
+    let target = combine (Path.GetDirectoryName fullPath) (Path.GetFileNameWithoutExtension fullPath)
+    if Path.IsPathRooted target = false then
+        failwithf "unrooted path to extract package to : %s" fullPath
+
+    printfn "extracting package to %s" target
+    Compression.ZipFile.ExtractToDirectory(fullPath,target)
+    if Directory.Exists target = false then
+        failwithf "Extraction occurred but did not create dir: %s" target
+    printfn "extracted to %s" target
+
+let copyPackageDll packagePath dllRelPath (dll:string) = 
+    if Path.IsPathRooted packagePath = false then
+        failwithf "packagePath must be absolute and rooted:%s" packagePath
+    let dll = if dll.EndsWith(".dll") then dll else dll + ".dll"
+    if File.Exists(dll) = false then
+        printfn "starting copy from package %s" packagePath
+        let packageExtractedPath = combine packagesTemp packagePath
+        printfn "Checking for package extraction at %s" packageExtractedPath
+        if Directory.Exists packageExtractedPath = false then
+            extractPackage(packageExtractedPath + ".zip")
+        let dll = if dll.EndsWith(".dll") then dll else dll + ".dll"
+        let fileTarget = combine3 packagesTemp packagePath dllRelPath dll
+        printfn "copying from %s" fileTarget
+        printfn "copying to %s" (Path.GetFullPath dll)
+        if Directory.Exists (Path.GetDirectoryName fileTarget) = false then
+            failwithf "file copy from parentDir does not exist: %s" (Path.GetDirectoryName fileTarget)
+        File.Copy(fileTarget,dll)
+        printfn "copied package dll to %s" (Path.GetFullPath(dll))
+
+let getPackageForReference packagePath dllRelPath id ver dll =
+    printfn "Checking %s and %s for %s" Environment.CurrentDirectory srcDir dll
+    let packageFullPath = combine packagesTemp packagePath
+    if File.Exists dll = false && File.Exists (combine srcDir dll) = false then
+        if File.Exists(packageFullPath) = false then
+            getPackage id ver |> ignore
+        copyPackageDll packageFullPath dllRelPath dll
+
+getPackageForReference "Microsoft.CodeAnalysis.CSharp" @"package\lib\net45\" "Microsoft.CodeAnalysis.CSharp" None "Microsoft.CodeAnalysis.CSharp"
+getPackageForReference "Microsoft.CodeAnalysis.Common" @"lib\net45\" "Microsoft.CodeAnalysis.Common" None "Microsoft.CodeAnalysis"
+
 #if INTERACTIVE
 #if MONO
+
 #I "/usr/lib/mono/4.5/Facades/"
 #r "/usr/lib/mono/4.5/Facades/System.Runtime.dll"
 #r "./packages/System.Collections.Immutable.1.1.33-beta/lib/portable-net45+win8+wp8+wpa81/System.Collections.Immutable"
 #else
 #r "System.Runtime"
 #r "System.Collections.Immutable"
-#I @"C:\Program Files (x86)\Microsoft Web Tools\DNX\dnx-clr-win-x64.1.0.0-beta4\bin\"
+
+//#I @"C:\Program Files (x86)\Microsoft Web Tools\DNX\dnx-clr-win-x64.1.0.0-beta4\bin\"
 #r @"Microsoft.CodeAnalysis.dll"
 #r @"Microsoft.CodeAnalysis.CSharp.dll"
 #endif
@@ -17,8 +99,6 @@ open System.IO
 #r "System.Threading.Tasks"
 #endif
 
-
-    
 type System.String with
     static member before (d:string) (s:string) = s.Substring(0, s.IndexOf(d))
     static member after (d:string) (s:string) = s.Substring( s.IndexOf(d) + d.Length)
