@@ -1,5 +1,5 @@
 <Query Kind="Program">
-  <NuGetReference Prerelease="true">Microsoft.CodeAnalysis</NuGetReference>
+  <NuGetReference>Microsoft.CodeAnalysis.CSharp</NuGetReference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
   <Namespace>Microsoft.CodeAnalysis</Namespace>
   <Namespace>Microsoft.CodeAnalysis.CSharp</Namespace>
