@@ -322,13 +322,16 @@ let toFType promoteUninitializedStructsToNullable (t:string) =
             | x when x="Guid" || x = "System.Guid" -> if promoteUninitializedStructsToNullable then sprintf"(* NullableWithoutInit*) Nullable<%s>" x else x
             | x when x="Image" -> "System.Drawing.Image"
             | _ as type' -> type'
+
 let toFull (node:#SyntaxNode) = node.ToFullString() |> String.trim
+
 let mapToken (token:SyntaxToken)=
     match token.ValueText with
     |"==" -> "="
     | "!=" -> "<>"
     |"&&"
     | _ as result -> result
+
 let toSyntaxNodeOpt x = match x with | Some n -> n :> SyntaxNode |> Some | None -> None
 
 
@@ -537,6 +540,10 @@ let rec mapNode translateOptions promoteUninitializedStructsToNullable spacing (
         let dumpResult matchType r = dumpf matchType debugOption (fun r-> (node.GetType().Name + "," + matchType + "," + node.Kind().ToString()) + "=\""+ r.ToString()+"\"") r
         dumpResult (sprintf "%s.%s" t <| node.Kind().ToString()) o
 
+let mapNodeChildren translateOptions promoteUninitializedStructsToNullable spacing (memberNames:Set<string>) (getDebugOpt:DebugDelegate) delimiter (node:SyntaxNode) = 
+    let debugOption, getDebugOpt = translateOptions.GetNextDebugState getDebugOpt (translateOptions.IsDebugNode node)
+    let mapNodeC = mapNode translateOptions promoteUninitializedStructsToNullable spacing memberNames getDebugOpt
+    node.ChildNodes() |> Seq.map mapNodeC |> String.join delimiter
 
 module ScriptOptions = 
 
@@ -593,12 +600,6 @@ module ScriptOptions =
     //let private debugIndent spc debug = match debug with |Yes -> Indent spc |Indent indent -> Indent (indent + spc) | No -> No
 
 (* end of proper functional approach (from here on out, things may close over important script options *)
-
-
-let mapNodeChildren translateOptions promoteUninitializedStructsToNullable spacing (memberNames:Set<string>) (getDebugOpt:DebugDelegate) delimiter (node:#SyntaxNode) = 
-    let debugOption, getDebugOpt = ScriptOptions.getNextDebugState getDebugOpt (ScriptOptions.isDebugNode node)
-    let mapNodeC = mapNode translateOptions promoteUninitializedStructsToNullable spacing memberNames getDebugOpt
-    node.ChildNodes() |> Seq.map mapNodeC |> String.join delimiter
 
 let getFileInfoFromSource (source:(_*_*Dictionary<string,string list>) option seq) = 
     let files' = source |> Seq.choose id |> Array.ofSeq
@@ -867,6 +868,7 @@ module PropConversion =
                 let getter = mapGetter getter
                 let matchType,setter' = 
                     let full = toFull setter
+                    // for case insensitivity on the field name use @"set\s*{\s*this\.SetAndNotify\(\(\)\s*=>\s*this\.(?<name>\w+),\s*ref\s*_(?i)\k<name>,\s*value\);\s*}"
                     let match' = System.Text.RegularExpressions.Regex.Match(full,@"set\s*{\s*this\.SetAndNotify\(\(\)\s*=>\s*this\.(?<name>\w+),\s*ref\s*_\k<name>,\s*value\);\s*}")
                     if match'.Success then
                         let fieldName = match pib.FieldName with | Some fn -> fn | _ -> ("_" + match'.Groups.[1].Value)
@@ -930,7 +932,10 @@ let convertFile translateOptions spacing typeAttrs target (cls:FileInfoB) =
 
         let classD ={classD with Fields = FieldConversion.convertFileFields translateOptions promote spacing  cls getDebugOpt}
         let props = PropConversion.convertProperties translateOptions target spacing cls |> Seq.map (String.indent spacing)
-        let text = sprintf "%s\r\ntype %s() = \r\n%s\r\n\r\n" (classD.AttributeText()) cls.Class' (ScriptOptions.spacing + String.optionToStringOrEmpty classD.BaseClass)
+        let filename = match cls.File with 
+            |Code (Some path,_) -> match path with |Path p -> p
+            | _ -> "unknown"
+        let text = sprintf "%s\r\ntype %s() = \\\\ translated from %s\r\n%s\r\n\r\n" (classD.AttributeText()) cls.Class' filename (ScriptOptions.spacing + String.optionToStringOrEmpty classD.BaseClass)
         let text = new System.Text.StringBuilder(text)
         text.AppendLine(classD.FieldText spacing).AppendLine(String.join "\r\n" props).ToString()
 
