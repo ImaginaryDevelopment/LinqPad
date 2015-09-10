@@ -5,6 +5,7 @@ open System.IO
 
 #if INTERACTIVE
 #r "System.IO.Compression.FileSystem"
+open System.IO //open it again, since it has changed
 #I __SOURCE_DIRECTORY__
 module NugetAlternative = 
 
@@ -185,9 +186,9 @@ type ClassDeclaration = { ClassAttributes: string list; Name:string; BaseClass :
 module Array = 
     let skip v = Seq.skip(v) >> Array.ofSeq
 module Seq =
-    #if F43
+    #if F43 
 
-    #else
+    #else // this function already exists in newer versions of F#
     let contains v = Seq.exists (fun f -> f = v)
     #endif
     #if INTERACTIVE
@@ -219,8 +220,7 @@ module Helpers =
     let enumerateAllFiles rootPath pattern = System.IO.Directory.EnumerateFiles(rootPath,pattern, SearchOption.AllDirectories)
     let readAllText filePath = File.ReadAllText(filePath)
     let inline flip f arg1 arg2 = f arg2 arg1
-    
-    // let test = <@ typeof<BlockSyntax> @>
+
     let typeToString= function
         |Microsoft.FSharp.Quotations.Patterns.Call (e,r,children) -> printfn "Call %A,%A,%A" e (r.GetGenericArguments().[0].Name) children
         |_ as x -> failwithf "call must match typeof<Foo> %A" x
@@ -245,10 +245,6 @@ module Helpers =
         | Yes -> Seq.iterDump lines
         | Indent spc -> Seq.iterDumpInd spc lines
         | No -> ()
-    
-    // alternate implementation
-    //let ofType<'a> (items: _ seq) = items |> Seq.filter(fun x -> box x :? 'a) |> Seq.cast<'a>
-
 
 module FileWalker = 
 
@@ -280,7 +276,7 @@ module FileWalker =
         | File (Path path) -> path |> readAllText |> (fun c -> Code (Some(Path path),c))
 
     let walkCode code = 
-        let src = match code with |Code (p,src) -> src
+        let src = match code with |Code (_p,src) -> src
         let tree = CSharpSyntaxTree.ParseText(src)
         let root = tree.GetRoot() :?> CompilationUnitSyntax
 
@@ -296,7 +292,6 @@ module FileWalker =
             Some (code,root,classesToBases)
         else None
 
-
 let getFiles source = 
     let codeSourceMap cs = cs |> FileWalker.getSrcCode |> FileWalker.walkCode
     match source with
@@ -310,20 +305,8 @@ let getFiles source =
         |> Seq.map codeSourceMap
         |> List.ofSeq
 
-let (|SimpleGetter|_|) (getter: AccessorDeclarationSyntax) =
-    let nodes = getter.DescendantNodes() |> Array.ofSeq
-    if nodes.Length = 3 && 
-        nodes.[0] :? BlockSyntax &&
-        nodes.[1] :? ReturnStatementSyntax &&
-        nodes.[2] :? IdentifierNameSyntax then
-        Some (
-            nodes.[0] :?> BlockSyntax, 
-            nodes.[1] :?> ReturnStatementSyntax,
-            nodes.[2] :?> IdentifierNameSyntax
-            )
-    else None
 
-type PropertyInfoB = { IsSimpleGet:bool; IsINotify:bool; Type:string; FieldName: string option; PropertyName:string; Getter:AccessorDeclarationSyntax option; Setter:AccessorDeclarationSyntax option}
+type PropertyInfoB = { IsINotify:bool; Type:string; FieldName: string option; PropertyName:string; Getter:AccessorDeclarationSyntax option; Setter:AccessorDeclarationSyntax option}
 
 let mapName s= 
         match String.trim s with
@@ -331,63 +314,7 @@ let mapName s=
         | Id when Id.EndsWith("ID") -> Id |> String.before "ID" |> flip (+) "Id"
         | _ as s -> s
 
-module ScriptOptions = 
 
-    let searchLinqPadQueriesForSample() =
-        let myDocs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
-        Path.Combine(myDocs,"LINQPad Queries","Roslyn")
-
-    #if INTERACTIVE
-
-    let srcPath = 
-        let workTarget = @"C:\TFS\Pm-Rewrite\Source-dev-rewrite\PracticeManagement\PracticeManagement.Foundation\DataModels"
-        if File.Exists(workTarget) then 
-            workTarget (*  Environment.ExpandEnvironmentVariables("%devroot%"); *) 
-        else
-            let envTarget = Environment.ExpandEnvironmentVariables("%devroot%")
-            if Directory.Exists envTarget then 
-                envTarget
-            else
-            searchLinqPadQueriesForSample()
-    #else
-    let srcPath = searchLinqPadQueriesForSample()
-    #endif
-
-    printfn "searching path %s" srcPath
-    let getDefaultRunOptions () = {Target = CodeGenTarget.Class (PropertyOptions.InheritFsharpViewModule, PromoteUnitializedStructsToNullables.Flag(true)); TypeAttributes = ["AllowNullLiteral"]; Source = CodeSources.Directory (Path srcPath (*  Environment.ExpandEnvironmentVariables("%devroot%"); *) )}
-    let promoteUninitializedStructsToNullable = true
-    let includeOriginalInComments = true
-    let includeMatchTypeInComments = true
-    let selfIdentifier = "x"
-    let spacing = "  "
-
-    let isDebugFieldPred name = if name ="_AppointmentEndTime" then Promote else Demote
-    let isDebugPropPred name = if name = "LOS" then Promote else Demote
-    let isDebugCode code = match code with | Code(p,s) -> Abstain 
-    let isDebugClass name =name |> ignore; Abstain
-    let isDebugNode (node: #SyntaxNode) = Abstain
-    let isDebugNodeResult text= Abstain // if String.contains text "AddMinutes" then Promote else Abstain
-    let rec startDebugState state vote : DebugOpt * DebugDelegate =
-        let state = 
-            match state,vote with
-            | Some(x), Abstain -> x
-            | None, Abstain -> DebugOpt.No
-            | Some (DebugOpt.Yes), Promote -> DebugOpt.Indent spacing
-            | Some (DebugOpt.Indent spc), Promote -> DebugOpt.Indent(spc + spacing)
-            | Some (DebugOpt.No), Promote -> DebugOpt.Yes
-            | Some (DebugOpt.Indent spc), Demote -> if spc.Length > spacing.Length then DebugOpt.Indent (String.before spacing spc) else DebugOpt.Yes
-            | _, Demote -> DebugOpt.No
-            | _, Promote -> DebugOpt.Yes
-            
-        let dd = DebugDelegate (fun vote -> startDebugState (Some state) vote)
-        state,dd
-    let getNextDebugState debugDelegate vote =
-        match debugDelegate with |DebugDelegate getDebugOpt -> getDebugOpt vote
-    //let private debugIndent spc debug = match debug with |Yes -> Indent spc |Indent indent -> Indent (indent + spc) | No -> No
-    
-    let childGetDebugOptions (dd: DebugDelegate) (f:unit->DebugVote):DebugOpt*DebugDelegate =
-        let myVote =  f()
-        match dd with |DebugDelegate f -> f myVote
 
 let toFType promoteUninitializedStructsToNullable (t:string) = 
             match String.trim t with
@@ -404,8 +331,37 @@ let mapToken (token:SyntaxToken)=
     | _ as result -> result
 let toSyntaxNodeOpt x = match x with | Some n -> n :> SyntaxNode |> Some | None -> None
 
-let rec mapNode promoteUninitializedStructsToNullable spacing (memberNames:Set<string>) (getDebugOpt: DebugDelegate) (node:SyntaxNode) =
-    let debugOption, getDebugOpt = ScriptOptions.getNextDebugState getDebugOpt (ScriptOptions.isDebugNode node)
+
+let mapPropertyDeclaration (prop:PropertyDeclarationSyntax) =
+    let accessorCount = prop.AccessorList.Accessors.Count
+    if accessorCount > 2 then failwithf "too many accessors %s" prop.Identifier.ValueText
+    let tryFindAccessor k = prop.AccessorList.Accessors |> Seq.tryFind (fun a -> a.Kind() = k)
+    let getter = tryFindAccessor SyntaxKind.GetAccessorDeclaration
+    let setter = tryFindAccessor SyntaxKind.SetAccessorDeclaration
+    {
+            
+            IsINotify=prop.AccessorList.ToFullString().Contains("SetAndNotify")
+            Type = prop.Type.ToFullString()
+            PropertyName = prop.Identifier.ToFullString()
+            FieldName = None 
+            Getter=getter
+            Setter=setter
+    }
+
+let getProperties (root:CompilationUnitSyntax) =
+    let nodes = root.DescendantNodes() |> Array.ofSeq
+    let values = [ 1; 2;3]
+    let values = values|> Seq.ofType<int>
+    nodes
+    |> Seq.map box
+    |> Seq.ofType<PropertyDeclarationSyntax> 
+    |> Seq.map mapPropertyDeclaration
+
+type FileInfoB = {File:Code; Class':string; Bases: string list;Fields:FieldDeclarationSyntax list; Properties: PropertyInfoB list}
+type TranslateOptions = {GetNextDebugState:DebugDelegate -> DebugVote -> DebugOpt * DebugDelegate; IsDebugNode: SyntaxNode -> DebugVote; Spacing:string; SelfIdentifier:string;IsDebugNodeResult:string -> DebugVote}
+
+let rec mapNode translateOptions promoteUninitializedStructsToNullable spacing (memberNames:Set<string>) (getDebugOpt: DebugDelegate) (node:SyntaxNode) =
+    let debugOption, getDebugOpt = translateOptions.GetNextDebugState getDebugOpt (translateOptions.IsDebugNode node)
     
     let inline dumps title (o:'a) :'a = dumps title debugOption o
     let inline dump title o : unit = dumps title o |> ignore
@@ -418,7 +374,7 @@ let rec mapNode promoteUninitializedStructsToNullable spacing (memberNames:Set<s
         dump "HasTrivia" (n.HasLeadingTrivia, n.HasStructuredTrivia, n.HasTrailingTrivia)
         dump "missing,isstructured" (n.IsMissing, n.IsStructuredTrivia)
 
-    let mapNodeP node = mapNode promoteUninitializedStructsToNullable spacing memberNames getDebugOpt node
+    let mapNodeP node = mapNode translateOptions promoteUninitializedStructsToNullable spacing memberNames getDebugOpt node
     
     let mapChildren delimiter (node:#SyntaxNode) = node.ChildNodes() |> Seq.map mapNodeP |> String.join delimiter
     
@@ -493,7 +449,7 @@ let rec mapNode promoteUninitializedStructsToNullable spacing (memberNames:Set<s
         let statement = mapNodeP ifss.Statement
         let elseblock = if ifss.Else <> null then dumps "found else!" <| mapNodeP ifss.Else |> Some else None
         let elseblock,matchType = match elseblock with Some text -> sprintf " %s" text,"IfElseStatementSyntax" | _ -> String.Empty,"IfStatementSyntax"
-        let statements = if statement.Contains("\r\n") then "(*switchstatement multiline*)\r\n" + ScriptOptions.spacing + (String.replace "\r\n" ("\r\n" + ScriptOptions.spacing) statement) + "\r\n" else statement 
+        let statements = if statement.Contains("\r\n") then "(*switchstatement multiline*)\r\n" + translateOptions.Spacing + (String.replace "\r\n" ("\r\n" + translateOptions.Spacing) statement) + "\r\n" else statement 
         matchType, sprintf "if %s then %s%s" (mapNodeP ifss.Condition) statements elseblock
 
     | :? PrefixUnaryExpressionSyntax as pues -> "PrefixUnaryExpressionSyntax", sprintf "not <| ( %s )" (mapNodeP pues.Operand) 
@@ -507,7 +463,6 @@ let rec mapNode promoteUninitializedStructsToNullable spacing (memberNames:Set<s
                 "SwitchSectionSyntax.nostatements", sprintf "%s" label
             else
                 let statement = statements |> Seq.map mapNodeP |> String.join ("(*switch section end*)\r\n") |> String.indent spacing 
-                //let statement = ScriptOptions.spacing + statement
                 if String.IsNullOrEmpty(statement) then 
                     "SwitchSectionSyntax.labelOnly", sprintf "%s" label
                 else if statement |> String.trim |> String.contains "\r\n" then
@@ -538,7 +493,7 @@ let rec mapNode promoteUninitializedStructsToNullable spacing (memberNames:Set<s
         let name = mapNodeP maes.Name
         dump "maes details2" <| sprintf "%A" (expr,token,name)
         match expr, token with
-        | "this","." -> "This(maes)", sprintf "%s.%s" ScriptOptions.selfIdentifier (mapName name)
+        | "this","." -> "This(maes)", sprintf "%s.%s" translateOptions.SelfIdentifier (mapName name)
         | "string","." -> "string(maes)", (sprintf "%s.%s" "String" name|> dumps "maes result")
         | x, _ when x.Contains("this.") -> "this.(maes)", x|> String.replace "this." "x."
         |_ -> "MemberAccessExpressionSyntax", sprintf "%s%s%s" expr token (mapName name)
@@ -578,47 +533,72 @@ let rec mapNode promoteUninitializedStructsToNullable spacing (memberNames:Set<s
         "AddExpression", result
     | _ -> "default",node |> toFull
     |> fun (t,o) -> 
-        let debugOption,getDebugOpt = ScriptOptions.getNextDebugState getDebugOpt (ScriptOptions.isDebugNodeResult o)
+        let debugOption,getDebugOpt = translateOptions.GetNextDebugState getDebugOpt (translateOptions.IsDebugNodeResult o)
         let dumpResult matchType r = dumpf matchType debugOption (fun r-> (node.GetType().Name + "," + matchType + "," + node.Kind().ToString()) + "=\""+ r.ToString()+"\"") r
         dumpResult (sprintf "%s.%s" t <| node.Kind().ToString()) o
 
-let mapNodeChildren promoteUninitializedStructsToNullable spacing (memberNames:Set<string>) (getDebugOpt:DebugDelegate) delimiter (node:#SyntaxNode) = 
+
+module ScriptOptions = 
+
+    let searchLinqPadQueriesForSample() =
+        let myDocs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+        Path.Combine(myDocs,"LINQPad Queries","Roslyn")
+
+    #if INTERACTIVE
+
+    let srcPath = 
+        let workTarget = @"C:\TFS\Pm-Rewrite\Source-dev-rewrite\PracticeManagement\PracticeManagement.Foundation\DataModels"
+        if File.Exists(workTarget) then 
+            workTarget (*  Environment.ExpandEnvironmentVariables("%devroot%"); *) 
+        else
+            let envTarget = Environment.ExpandEnvironmentVariables("%devroot%")
+            if Directory.Exists envTarget then 
+                envTarget
+            else
+            searchLinqPadQueriesForSample()
+    #else
+    let srcPath = searchLinqPadQueriesForSample()
+    #endif
+
+    printfn "searching path %s" srcPath
+    let getDefaultRunOptions () = {Target = CodeGenTarget.Class (PropertyOptions.InheritFsharpViewModule, PromoteUnitializedStructsToNullables.Flag(true)); TypeAttributes = ["AllowNullLiteral"]; Source = CodeSources.Directory (Path srcPath (*  Environment.ExpandEnvironmentVariables("%devroot%"); *) )}
+    let promoteUninitializedStructsToNullable = true
+    let includeOriginalInComments = true
+    let includeMatchTypeInComments = true
+    let selfIdentifier = "x"
+    let spacing = "  "
+
+    let isDebugFieldPred name = if name ="_AppointmentEndTime" then Promote else Demote
+    let isDebugPropPred name = if name = "LOS" then Promote else Demote
+    let isDebugCode code = match code with | Code(p,s) -> Abstain 
+    let isDebugClass name =name |> ignore; Abstain
+    let isDebugNode (_node: #SyntaxNode) = Abstain
+    let isDebugNodeResult (_text:string)= Abstain // if String.contains text "AddMinutes" then Promote else Abstain
+    let rec startDebugState state vote : DebugOpt * DebugDelegate =
+        let state = 
+            match state,vote with
+            | Some(x), Abstain -> x
+            | None, Abstain -> DebugOpt.No
+            | Some (DebugOpt.Yes), Promote -> DebugOpt.Indent spacing
+            | Some (DebugOpt.Indent spc), Promote -> DebugOpt.Indent(spc + spacing)
+            | Some (DebugOpt.No), Promote -> DebugOpt.Yes
+            | Some (DebugOpt.Indent spc), Demote -> if spc.Length > spacing.Length then DebugOpt.Indent (String.before spacing spc) else DebugOpt.Yes
+            | _, Demote -> DebugOpt.No
+            | _, Promote -> DebugOpt.Yes
+            
+        let dd = DebugDelegate (fun vote -> startDebugState (Some state) vote)
+        state,dd
+    let getNextDebugState debugDelegate vote =
+        match debugDelegate with |DebugDelegate getDebugOpt -> getDebugOpt vote
+    //let private debugIndent spc debug = match debug with |Yes -> Indent spc |Indent indent -> Indent (indent + spc) | No -> No
+
+(* end of proper functional approach (from here on out, things may close over important script options *)
+
+
+let mapNodeChildren translateOptions promoteUninitializedStructsToNullable spacing (memberNames:Set<string>) (getDebugOpt:DebugDelegate) delimiter (node:#SyntaxNode) = 
     let debugOption, getDebugOpt = ScriptOptions.getNextDebugState getDebugOpt (ScriptOptions.isDebugNode node)
-    let mapNodeC = mapNode promoteUninitializedStructsToNullable spacing memberNames getDebugOpt
+    let mapNodeC = mapNode translateOptions promoteUninitializedStructsToNullable spacing memberNames getDebugOpt
     node.ChildNodes() |> Seq.map mapNodeC |> String.join delimiter
-
-let mapPropertyDeclaration (prop:PropertyDeclarationSyntax) =
-    let accessorCount = prop.AccessorList.Accessors.Count
-    if accessorCount > 2 then failwithf "too many accessors %s" prop.Identifier.ValueText
-    let tryFindAccessor k = prop.AccessorList.Accessors |> Seq.tryFind (fun a -> a.Kind() = k)
-    let getter = tryFindAccessor SyntaxKind.GetAccessorDeclaration
-    let setter = tryFindAccessor SyntaxKind.SetAccessorDeclaration
-    let defaultResult = 
-        {
-            IsSimpleGet=false;
-            IsINotify=prop.AccessorList.ToFullString().Contains("SetAndNotify")
-            Type = prop.Type.ToFullString()
-            PropertyName = prop.Identifier.ToFullString()
-            FieldName = None 
-            Getter=getter
-            Setter=setter
-        }
-
-    match getter with
-    | Some (SimpleGetter (block,ret,ident)) -> 
-        {defaultResult with IsSimpleGet = true;FieldName= if ident.ToFullString().StartsWith("_") then Some <| (mapName (ident.ToFullString())) else None}
-    | _ -> defaultResult
-    
-let getProperties (root:CompilationUnitSyntax) =
-    let nodes = root.DescendantNodes() |> Array.ofSeq
-    let values = [ 1; 2;3]
-    let values = values|> Seq.ofType<int>
-    nodes
-    |> Seq.map box
-    |> Seq.ofType<PropertyDeclarationSyntax> 
-    |> Seq.map mapPropertyDeclaration
-
-type FileInfoB = {File:Code; Class':string; Bases: string list;Fields:FieldDeclarationSyntax list; Properties: PropertyInfoB list}
 
 let getFileInfoFromSource (source:(_*_*Dictionary<string,string list>) option seq) = 
     let files' = source |> Seq.choose id |> Array.ofSeq
@@ -697,21 +677,22 @@ module Declarations =
             | _ -> None
         | _ -> None
 
-(* end of proper functional approach (from here on out, things may close over important script options *)
+
 let getFileInfoFrom source = 
     let files = getFiles source
     getFileInfoFromSource files
+
 //let commence files = 
 module FieldConversion =
     open Declarations 
     type FieldInfoB = {Type:string; Name:string; Initial:string option; Declaration:VariableDeclarationSyntax}
-    let convertFileFields promoteUninitializedStructsToNullable spacing (fileInfoB:FileInfoB) (getDebugOpt:DebugDelegate) : string list =
+    let convertFileFields translateOptions promoteUninitializedStructsToNullable spacing (fileInfoB:FileInfoB) (getDebugOpt:DebugDelegate) : string list =
         let promoteUninitializedStructsToNullable = match promoteUninitializedStructsToNullable with | Flag b -> b
         let cls = fileInfoB
         
-        let inline mapNode memberNames = mapNode promoteUninitializedStructsToNullable memberNames
+        let inline mapNode memberNames = mapNode translateOptions promoteUninitializedStructsToNullable memberNames
         let toFType = toFType promoteUninitializedStructsToNullable
-        let mapNodeChildren memberNames = mapNodeChildren promoteUninitializedStructsToNullable memberNames
+        let mapNodeChildren memberNames = mapNodeChildren translateOptions promoteUninitializedStructsToNullable memberNames
         let debugOption, getDebugOpt = ScriptOptions.getNextDebugState getDebugOpt  (ScriptOptions.isDebugClass cls.Class')
         
         //let typeText = new System.Text.StringBuilder()
@@ -827,13 +808,13 @@ module FieldConversion =
 module PropConversion = 
     open Declarations
 
-    let toFProp target spacing (propertyNames:Set<string>) (pib:PropertyInfoB) (getDebugOpt:DebugDelegate) = 
+    let toFProp translateOptions target spacing (propertyNames:Set<string>) (pib:PropertyInfoB) (getDebugOpt:DebugDelegate) = 
         let debugOpt, getDebugOpt = ScriptOptions.getNextDebugState getDebugOpt (ScriptOptions.isDebugPropPred pib.PropertyName)
         match target with
         |CodeGenTarget.Interface -> sprintf "member %s:%s" pib.PropertyName pib.Type
         |Class(propertyHandling, promote) ->
             let promote = match promote with |PromoteUnitializedStructsToNullables.Flag b -> b
-            let mapNode = mapNode promote spacing propertyNames
+            let mapNode = mapNode translateOptions promote spacing propertyNames
             let fDec getter setter matchType= 
                 let spc = ScriptOptions.spacing
                 match getter,setter with
@@ -873,70 +854,66 @@ module PropConversion =
             let mapGetter name = mapAccessor name "getter"
             let mapSetter name = mapAccessor name "setter"
 
-            match pib.IsINotify, pib.IsSimpleGet, pib.FieldName with
-            | true,true, Some fieldName -> fDec pib.FieldName (Some (iNotifyProp fieldName pib.PropertyName)) "SimpleINotify"
-            | _ -> 
-            
-                let spacing = spacing + spacing + spacing
-                let mapAccessor map childnodes = childnodes |> Seq.toArray |> map pib.PropertyName |> String.replace "\r\n" (sprintf "\r\n%s" spacing) |> Some
-                let mapGetter (getter:AccessorDeclarationSyntax) = getter.ChildNodes()|> mapAccessor mapGetter
-                let mapSetter (setter:AccessorDeclarationSyntax) = setter.ChildNodes()|> mapAccessor mapSetter
-                let value = match pib.Type with | "bool" -> "false" | _ -> "null"
-                match pib.Getter,pib.Setter with
-                | AutoProperty -> 
-                    debugPropLines pib.PropertyName None [sprintf "AutoProperty type,value:(%s,%s)" pib.Type value]
-                    sprintf "%smember val %s : %s = %s with get, set\r\n" spacing pib.PropertyName pib.Type value
-                | Some getter, Some setter ->
-                    let getter = mapGetter getter
-                    let matchType,setter' = 
-                        let full = toFull setter
-                        let match' = System.Text.RegularExpressions.Regex.Match(full,@"set\s*{\s*this\.SetAndNotify\(\(\)\s*=>\s*this\.(?<name>\w+),\s*ref\s*_\k<name>,\s*value\);\s*}")
-                        if match'.Success then
-                            let fieldName = match pib.FieldName with | Some fn -> fn | _ -> ("_" + match'.Groups.[1].Value)
-                            let debugPropLines = debugPropLines pib.PropertyName
-                            let result = 
-                                match propertyHandling with 
-                                | InheritFsharpViewModule -> iNotifyProp fieldName pib.PropertyName
-                                | KeepNotify -> iNotifyProp fieldName pib.PropertyName
-                                | NoNotify -> simpleSet fieldName
-                            let sSetter = setter :> SyntaxNode |> Some
-                            debugPropLines sSetter [
-                                fieldName
-                                full
-                                result
-                            ]
-                            "mapSetterMatchINotify", Some result
-                        else
-                            "using existing getter and setter",mapSetter setter
-                    fDec getter setter' matchType
-                | Some getter, None ->
-                    fDec (mapGetter getter) None "using existing getter"
-                | _ -> sprintf "  // could not generate property for %A\r\n" pib.PropertyName
+            let spacing = spacing + spacing + spacing
+            let mapAccessor map childnodes = childnodes |> Seq.toArray |> map pib.PropertyName |> String.replace "\r\n" (sprintf "\r\n%s" spacing) |> Some
+            let mapGetter (getter:AccessorDeclarationSyntax) = getter.ChildNodes()|> mapAccessor mapGetter
+            let mapSetter (setter:AccessorDeclarationSyntax) = setter.ChildNodes()|> mapAccessor mapSetter
+            let value = match pib.Type with | "bool" -> "false" | _ -> "null"
+            match pib.Getter,pib.Setter with
+            | AutoProperty -> 
+                debugPropLines pib.PropertyName None [sprintf "AutoProperty type,value:(%s,%s)" pib.Type value]
+                sprintf "%smember val %s : %s = %s with get, set\r\n" spacing pib.PropertyName pib.Type value
+            | Some getter, Some setter ->
+                let getter = mapGetter getter
+                let matchType,setter' = 
+                    let full = toFull setter
+                    let match' = System.Text.RegularExpressions.Regex.Match(full,@"set\s*{\s*this\.SetAndNotify\(\(\)\s*=>\s*this\.(?<name>\w+),\s*ref\s*_\k<name>,\s*value\);\s*}")
+                    if match'.Success then
+                        let fieldName = match pib.FieldName with | Some fn -> fn | _ -> ("_" + match'.Groups.[1].Value)
+                        let debugPropLines = debugPropLines pib.PropertyName
+                        let result = 
+                            match propertyHandling with 
+                            | InheritFsharpViewModule -> iNotifyProp fieldName pib.PropertyName
+                            | KeepNotify -> iNotifyProp fieldName pib.PropertyName
+                            | NoNotify -> simpleSet fieldName
+                        let sSetter = setter :> SyntaxNode |> Some
+                        debugPropLines sSetter [
+                            fieldName
+                            full
+                            result
+                        ]
+                        "mapSetterMatchINotify", Some result
+                    else
+                        "using existing getter and setter",mapSetter setter
+                fDec getter setter' matchType
+            | Some getter, None ->
+                fDec (mapGetter getter) None "using existing getter"
+            | _ -> sprintf "  // could not generate property for %A\r\n" pib.PropertyName
 
-    let convertProperties target spacing (fileInfoB:FileInfoB) = 
+    let convertProperties translateOptions target spacing (fileInfoB:FileInfoB) = 
         let debugOpt,getDebugOpt = ScriptOptions.startDebugState None (ScriptOptions.isDebugCode fileInfoB.File)
         let propNames = fileInfoB.Properties|> Seq.map(fun p -> mapName p.PropertyName) |> Set.ofSeq
         let props promote = fileInfoB.Properties |> Seq.map(fun p -> {p with PropertyName=mapName p.PropertyName;Type=toFType promote p.Type}) |> Seq.sortBy ( fun p -> p.PropertyName) 
         match target with
         | CodeGenTarget.Interface -> //target spacing (propertyNames:Set<string>) (pib:PropertyInfoB) (getDebugOpt:DebugDelegate) 
-            let f (prop:PropertyInfoB) = toFProp target spacing propNames prop getDebugOpt
+            let f (prop:PropertyInfoB) = toFProp translateOptions target spacing propNames prop getDebugOpt
             props false |> Seq.map f
         | CodeGenTarget.Class(_,promote) -> 
             let promoteUninitializedStructsToNullable = (match promote with |Flag promote -> promote)
             let toFType = toFType promoteUninitializedStructsToNullable 
-            let f (prop:PropertyInfoB) = toFProp target spacing propNames prop getDebugOpt
+            let f (prop:PropertyInfoB) = toFProp translateOptions target spacing propNames prop getDebugOpt
             props promoteUninitializedStructsToNullable |> Seq.map f
 
-let convertFile spacing typeAttrs target (cls:FileInfoB) = 
+let convertFile translateOptions spacing typeAttrs target (cls:FileInfoB) = 
     let debugOpt,getDebugOpt = ScriptOptions.startDebugState None (ScriptOptions.isDebugCode cls.File)
     
     match target with 
     //| RecordBasedClass (propertyPrefs,promote)  -> String.Empty
     | Record -> 
-        let props = PropConversion.convertProperties target ScriptOptions.spacing cls 
+        let props = PropConversion.convertProperties translateOptions target ScriptOptions.spacing cls 
         sprintf "type %sRecord={%s}" cls.Class' (String.join ";" props)
     | CodeGenTarget.Interface ->
-        let props = PropConversion.convertProperties target ScriptOptions.spacing cls
+        let props = PropConversion.convertProperties translateOptions target ScriptOptions.spacing cls
         sprintf "type I%s =\r\n%s" cls.Class' (props |> Seq.map (sprintf "abstract %s") |> String.join ";")
     | CodeGenTarget.Class (propertyPrefs,promote) ->
         let spacing = ScriptOptions.spacing
@@ -951,13 +928,13 @@ let convertFile spacing typeAttrs target (cls:FileInfoB) =
             let buildInterface() : ClassMember = ClassMember.Interface <| sprintf " interface %s\r\n" "System.ComponentModel.INotifyPropertyChanged"
             match propertyPrefs with | PropertyOptions.KeepNotify -> {classD with Members = buildInterface() :: classD.Members} |_ -> classD
 
-        let classD ={classD with Fields = FieldConversion.convertFileFields promote spacing  cls getDebugOpt}
-        let props = PropConversion.convertProperties target spacing cls |> Seq.map (String.indent spacing)
+        let classD ={classD with Fields = FieldConversion.convertFileFields translateOptions promote spacing  cls getDebugOpt}
+        let props = PropConversion.convertProperties translateOptions target spacing cls |> Seq.map (String.indent spacing)
         let text = sprintf "%s\r\ntype %s() = \r\n%s\r\n\r\n" (classD.AttributeText()) cls.Class' (ScriptOptions.spacing + String.optionToStringOrEmpty classD.BaseClass)
         let text = new System.Text.StringBuilder(text)
         text.AppendLine(classD.FieldText spacing).AppendLine(String.join "\r\n" props).ToString()
 
-let ``convertToF#`` (runOptions:ConversionRunOptions option) limit =
+let ``convertToF#`` translateOptions (runOptions:ConversionRunOptions option) limit =
     let runOptions = match runOptions with |Some ro -> ro | None -> ScriptOptions.getDefaultRunOptions()
     let lines = ref 0
     let classes = ref 0
@@ -969,7 +946,7 @@ let ``convertToF#`` (runOptions:ConversionRunOptions option) limit =
         
         for cls in items do
             //printfn "Starting conversion %s" cls.Class'
-            let text = convertFile ScriptOptions.spacing runOptions.TypeAttributes runOptions.Target cls
+            let text = convertFile translateOptions ScriptOptions.spacing runOptions.TypeAttributes runOptions.Target cls
             let split = text.Split([| "\r\n" |], StringSplitOptions.RemoveEmptyEntries)
             lines := !lines +  (split |> Seq.length)
             classes:= !classes + 1
@@ -978,20 +955,20 @@ let ``convertToF#`` (runOptions:ConversionRunOptions option) limit =
     printfn "converted %i classes, %i lines" !classes !lines
     converted()
 
-let convertUsingDefaults fileInfos target= 
+let convertUsingDefaults translateOptions fileInfos target= 
     let options = ScriptOptions.getDefaultRunOptions()
     let target = findModel target fileInfos
-    let target' = target |> Option.map(convertFile ScriptOptions.spacing options.TypeAttributes options.Target)
+    let target' = target |> Option.map(convertFile translateOptions ScriptOptions.spacing options.TypeAttributes options.Target)
     target'
 
-let pdm' fileInfos = convertUsingDefaults fileInfos "PatientDataModel" 
-let apm' fileInfos = convertUsingDefaults fileInfos "AppointmentDataModel"
+let pdm' fileInfos = convertUsingDefaults {TranslateOptions.GetNextDebugState= ScriptOptions.getNextDebugState; IsDebugNode=ScriptOptions.isDebugNode;Spacing=ScriptOptions.spacing;SelfIdentifier=ScriptOptions.selfIdentifier; IsDebugNodeResult=ScriptOptions.isDebugNodeResult} fileInfos "PatientDataModel" 
+let apm' fileInfos = convertUsingDefaults {TranslateOptions.GetNextDebugState= ScriptOptions.getNextDebugState; IsDebugNode=ScriptOptions.isDebugNode;Spacing=ScriptOptions.spacing;SelfIdentifier=ScriptOptions.selfIdentifier; IsDebugNodeResult=ScriptOptions.isDebugNodeResult}fileInfos "AppointmentDataModel"
 
 #if INTERACTIVE
 #r "System.Windows.Forms"
 #endif
 
-let getClip text = System.Windows.Forms.Clipboard.GetText()
+let getClip () = System.Windows.Forms.Clipboard.GetText()
 let setClip text = if text <> null then System.Windows.Forms.Clipboard.SetText(text)
 
 let getClassToClip f= 
@@ -1001,7 +978,9 @@ let getClassToClip f=
 let pdm () = 
     printfn "starting on patient data model"
     getClassToClip (fun s -> pdm' (getFileInfoFrom s))
+
 let apm () = getClassToClip (fun s -> apm' (getFileInfoFrom s))
+
 let chargeDataModelToInterface() = 
     let options = {
         ConversionRunOptions.Source= Path @"C:\TFS\Pm-Rewrite\Source-dev-rewrite\PracticeManagement\Pm.ViewModelsC\DataModels\ChargeDataModel.cs" |> CodeSource.File |> CodeSources.CodeSource 
@@ -1009,10 +988,10 @@ let chargeDataModelToInterface() =
         ConversionRunOptions.TypeAttributes = List.empty
     }
     let fileInfo = getFileInfoFrom options.Source |> Seq.head
-    convertFile ScriptOptions.spacing options.TypeAttributes options.Target fileInfo
+    convertFile {TranslateOptions.GetNextDebugState= ScriptOptions.getNextDebugState; IsDebugNode=ScriptOptions.isDebugNode;Spacing=ScriptOptions.spacing;SelfIdentifier=ScriptOptions.selfIdentifier; IsDebugNodeResult=ScriptOptions.isDebugNodeResult}ScriptOptions.spacing options.TypeAttributes options.Target fileInfo
 let clipAll runOptions= 
 
-    let converted = ``convertToF#`` runOptions None 
+    let converted = ``convertToF#`` {TranslateOptions.GetNextDebugState= ScriptOptions.getNextDebugState; IsDebugNode=ScriptOptions.isDebugNode;Spacing=ScriptOptions.spacing;SelfIdentifier=ScriptOptions.selfIdentifier; IsDebugNodeResult=ScriptOptions.isDebugNodeResult} runOptions None 
     if Seq.isEmpty converted then
         printfn "nothing converted"
     else
