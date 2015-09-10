@@ -385,22 +385,7 @@ let findModel name fileInfoBseq  =
 module Declarations = 
     let (|EmptyEnumerable|NonEmpty|) (items: _ IEnumerable) =
         if Seq.isEmpty items then EmptyEnumerable else NonEmpty
-    let (|SimpleInit|_|) (nodes:SyntaxNode[]) =
-        let simpleKinds = [ 
-            SyntaxKind.NumericLiteralExpression
-            SyntaxKind.StringLiteralExpression
-            SyntaxKind.NullLiteralExpression
-            SyntaxKind.FalseLiteralExpression
-            SyntaxKind.TrueLiteralExpression
-            ]
-        if nodes.Length = 4 
-            && nodes.[0] :? PredefinedTypeSyntax
-            && nodes.[1] :? VariableDeclaratorSyntax
-            && nodes.[2] :? EqualsValueClauseSyntax
-            && simpleKinds |> Seq.contains (nodes.[3].Kind()) then
-                Some (nodes.[0] :?> PredefinedTypeSyntax, nodes.[1] :?> VariableDeclaratorSyntax, nodes.[2] :?> EqualsValueClauseSyntax, nodes.[3] )
-            else None
-    
+
     let (|ArrayMatch|_|) (typeSpecifications: TypeSpecification[]) (nodes:SyntaxNode[]) =
         if nodes.Length = typeSpecifications.Length then
             let zipped = Seq.zip typeSpecifications nodes
@@ -738,10 +723,10 @@ module FieldConversion =
             //printfn "starting field %s" name
             let mapNode = mapNode spacing memberNames
             
-            let getNodeDebugOptions expr= ScriptOptions.getNextDebugState getDebugOpt (ScriptOptions.isDebugNode expr)
+            let getNodeDebugOptions expr= translateOptions.GetNextDebugState getDebugOpt (translateOptions.IsDebugNode expr)
                 
             let debugLines expr lines:unit = 
-                let debugOpt,_ = ScriptOptions.getNextDebugState getDebugOpt  (ScriptOptions.isDebugNode expr)
+                let debugOpt,_ = translateOptions.GetNextDebugState getDebugOpt  (translateOptions.IsDebugNode expr)
                 debugLines debugOpt lines //  let debugLines debug (lines:string seq) = 
             //let mapIndent expr :string = mapNode memberNames (ScriptOptions.getNextDebugState (ScriptOptions.isDebugNode expr)) expr
             let fDec init matchType = 
@@ -765,28 +750,6 @@ module FieldConversion =
                 | NullableSimplerInit -> fDec eqNullable  "NullableSimplerInit"
                 | NullableSimpleInit -> fDec eqNullable  "NullableSimpleInit"
                 | SimplerInit(_,_) -> fDec  (if type'.Contains("Nullable") then eqNullable  else  "=null") "simpler init" //(Some (fun shouldLift -> if shouldLift then "Nullable()" else fDec "null"))
-                | SimpleInit (_,_,_, literalKind) -> fDec  ("=" + toFull literalKind) "simple init"
-                | nodes when nodes.Length > 3 && (nodes.[0] :? PredefinedTypeSyntax) && (nodes.[1] :? VariableDeclaratorSyntax) && (nodes.[2] :? EqualsValueClauseSyntax) -> 
-                    [
-                        yield sprintf "predefined fieldtype node %s" name
-                        yield! nodes |> Seq.map (fun n -> n.Kind().ToString()) |> Seq.map (fun m -> sprintf "%s" m)
-                    ] |> debugLines vDeclaration
-                    let node = nodes |> Array.skip(3) |> Seq.head
-                    let debugOpt,getDebugOpt = ScriptOptions.getNextDebugState getDebugOpt  (ScriptOptions.isDebugNode node)
-                    let mapped = mapNode getDebugOpt node
-                    debugLines node [sprintf "mapped:%s" mapped]
-                    let result = fDec ("=" + mapped ) "predefinedType init"
-                    debugLines node [ sprintf "  %s" result]
-                    result
-                | _ when children.Length = 2 && (children.[0] :? VariableDeclaratorSyntax) && (children.[1] :? EqualsValueClauseSyntax) ->
-                    let vds = children.[0] :?> VariableDeclaratorSyntax
-                    let evcs = children.[1] :?> EqualsValueClauseSyntax
-                    let right = mapNode getDebugOpt evcs
-                    debugLines evcs.Value [
-                        "fieldChildNodes2"
-                        right 
-                    ]
-                    fDec ("=" + right) "fieldChildNodes2"
                 | _ -> 
                     debugLines vDeclaration [
                         yield "fieldDefaultsChildNodes"
@@ -925,8 +888,8 @@ let convertFile translateOptions spacing typeAttrs target (cls:FileInfoB) =
         let classD ={classD with Fields = FieldConversion.convertFileFields translateOptions promote spacing  cls getDebugOpt}
         let props = PropConversion.convertProperties translateOptions target spacing cls |> Seq.map (String.indent spacing)
         let filename = match cls.File with 
-            |Code (Some path,_) -> match path with |Path p -> p
-            | _ -> "unknown"
+                        |Code (Some path,_) -> match path with |Path p -> p
+                        | _ -> "unknown"
         let text = sprintf "%s\r\ntype %s() = \\\\ translated from %s\r\n%s\r\n\r\n" (classD.AttributeText()) cls.Class' filename (translateOptions.Spacing + String.optionToStringOrEmpty classD.BaseClass)
         let text = new System.Text.StringBuilder(text)
         text.AppendLine(classD.FieldText spacing).AppendLine(String.join "\r\n" props).ToString()
