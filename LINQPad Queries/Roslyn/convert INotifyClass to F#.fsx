@@ -157,9 +157,6 @@ let (|Null|Empty|Single|Multiline|) (s:string)=
     | x when String.trim s |> String.contains "\r\n" -> Multiline
     | _ -> Single
 
-
-
-
 type Identifier = | Identifier of string
 
 type DebugOpt = | Yes | Indent of string | No
@@ -313,7 +310,7 @@ type PropertyInfoB = { IsINotify:bool; Type:string; FieldName: string option; Pr
 let mapName s= 
         match String.trim s with
         | "" -> failwithf "name cannot be empty"
-        | Id when Id.EndsWith("ID") -> Id |> String.before "ID" |> flip (+) "Id"
+        //| Id when Id.EndsWith("ID") -> Id |> String.before "ID" |> flip (+) "Id"
         | _ as s -> s
 
 
@@ -459,7 +456,7 @@ let rec mapNode translateOptions promoteUninitializedStructsToNullable spacing (
     | :? InvocationExpressionSyntax as ies -> 
         
         let expr = mapNodeP ies.Expression
-
+        let expr = if expr = "RaisePropertyChanged" then sprintf "%s.%s" translateOptions.SelfIdentifier expr else expr
         if  expr.Contains("AddMinutes") then
             dump "IES:AddMinutes" ies.ArgumentList.Arguments.[0]
         let ignoredResult = expr.StartsWith("builder.Append")
@@ -564,18 +561,19 @@ let rec mapNode translateOptions promoteUninitializedStructsToNullable spacing (
     | :? BreakStatementSyntax as bss ->
         "BreakStatementSyntax", String.Empty
     | :? MemberAccessExpressionSyntax as maes -> 
-        //dump "maes details" <| sprintf "%A" (maes.Name,maes.Expression, maes.OperatorToken)
-        
         let expr = mapNodeP maes.Expression
         let token = mapToken maes.OperatorToken
         let name = mapNodeP maes.Name
-        dump "maes details2" <| sprintf "%A" (expr,token,name)
+        dump "maes details" <| sprintf "%A" (expr,token,name)
         match expr, token with
-        | "this","." -> "This(maes)", sprintf "%s.%s" translateOptions.SelfIdentifier (mapName name)
-        | "string","." -> "string(maes)", (sprintf "%s.%s" "String" name|> dumps "maes result")
-        | x, _ when x.Contains("this.") -> "this.(maes)", x|> String.replace "this." "x."
+        | "this","." -> 
+            "This(maes)", sprintf "%s.%s" translateOptions.SelfIdentifier (mapName name)
+        | "string","." -> 
+            "string(maes)", (sprintf "%s.%s" "String" name|> dumps "maes result")
+        | x, _ when x.Contains("this.") -> "this.(maes)", x |> String.replace "this." (sprintf "%s." translateOptions.SelfIdentifier)
         |_ -> "MemberAccessExpressionSyntax", sprintf "%s%s%s" expr token (mapName name)
-    | :? ThisExpressionSyntax as tes -> "ThisExpressionSyntax", "x"
+
+    | :? ThisExpressionSyntax as tes -> "ThisExpressionSyntax", translateOptions.SelfIdentifier
     | :? ArgumentSyntax as arg -> "ArgumentSyntax", mapChildren String.Empty arg 
     | :? BinaryExpressionSyntax as bes -> "BinaryExpressionSyntax", sprintf "%s %s %s" (mapNodeP bes.Left) (mapToken bes.OperatorToken) (mapNodeP bes.Right)
     | :? ExpressionStatementSyntax as ess -> "ExpressionStatementSyntax", mapChildren String.Empty ess
@@ -608,20 +606,15 @@ let rec mapNode translateOptions promoteUninitializedStructsToNullable spacing (
     | :? GenericNameSyntax as gns ->
         "GenericNameSyntax", node |> toFull
     | n when n.Kind() = SyntaxKind.AddExpression ->
-        //if printDebug then 
-            //printfn "AddExpression is type %s" (n.GetType().Name)
-            //n|> dumps "mapNode:AddExpression" |> ignore
         let result = toFull n
-        //if printDebug then 
-            //result |> dumps "mapNode:AddExpressionText" |> ignore
         "AddExpression", result
     | _ -> 
         let result = node |> toFull
         printfn "using default for %s %A" (node.GetType().Name) node
         printfn "result would be %s" result
-        //failwithf "stopping at default"
         "default",node |> toFull
     |> fun (t,o) -> 
+        if o.Contains("bool_IsChecked") then failwithf "bad field init %s %s %A" t o node
         let debugOption,getDebugOpt = translateOptions.GetNextDebugState getDebugOpt (translateOptions.IsDebugNodeResult o)
         let dumpResult matchType r = dumpf matchType debugOption (fun r-> (node.GetType().Name + "," + matchType + "," + node.Kind().ToString()) + "=\""+ r.ToString()+"\"") r
         dumpResult (sprintf "%s.%s" t <| node.Kind().ToString()) o
@@ -792,11 +785,11 @@ module PropConversion =
             let fDec getter setter matchType= 
                 let spc = translateOptions.Spacing
                 match getter,setter with
-                | Some getter, Some setter -> sprintf "member x.%s //%s\r\n%swith get() = %s\r\n%sand set v = %s\r\n" pib.PropertyName matchType spc getter spc setter
+                | Some getter, Some setter -> sprintf "member x.%s //%s\r\n%swith get() = %s\r\n%sand set value = %s\r\n" pib.PropertyName matchType spc getter spc setter
                 | Some getter, None -> sprintf "member x.%s //%s\r\n%swith get() = %s\r\n" pib.PropertyName matchType spc getter
-                | None, Some setter -> sprintf "member x.%s //%s\r\n%swith set v = %s\r\n" pib.PropertyName matchType spc setter
+                | None, Some setter -> sprintf "member x.%s //%s\r\n%swith set value = %s\r\n" pib.PropertyName matchType spc setter
                 | None,None -> sprintf "//could not declare property %s" matchType
-            let inline simpleSet fieldName = sprintf "%s <- v" fieldName
+            let inline simpleSet fieldName = sprintf "%s <- value" fieldName
             let inline iNotifyProp fieldName propName =
                 sprintf "%s;x.RaisePropertyChanged(<@ x.%s @>)" (simpleSet fieldName) propName // F# Quotations with INotifyPropertyChanged -> see also http://www.fssnip.net/4Q
             let getDebugPropOptions name = translateOptions.GetNextDebugState getDebugOpt  (translateOptions.IsDebugPropPred name)
@@ -836,10 +829,11 @@ module PropConversion =
             match pib.Getter,pib.Setter with
             | AutoProperty -> 
                 debugPropLines pib.PropertyName None [sprintf "AutoProperty type,value:(%s,%s)" pib.Type value]
-                sprintf "%smember val %s : %s = %s with get, set\r\n" spacing pib.PropertyName pib.Type value
+                sprintf "member val %s : %s = %s with get, set\r\n" pib.PropertyName pib.Type value
             | Some getter, Some setter ->
                 let getter = mapGetter getter
                 let matchType,setter' = 
+                    
                     let full = toFull setter
                     // for case insensitivity on the field name use @"set\s*{\s*this\.SetAndNotify\(\(\)\s*=>\s*this\.(?<name>\w+),\s*ref\s*_(?i)\k<name>,\s*value\);\s*}"
                     let match' = System.Text.RegularExpressions.Regex.Match(full,@"set\s*{\s*this\.SetAndNotify\(\(\)\s*=>\s*this\.(?<name>\w+),\s*ref\s*_\k<name>,\s*value\);\s*}")
@@ -973,8 +967,8 @@ let chargeDataModelToInterface() =
     }
     let fileInfo = getFileInfoFrom options.Source |> Seq.head
     convertFile {TranslateOptions.GetNextDebugState= ScriptOptions.getNextDebugState; IsDebugNode=ScriptOptions.isDebugNode;Spacing=ScriptOptions.spacing;SelfIdentifier=ScriptOptions.selfIdentifier; IsDebugNodeResult=ScriptOptions.isDebugNodeResult;IsDebugPropPred = ScriptOptions.isDebugPropPred}ScriptOptions.spacing options.TypeAttributes options.Target fileInfo
-let clipAll runOptions= 
 
+let clipAll runOptions= 
     let converted = ``convertToF#`` {TranslateOptions.GetNextDebugState= ScriptOptions.getNextDebugState; IsDebugNode=ScriptOptions.isDebugNode;Spacing=ScriptOptions.spacing;SelfIdentifier=ScriptOptions.selfIdentifier; IsDebugNodeResult=ScriptOptions.isDebugNodeResult;IsDebugPropPred = ScriptOptions.isDebugPropPred} runOptions None 
     if Seq.isEmpty converted then
         printfn "nothing converted"
