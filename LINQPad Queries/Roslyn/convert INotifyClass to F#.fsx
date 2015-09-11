@@ -4,6 +4,7 @@ open System.Collections.Generic
 open System.IO
 
 #if INTERACTIVE
+#r "System.IO"
 #r "System.IO.Compression.FileSystem"
 open System.IO //open it again, since it has changed
 #I __SOURCE_DIRECTORY__
@@ -116,6 +117,7 @@ type TargetCode =
 type PropertyOptions =
     | NoNotify
     | KeepNotify
+    | InheritViewModelBase
     | InheritFsharpViewModule
     
 type CodeGenTarget = 
@@ -482,6 +484,11 @@ let rec mapNode translateOptions promoteUninitializedStructsToNullable spacing (
             "LocalDeclarationStatementSyntax", ldss |> toFull |> String.replace "var " "let " |> String.trim
     | :? ConditionalExpressionSyntax as ces ->
         "ConditionalExpressionSyntax", sprintf "(if %s then %s else %s )" (mapNodeP ces.Condition) (mapNodeP ces.WhenTrue) (mapNodeP ces.WhenFalse)
+    | :? ParenthesizedLambdaExpressionSyntax as ples ->
+        if ples.ParameterList.Parameters.Count > 0 then
+            "ParenthesizedLambdaExpressionSyntaxWithParameters", node |> toFull
+        else
+            "ParenthesizedLambdaExpressionSyntax", sprintf "fun () -> %s" (mapNodeP ples.Body)
     | :? ParenthesizedExpressionSyntax as pes ->
         "ParenthesizedExpressionSyntax", sprintf "(%s)" (mapNodeP pes.Expression)
     | :? ElementAccessExpressionSyntax as eaes ->
@@ -594,6 +601,12 @@ let rec mapNode translateOptions promoteUninitializedStructsToNullable spacing (
                 "Ins:()", sprintf "x.%s" name
             else
                  "IdentifierNameSyntax", sprintf "%s" (mapName ins.Identifier.ValueText)
+    | :? ObjectCreationExpressionSyntax as oces ->
+        "ObjectCreationExpressionSyntax", node |> toFull
+    | :? PredefinedTypeSyntax as pts ->
+        "PredefinedTypeSyntax", node |> toFull
+    | :? GenericNameSyntax as gns ->
+        "GenericNameSyntax", node |> toFull
     | n when n.Kind() = SyntaxKind.AddExpression ->
         //if printDebug then 
             //printfn "AddExpression is type %s" (n.GetType().Name)
@@ -602,7 +615,12 @@ let rec mapNode translateOptions promoteUninitializedStructsToNullable spacing (
         //if printDebug then 
             //result |> dumps "mapNode:AddExpressionText" |> ignore
         "AddExpression", result
-    | _ -> "default",node |> toFull
+    | _ -> 
+        let result = node |> toFull
+        printfn "using default for %s %A" (node.GetType().Name) node
+        printfn "result would be %s" result
+        //failwithf "stopping at default"
+        "default",node |> toFull
     |> fun (t,o) -> 
         let debugOption,getDebugOpt = translateOptions.GetNextDebugState getDebugOpt (translateOptions.IsDebugNodeResult o)
         let dumpResult matchType r = dumpf matchType debugOption (fun r-> (node.GetType().Name + "," + matchType + "," + node.Kind().ToString()) + "=\""+ r.ToString()+"\"") r
@@ -638,7 +656,7 @@ module ScriptOptions =
     #endif
 
     printfn "searching path %s" srcPath
-    let getDefaultRunOptions () = {Target = CodeGenTarget.Class (PropertyOptions.InheritFsharpViewModule, PromoteUnitializedStructsToNullables.Flag(true)); TypeAttributes = ["AllowNullLiteral"]; Source = CodeSources.Directory (Path srcPath (*  Environment.ExpandEnvironmentVariables("%devroot%"); *) )}
+    let getDefaultRunOptions () = {Target = CodeGenTarget.Class (PropertyOptions.InheritViewModelBase, PromoteUnitializedStructsToNullables.Flag(true)); TypeAttributes = ["AllowNullLiteral"]; Source = CodeSources.Directory (Path srcPath (*  Environment.ExpandEnvironmentVariables("%devroot%"); *) )}
     let promoteUninitializedStructsToNullable = true
     let includeOriginalInComments = true
     let includeMatchTypeInComments = true
@@ -646,8 +664,8 @@ module ScriptOptions =
     let spacing = "  "
 
     let isDebugFieldPred name = if name ="_AppointmentEndTime" then Promote else Demote
-    let isDebugPropPred name = if name = "LOS" then Promote else Demote
-    let isDebugCode code = match code with | Code(p,s) -> Abstain 
+    let isDebugPropPred name = if name = "LOS" || name = "WeightVital" || name = "NeedleSize" then Promote else Demote
+    let isDebugCode code = match code with | Code(_p,_s) -> Abstain 
     let isDebugClass name =name |> ignore; Abstain
     let isDebugNode (_node: #SyntaxNode) = Abstain
     let isDebugNodeResult (_text:string)= Abstain // if String.contains text "AddMinutes" then Promote else Abstain
@@ -831,6 +849,7 @@ module PropConversion =
                         let result = 
                             match propertyHandling with 
                             | InheritFsharpViewModule -> iNotifyProp fieldName pib.PropertyName
+                            | InheritViewModelBase -> iNotifyProp fieldName pib.PropertyName
                             | KeepNotify -> iNotifyProp fieldName pib.PropertyName
                             | NoNotify -> simpleSet fieldName
                         let sSetter = setter :> SyntaxNode |> Some
@@ -877,7 +896,11 @@ let convertFile translateOptions spacing typeAttrs target (cls:FileInfoB) =
         let classD = {
             ClassAttributes = typeAttrs
             Name=cls.Class'
-            BaseClass= match propertyPrefs with | PropertyOptions.InheritFsharpViewModule -> Some "  inherit FSharp.ViewModule.ViewModelBase()" |_ -> None
+            BaseClass= 
+                match propertyPrefs with 
+                | PropertyOptions.InheritFsharpViewModule -> Some "inherit FSharp.ViewModule.ViewModelBase()"
+                | PropertyOptions.InheritViewModelBase -> Some "inherit ViewModelBase()"
+                |_ -> None
             Fields=  List.empty
             Members = List.empty
             }
@@ -890,7 +913,7 @@ let convertFile translateOptions spacing typeAttrs target (cls:FileInfoB) =
         let filename = match cls.File with 
                         |Code (Some path,_) -> match path with |Path p -> p
                         | _ -> "unknown"
-        let text = sprintf "%s\r\ntype %s() = \\\\ translated from %s\r\n%s\r\n\r\n" (classD.AttributeText()) cls.Class' filename (translateOptions.Spacing + String.optionToStringOrEmpty classD.BaseClass)
+        let text = sprintf "%s\r\ntype %s() = // translated from %s\r\n%s\r\n\r\n" (classD.AttributeText()) cls.Class' filename (translateOptions.Spacing + String.optionToStringOrEmpty classD.BaseClass)
         let text = new System.Text.StringBuilder(text)
         text.AppendLine(classD.FieldText spacing).AppendLine(String.join "\r\n" props).ToString()
 
@@ -912,8 +935,9 @@ let ``convertToF#`` translateOptions (runOptions:ConversionRunOptions option) li
             classes:= !classes + 1
             yield text
         } |> Array.ofSeq
+    let result = converted()
     printfn "converted %i classes, %i lines" !classes !lines
-    converted()
+    result
 
 let convertUsingDefaults translateOptions fileInfos target= 
     let options = ScriptOptions.getDefaultRunOptions()
