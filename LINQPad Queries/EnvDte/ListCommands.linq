@@ -19,13 +19,14 @@ void Main()
 		//return;
 	}
 	
-	var dte = (EnvDTE.DTE)System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE.12.0");
+	var dte = (EnvDTE.DTE)System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE.14.0");
 	//var typeDte = Type.GetTypeFromProgID("VisualStudio.DTE.12.0");
 	
 	//typeDte.Dump();
 	
 	// commands to remember
 	(new [] {
+		"File.SaveAll",
 		"ProjectandSolutionContextMenus.Item.MoveDown",
 		"ProjectandSolutionContextMenus.Item.MoveUp",
 		"ReSharper_Suspend",

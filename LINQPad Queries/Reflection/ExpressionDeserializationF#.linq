@@ -3,9 +3,8 @@
 </Query>
 
 
-
 let inline toJObj (x:JToken) = 
-	x :?> JObject
+	x :?> JObject // return (JObject) x;
 
 
 let rec createNode<'t> (entity:ParameterExpression option) (serializedNode:JObject) :Expression = 
@@ -15,8 +14,8 @@ let rec createNode<'t> (entity:ParameterExpression option) (serializedNode:JObje
 	let exprType = Enum.Parse(typeof<System.Linq.Expressions.ExpressionType>,nodeType) :?> ExpressionType
 	let entity = if entity.IsSome then entity else Some <| Expression.Parameter(targetEntityType,"f")
 	let getSides () = 
-		let left = createNode <| entity <| toJObj serializedNode.["Left"]
-		let right = createNode <| entity <| toJObj serializedNode.["Right"]
+		let left = toJObj serializedNode.["Left"] |> createNode entity
+		let right = toJObj serializedNode.["Right"] |> createNode entity
 		left,right
 	match exprType with
 	| ExpressionType.Lambda -> 
@@ -76,6 +75,7 @@ let deserializeLambdaPredicate<'t> 	(entity:ParameterExpression) (serializedNode
 type Foo = { Hello:string;IsSet:bool}
 
 let x = "Hello"
+
 //let expr :Expression<Func<Foo,bool>> = Expression.Lambda
 
 

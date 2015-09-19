@@ -11,7 +11,7 @@
 void Main()
 {
 		var tfsServer = Environment.GetEnvironmentVariable("servers").Dump().Split(new []{";"},StringSplitOptions.RemoveEmptyEntries).Dump().FirstOrDefault(c=>c.Contains("tfs"));
-	var tfsUrl= "https://"+tfsServer;
+	var tfsUrl= "http://"+tfsServer+":8080/tfs";
 	var tfsUri= new Uri(tfsUrl); 
 	
 	
@@ -21,7 +21,7 @@ void Main()
 		//tfsPc.Dump();
 		var vcs=tfsPc.GetService<Microsoft.TeamFoundation.VersionControl.Client.VersionControlServer>();
 		
-		var gtpm=vcs.GetItem("$/development/products/cvs");
+		var gtpm=vcs.GetItem("$/PracticeManagement/");
 		
 		
 		var pendings=vcs.QueryPendingSets(new[]{gtpm.ServerItem}, RecursionType.Full,null,null);

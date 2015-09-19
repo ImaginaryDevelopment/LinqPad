@@ -12,15 +12,16 @@ List<string> gacFolders = new List<string>() {
     "NativeImages_v4.0.30319_64"
 };
 
-foreach( string folder in gacFolders)
-{
-	string path = Path.Combine(Environment.ExpandEnvironmentVariables(@"%systemroot%\assembly"),folder);
-	if(Directory.Exists(path))
-	{
-	
-		Directory.GetDirectories(path).Dump();
-		//foreach( var assemblyFolder in Directory.GetDirectories(path)){
-			
-		//}
-	}
-}
+var q = from folder in gacFolders
+		let gacFullPath = Path.Combine(Environment.ExpandEnvironmentVariables(@"%systemroot%\assembly"),folder)
+		where Directory.Exists(gacFullPath)
+		from asmFullPath in Directory.GetDirectories(gacFullPath)
+		from vFullPath in Directory.GetDirectories(asmFullPath)
+		//where asmFullPath.Contains("Telerik",StringComparison.InvariantCultureIgnoreCase)
+		from file in Directory.GetFiles(vFullPath)
+		let versionInfo = FileVersionInfo.GetVersionInfo(file)
+		let fileVersion = versionInfo.FileVersion
+		let productVersion = versionInfo.ProductVersion
+		select new{Folder= Path.GetDirectoryName(gacFullPath),Gac=Path.GetFileName(gacFullPath),Asm=Path.GetFileName(asmFullPath),Ver=Path.GetFileName(vFullPath),File=Path.GetFileName(file),fileVersion,productVersion };
+		
+		q.Dump();

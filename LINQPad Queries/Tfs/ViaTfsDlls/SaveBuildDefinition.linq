@@ -15,16 +15,22 @@
 void Main()
 {
 //unfinished? https://gist.github.com/jstangroome/6747950
-	var tfs = TFS.GetTfs();
+#if UseFsi
+var tfs = TFS.GetTfs();
+#else
+var tfs = Macros.TfsModule.GetTfs(new Uri("http://tfs20102:8080/tfs"));
+#endif
+	
+	
 	var build =new TfsBuild( Build.GetBuildServer(tfs));
-	var saveDir= @"C:\Development\Products\CVS\BuildDefinitions";
+	var saveDir= @"C:\TFS\Pm-Rewrite\Source-dev-rewrite\BuildDefinitionBackups";
 	
 	
-	var teamProjectName = "Development";
+	var teamProjectName = "PracticeManagement";
 	var builds = build.GetBuildDefinitions(teamProjectName);
 	// var tp = vcs.GetTeamProjectForServerPath("$/Development");
 	var teamProjectCollectionUri = Build.GetBuildServer(tfs).TeamProjectCollection.Uri;
-	var buildToSave=Util.ReadLine("Build?","Cvr Dev Deploy",builds.Select (b => b.Name).Dump("options") );
+	var buildToSave=Util.ReadLine("Build?","PracticeManagementRW",builds.Select (b => b.Name).Dump("options") );
 	
 	var buildToDump=build.GetBuildDefinition(teamProjectName, buildToSave);
 	
@@ -56,7 +62,8 @@ void Main()
 	var targetPath = System.IO.Path.Combine(saveDir,buildDefinition.Name+".json");
 	if(System.IO.Directory.Exists(saveDir)==false)
 	{
-		throw new DirectoryNotFoundException(saveDir);
+		//throw new DirectoryNotFoundException(saveDir);
+		System.IO.Directory.CreateDirectory(saveDir);
 	}
 	System.IO.File.WriteAllText(targetPath, json);
 	targetPath.Dump("saved to");
