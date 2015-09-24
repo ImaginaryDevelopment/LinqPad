@@ -20,19 +20,24 @@ var tfs = TFS.GetTfs();
 #else
 var tfs = Macros.TfsModule.GetTfs(new Uri("http://tfs20102:8080/tfs"));
 #endif
-	
+
+	var teamProjects = new[] {
+		new { Name="PracticeManagement", BuildDefinitionPath =@"C:\TFS\Pm-Rewrite\Source-dev-rewrite\BuildDefinitionBackups"},
+		new { Name="XpressCharts", BuildDefinitionPath =@"C:\tfs\XpressCharts\BuildDefinitionBackups"},
+	};
 	
 	var build =new TfsBuild( Build.GetBuildServer(tfs));
-	var saveDir= @"C:\TFS\Pm-Rewrite\Source-dev-rewrite\BuildDefinitionBackups";
+	
+	var teamProjectName =Util.ReadLine("Project?",teamProjects[0], teamProjects);
 	
 	
-	var teamProjectName = "PracticeManagement";
-	var builds = build.GetBuildDefinitions(teamProjectName);
+	
+	var builds = build.GetBuildDefinitions(teamProjectInfo.);
 	// var tp = vcs.GetTeamProjectForServerPath("$/Development");
 	var teamProjectCollectionUri = Build.GetBuildServer(tfs).TeamProjectCollection.Uri;
 	var buildToSave=Util.ReadLine("Build?","PracticeManagementRW",builds.Select (b => b.Name).Dump("options") );
 	
-	var buildToDump=build.GetBuildDefinition(teamProjectName, buildToSave);
+	var buildToDump=build.GetBuildDefinition(teamProjectInfo.TeamProjectName, buildToSave);
 	
 	var buildDefinition= new {
 			Uri=buildToDump.Uri, Id=buildToDump.Id, TeamProject=buildToDump.TeamProject,
