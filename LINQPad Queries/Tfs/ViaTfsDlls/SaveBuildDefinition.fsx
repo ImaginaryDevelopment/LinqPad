@@ -7,30 +7,40 @@ open System
 open System.Diagnostics
 open Microsoft.TeamFoundation.Build.Client
 
-let runProc filename args startDir = 
-    let procStartInfo = 
-        ProcessStartInfo(
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            FileName = filename,
-            Arguments = args
-        )
-    match startDir with | Some d -> procStartInfo.WorkingDirectory <- d | _ -> ()
+let runProc filename startDir args  = 
+        let timer = System.Diagnostics.Stopwatch.StartNew()
+        let procStartInfo = 
+            ProcessStartInfo(
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                FileName = filename,
+                Arguments = args
+            )
+        match startDir with | Some d -> procStartInfo.WorkingDirectory <- d | _ -> ()
 
-    let outputs = System.Collections.Generic.List<string>()
-    let errors = System.Collections.Generic.List<string>()
-    let outputHandler f (_sender:obj) (args:DataReceivedEventArgs) = f args.Data
-    let p = new Process(StartInfo = procStartInfo)
-    p.OutputDataReceived.AddHandler(DataReceivedEventHandler (outputHandler outputs.Add))
-    p.ErrorDataReceived.AddHandler(DataReceivedEventHandler (outputHandler errors.Add))
-    let started = p.Start()
-    if not started then
-        failwithf "Failed to start process %s" filename
-    p.BeginOutputReadLine()
-    p.BeginErrorReadLine()
-    p.WaitForExit()
-    outputs,errors
+        let outputs = System.Collections.Generic.List<string>()
+        let errors = System.Collections.Generic.List<string>()
+        let outputHandler f (_sender:obj) (args:DataReceivedEventArgs) = f args.Data
+        let p = new Process(StartInfo = procStartInfo)
+        p.OutputDataReceived.AddHandler(DataReceivedEventHandler (outputHandler outputs.Add))
+        p.ErrorDataReceived.AddHandler(DataReceivedEventHandler (outputHandler errors.Add))
+        let started = 
+            try
+                p.Start()
+            with | ex ->
+                ex.Data.Add("filename", filename)
+                reraise()
+        if not started then
+            failwithf "Failed to start process %s" filename
+        printfn "Started %s with pid %i" p.ProcessName p.Id
+        p.BeginOutputReadLine()
+        p.BeginErrorReadLine()
+        p.WaitForExit()
+        timer.Stop()
+        printfn "Finished %s after %A milliseconds" filename timer.ElapsedMilliseconds
+        let cleanOut l = l |> Seq.filter (fun o -> System.String.IsNullOrEmpty o |> not)
+        cleanOut outputs,cleanOut errors
 
 let readOutputs (o,e) = 
             if e|> Seq.exists (fun e' -> String.IsNullOrWhiteSpace( e' ) = false) then
@@ -40,14 +50,14 @@ let readOutputs (o,e) =
                 o |> Seq.iter (printfn "%s")
 module TfExe = 
     let tfPath = @"C:\Program Files (x86)\Microsoft Visual Studio 14.0\Common7\IDE\TF.exe"
-    let tf startDir args = runProc tfPath args startDir
+    let tf startDir args = runProc tfPath startDir args
 
     // TfExe.tfAdd None [@"C:\tfs\XpressCharts2\BuildDefinitionBackups\FullBuild.json"];;
     let tfAdd basePath items =
         let addItem item = sprintf "add %s" item |> tf basePath
         items |> Seq.iter (addItem >> readOutputs)
     let tfCheckout basePath items = 
-        let coItem item = sprintf "checkout %s" item |> tf basePath
+        let coItem item = sprintf "checkout \"%s\"" item |> tf basePath
         items |> Seq.iter (coItem >> readOutputs)
             
 
