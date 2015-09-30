@@ -16,40 +16,89 @@ let copyAllFiles sourceDir targetDir overwrite =
     Directory.CreateDirectory targetDir |> ignore
     Directory.GetFiles(sourceDir) |> Seq.iter (fun f -> File.Copy(f, combine targetDir (Path.GetFileName f), overwrite))
 
-let runProc filename args startDir = 
-    let timer = System.Diagnostics.Stopwatch.StartNew()
-    let procStartInfo = 
-        ProcessStartInfo(
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            FileName = filename,
-            Arguments = args
-        )
-    match startDir with | Some d -> procStartInfo.WorkingDirectory <- d | _ -> ()
+module Process' = 
+    open System.Collections.ObjectModel
+    type RunProcResult = {Outputs:string ObservableCollection; Errors: string ObservableCollection; }
 
-    let outputs = System.Collections.Generic.List<string>()
-    let errors = System.Collections.Generic.List<string>()
-    let outputHandler f (_sender:obj) (args:DataReceivedEventArgs) = f args.Data
-    let p = new Process(StartInfo = procStartInfo)
-    p.OutputDataReceived.AddHandler(DataReceivedEventHandler (outputHandler outputs.Add))
-    p.ErrorDataReceived.AddHandler(DataReceivedEventHandler (outputHandler errors.Add))
-    let started = 
-        try
-            p.Start()
-        with | ex ->
-            ex.Data.Add("filename", filename)
-            reraise()
-    if not started then
-        failwithf "Failed to start process %s" filename
-    printfn "Started %s with pid %i" p.ProcessName p.Id
-    p.BeginOutputReadLine()
-    p.BeginErrorReadLine()
-    p.WaitForExit()
-    timer.Stop()
-    printfn "Finished %s after %A milliseconds" filename timer.ElapsedMilliseconds
-    let cleanOut l = l |> Seq.filter (fun o -> String.IsNullOrEmpty o |> not)
-    cleanOut outputs,cleanOut errors
+    let private setupRunProc filename args startDir outF errorF = 
+        let timer = System.Diagnostics.Stopwatch.StartNew()
+        let procStartInfo = 
+            ProcessStartInfo(
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                FileName = filename,
+                Arguments = args
+            )
+        match startDir with | Some d -> procStartInfo.WorkingDirectory <- d | _ -> ()
+
+        let outputHandler f (_sender:obj) (args:DataReceivedEventArgs) = f args.Data
+        let p = new Process(StartInfo = procStartInfo)
+        let filterS f s = if not (String.IsNullOrEmpty s) then f s
+
+        p.OutputDataReceived.AddHandler(DataReceivedEventHandler (outputHandler (filterS outF)))
+        p.ErrorDataReceived.AddHandler(DataReceivedEventHandler (outputHandler (filterS errorF)))
+
+        let started = 
+            try
+                p.Start()
+            with | ex ->
+                ex.Data.Add("filename", filename)
+                reraise()
+        if not started then
+            failwithf "Failed to start process %s" filename
+        printfn "Started %s with pid %i" p.ProcessName p.Id
+        p.BeginOutputReadLine()
+        p.BeginErrorReadLine()
+        let onFinish = 
+            async{
+                p.WaitForExit()
+                timer.Stop()
+                printfn "Finished %s after %A milliseconds" filename timer.ElapsedMilliseconds
+                return (p,timer)
+            }
+        onFinish
+
+    let runProcAsync filename args startDir fOutput fError=
+        let outputs = System.Collections.Generic.List<string>()
+        let errors = System.Collections.Generic.List<string>()
+        let tree f1 s = 
+            f1 s
+            s
+        let onFinish = setupRunProc filename args startDir (tree fOutput>>outputs.Add) (tree fError >> errors.Add)
+        let resultTask = 
+            async {
+                let! p,timer = onFinish
+                return outputs,errors
+            }
+        resultTask
+
+    let runProcPrint filename args startDir outputIsErrorF = 
+        let errorHandler errS= 
+            let color = System.Console.ForegroundColor
+            Console.ForegroundColor <- ConsoleColor.Red
+            Console.WriteLine (sprintf "err:%s" errS)
+            Console.ForegroundColor <- color
+
+        let outputHandler s = 
+            match outputIsErrorF with
+            |Some f when f s -> errorHandler s
+            | _ -> printfn "%s" s
+
+        let resultTask = 
+            async {
+                let! output,errors= runProcAsync filename args startDir outputHandler errorHandler
+                return (output,errors)
+            }
+
+        let outputs,errors = Async.RunSynchronously resultTask
+        outputs,errors
+
+    let runProcSync filename args startDir = 
+        let outputs = System.Collections.Generic.List<string>()
+        let errors = System.Collections.Generic.List<string>()
+        let p,timer = Async.RunSynchronously (setupRunProc filename args startDir outputs.Add errors.Add)
+        outputs,errors
 
 let msbuild targetProject buildArgs = 
     let targetFolder = Path.GetDirectoryName targetProject
@@ -59,14 +108,9 @@ let msbuild targetProject buildArgs =
         [ outputs;errors] |> Seq.concat  |> Seq.map regex.Match |> Seq.tryFind(fun m -> m.Success)
 
     let args = targetProject::buildArgs |> delimit " "
-    let output,errors = runProc msbuildPath args (Some targetFolder)
+    let output,errors = Process'.runProcSync msbuildPath args (Some targetFolder)
     match errorCount output errors with
     | Some errorMatch -> 
-        //printfn "errorMatch (captures %i,groups %i) %A" errorMatch.Captures.Count errorMatch.Groups.Count errorMatch
-        //[0..errorMatch.Captures.Count-1] |> Seq.map (fun i -> errorMatch.Captures.[i].Value) |> Seq.iter (printfn "Capture %s")
-        //[0..errorMatch.Groups.Count-1] |> Seq.map (fun i -> errorMatch.Groups.[i].Value) |> Seq.iter (printfn "Group %s")
-        //printfn "%A" output
-        //printfn "%A" errors
         let regex = System.Text.RegularExpressions.Regex("Build error", Text.RegularExpressions.RegexOptions.IgnoreCase)
 
         printfn "%A" (output |> Seq.filter regex.IsMatch |> List.ofSeq)
@@ -121,7 +165,7 @@ let runDeploy cmd =
     let badLines = cmdText |> Seq.mapi (fun i line -> (i,line),line.TrimStart().StartsWith("pause")) |> Seq.filter snd |> Seq.map fst
     if badLines |> Seq.exists (fun _ -> true) then
         failwithf "bad lines found %A" (Array.ofSeq badLines)
-    runProc cmd "nopause" None
+    Process'.runProcSync cmd "nopause" None
 
 type DbProjPathSpecifier = 
     |AbsoluteDbProjFolder of string
@@ -171,7 +215,7 @@ let runPmApp' dbProjSpecifier =
 
     let folder = getPmAppDbProjPath dbProjSpecifier
     let deployFolder = folder |> buildDbProj None |> fst |> copyForDeploy
-    let output,errors = runProc @"C:\VSDBCMD\vsdbcmd.exe" """/a:Deploy /cs:"Server=.;Integrated Security=true" /dsp:Sql /dd+ /manifest:"C:\VSDBCMD\deployment\ApplicationDatabase.deploymanifest" /p:AlwaysCreateNewdatabase=False /p:PerformDatabaseBackup=False /p:IgnoreColumnCollation=True""" (Some @"C:\VSDBCMD\")
+    let output,errors = Process'.runProcPrint @"C:\VSDBCMD\vsdbcmd.exe" """/a:Deploy /cs:"Server=.;Integrated Security=true" /dsp:Sql /dd+ /manifest:"C:\VSDBCMD\deployment\ApplicationDatabase.deploymanifest" /p:AlwaysCreateNewdatabase=False /p:PerformDatabaseBackup=False /p:IgnoreColumnCollation=True""" (Some @"C:\VSDBCMD\") None
     printfn "output: %A" (Array.ofSeq output)
     printfn "errors %A" (Array.ofSeq errors)
 

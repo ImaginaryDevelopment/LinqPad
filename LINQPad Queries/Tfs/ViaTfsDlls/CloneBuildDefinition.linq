@@ -17,6 +17,7 @@ void Main()
 	var buildToCopy=tfsbuild.GetBuildDefinition("Development","Cvr Dev Deploy").Dump();
 	var clone=CloneBuildDefinition(buildToCopy).Dump();
 	clone.Name=clone.Name+"Clone";
+	if(Util.ReadLine<bool>("Save Clone?"))
 	clone.Save();
 }
 

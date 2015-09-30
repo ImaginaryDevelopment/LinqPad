@@ -2,6 +2,7 @@
 
 //bool debug=false;
 var baseDir=Util.ReadLine("Directory?",System.Environment.GetEnvironmentVariable("devroot"));
+Func<string,bool> isOurProject = include => include.Contains("Xpress") || include.Contains("XPress");
 
 var projects= System.IO.Directory.GetFiles(baseDir,"*.*proj", SearchOption.AllDirectories);
 //sample projFile
@@ -25,13 +26,13 @@ var references= from i in baseQuery
 	let inc = r.GetAttribValOrNull("Include")
 	where inc!=null
 	let IsCopyLocal=r.Elements().Where (x => x.Name.LocalName=="Private").Select (x => x.Value).FirstOrDefault ()
-	where inc.Contains("Oceanside") || inc.Contains("CVS") || IsCopyLocal!=null
+	where isOurProject(inc) || IsCopyLocal!=null
 	let specificVersion=r.Elements().Where(x => x.Name.LocalName=="SpecificVersion").Select (x => x.Value).FirstOrDefault ()
 	let hintPath=r.Elements().Where (x => x.Name.LocalName=="HintPath").Select (x => x.Value).FirstOrDefault ()
-	orderby inc.Contains("CVS") descending ,inc.Contains("Oceanside") descending,r.Name.LocalName descending, IsCopyLocal descending
+	orderby inc.Contains("Xpress") descending ,inc.Contains("XPress") descending,r.Name.LocalName descending, IsCopyLocal descending
 	select new{name=inc.BeforeOrSelf(",").AfterLastOrSelf("\\"),r.Name.LocalName,IsCopyLocal,isWebProject,hintPath, Project=i.Path,Condition=ig.Attribute(XNamespace.None+"Condition"), inc,specificVersion,r};
 	//should have copy local true for all if project contains import of target  <Import Project="$(VSToolsPath)\WebApplications\Microsoft.WebApplication.targets" Condition="'$(VSToolsPath)' != '' AND Exists('$(VSToolsPath)\WebApplications\Microsoft.WebApplication.targets')" />
-	references.Where (r => r.LocalName!="ProjectReference" && (r.inc.Contains("Oceanside") || r.inc.Contains("CVS"))).Dump("bad");
+	references.Where (r => r.LocalName!="ProjectReference" && (isOurProject( r.inc))).Dump("bad");
 	
 	references.SelectMany (r => r.r.Elements().Select (x => x.Name.LocalName)).Distinct().Dump("Inner element types");
 	
