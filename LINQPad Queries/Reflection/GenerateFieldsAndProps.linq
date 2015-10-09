@@ -12,15 +12,19 @@
 </Query>
 
 let dc = new TypedDataContext()
+let flip f x y = f y x
 
 type NullableBehavior = |UseOpt |UseNullable
 type ``C#Outs`` = | Props |InterfaceProps
 type DesiredOutput = | ``C#`` of ``C#Outs`` | ``F#Record`` of NullableBehavior
-let transformCType (type':Type) = 
+let rec transformCType (type':Type) : string = 
     if type'.Name.StartsWith("Nullable") then
-        type'.GetGenericArguments().[0].Name + "?"
-    else
-        type'.Name
+        type'.GetGenericArguments().[0]
+        |>  transformCType
+        |> flip (+) "?"
+    elif type'.Name = "Int32" then
+        "int"
+    else type'.Name
 let makeTypePart desiredOutput (t:Type)= 
 
     let fields = 
@@ -55,11 +59,12 @@ let testTypes = [
 testTypes
 |> Seq.iter (fun (title,t) -> 
                 [
+                    makeTypePart (``F#Record`` UseNullable) t
                     makeTypePart (``C#`` Props) t
                     makeTypePart (``C#`` InterfaceProps) t
-                    makeTypePart (``F#Record`` UseNullable) t
+                    
                 ]
-                |> (fun items -> Util.HorizontalRun ("C#Props,C#Interface,F#Record", items))
+                |> (fun items -> Util.HorizontalRun ("F#Record,C#Props,C#Interface", items))
                 |> (fun hr -> hr.Dump(title + ":" + t.Name))
             )
 
