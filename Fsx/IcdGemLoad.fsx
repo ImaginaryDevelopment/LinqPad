@@ -68,7 +68,7 @@ let scriptify () =
 
 let writeGemScripts() = 
     scriptify()
-    |> Seq.iter (fun (filename,text) ->
+    |> Seq.iter (fun (filename,(rowCount,text)) ->
         let fullpath = System.IO.Path.Combine(scriptTargetPath, filename)
         System.IO.File.WriteAllText(fullpath,text)
     )
