@@ -73,20 +73,22 @@ let tfAdd basePath items =
     let addItem item = sprintf "add %s" item |> tf basePath
     let readOutputs (o,e) = 
         if e|> Seq.exists (fun e' -> String.IsNullOrWhiteSpace( e' ) = false) then
-            o |> Seq.iter (printfn "%s")
+            o |> Seq.iter (printfn "tfAdd:%s")
             e |> Seq.iter (printfn "error:%s")
         else
-            o |> Seq.iter (printfn "%s")
+            o |> Seq.iter (printfn "tfAdd:%s")
     items |> Seq.iter (addItem >> readOutputs)
 
-let tfCheckout basePath items = 
+let tfCheckout basePath items =
     let checkout item = sprintf "checkout %s" item |> tf basePath
     let readOutputs (o,e) = 
         if e|> Seq.exists (fun e' -> String.IsNullOrWhiteSpace( e' ) = false) then
-            o |> Seq.iter (printfn "%s")
+            o |> Seq.iter (printfn "tfCheckout:%s")
             e |> Seq.iter (printfn "error:%s")
-        else
-            o |> Seq.iter (printfn "%s")
+            printfn "basePath %A items %A" basePath items
+        elif o |> Seq.exists( fun o' -> String.IsNullOrWhiteSpace( o' ) = false) then
+            o |> Seq.iter (printfn "tfCheckout:%s")
+        else () // no non-whitespace characters in output streams
     items |> Seq.iter (checkout >> readOutputs)
 
 type Diagnosis = {Code:string;Desc:string;IsBillable:bool; Unextended:string}
@@ -118,7 +120,7 @@ module Diags =
                 failwithf "Chapter was unnamed or had no desc"
             )
 
-    let getIcd10Diags icd10Path = 
+    let getIcd10Diags icd10Path interestingCodeBeginnings = 
         let rootNs,diags = getSectionalizedDiags(icd10Path)
         let getElement name (parent:XElement) = parent.Element(rootNs + name) |> nullToOpt 
         let getElementValue name (parent : XElement) = parent.Element(rootNs + name).Value
@@ -134,12 +136,20 @@ module Diags =
             let attr = parent.Attribute(XNamespace.None + name)
             if attr = null then null else attr.Value
 
-        let rec descend parentExtensions node =
+        let rec descend showDebug parentExtensions node=
             let childDiagnoses = getElements "diag" node
 
             let rawCode = node |> getDiagName
             let cleanedCode = rawCode |> replace "." String.Empty
+            let showDebug = 
+                if showDebug then
+                    true 
+                else
+                    match interestingCodeBeginnings with
+                    | Some list -> list |> Seq.filter cleanedCode.StartsWith |> Seq.any
+                    | None -> false
             let baseDiagnosis = {Code= cleanedCode ;Desc= node|> getElementValue "desc";IsBillable = Option.isNone childDiagnoses; Unextended=cleanedCode}
+            if showDebug then printfn "%s(%s):processing" cleanedCode rawCode
             //printfn "checking for extensions on node %A" baseDiagnosis
             let extensionElements = 
                 node.Element(rootNs + "sevenChrDef")
@@ -152,13 +162,14 @@ module Diags =
                 |> Option.bind( getElement "note" >> Option.bind (fun e -> e.Value |> Some))
 
             let descendChildren children extensions = 
+                if showDebug then printfn "%s:descendChildren" cleanedCode
                 //if baseDiagnosis.Code="V00" then failwithf "found V00! hasExtension=%A, extensionElements= %A,childDiags=%A" hasExtension extensionElements childDiagnoses
                 match extensions with
                 | Some extensionElements -> 
-                    children |> Seq.map (descend (Some extensionElements)) |> Seq.collect id
+                    children |> Seq.map (descend showDebug (Some extensionElements)) |> Seq.collect id
                 | None -> 
                     if Option.isSome parentExtensions then failwith "descend children called with parentExtensions"
-                    children |> Seq.map (descend None) |> Seq.collect id
+                    children |> Seq.map (descend showDebug None) |> Seq.collect id
 
             let walkWithExtensions (extensions:XElement seq) = 
                 seq{
@@ -183,25 +194,33 @@ module Diags =
                 elif Map.containsKey rawCode limitMap then
                     let useExtensions = limitMap.[rawCode] |> Seq.map (sprintf "%s.%i" rawCode) |> List.ofSeq
                     children
-                    |> Seq.map ( fun c -> if useExtensions |> Seq.contains (getDiagName c) then descend (Some extensions) c else descend None c )
+                    |> Seq.map ( fun c -> if useExtensions |> Seq.contains (getDiagName c) then descend showDebug (Some extensions) c else descend showDebug None c )
                     |> Seq.collect id
                 else
                     match extensionNote() with 
-                    | AllowedExtensionNote rawCode -> descendChildren children (Some extensions) // must have children
+                    | AllowedExtensionNote rawCode ->
+                        if showDebug then printfn "%s:hadAllowedExtension" cleanedCode
+                        descendChildren children (Some extensions) // must have children
                     | Some note -> failwithf "1:Failed on node %s, hasDiagChildren, hasExtension with note %A" rawCode note
                     | _ -> failwithf "2:Failed on node %s, hasDiagChildren, hasExtension with no note" rawCode
-
+            if showDebug then 
+                let printx presentText = function |Some _ -> presentText | None -> "None"
+                printfn "%s,%s,%s" (printx "parentExtensions" parentExtensions) (printx "extensions" extensionElements) (printx "childDiagnoses" childDiagnoses)
             match parentExtensions,extensionElements,childDiagnoses with
-            | None,                 None,               None ->  seq { yield baseDiagnosis }
-            | None,                 None,               Some children -> seq{ yield baseDiagnosis; yield! children |> Seq.map (descend None) |> Seq.collect id}
+            | None,                 None,               None -> seq { yield baseDiagnosis }
+            | None,                 None,               Some children -> seq{ yield baseDiagnosis; yield! children |> Seq.map (descend showDebug None) |> Seq.collect id}
             | None,                 Some extensions,    None -> walkWithExtensions extensions
             | None,                 Some extensions,    Some children -> walkExtensionParent extensions children
             | Some parentExtensions, None,              None -> walkWithExtensions parentExtensions
             | Some parentExtensions, None,              Some children -> 
                 let results = 
+                    let badApples = [] // [ "O318"; "O418"]
+                    if showDebug then
+                        printfn "Checking for placeholder on %A" node
                     seq {
-                        yield! walkWithExtensions parentExtensions
-                        yield! children |> Seq.map (descend None) |> Seq.collect id
+                        if getAttrValue "placeholder" node <> "true" then
+                            yield! walkWithExtensions parentExtensions
+                        yield! children |> Seq.map (descend showDebug (Some parentExtensions)) |> Seq.collect id
                     }
 //                if rawCode.StartsWith("V00") && rawCode <> "V00" then failwithf "code=%s, yielding:%i, hasExtension=%A, hasDiagChildren=%A parentExtensions= %A" rawCode (Seq.length results) hasExtension hasDiagChildren parentExtensions
                 results
@@ -214,8 +233,40 @@ module Diags =
                     | _ -> failwithf "4:Failed on node %s, hasDiagChildren, hasExtension with no note" rawCode
             
             //| Some parentExtensions, Some extensions, _ -> failwithf "5:Failed on node %s, hasDiagChildren: %A,hasParentExtensions, hasExtension %A with note(s) %A" rawCode hasDiagChildren hasExtension extensionNotes
+        let duplicates xs =
+          (Map.empty, xs)
+          ||> Seq.scan (fun xs x ->
+              match Map.tryFind x xs with
+              | None -> Map.add x false xs
+              | Some false -> Map.add x true xs
+              | Some true -> xs)
+          |> Seq.zip xs
+          |> Seq.choose (fun (x, xs) ->
+              match Map.tryFind x xs with
+              | Some false -> Some x
+              | None | Some true -> None)
 
+        let filterOrFailOnDuplicates (diags:#seq<Diagnosis>) : seq<Diagnosis> = 
+            let dups = diags |> Seq.map (fun d-> d.Code) |> duplicates |> Array.ofSeq
+            if Seq.any dups then 
+                let dupDiags = 
+                    diags 
+                    |> Seq.filter (fun d -> dups |> Seq.contains d.Code) 
+                    |> Seq.sortByDescending (fun d -> d.IsBillable) // if there is a billable version, then it should be the one we yield
+                    |> Seq.groupBy(fun d -> d.Code)
+                    |> Map.ofSeq
+                //let allowedDuplicates = ["S548X"]
+                seq {
+                    for (KeyValue(code,dupDiags)) in dupDiags do
+                        printfn "Checking how bad the duplication is for code %s" code
+                        let first = dupDiags |> Seq.head
+                        if dupDiags |> Seq.forall (fun diag -> diag.Desc = first.Desc ) then 
+                            yield first
+                        else failwithf "Found two different descriptions on duplicate codes %s in %A" code dupDiags
+                    yield! diags |> Seq.filter (fun d -> dups |> Seq.contains d.Code = false)
+                }
+            else upcast diags
         diags
         |> Seq.map (fun (sectionName,desc,diags) ->
-        sectionName,desc,diags |> Seq.collect (descend None)
+        sectionName,desc,diags |> Seq.collect (descend false None) |> filterOrFailOnDuplicates 
         )

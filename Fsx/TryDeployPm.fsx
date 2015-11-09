@@ -8,6 +8,11 @@ open System.Diagnostics
 //module private Imported = 
 //    [<DllImport("user32.dll")>]
 //    extern bool SetWindowText(IntPtr hWnd, string text);
+#if INTERACTIVE
+#r "System.IO.Compression"
+#r "System.IO.Compression.FileSystem"
+#endif
+open System.IO.Compression
 
 let combine s1 s2 = Path.Combine(s1,s2)
 let combineAll ([<ParamArray>]args) = args |> Array.ofSeq |> Path.Combine
@@ -151,14 +156,15 @@ let findNewest path =
     |> Seq.map File.GetLastWriteTime
     |> Seq.max
 
-let copyDbProjOutputs dbProjFolder target = //assume all output to a /sql folder
+let getNewestDbProjFolder dbProjFolder = //debug or release whichever is newer 
     let sqlFolder = combine dbProjFolder "sql"
-    let newest = 
-        [combine sqlFolder "debug"; combine sqlFolder "release"]
-        |> Seq.filter Directory.Exists
-        |> Seq.filter (Directory.GetFiles >> Seq.exists(fun _ -> true))
-        |> Seq.maxBy findNewest
-    copyAllFiles newest target true
+    [combine sqlFolder "debug"; combine sqlFolder "release"]
+    |> Seq.filter Directory.Exists
+    |> Seq.filter (Directory.GetFiles >> Seq.exists(fun _ -> true))
+    |> Seq.maxBy findNewest
+
+let copyDbProjOutputs sqlFolder target = //assume all output to a /sql folder
+    copyAllFiles sqlFolder target true
 
 let runDeploy cmd = 
     let cmdText = File.ReadAllLines(cmd)
@@ -181,7 +187,8 @@ let targetFolder = @"C:\VSDBCMD"
 //dbFolders |> Seq.head |> copyForDeploy;;
 let copyForDeploy dbProjFolder =
     let deployFolder = @"C:\VSDBCMD\deployment"
-    copyDbProjOutputs dbProjFolder deployFolder
+    let newestChild = getNewestDbProjFolder dbProjFolder
+    copyDbProjOutputs newestChild deployFolder
     deployFolder
 
 let getPmAppDbProjPath specifier = 
@@ -199,10 +206,15 @@ let deployPmApplicationPath = @"C:\VSDBCMD\deployment\deployPmApplication.cmd"
 
 let runPmApp dbProjFolderSpecifier = 
     let folder = getPmAppDbProjPath dbProjFolderSpecifier
+    
     let deployFolder = folder |> buildDbProj None |> fst |> copyForDeploy
     let output,errors = runDeploy deployPmApplicationPath
     printfn "output: %A" (Array.ofSeq output)
     printfn "errors %A" (Array.ofSeq errors)
+    // begin zip to network
+    let newestChild = getNewestDbProjFolder folder
+    let targetFileName = Path.Combine(@"\\fs01\Documents\Brandon\PmDeploys","PmDb " + DateTime.Now.ToString("yyyyMMdd HHmm") + ".zip")
+    System.IO.Compression.ZipFile.CreateFromDirectory(newestChild, targetFileName)
 
 //this version calls vsdbcmd directly so we can capture the output errors and warnings
 let runPmApp' dbProjSpecifier = 
@@ -221,4 +233,4 @@ let runPmApp' dbProjSpecifier =
 
 // sample usages:
 // buildDbProj None @"C:\TFS\Pm-Rewrite\Source-dev-rewrite\PracticeManagement\ApplicationDatabase";;
-// runPmApp' (AbsoluteDbProjFolder @"C:\TFS\Pm-Rewrite\Source-dev-rewrite\PracticeManagement\ApplicationDatabase");;
+runPmApp' (AbsoluteDbProjFolder @"C:\TFS\PracticeManagement\dev\PracticeManagement\ApplicationDatabase")

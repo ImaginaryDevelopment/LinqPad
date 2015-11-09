@@ -1,6 +1,7 @@
 <Query Kind="Program">
-  <NuGetReference>Microsoft.CodeAnalysis.CSharp</NuGetReference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.dll</Reference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
+  <NuGetReference>Microsoft.CodeAnalysis.CSharp</NuGetReference>
   <Namespace>Microsoft.CodeAnalysis</Namespace>
   <Namespace>Microsoft.CodeAnalysis.CSharp</Namespace>
   <Namespace>Microsoft.CodeAnalysis.CSharp.Syntax</Namespace>
@@ -8,7 +9,8 @@
 
 void Main()
 {
-	var target = @"C:\TFS\Pm-Rewrite\Source-dev-rewrite\PracticeManagement\PracticeManagement.Foundation\DataModels\BillingStageDataModel.cs";
+	// only have to have the file path on the clipboard the first time, then F5 will just keep using the same one
+	var target = Util.Cache(() => System.Windows.Forms.Clipboard.GetText());
 	var rewriter = new SortClassRewriter();
 	var tree = CSharpSyntaxTree.ParseText(File.ReadAllText(target));
 	var visited = rewriter.Visit(tree.GetRoot());

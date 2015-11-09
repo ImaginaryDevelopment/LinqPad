@@ -53,7 +53,7 @@ let sqlTemplate chunkValuesThreshold identifier hasIdentity tableSpec  :int*stri
     let values = values |> Seq.chunkBySize chunkValuesThreshold |> Seq.map (delimit ("," + Environment.NewLine))
     let columns = tableSpec.Columns |> Seq.map (fun c -> "[" + c.Name + "]") 
     let columnList = columns |>  delimit (sprintf ",%s%s%s" Environment.NewLine spacing spacing)
-    let onClause =tableSpec.Columns |> Seq.filter (fun c -> c.IsMatch) |> Seq.map (fun c -> sprintf "CTE.%s = TARGET.%s" c.Name c.Name) |> delimit " AND " // AND CTE.[Description] = TARGET.[Description]"
+    let onClause = tableSpec.Columns |> Seq.filter (fun c -> c.IsMatch) |> Seq.map (fun c -> sprintf "CTE.%s = TARGET.%s" c.Name c.Name) |> delimit " AND " // AND CTE.[Description] = TARGET.[Description]"
 
     let createMergeStatement chunkValues = 
         sprintf """
@@ -70,7 +70,10 @@ let sqlTemplate chunkValuesThreshold identifier hasIdentity tableSpec  :int*stri
         ON %s
         WHEN NOT MATCHED BY TARGET THEN
           INSERT(%s)
-          VALUES(%s);
+          VALUES(%s)
+        WHEN MATCHED AND CTE.ISBILLABLE <> TARGET.ISBILLABLE THEN
+            UPDATE set target.isbillable=cte.isbillable
+          ;
         """ columnList chunkValues columnList tableSpec.TableName onClause columnList columnList
 
     let chunks = 
@@ -100,10 +103,10 @@ GO
     """ tableSpec.TableName identifier rowCount (fst identity) chunks (snd identity) tableSpec.TableName)
 
 let useDiagnosis values valueF = 
-    let values = values |> Seq.map (fun v -> {v with Code = replace "." "" v.Code}) |> Seq.map (fun v -> [v.Code;"ICD10";v.Desc;v.Desc;v.Desc;sprintf "%s %s" v.Code v.Desc; ] |> Seq.ofList |> valueF) 
+    let values = values |> Seq.map (fun v -> {v with Code = replace "." "" v.Code}) |> Seq.map (fun v -> [v.Code;"ICD10";v.Desc;v.Desc;v.Desc;sprintf "%s %s" v.Code v.Desc;sprintf "%b" v.IsBillable ] |> Seq.ofList |> valueF) 
     let tbl = "[dbo].[Diagnoses]"
     let matchColumns = ["IcdCode";"CodeType"] |> List.map (fun c -> {Name=c;IsMatch=true})
-    let columns = ["Diagnosis";"ShortDescription";"LongDescription";"FullTextSearch"] |> List.map (fun c -> {Name=c;IsMatch=false})
+    let columns = ["Diagnosis";"ShortDescription";"LongDescription";"FullTextSearch";"IsBillable"] |> List.map (fun c -> {Name=c;IsMatch=false})
     let columns = matchColumns @ columns
     {Values = values; HasIdentity=true; TableName = tbl; Columns = columns }
 
@@ -119,13 +122,33 @@ let tryIt () =
         ]
     diagnosisTemplate "tryIt" values
 
-let scriptifySections () = 
-    Icd10Reader.Diags.getIcd10Diags drugPath
+let checkForMissingCodes (chapter,title,diagnoses:#seq<Diagnosis>) = 
+    match chapter with
+    | "19" -> // 15597 codes on last attempt
+        ["S9301XA";"S9301XD";"S9302XA"]
+        |> Seq.iter(fun code ->
+        match diagnoses |> Seq.tryFind (fun d -> d.Code= code) with
+        | Some x -> ()
+        | None -> 
+            
+            printfn "Found %i diagnoses in chapter %s" (Seq.length diagnoses) chapter
+            failwithf "Expected to find code %s in chapter %s under title %s" code chapter title
+        )
+        (chapter,title,diagnoses)
+    | _ -> (chapter,title,diagnoses)
+
+let scriptifySections interestedCodeBeginnings chapterFilter = 
+    let diags = Icd10Reader.Diags.getIcd10Diags drugPath interestedCodeBeginnings
+    match chapterFilter with 
+    |Some f -> diags |> Seq.filter f
+    |None -> diags
+    |> Seq.map checkForMissingCodes
     |> Seq.map (fun (name,desc, diagnoses) -> sprintf "Icd10_Chapter%s_Inserts.sql" name, diagnosisTemplate (sprintf "Chapter%s(%s)" name desc) diagnoses)
 
 let scriptTargetPath = @"C:\TFS\Pm-Rewrite\Source-dev-rewrite\PracticeManagement\ApplicationDatabase\Scripts\Post-Deployment\TableInserts\Icd10"
-let writeDiagnosisScripts beforeWriteF = 
-    scriptifySections()
+
+let writeDiagnosisScripts beforeWriteF interestedCodeBeginnings chapterFilter= 
+    scriptifySections interestedCodeBeginnings chapterFilter
     |> Seq.map (fun (filename,(rowCount,text)) ->
         let fullpath = System.IO.Path.Combine(scriptTargetPath, filename)
         match beforeWriteF with
@@ -169,17 +192,22 @@ let runInserts values=
             printfn "%A" ex
 
 let runInserts'() = 
-    Icd10Reader.Diags.getIcd10Diags drugPath
+    Icd10Reader.Diags.getIcd10Diags drugPath None
     |> Seq.map (fun (_,_,diags) -> diags)
     |> Seq.collect id
     |> runInserts
 
 let tryIt2 () = 
-    Icd10Reader.Diags.getIcd10Diags drugPath
+    Icd10Reader.Diags.getIcd10Diags drugPath None
     |> Seq.map (fun (_,_,diags) -> diags)
     |> Seq.collect id
     |> Seq.take 2
     |> runInserts
 
+// tf None "workspaces /collection:http://tfs20102.xpress.domain:8080/tfs";;
 let writeWithCheckout() = 
-    writeDiagnosisScripts (Some (fun i -> tfCheckout None [i]))
+    let interestedCodeBeginnings = (Some ["S548"])
+    let diagFilter = None //(Some (fun (ch,_,_) -> ch="19"))
+    writeDiagnosisScripts (Some (fun i -> tfCheckout (Some(scriptTargetPath)) [i])) interestedCodeBeginnings diagFilter
+
+writeWithCheckout()

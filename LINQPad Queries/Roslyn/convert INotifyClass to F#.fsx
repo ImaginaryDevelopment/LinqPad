@@ -246,20 +246,58 @@ module Helpers =
         | No -> ()
 
 module FileWalker = 
-
+    type ClassName = |ClassName of string
     type ModelCollector() = 
         inherit CSharpSyntaxWalker()
-        let implementedInterfaces = new Dictionary<string,string list>()
-        member private __.ImplementedInterfaces() = implementedInterfaces
+        let implementedInterfaces = new Dictionary<ClassName,string list>()
+        let properties = new Dictionary<ClassName,(string*PropertyDeclarationSyntax) list>()
+        let fields = new Dictionary<ClassName, (string*VariableDeclaratorSyntax) list>()
+        let getParentName (node:#SyntaxNode) = node.Parent :?> ClassDeclarationSyntax |> (fun cds -> cds.Identifier.ValueText) |> ClassName
+        member private __.ImplementedInterfaces = implementedInterfaces
+        member private __.Properties = properties
+        member private __.Fields = fields
         //full of fail:
         // member private x.ImplementedInterfaces = new Dictionary<string,string list>()
         static member VisitClassInterfaces (root:CompilationUnitSyntax) =
             let mc = new ModelCollector()
             mc.Visit(root)
-            mc.ImplementedInterfaces()
+            mc.ImplementedInterfaces
+        static member VisitClass (root) = 
+            let mc = new ModelCollector()
+            mc.Visit(root)
+            let keys = [mc.ImplementedInterfaces.Keys |> Seq.map id;mc.Fields.Keys |> Seq.map id] |> Seq.collect id |> Set.ofSeq
+            let dic = 
+                keys 
+                |> Seq.map(fun k -> 
+                    let interfaceValues = if mc.ImplementedInterfaces.ContainsKey k then Some mc.ImplementedInterfaces.[k] else None
+                    let fieldValues = if mc.Fields.ContainsKey k then Some mc.Fields.[k] else None
+                    let propValues = if mc.Properties.ContainsKey k then Some mc.Properties.[k] else None
+                    (k,(interfaceValues,fieldValues,propValues))
+                ) 
+                |> Map.ofSeq (fun (k,_) -> k)
+            dic
             //|> Seq.dumps "implemented interfaces"
+        override __.VisitPropertyDeclaration node = 
+            let className = getParentName node 
+            let propName = node.Identifier.ValueText
+            if properties.ContainsKey className then
+                properties.[className] <- (propName,node)::properties.[className]
+            else
+                properties.[className] <- [propName,node]
+            base.VisitPropertyDeclaration node
+        override __.VisitFieldDeclaration node = 
+            let className = getParentName node //node.Parent :?> ClassDeclarationSyntax
+            node.Declaration.Variables
+            |> Seq.iter (fun v -> 
+                let fieldName = v.Identifier.ValueText
+                if fields.ContainsKey className then
+                    fields.[className] <- (fieldName,v)::fields.[className]
+                else
+                    fields.[className] <- [fieldName,v]
+            )
+            base.VisitFieldDeclaration node
         override __.VisitBaseList node = 
-            let parentIdentifier = (node.Parent :?> ClassDeclarationSyntax).Identifier.ValueText
+            let parentIdentifier = getParentName node // (node.Parent :?> ClassDeclarationSyntax).Identifier.ValueText
             let bases = 
                 node.Types
                 |> Seq.map (fun t-> t.Type)
@@ -278,18 +316,19 @@ module FileWalker =
         let src = match code with |Code (_p,src) -> src
         let tree = CSharpSyntaxTree.ParseText(src)
         let root = tree.GetRoot() :?> CompilationUnitSyntax
-
-        let classesToBases= 
-            let clsToBases = new Dictionary<string,string list>()
-            let dic = ModelCollector.VisitClassInterfaces root
-            dic
+        let classesToInterfaces,fields,props = ModelCollector.VisitClass root
             //|> Seq.dumps "interfaces!"
-            |> Seq.filter (fun i -> i.Key <> null) // && (i.Value |> (* Seq.dumps "bases" |> *) Seq.exists (fun v -> v = "DataModelBase")))
-            |> Seq.iter (fun kvp -> clsToBases.Add(kvp.Key, kvp.Value))
-            clsToBases
-        if classesToBases.Count > 0 then
-            Some (code,root,classesToBases)
+            //|> Seq.filter (fun i -> match i.Key with |ClassName x when x<> null -> true |_ -> false) // && (i.Value |> (* Seq.dumps "bases" |> *) Seq.exists (fun v -> v = "DataModelBase")))
+            //|> Seq.iter (fun kvp -> clsToBases.Add(kvp.Key, kvp.Value))
+        if classesToInterfaces.Count > 0 then
+            Some (code,root,classesToInterfaces,fields,props)
         else None
+    let walkFile path = 
+        let code = path |> Path |> File |>  getSrcCode |> walkCode
+        match code with
+        | Some (code,cus, classesToInterfaces,classesToFields,classesToProperties)  -> printfn "%A"
+        code
+
 
 let getFiles source = 
     let codeSourceMap cs = cs |> FileWalker.getSrcCode |> FileWalker.walkCode
@@ -587,10 +626,14 @@ let rec mapNode translateOptions promoteUninitializedStructsToNullable spacing (
         let dumpResult matchType r = dumpf matchType debugOption (fun r-> (node.GetType().Name + "," + matchType + "," + node.Kind().ToString()) + "=\""+ r.ToString()+"\"") r
         dumpResult (sprintf "%s.%s" t <| node.Kind().ToString()) o
 
+//only called in mapFField it seems
 let mapNodeChildren translateOptions promoteUninitializedStructsToNullable spacing (memberNames:Set<string>) (getDebugOpt:DebugDelegate) delimiter (node:SyntaxNode) = 
     let debugOption, getDebugOpt = translateOptions.GetNextDebugState getDebugOpt (translateOptions.IsDebugNode node)
     let mapNodeC = mapNode translateOptions promoteUninitializedStructsToNullable spacing memberNames getDebugOpt
-    node.ChildNodes() |> Seq.map mapNodeC |> String.join delimiter
+    let result = node.ChildNodes() |> Seq.map mapNodeC |> String.join delimiter
+    if result.Contains("string_BenefitsNumber") then failwithf "bad translation '%A' '%s' '%s'" node delimiter result else
+    printfn "good translation '%A' '%s' '%s'" node delimiter result
+    result
 
 (* end of proper functional approach (from here on out, things may close over important script options *)
 
@@ -658,8 +701,7 @@ module FieldConversion =
         
         let inline mapNode memberNames = mapNode translateOptions promoteUninitializedStructsToNullable memberNames
         let toFType = toFType promoteUninitializedStructsToNullable
-        let mapNodeChildren memberNames = 
-            mapNodeChildren translateOptions promoteUninitializedStructsToNullable memberNames
+        let mapNodeChildren memberNames = mapNodeChildren translateOptions promoteUninitializedStructsToNullable memberNames
         let debugOption, getDebugOpt = translateOptions.GetNextDebugState getDebugOpt  (ScriptOptions.isDebugClass cls.Class')
 
         let fieldNames = 
@@ -720,7 +762,7 @@ module FieldConversion =
                     } |> Array.ofSeq
                 let comments = if Seq.isEmpty comments then String.Empty else String.Join(";",comments) |> sprintf "//%s"
                 let fDecResult = sprintf "let mutable %s : %s %s%s" name type' init comments
-                //if fDecResult.Contains("bool_IsChecked") then failwithf "%A" (name,type',init,comments)
+                //if fDecResult.Contains("string_BenefitsNumber") then failwithf "%A" (name,type',init,comments)
                 fDecResult
             let eqNullable = "=Nullable()"
             match initial with
@@ -737,7 +779,7 @@ module FieldConversion =
                     ]
                 let debugOpt,getDebugOpt = ScriptOptions.getNextDebugState getDebugOpt  (ScriptOptions.isDebugNode vDeclaration)
                 let initializer = mapNodeChildren spacing memberNames getDebugOpt String.Empty vDeclaration
-                //if initializer.Contains("bool_IsChecked") then failwithf "toFField: %A" (vDeclaration)
+                //if initializer.Contains("string_BenefitsNumber") then failwithf "toFField: %A" (vDeclaration)
                 fDec ("=" + initializer) "default init" 
 
         let fields = fields |> Seq.map (toFField fieldNames getDebugOpt) |> List.ofSeq
