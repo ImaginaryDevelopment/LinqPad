@@ -233,4 +233,4 @@ let runPmApp' dbProjSpecifier =
 
 // sample usages:
 // buildDbProj None @"C:\TFS\Pm-Rewrite\Source-dev-rewrite\PracticeManagement\ApplicationDatabase";;
-runPmApp' (AbsoluteDbProjFolder @"C:\TFS\PracticeManagement\dev\PracticeManagement\ApplicationDatabase")
+runPmApp' (AbsoluteDbProjFolder @"C:\TFS\PracticeManagement\devDb")
