@@ -28,9 +28,9 @@ type PtRespType = | Deductible |CoPay|CoInsurance
 type PaymentItemType = |EraPayment |EraAdjustment |PtResp of PtRespType |Other
 type PaymentTier = 
     |Primary //1 
-    |Secondary 
-    |Tertiary 
-    |Workman'sComp
+    |Secondary //2
+    |Tertiary //3
+    |Workman'sComp // 4?
     
 type EraStatus = |New | Complete |Partial
 type PaymentType = 
@@ -38,31 +38,31 @@ type PaymentType =
     |ThirdParty of PayerIdentifier * ThirdPartyPayment 
     |Era of PayerIdentifier * EraPaymentMethod
 
-type Payment= {
+type Payment= { // branched from payments for legacy data and migration
     PayerId: PayerIdentifier
-    PaymentType: PaymentType
+    PaymentTypeId: PaymentType // 3 columns in db
     Created:DateTime
     Recv'd:DateTime
     UserId:UserIdentifier
     TotalAmount: Money // must be >= 0
-    PaymentMethod:PaymentMethod
-    Status: EraStatus
+    PaymentMethodId: int // db only (In model PaymentType encapsulates this)
+    PaymentStatusId: EraStatus
     IsElectronic:bool
     Comments:string
     //apptId removed
     //isReconciled (wasn't in use)
     // chargereconciled (wasn't being used)
-    // is copay
+    // is copay remove
     // timestamp -> Created
-    // Amount -> not nullable
+    // Amount -> not nullable (6,2)
     // CreditCardPaymentResultID remove
-    // PatientId keep (consider recv'd patientid
+    // PatientId keep (consider recv'd patientid)
     // TransactioNumber -> remove
     // CheckNumber -> TransactionNumber // also will store Ach number
     // Comments keep
     // apptDate remove
     
-    // credit card stuff:
+    // credit card stuff (consider making into own table):
     // responseCode keep
     // response description
     // transactionId
