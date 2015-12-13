@@ -49,6 +49,7 @@ type Payment= { // branched from payments for legacy data and migration
     PaymentStatusId: EraStatus
     IsElectronic:bool
     Comments:string
+    CCItemID:int
     //apptId removed
     //isReconciled (wasn't in use)
     // chargereconciled (wasn't being used)
@@ -95,16 +96,16 @@ type PaymentItemStatus =
     
 type PaymentItem =
     {
-    EraId:EraItemIdentifier
-    PaymentItemType :PaymentItemType 
+    PaymentID:EraItemIdentifier
+    PaymentItemTypeId :PaymentItemType 
     Created:DateTime
-    PaymentAmount: Money
-    PtRespType: PtRespType option
+    Amount: Money
+    //PtRespType: PtRespType option
     ChargeId: ChargeIdentifier option // provider level adjustments are the only case where the option would be empty
     PaymentTier: PaymentTier
     RemarkCode:string
     AdjustmentReasonCode:string
-    Status : PaymentItemStatus
+    PaymentItemStatus : PaymentItemStatus
     Comments : string
     }
 
