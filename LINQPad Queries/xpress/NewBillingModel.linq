@@ -39,7 +39,7 @@ type PaymentType =
     |Era of PayerIdentifier * EraPaymentMethod
 
 type Payment= { // branched from payments for legacy data and migration
-    PayerId: PayerIdentifier
+    //PayerId: PayerIdentifier (included in PaymentType)
     PaymentTypeId: PaymentType // 3 columns in db
     Created:DateTime
     Recv'd:DateTime
@@ -79,7 +79,7 @@ type Payment= { // branched from payments for legacy data and migration
     
     //charge id migrates into payment items
     //insurance becomes payment items and remove the source column
-    //paymentdate -> Recv'd datetime
+    //paymentdate -> Rcd (recv'd) datetime
     //deductible,coins,copay -> remove
     //adjustment, adjustmentcode, remarks code -> payment items
     //billbanlanceto, denied, writeoff balance -> remove
@@ -110,7 +110,7 @@ type PaymentItem =
     }
 
 type Charge = { 
-    Money:Money
+    Amount:Money
     ApptId:AppointmentIdentifier option
     //CodeUnique -> Modifier1
     // ModCodeId -> remove
