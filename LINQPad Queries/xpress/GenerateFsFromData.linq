@@ -1,9 +1,22 @@
 <Query Kind="FSharpProgram">
+  <Connection>
+    <ID>3da1b433-c8cb-407a-9c25-1d4f2ea04d64</ID>
+    <Persist>true</Persist>
+    <Server>192.168.0.187</Server>
+    <SqlSecurity>true</SqlSecurity>
+    <UserName>xpu10</UserName>
+    <Password>AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAAfs+fvOIuHkq5uisIQafUpAAAAAACAAAAAAAQZgAAAAEAACAAAACQAkUvjSn5aeB96QXgdsjjFqXPvptKHgnaCGMhNRDMSgAAAAAOgAAAAAIAACAAAABbiFmT0lVrhHmtBPdMe3xyU1OjyKeaaH7eR33/SwSecRAAAAABJ/MPPwEPOgIlPCyxKQuIQAAAAIT7pUPnPxbVciisX+r/MmPla5oOVfqYvr9sRtZbeRrH/OKX3Rc7PSVpRIZFGC/3DIrOyo2W19KDU8GleIkcCIM=</Password>
+    <IncludeSystemObjects>true</IncludeSystemObjects>
+    <Database>ApplicationDatabase</Database>
+    <ShowServer>true</ShowServer>
+  </Connection>
   <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 10.0\Common7\IDE\PublicAssemblies\EnvDTE.dll</Reference>
   <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 10.0\Common7\IDE\PublicAssemblies\EnvDTE80.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.Data.Entity.Design.dll</Reference>
   <GACReference>Microsoft.VisualStudio.TextTemplating.Interfaces.10.0, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
 </Query>
+
+let dc = new TypedDataContext()
 
 // .tt translations
 open System
@@ -17,7 +30,6 @@ type PluralizationService = System.Data.Entity.Design.PluralizationServices.Plur
 
 let createPluralizer () = PluralizationService.CreateService(CultureInfo "en") // https://msdn.microsoft.com/en-us/library/system.data.entity.design.pluralizationservices.pluralizationservice(v=vs.110).aspx
 
-
 // MultipleOutputHelper.ttinclude
 [<AllowNullLiteral>]
 type Block () =
@@ -26,158 +38,178 @@ type Block () =
         member val Start = 0 with get,set
         member val Length = 0 with get,set
 
-type IManager
-        
-type Manager internal (host,template) = 
-
-    let mutable currentBlock:Block = null
-    let files = List<Block>()
-    let footer = Block()
-    let header = Block()
-    let host : ITextTemplatingEngineHost = host
-    let template : StringBuilder = template
-    //protected List<String> generatedFileNames = new List<String>();
-    let mutable generatedFileNames : string list = []
-
-    member __.GeneratedFileNames with get() = generatedFileNames    
-    member __.StartNewFile(name, ?project) =
-        if isNull name then raise <| new ArgumentNullException("name")
-        let project = defaultArg project null
-        currentBlock <- new Block(Name=name,Project=project)
-        
-    member x.StartFooter () = x.CurrentBlock <- footer
-    member x.StartHeader () = x.CurrentBlock <- header
+type IManager =
+    abstract member StartNewFile : Filename:string*Project option -> unit
+    abstract member TemplateFile: string with get
+    abstract member Dte : Dte option with get
+    abstract member EndBlock: unit -> unit
+    abstract member Process: doMultiFile:bool -> unit
+    abstract member DefaultProjectNamespace: string with get
     
-    member x.EndBlock () =
-        if isNull currentBlock then
-            ()
-        else
-            currentBlock.Length <- template.Length - currentBlock.Start
-            if currentBlock <> header && currentBlock <> footer then
-                files.Add currentBlock
-            x.CurrentBlock <- null
-            
-    abstract Process : split:bool -> unit
-    default x.Process split = 
-        if split then
-            x.EndBlock()
-            let headerText = template.ToString(header.Start, header.Length)
-            let footerText = template.ToString(footer.Start, footer.Length)
-            let outputPath = Path.GetDirectoryName(host.TemplateFile)
-            files.Reverse()
-            for block in files do
-                let fileName = Path.Combine(outputPath, block.Name)
-                let content = headerText + template.ToString(block.Start, block.Length) + footerText
-                generatedFileNames <- fileName::generatedFileNames
-                x.CreateFile fileName content
-                template.Remove(block.Start, block.Length) |> ignore
-
-    abstract CreateFile : fileName:string -> content:string -> unit
-    default x.CreateFile fileName content = 
-        if x.IsFileContentDifferent fileName content then
-            File.WriteAllText(fileName, content)
-            
-    abstract GetCustomToolNamespace: fileName: string -> string
-    default x.GetCustomToolNamespace fileName = null
+module Managers = 
+    type Manager internal (host,template) = 
     
-    abstract DefaultProjectNamespace:  string with get
-    default x.DefaultProjectNamespace with get() = null
-    
-    abstract IsFileContentDifferent : fileName:string -> newContent:string -> bool
-    default __.IsFileContentDifferent fileName newContent =
-        File.Exists fileName && File.ReadAllText(fileName) = newContent
-        |> not
-        
-    member x.CurrentBlock
-        with get() = currentBlock
-        and set v = 
-            if not <| isNull x.CurrentBlock then
-                x.EndBlock()
-            if not <| isNull v then
-                v.Start <- template.Length
-            currentBlock <- v
-            
-    static member Create(host:ITextTemplatingEngineHost,template) =
-        match host with 
-        // TODO: re-enable this
-        | :? IServiceProvider -> VsManager(host,template) :> Manager
-        | _ -> Manager(host,template)
-            
-and VsManager private (host,dte,template,templateProjectItem,checkOutAction, projectSyncAction) =
-        inherit Manager(host,template)
-        
-        let templateProjectItem:ProjectItem = null
-        let dte: Dte = dte
-        let checkOutAction: Action<string> = checkOutAction // Action<String> 
-        let projectSyncAction: Action<string seq> = projectSyncAction //Action<IEnumerable<String>> 
+        let mutable currentBlock:Block = null
+        let files = List<Block>()
+        let footer = Block()
+        let header = Block()
+        let host : ITextTemplatingEngineHost = host
+        let template : StringBuilder = template
+        //protected List<String> generatedFileNames = new List<String>();
+        let mutable generatedFileNames : string list = []
 
-        override __.DefaultProjectNamespace with get() = templateProjectItem.ContainingProject.Properties.Item("DefaultNamespace").Value.ToString()
-        override __.GetCustomToolNamespace fileName = dte.Solution.FindProjectItem(fileName).Properties.Item("CustomToolNamespace").Value.ToString()
+        member __.GeneratedFileNames with get() = generatedFileNames    
+        member __.StartNewFile(name, ?project) =
+            if isNull name then raise <| new ArgumentNullException("name")
+            let project = defaultArg project null
+            currentBlock <- new Block(Name=name,Project=project)
+            
+        member x.StartFooter () = x.CurrentBlock <- footer
+        member x.StartHeader () = x.CurrentBlock <- header
         
-        override __.Process split =
-            if isNull templateProjectItem.ProjectItems then
+        member x.EndBlock () =
+            if isNull currentBlock then
                 ()
-            else 
-                base.Process split
-            projectSyncAction.EndInvoke(projectSyncAction.BeginInvoke(base.GeneratedFileNames, null, null))
-
-        override x.CreateFile fileName content =
+            else
+                currentBlock.Length <- template.Length - currentBlock.Start
+                if currentBlock <> header && currentBlock <> footer then
+                    files.Add currentBlock
+                x.CurrentBlock <- null
+                
+        abstract Process : split:bool -> unit
+        default x.Process split = 
+            if split then
+                x.EndBlock()
+                let headerText = template.ToString(header.Start, header.Length)
+                let footerText = template.ToString(footer.Start, footer.Length)
+                let outputPath = Path.GetDirectoryName(host.TemplateFile)
+                files.Reverse()
+                for block in files do
+                    let fileName = Path.Combine(outputPath, block.Name)
+                    let content = headerText + template.ToString(block.Start, block.Length) + footerText
+                    generatedFileNames <- fileName::generatedFileNames
+                    x.CreateFile fileName content
+                    template.Remove(block.Start, block.Length) |> ignore
+    
+        abstract CreateFile : fileName:string -> content:string -> unit
+        default x.CreateFile fileName content = 
             if x.IsFileContentDifferent fileName content then
-                x.CheckoutFileIfRequired(fileName)
                 File.WriteAllText(fileName, content)
                 
-        //static member private x.CreateVsManager(
-        internal new(host:ITextTemplatingEngineHost , template:StringBuilder ) =
-            let hostServiceProvider = host :?> IServiceProvider
-            if isNull hostServiceProvider then
-                raise <| ArgumentNullException("Could not obtain IServiceProvider")
-            let  dte = hostServiceProvider.GetService(typeof<Dte>) :?> Dte
-            if isNull dte then
-                raise <| ArgumentNullException("Could not obtain DTE from host")
-            
-            let templateProjectItem = dte.Solution.FindProjectItem(host.TemplateFile)
-            let checkOutAction fileName = dte.SourceControl.CheckOutItem fileName |> ignore
-            let projectSyncAction = fun keepFileNames -> VsManager.ProjectSync(templateProjectItem, keepFileNames)
-            VsManager(host,dte,template,templateProjectItem,Action<_>(checkOutAction), Action<_>(projectSyncAction))
+        abstract GetCustomToolNamespace: fileName: string -> string
+        default x.GetCustomToolNamespace fileName = null
         
-        static member WriteLnToOutputPane(dte:Dte) (s:string) =
-            let window = dte.Windows.Item(EnvDTE.Constants.vsWindowKindOutput).Object :?> EnvDTE.OutputWindow
-            window.ActivePane.Activate ()
-            window.ActivePane.OutputString (s + Environment.NewLine)
+        abstract DefaultProjectNamespace:  string with get
+        default x.DefaultProjectNamespace with get() = null
+        
+        abstract IsFileContentDifferent : fileName:string -> newContent:string -> bool
+        default __.IsFileContentDifferent fileName newContent =
+            File.Exists fileName && File.ReadAllText(fileName) = newContent
+            |> not
+            
+        member x.CurrentBlock
+            with get() = currentBlock
+            and set v = 
+                if not <| isNull x.CurrentBlock then
+                    x.EndBlock()
+                if not <| isNull v then
+                    v.Start <- template.Length
+                currentBlock <- v
+                
+        static member Create(host:ITextTemplatingEngineHost,template) =
+            match host with 
+            // TODO: re-enable this
+            | :? IServiceProvider -> VsManager(host,template) :> Manager
+            | _ -> Manager(host,template)
+        interface IManager with
+            override x.StartNewFile (p,s) =
+                match s with
+                | Some project -> x.StartNewFile(p,project)
+                | None -> x.StartNewFile(p,null)
+            override x.EndBlock() = x.EndBlock ()
+            override x.Process doMultiFile = x.Process doMultiFile
+            override x.DefaultProjectNamespace = x.DefaultProjectNamespace
+            override x.Dte = None
+            override x.TemplateFile = host.TemplateFile
+            
+    and VsManager private (host,dte,template,templateProjectItem,checkOutAction, projectSyncAction) =
+            inherit Manager(host,template)
+            
+            let templateProjectItem:ProjectItem = null
+            let dte: Dte = dte
+            let checkOutAction: Action<string> = checkOutAction // Action<String> 
+            let projectSyncAction: Action<string seq> = projectSyncAction //Action<IEnumerable<String>> 
 
-        static member ProjectSync(templateProjectItem:ProjectItem, keepFileNames:string seq)  =
-            let keepFileNameSet = HashSet<string>(keepFileNames)
-            let projectFiles = Dictionary<string, ProjectItem>()
-            let dte = templateProjectItem.Collection.DTE
-            let project = templateProjectItem.Collection.ContainingProject
-            VsManager.WriteLnToOutputPane dte ("Starting ProjectSync for t4 in " + project.Name + "\\" + templateProjectItem.Name)
-            let templateProjectDirectory = Path.GetDirectoryName project.FullName
-            let projects = dte.Solution.Projects.OfType<Project>()
-            let inline isInCurrentProject (fileName:string) =  fileName.StartsWith(templateProjectDirectory)
-            let originalFilePrefix = Path.GetFileNameWithoutExtension(templateProjectItem.get_FileNames(0s)) + "."
-            for projectItem in templateProjectItem.ProjectItems do
-                projectFiles.Add(projectItem.get_FileNames(0s), projectItem)
-
-            // Remove unused items from the project
-            for pair in projectFiles do
-                if not <| keepFileNames.Contains pair.Key && not <| (Path.GetFileNameWithoutExtension(pair.Key) + ".").StartsWith(originalFilePrefix) then
-                    pair.Value.Delete()
-
-            // Add missing files to the project
-            for fileName in keepFileNameSet do
-                if isInCurrentProject fileName then
-                    if not <| projectFiles.ContainsKey(fileName) then
-                        templateProjectItem.ProjectItems.AddFromFile(fileName) |> ignore
-                        VsManager.WriteLnToOutputPane dte ("added " + fileName)
-                else // add to another project
-                    let targetProject = projects.First(fun p -> p.Kind <> ProjectKinds.vsProjectKindSolutionFolder && fileName.StartsWith(Path.GetDirectoryName p.FullName))
-                    VsManager.WriteLnToOutputPane dte ("Generating into " + targetProject.FullName)
-                    targetProject.ProjectItems.AddFromFile fileName |> ignore
+            interface IManager with
+                override x.Dte = Some dte
+                
+            override __.DefaultProjectNamespace with get() = templateProjectItem.ContainingProject.Properties.Item("DefaultNamespace").Value.ToString()
+            override __.GetCustomToolNamespace fileName = dte.Solution.FindProjectItem(fileName).Properties.Item("CustomToolNamespace").Value.ToString()
+            
+            override __.Process split =
+                if isNull templateProjectItem.ProjectItems then
+                    ()
+                else 
+                    base.Process split
+                projectSyncAction.EndInvoke(projectSyncAction.BeginInvoke(base.GeneratedFileNames, null, null))
+    
+            override x.CreateFile fileName content =
+                if x.IsFileContentDifferent fileName content then
+                    x.CheckoutFileIfRequired(fileName)
+                    File.WriteAllText(fileName, content)
                     
-        member x.CheckoutFileIfRequired fileName =
-            let sc = dte.SourceControl
-            if not <| isNull sc && sc.IsItemUnderSCC fileName && not <| sc.IsItemCheckedOut fileName then
-                checkOutAction.EndInvoke(checkOutAction.BeginInvoke(fileName, null, null))
+            //static member private x.CreateVsManager(
+            internal new(host:ITextTemplatingEngineHost , template:StringBuilder ) =
+                let hostServiceProvider = host :?> IServiceProvider
+                if isNull hostServiceProvider then
+                    raise <| ArgumentNullException("Could not obtain IServiceProvider")
+                let  dte = hostServiceProvider.GetService(typeof<Dte>) :?> Dte
+                if isNull dte then
+                    raise <| ArgumentNullException("Could not obtain DTE from host")
+                
+                let templateProjectItem = dte.Solution.FindProjectItem(host.TemplateFile)
+                let checkOutAction fileName = dte.SourceControl.CheckOutItem fileName |> ignore
+                let projectSyncAction = fun keepFileNames -> VsManager.ProjectSync(templateProjectItem, keepFileNames)
+                VsManager(host,dte,template,templateProjectItem,Action<_>(checkOutAction), Action<_>(projectSyncAction))
+            
+            static member WriteLnToOutputPane(dte:Dte) (s:string) =
+                let window = dte.Windows.Item(EnvDTE.Constants.vsWindowKindOutput).Object :?> EnvDTE.OutputWindow
+                window.ActivePane.Activate ()
+                window.ActivePane.OutputString (s + Environment.NewLine)
+    
+            static member ProjectSync(templateProjectItem:ProjectItem, keepFileNames:string seq)  =
+                let keepFileNameSet = HashSet<string>(keepFileNames)
+                let projectFiles = Dictionary<string, ProjectItem>()
+                let dte = templateProjectItem.Collection.DTE
+                let project = templateProjectItem.Collection.ContainingProject
+                VsManager.WriteLnToOutputPane dte ("Starting ProjectSync for t4 in " + project.Name + "\\" + templateProjectItem.Name)
+                let templateProjectDirectory = Path.GetDirectoryName project.FullName
+                let projects = dte.Solution.Projects.OfType<Project>()
+                let inline isInCurrentProject (fileName:string) =  fileName.StartsWith(templateProjectDirectory)
+                let originalFilePrefix = Path.GetFileNameWithoutExtension(templateProjectItem.get_FileNames(0s)) + "."
+                for projectItem in templateProjectItem.ProjectItems do
+                    projectFiles.Add(projectItem.get_FileNames(0s), projectItem)
+    
+                // Remove unused items from the project
+                for pair in projectFiles do
+                    if not <| keepFileNames.Contains pair.Key && not <| (Path.GetFileNameWithoutExtension(pair.Key) + ".").StartsWith(originalFilePrefix) then
+                        pair.Value.Delete()
+    
+                // Add missing files to the project
+                for fileName in keepFileNameSet do
+                    if isInCurrentProject fileName then
+                        if not <| projectFiles.ContainsKey(fileName) then
+                            templateProjectItem.ProjectItems.AddFromFile(fileName) |> ignore
+                            VsManager.WriteLnToOutputPane dte ("added " + fileName)
+                    else // add to another project
+                        let targetProject = projects.First(fun p -> p.Kind <> ProjectKinds.vsProjectKindSolutionFolder && fileName.StartsWith(Path.GetDirectoryName p.FullName))
+                        VsManager.WriteLnToOutputPane dte ("Generating into " + targetProject.FullName)
+                        targetProject.ProjectItems.AddFromFile fileName |> ignore
+                        
+            member x.CheckoutFileIfRequired fileName =
+                let sc = dte.SourceControl
+                if not <| isNull sc && sc.IsItemUnderSCC fileName && not <| sc.IsItemCheckedOut fileName then
+                    checkOutAction.EndInvoke(checkOutAction.BeginInvoke(fileName, null, null))
                 
 // -----------------------------------                
 // translation of EnvDteHelper.ttinclude
@@ -484,25 +516,37 @@ let generateClass(typeName:string, columns:IEnumerable<ColumnDescription> , appe
 //  if isNull dte then
 //      raise <| ArgumentNullException("Could not obtain DTE from host")
 
+// let manager = Manager.Create(host, generationEnvironment)
 *)
-let generate(host:ITextTemplatingEngineHost, dte:Dte, generationEnvironment:StringBuilder , targetProjectName:string , tables:string seq, cString:string , doMultiFile:bool) (pluralizer:string -> string) (singularizer:string -> string) useOptions=
+// was public static void Generate(ITextTemplatingEngineHost host, EnvDTE.DTE dte, StringBuilder generationEnvironment, string targetProjectName, IEnumerable<string> tables, string cString, bool doMultiFile)
+    
+let generate(manager:IManager, generationEnvironment:StringBuilder , targetProjectName:string, tables:string seq, cString:string , doMultiFile:bool) (pluralizer:string -> string) (singularizer:string -> string) useOptions=
     let appendLine text = generationEnvironment.AppendLine(text) |> ignore
-    generationEnvironment.AppendLine(host.TemplateFile) |> ignore
+    generationEnvironment.AppendLine(manager.TemplateFile) |> ignore // was host.TemplateFile
     let appendLine' (indentLevels, text) = generationEnvironment.AppendLine(String.Join(String.Empty,Enumerable.Repeat("    ",indentLevels)) + text) |> ignore
-    let manager = Manager.Create(host, generationEnvironment)
-
-    let projects = recurseSolutionProjects dte
-    let targetProject = projects.First(fun p -> p.Name = targetProjectName)
-    let targetProjectFolder = Path.GetDirectoryName(targetProject.FullName)
-
+    
     generationEnvironment.AppendLine("Main file output") |> ignore
-    for p in projects do
-        appendLine (p.Name + " " + p.FullName)
+     
+    
+    let projects = manager.Dte |> Option.bind (recurseSolutionProjects>> Some) // was dte
+    let targetProject = projects |> Option.bind (fun projs -> projs.First(fun p -> p.Name = targetProjectName) |> Some)
+    let targetProjectFolder = targetProject |> Option.bind (fun tp -> Path.GetDirectoryName(tp.FullName) |> Some)
+
+
+    projects |> Option.iter (fun projs ->
+        for p in projs do
+            appendLine (p.Name + " " + p.FullName)
+    )
+            
 
     use cn = new System.Data.SqlClient.SqlConnection(cString)
     cn.Open()
+    
     for tableName in tables do
-        manager.StartNewFile(Path.Combine(targetProjectFolder,tableName + ".generated.fs"),targetProject)
+        match targetProjectFolder with
+        | Some targetProjectFolder -> 
+            manager.StartNewFile(Path.Combine(targetProjectFolder,tableName + ".generated.fs"),targetProject)
+        | None -> manager.StartNewFile(tableName + ".generated.fs",targetProject)
         let typeName = singularizer tableName
         let columns = List<ColumnDescription>()
         let identities = List<string>()
@@ -550,4 +594,24 @@ let generate(host:ITextTemplatingEngineHost, dte:Dte, generationEnvironment:Stri
         manager.EndBlock()
 
 
-    manager.Process(doMultiFile)
+    manager.Process doMultiFile
+    
+let sb = StringBuilder()
+let mutable currentFile:string = null
+let pluralizer = createPluralizer()
+{ new IManager
+     with 
+        override this.StartNewFile (s,p) = currentFile <- s;  sb.AppendLine(sprintf "// Starting a new file '%s' s for project opt '%A'" s p) |> ignore
+        override this.EndBlock () = sb.AppendLine(String.Empty) |> ignore; sb.AppendLine(sprintf "// file finished '%s'" currentFile) |> ignore
+        override this.Process doMultiFile = ()
+        override this.DefaultProjectNamespace with get() = "DefaultProjectNamespace"
+        override this.Dte = None    
+        override this.TemplateFile with get() = "DataModels.tt"
+        
+        
+}
+//let generate(manager:IManager, generationEnvironment:StringBuilder , targetProjectName:string , tables:string seq, cString:string , doMultiFile:bool) (pluralizer:string -> string) (singularizer:string -> string) useOptions=
+|> fun m -> generate (m,sb,"Pm.Schema",["Users"], dc.Connection.ConnectionString, true) pluralizer.Pluralize pluralizer.Singularize false
+
+sb.ToString().Dump("generated")
+    
