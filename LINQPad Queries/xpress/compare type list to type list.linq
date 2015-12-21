@@ -15,7 +15,6 @@
 let dc = new TypedDataContext()
 type MetaDataSource = |Type | ClassMethodName of string | ModuleMethod of string*string // doesn't account for overloads
 
-
 let getInfo (typeRef:Type) source = 
     let getMethodParams (mi:MethodInfo) = 
         mi.GetParameters()
@@ -37,18 +36,18 @@ let getInfo (typeRef:Type) source =
         |> Seq.find(fun m -> m.Name = methodName)
         |> getMethodParams
 
-let source = getInfo typeof<LINQPad.User.Claims> MetaDataSource.Type
-let target = getInfo typeof<Pm.Dal.SqlConn> (MetaDataSource.ModuleMethod ("Claims","SaveCon"))
+let source = getInfo typeof<LINQPad.User.Codes> MetaDataSource.Type
+let target = getInfo typeof<PracticeManagement.Foundation.DataModels.CodeDataModel> MetaDataSource.Type
 //target.Dump()
 
-		
+        
 let missingFromSource = 
     query {
         for (sName,sType) in source do
         leftOuterJoin tpl in target on ((sName.ToLower()) = ((fst tpl).ToLower())) into tpLeft
         for tp in tpLeft.DefaultIfEmpty() do
         where (box tp = null)
-        select sName
+        select (sName,sType.Name)
     }
 
 //missingFromSource.Dump("missing")
@@ -60,10 +59,10 @@ let missingFromTarget =
         leftOuterJoin spl in source on ((tName.ToLower()) = ((fst spl).ToLower())) into spLeft
         for sp in spLeft.DefaultIfEmpty() do
         where (box sp = null)
-        select tName
+        select (tName,tType.Name)
     }
-	
-Util.HorizontalRun("missingFromSource,missingFromTarget", missingFromSource,missingFromTarget).Dump()
+    
+Util.HorizontalRun("missingFromTarget,missingFromSource", missingFromSource,missingFromTarget).Dump()
 let mismatched = 
     query {
         for (tName,tType) in target do
@@ -72,5 +71,5 @@ let mismatched =
         sortBy sName
         select (sName,sType,tType)
     }
-	
+    
 mismatched.Dump("mismatches")

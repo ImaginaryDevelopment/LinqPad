@@ -3,10 +3,11 @@
   <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 10.0\Common7\IDE\PublicAssemblies\EnvDTE80.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.Data.Entity.Design.dll</Reference>
   <GACReference>Microsoft.VisualStudio.TextTemplating.Interfaces.10.0, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
-  <Namespace>Microsoft.VisualStudio.TextTemplating</Namespace>
 </Query>
 
 // .tt translations
+open System
+open Microsoft.VisualStudio.TextTemplating
 type CultureInfo = System.Globalization.CultureInfo
 type Dte = EnvDTE.DTE
 type Project = EnvDTE.Project
@@ -81,6 +82,7 @@ type Manager internal (host,template) =
     default __.IsFileContentDifferent fileName newContent =
         File.Exists fileName && File.ReadAllText(fileName) = newContent
         |> not
+        
     member x.CurrentBlock
         with get() = currentBlock
         and set v = 
@@ -95,7 +97,6 @@ type Manager internal (host,template) =
         // TODO: re-enable this
         | :? IServiceProvider -> VsManager(host,template) :> Manager
         | _ -> Manager(host,template)
-        
             
 and VsManager private (host,dte,template,templateProjectItem,checkOutAction, projectSyncAction) =
         inherit Manager(host,template)
@@ -244,7 +245,6 @@ let generateInterface (typeName:string , columns:IEnumerable<ColumnDescription> 
         appendLine(1, "abstract member " + cd.ColumnName + ":" + mapSqlType(cd.Type, cd.Nullable, useOptions) + " with get" + (if writeable then ",set" else String.Empty))
         
     appendLine(0,String.Empty)
-
         
 let getDefaultValue(mappedType:string ) =
     if mappedType.EndsWith("Nullable") then
@@ -260,7 +260,6 @@ let getDefaultValue(mappedType:string ) =
             |"datetime" -> "System.DateTime.MinValue"
             |"uniqueidentifier" -> "Guid.Empty"
             |_ -> "null"
-
     
 let generateRecord(typeName:string, columns: ColumnDescription seq, appendLine:int * string -> unit, useOptions:bool) =
     appendLine(0, generateTypeComment (columns.Count()))
@@ -361,7 +360,6 @@ let generateModule(typeName:string, columns:IEnumerable<ColumnDescription>, sche
 
     appendLine(2, "}")
 
-
     appendLine(0,String.Empty)
 
     appendLine(1, "let inline toRecordStp (" + camelType + ": ^a) =")
@@ -393,20 +391,18 @@ let generateModule(typeName:string, columns:IEnumerable<ColumnDescription>, sche
     appendLine(0,String.Empty)
         
 let mapFieldNameFromType(columnName:string) = 
-    let camel = toCamel columnName
-    if camel = "type" then
-        "type'"
-    else 
-        camel
+    match toCamel columnName with
+    | "type" ->  "type'"
+    | camel -> camel
         
 let generateClass(typeName:string, columns:IEnumerable<ColumnDescription> , appendLine:int * string -> unit, useOptions:bool ) =
-    appendLine(0, generateTypeComment (columns.Count()));
-    appendLine(0, "type "+ typeName + "N (model:" + typeName + "Record) = ");
-    appendLine(0, String.Empty);
+    appendLine(0, generateTypeComment (columns.Count()))
+    appendLine(0, "type "+ typeName + "N (model:" + typeName + "Record) = ")
+    appendLine(0, String.Empty)
     appendLine(1, "let propertyChanged = new Event<_, _>()");
-    appendLine(0, String.Empty);
+    appendLine(0, String.Empty)
 
-    appendLine(0, String.Empty);
+    appendLine(0, String.Empty)
     for cd in columns do // https://fadsworld.wordpress.com/2011/05/18/f-quotations-for-inotifypropertychanged/
         let camel = mapFieldNameFromType(cd.ColumnName)
         appendLine(1, "let mutable "+ camel + " = model." + cd.ColumnName)
