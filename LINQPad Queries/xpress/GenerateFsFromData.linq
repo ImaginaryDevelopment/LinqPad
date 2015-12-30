@@ -33,6 +33,8 @@ let inline delimit (delimiter:string) (text:#seq<string>) = String.Join(delimite
 let first (x:#seq<_>) = x.First()
 let any (x:#seq<_>) = x.Any()
 let count (x:#seq<_>) = x.Count()
+let contains y (x:seq<_>) = x.Contains(y)
+
 // -----------------------------------                
 // translation of EnvDteHelper.ttinclude
 module EnvDteHelper = 
@@ -335,7 +337,7 @@ module DataModelToF =
             s
         elif not <| Char.IsUpper s.[0] then
             s
-        else 
+        else
             let camelCase = Char.ToLower(s.[0], CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture)
             if (s.Length > 1) then
                 camelCase + (s.Substring 1)
@@ -587,7 +589,7 @@ module SqlGeneration =
         |Char of ColumnLength
         |NChar of ColumnLength
         |Other of Type
-    
+
     type ColumnInfo = 
         { 
             Name:string; 
@@ -597,8 +599,11 @@ module SqlGeneration =
             FKey:FKeyInfo option
             Comments: string list
             GenerateReferenceTable:bool
-            ReferencevaluesWithComment: IDictionary<string,string>
+            ReferenceValuesWithComment: IDictionary<string,string>
         }
+        with 
+            static member Zero ct = 
+                {Name=null; Type = ct; AllowNull = false; Attributes = List.empty; FKey = None; Comments = List.empty; GenerateReferenceTable = false; ReferenceValuesWithComment = null}
     
     type TableInfo = { Name:string; Schema:string; Columns: ColumnInfo list}
     
@@ -606,6 +611,7 @@ module SqlGeneration =
     type Targeting = TargetProject of EnvDTE.Project*targetProjectFolder:string
     
     let generateTable (manager:MultipleOutputHelper.IManager) (generationEnvironment:StringBuilder) targeting tableInfo =
+        printfn "Generating a table into %A %A" targeting tableInfo
         let formatFKey (table:string) column fKey : string =
             match fKey with
             |None -> null
@@ -615,7 +621,8 @@ module SqlGeneration =
                 
         let appendLine text = generationEnvironment.AppendLine(text) |> ignore
         let appendLine' indentLevel text = delimit String.Empty (Enumerable.Repeat("    ",indentLevel)) + text |> appendLine
-        
+        appendLine "-- Generated file, DO NOT edit directly"
+        appendLine (sprintf "CREATE TABLE [%s].[%s] (" tableInfo.Schema tableInfo.Name)
         let mapTypeToSql ct =
             let mapLength = 
                 function 
@@ -629,7 +636,12 @@ module SqlGeneration =
             | NVarChar cl -> sprintf "nvarchar(%s)" (mapLength cl)
             | Char cl -> sprintf "char(%s)" (mapLength cl)
             | NChar cl -> sprintf "nchar(%s)" (mapLength cl)
-            | Other t -> t.Name
+            | Other t -> 
+                if t = typeof<int> then
+                    "int"
+                elif t = typeof<bool> then
+                    "bit"
+                else t.Name
 
 //        let projects = manager.Dte |> Option.bind (EnvDteHelper.recurseSolutionProjects >> Some) // was dte
 //        let targetProject = projects |> Option.bind (fun projs -> projs.First(fun p -> p.Name = targetProjectName) |> Some)
@@ -641,9 +653,14 @@ module SqlGeneration =
                 manager.StartNewFile(targetFilename, targetProject)
             | None -> ()
         
+        let mutable i = 0
+        let columnCount = count tableInfo.Columns
+        let hasCombinationPK = tableInfo.Columns.Count (fun ci -> contains "primary key" ci.Attributes) > 1
+        
         for ci in tableInfo.Columns do
             let fKey = formatFKey tableInfo.Name ci.Name ci.FKey
-            let multipleComments = ci.Comments.Count() > 1
+            
+            let multipleComments = count ci.Comments > 1
             if multipleComments then
                 appendLine String.Empty
                 ci.Comments 
@@ -652,31 +669,77 @@ module SqlGeneration =
                 |> appendLine' 1 
 
             let comment = 
-                if not <| isNull ci.ReferencevaluesWithComment && any ci.ReferencevaluesWithComment && (multipleComments || not <| any ci.Comments) then
-                    " -- " + (delimit "," ci.ReferencevaluesWithComment.Keys)
+                if not <| isNull ci.ReferenceValuesWithComment && any ci.ReferenceValuesWithComment && (multipleComments || not <| any ci.Comments) then
+                    " -- " + (delimit "," ci.ReferenceValuesWithComment.Keys)
                 elif count ci.Comments = 1 then 
                     "--" + (first ci.Comments)
                 else String.Empty
-
+            
+            let formatAttributes attributes hasCombinationPK fKey allowNull = 
+                let isPk = not <| isNull attributes && contains "primary key" attributes
+                let needsStarter = allowNull || not isPk || hasCombinationPK
+                let starter = (if allowNull then "null" elif needsStarter then "not null" else String.Empty) + (if needsStarter then " " else String.Empty)
+                if isNull attributes then
+                    starter + (if not <| isNull fKey then " " + fKey else null)
+                else
+                    let attribs = starter + (delimit " " (if hasCombinationPK && (not <| isNull attributes) then attributes.Except([| "primary key" |]) else attributes))
+                    if isNull fKey then
+                        attribs
+                    else attribs + " " + fKey
+                    
             // TODO: finish translation
-            mapTypeToSql ci.Type
-            |> sprintf "%32s%16s" (sprintf "[%s]" ci.Name)
+            sprintf "%-32s%-16s%s%s%s%s" 
+                (sprintf "[%s]" ci.Name)
+                (mapTypeToSql ci.Type) 
+                (formatAttributes ci.Attributes hasCombinationPK fKey ci.AllowNull) 
+                (if i < columnCount - 1 || hasCombinationPK then "," else String.Empty) 
+                (if multipleComments then Environment.NewLine else String.Empty)
+                comment
+            |> appendLine' 1
+            i <- i + 1
+        if hasCombinationPK then
+            let columns = 
+                tableInfo.Columns.Where(fun ci -> ci.Attributes.Contains("primary key")).Select(fun ci -> ci.Name)
+                |> delimit ","
+            
+            sprintf "CONSTRAINT PK_%s PRIMARY KEY (%s)" tableInfo.Name columns
             |> appendLine' 1
 
 let sb = StringBuilder()
 let mutable currentFile:string = null
 let pluralizer = createPluralizer()
-{ new MultipleOutputHelper.IManager
-     with 
-        override this.StartNewFile (s,p) = currentFile <- s;  sb.AppendLine(sprintf "// Starting a new file '%s' s for project opt '%A'" s p) |> ignore
-        override this.EndBlock () = sb.AppendLine(String.Empty) |> ignore; sb.AppendLine(sprintf "// file finished '%s'" currentFile) |> ignore
-        override this.Process doMultiFile = ()
-        override this.DefaultProjectNamespace with get() = "DefaultProjectNamespace"
-        override this.Dte = None    
-        override this.TemplateFile with get() = "DataModels.tt"
-}
+
+let manager = 
+    { new MultipleOutputHelper.IManager
+         with 
+            override this.StartNewFile (s,p) = currentFile <- s;  sb.AppendLine(sprintf "// Starting a new file '%s' s for project opt '%A'" s p) |> ignore
+            override this.EndBlock () = sb.AppendLine(String.Empty) |> ignore; sb.AppendLine(sprintf "// file finished '%s'" currentFile) |> ignore
+            override this.Process doMultiFile = ()
+            override this.DefaultProjectNamespace with get() = "DefaultProjectNamespace"
+            override this.Dte = None
+            override this.TemplateFile with get() = "DataModels.tt"
+    }
+
+SqlGeneration.generateTable manager sb None 
+    {
+    Name="Users"; Schema="dbo"; 
+    Columns= 
+        [ 
+            { // should be [PaymentID]                     int             identity primary key,
+                Name="PaymentID"
+                Type = SqlGeneration.ColumnType.Other typeof<int>
+                Attributes = ["identity";"primary key" ]
+                AllowNull = false
+                FKey = None
+                Comments = List.empty
+                GenerateReferenceTable = false
+                ReferenceValuesWithComment = null
+            }
+        ] 
+    }
+
 //let generate(manager:IManager, generationEnvironment:StringBuilder , targetProjectName:string , tables:string seq, cString:string , doMultiFile:bool) (pluralizer:string -> string) (singularizer:string -> string) useOptions=
-|> fun m -> DataModelToF.generate (m,sb,"Pm.Schema",["Users"], dc.Connection.ConnectionString, true) pluralizer.Pluralize pluralizer.Singularize false
+DataModelToF.generate (manager, sb, "Pm.Schema", ["Users"], dc.Connection.ConnectionString, true) pluralizer.Pluralize pluralizer.Singularize false
 
 sb.ToString().Dump("generated")
     
