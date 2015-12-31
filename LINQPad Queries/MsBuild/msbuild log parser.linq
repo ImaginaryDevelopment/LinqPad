@@ -38,13 +38,11 @@ void Main()
 				select new{agentFolder,teamFolder,buildFolder,BuildName=System.IO.Path.GetFileName(buildFolder)};
 	var targetBuild=Util.ReadLine("target build?", null, buildPaths.Select(bp=>bp.BuildName).ToArray().Dump()); 
 	var buildDefinition =buildPaths.First(x=>x.BuildName.IsIgnoreCaseMatch(targetBuild));
-	var buildSrc = System.IO.Path.Combine( buildDefinition.buildFolder,"src"); // our builds have the msbuild log files going into the src folder for the specific project
+	var buildSrc = System.IO.Path.Combine( buildDefinition.buildFolder,"Sources"); // our builds have the msbuild log files going into the src folder for the specific project
+
 	
-	var productFolder = System.IO.Path.Combine(buildSrc,"Products");
-	
-	var slnFolder = System.IO.Path.Combine(productFolder,targetBuild.Contains("CV", StringComparison.InvariantCultureIgnoreCase)?"CVS":"MarketOnce");
-	if(!System.IO.Directory.Exists(productFolder) && buildSrc.AsDirPath().GetFiles("*.sln").Any()){
-		productFolder=null;
+	var slnFolder = System.IO.Path.Combine(buildSrc ,targetBuild.Contains("PracticeManagement", StringComparison.InvariantCultureIgnoreCase)?"PM":"Source");
+	if(!System.IO.Directory.Exists(slnFolder ) && buildSrc.AsDirPath().GetFiles("*.sln").Any()){
 		slnFolder=buildSrc;
 	}
 	
@@ -132,7 +130,7 @@ public string ReadBlock (IEnumerator<string> lines,string buildServer,string par
 	while(lines.MoveNext()){ 
 		index++;
 		var l = lines.Current;
-		var shallower =prevIndent!=string.Empty && l.StartsWith(prevIndent)==false;
+		var shallower = prevIndent!=string.Empty && l.StartsWith(prevIndent)==false;
 		var deeper = !shallower && l.After(prevIndent).IsMatch(@"^\s",false);
 		
 		if(!deeper && ! shallower) //same indention level

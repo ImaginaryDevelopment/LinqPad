@@ -5,6 +5,7 @@ type String with
     static member indexOf (delimiter:string) (value:string) = value.IndexOf(delimiter)
     static member after delimiter (value:string) = value.[String.indexOf delimiter value + delimiter.Length ..]
     static member before delimiter (value:string) = value.[0.. String.indexOf delimiter value - 1]
+    
 type XElement with
     static member descendants (value:XElement) = value.Descendants()
     static member byLocalName localname (xe:XElement) = xe.Name.LocalName = localname

@@ -10,13 +10,17 @@
 void Main()
 {
 	var tfsServer = Environment.GetEnvironmentVariable("servers").Dump().Split(new []{";"},StringSplitOptions.RemoveEmptyEntries).Dump().FirstOrDefault(c=>c.Contains("tfs"));
-	var tfsUri= "https://"+tfsServer;
+	var tfsUri= "http://"+tfsServer+":8080/tfs";
 	var tfs=new Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(new Uri(tfsUri));
 	var vcs=tfs.GetService<VersionControlServer>();
 	var tfsbuild = tfs.GetService<IBuildServer>(); //http://stackoverflow.com/questions/2909416/how-can-i-copy-a-tfs-2010-build-definition
-	var buildToCopy=tfsbuild.GetBuildDefinition("Development","Cvr Dev Deploy").Dump();
+	var buildToCopy=
+		//tfsbuild.GetBuildDefinition("PracticeManagement","PracticeManagement_DEV")
+		tfsbuild.GetBuildDefinition("XpressCharts","Development CI")
+		.Dump();
 	var clone=CloneBuildDefinition(buildToCopy).Dump();
 	clone.Name=clone.Name+"Clone";
+	if(Util.ReadLine<bool>("Save Clone?"))
 	clone.Save();
 }
 
