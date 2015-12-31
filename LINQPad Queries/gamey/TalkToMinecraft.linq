@@ -8,10 +8,8 @@ open System.Text
 let dumpt (title:string) x = 
     x.Dump(title) |> ignore
 let inline printfnC col s = Util.RawHtml(sprintf "<font color=\"%O\">%s</font>" col s).Dump()
-printfnC ConsoleColor.DarkBlue "hello world"
-let inline tee f x = 
-    f x
-    x
+//printfnC ConsoleColor.DarkBlue "hello world"
+let inline tee f x = f x; x
     
 module Readers = 
     let readByte offset (buffer:byte[]) : byte*int =
@@ -156,4 +154,4 @@ let sayHello() =
     offset.Dump("after handshake")
     let msg = Encoding.UTF8.GetBytes("chat.post(Merry Christmas from F#)")
     stream.Write(msg, 0, msg.Length)
-sayHello()    
+sayHello()
