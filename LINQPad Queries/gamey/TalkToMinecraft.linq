@@ -34,7 +34,7 @@ module Readers =
             b
         
         while (incrementb()) &&& (int 128uy) = (int 128uy) do
-            value <- int (value ||| ((b &&& (int 127uy) ) <<< (size * 7))) |> tee (dumpt "readVarInt value")
+            value <- int (value ||| ((b &&& (int 127uy) ) <<< (size * 7))) //|> tee (dumpt "readVarInt value")
             size <- size + 1
             if size > 5 then
                 raise <| new IOException "This VarInt is an imposter!"
@@ -65,14 +65,14 @@ module Writers =
         while value &&& 128 <> 0 do
             (value &&& 127 ||| 128) 
             |> Convert.ToByte 
-            |> tee (dumpt "readVarInt value")
+            //|> tee (dumpt "readVarInt value")
             |> buffer.Add
             value <- value |> Convert.ToUInt32 >>> 7 |> Convert.ToInt32
         value
         |> Convert.ToByte
         |> buffer.Add 
         
-        (x,buffer).Dump("after writeVarInt")
+        //(x,buffer).Dump("after writeVarInt")
             
     let writeString (data:string) = 
         let buffer' = Encoding.UTF8.GetBytes data
@@ -110,21 +110,26 @@ module Minecraft =
         flush1 stream 0
         "handshake finished".Dump()
         
+    type PingPayload = {Version:VersionPayload; Players:PlayersPayload; Description: string; Icon:string}// Icon is in base64
+    and VersionPayload = { Protocol:int; Name:string}
+    and PlayersPayload = {Max:int; Online:int; Sample: Player[]}
+    and Player = {Name:string; Id:string}
     let statusRequest stream offset = 
         flush1 stream 0
         let buffer = Array.create 4096 0uy
         try
             //stream.ReadTimeout <- 1000
             let readLength = stream.Read(buffer, 0, buffer.Length)
-            readLength.Dump("stream read finished, processing")
+            //readLength.Dump("stream read finished, processing")
             let offset = 0
             try
                 let length,offset = readVarInt offset buffer
                 let packet,offset = readVarInt offset buffer
                 let jsonLength,offset = readVarInt offset buffer
-                (length,packet,jsonLength,offset).Dump(sprintf "Received packet 0x%s with a length of %i" (packet.ToString("X2")) length)
+                //(length,packet,jsonLength,offset).Dump(sprintf "Received packet 0x%s with a length of %i" (packet.ToString("X2")) length)
                 let json,offset = readString offset buffer jsonLength
-                json.Dump(sprintf "json was '%A'" json)
+                //json.Dump(sprintf "json was '%A'" json)
+                Newtonsoft.Json.JsonConvert.DeserializeObject<PingPayload>(json).Dump()
                 offset
             with | :? IOException as ex ->
                 ex.Dump()
@@ -132,7 +137,8 @@ module Minecraft =
         with | :? IOException as ex ->
             ex.Dump()
             offset
-            
+    
+    
 open Minecraft
 
 let sayHello() = 
@@ -145,6 +151,7 @@ let sayHello() =
     Console.WriteLine("Sending handshake request")
     handshake stream 47 hostnameOrIp port 1
     let offset = statusRequest stream 0
+    offset.Dump("after handshake")
     let msg = Encoding.UTF8.GetBytes("chat.post(Merry Christmas from F#)")
     stream.Write(msg, 0, msg.Length)
 sayHello()    
