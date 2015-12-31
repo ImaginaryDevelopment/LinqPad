@@ -110,10 +110,34 @@ module Minecraft =
         flush1 stream 0
         "handshake finished".Dump()
         
+    type ColorChar =
+        |Value of char
+        |Color of ConsoleColor
+        
+    let writeMotd (description:string):ColorChar seq = 
+        let colours = dict [
+                        '0', ConsoleColor.Black
+                        '1', ConsoleColor.DarkBlue
+        ]
+        Console.Write "Motd:"
+        let chars = description.ToCharArray ()
+        chars
+        |> Seq.mapi (fun i c ->
+                if c = '\u00A7' && colours.Keys.Contains chars.[i + 1] then
+                    colours.[chars.[i + 1]] |> Color |> Some
+                elif i>1 && chars.[i - 1] = '\u00A7' && colours.Keys.Contains c then
+                    None
+                else
+                    ColorChar.Value c |> Some
+            )
+        |> Seq.choose id
+        //|> printf "%A"
+            
     type PingPayload = {Version:VersionPayload; Players:PlayersPayload; Description: string; Icon:string}// Icon is in base64
     and VersionPayload = { Protocol:int; Name:string}
     and PlayersPayload = {Max:int; Online:int; Sample: Player[]}
     and Player = {Name:string; Id:string}
+    
     let statusRequest stream offset = 
         flush1 stream 0
         let buffer = Array.create 4096 0uy
@@ -129,7 +153,10 @@ module Minecraft =
                 //(length,packet,jsonLength,offset).Dump(sprintf "Received packet 0x%s with a length of %i" (packet.ToString("X2")) length)
                 let json,offset = readString offset buffer jsonLength
                 //json.Dump(sprintf "json was '%A'" json)
-                Newtonsoft.Json.JsonConvert.DeserializeObject<PingPayload>(json).Dump()
+                let pingPayload = Newtonsoft.Json.JsonConvert.DeserializeObject<PingPayload>(json)
+                writeMotd pingPayload.Description
+                |> Dump
+                pingPayload.Dump()
                 offset
             with | :? IOException as ex ->
                 ex.Dump()
@@ -137,7 +164,7 @@ module Minecraft =
         with | :? IOException as ex ->
             ex.Dump()
             offset
-    
+            
     
 open Minecraft
 
@@ -152,6 +179,8 @@ let sayHello() =
     handshake stream 47 hostnameOrIp port 1
     let offset = statusRequest stream 0
     offset.Dump("after handshake")
+
+    // writing a chat message doesn't currently work
     let msg = Encoding.UTF8.GetBytes("chat.post(Merry Christmas from F#)")
     stream.Write(msg, 0, msg.Length)
 sayHello()
