@@ -12,10 +12,19 @@ let inline printfnC col s = Util.RawHtml(sprintf "<font color=\"%O\">%s</font>" 
 let inline tee f x = f x; x
     
 module Readers = 
+    // returns the read byte array, and length read
+    let read' (stream:NetworkStream) length =
+        let buffer = Array.create length 0uy
+        stream.Read(buffer,0,length),buffer
+        buffer
     let readByte offset (buffer:byte[]) : byte*int =
         let b = buffer.[offset]
         b,offset + 1
-        
+//        
+//    // needs testing
+//    let readBytes offset length (buffer:byte[]) =
+//        buffer.[offset.. length + offset], offset + length
+//        
     let read offset buffer length : byte[]*int =
         let data = Array.create length 0uy
         Array.Copy(buffer, offset, data, 0, length) |> ignore
@@ -52,14 +61,12 @@ module Writers =
         
     let write stream bytes= 
         write' stream bytes 0 bytes.Length
-        
-    let private buffer = List<byte>()
     
-    let writeShort (x16:Int16) = 
+    let writeShort (buffer:List<byte>) (x16:Int16) = 
         BitConverter.GetBytes x16
         |> buffer.AddRange
         
-    let writeVarInt x = 
+    let writeVarInt (buffer:List<byte>) x = 
         let mutable value:int = x
         
         while value &&& 128 <> 0 do
@@ -74,22 +81,22 @@ module Writers =
         
         //(x,buffer).Dump("after writeVarInt")
             
-    let writeString (data:string) = 
+    let writeString (buffer:List<byte>) (data:string) = 
         let buffer' = Encoding.UTF8.GetBytes data
-        writeVarInt buffer'.Length
+        writeVarInt buffer buffer'.Length
         buffer.AddRange buffer'
         
-    let flush1 stream ident = // default -1
+    let flush1 (buffer:List<byte>) stream ident = // default -1
         let buffer' = buffer.ToArray()
         buffer.Clear()
         let mutable add = 0
         let mutable packetData: byte[] = [| 0uy |] //byte literal suffix is uy
         if ident >= 0 then
-            writeVarInt ident
+            writeVarInt buffer ident
             packetData <- buffer.ToArray()
             add <- packetData.Length
             buffer.Clear()
-        buffer'.Length + add |> writeVarInt 
+        buffer'.Length + add |> writeVarInt buffer
         let bufferBytes = buffer.ToArray()
         buffer.Clear()
         let write = write stream
@@ -97,17 +104,18 @@ module Writers =
         write packetData
         write buffer'
         
-    let flush stream = flush1 stream -1
+    let flush buffer stream = flush1 buffer stream -1
 
 module Minecraft =
     open Readers
     open Writers
     let handshake stream protocolVersion hostnameOrIp port nextState = // nextState should be status (1) on handshake
-        writeVarInt protocolVersion
-        writeString hostnameOrIp
-        writeShort port
-        writeVarInt nextState
-        flush1 stream 0
+        let buffer = List<byte>()
+        writeVarInt buffer protocolVersion
+        writeString buffer hostnameOrIp
+        writeShort buffer port
+        writeVarInt buffer nextState
+        flush1 buffer stream 0
         "handshake finished".Dump()
         
     type ColorChar =
@@ -139,7 +147,8 @@ module Minecraft =
     and Player = {Name:string; Id:string}
     
     let statusRequest stream offset = 
-        flush1 stream 0
+        let writeBuffer = List<byte>()
+        flush1 writeBuffer stream 0
         let buffer = Array.create 4096 0uy
         try
             //stream.ReadTimeout <- 1000
@@ -154,9 +163,10 @@ module Minecraft =
                 let json,offset = readString offset buffer jsonLength
                 //json.Dump(sprintf "json was '%A'" json)
                 let pingPayload = Newtonsoft.Json.JsonConvert.DeserializeObject<PingPayload>(json)
-                writeMotd pingPayload.Description
-                |> Dump
-                pingPayload.Dump()
+                
+                writeMotd pingPayload.Description |> Dump |> ignore
+                pingPayload |> Dump |> ignore
+                
                 offset
             with | :? IOException as ex ->
                 ex.Dump()
@@ -165,22 +175,53 @@ module Minecraft =
             ex.Dump()
             offset
             
+    let getStatus protocol (hostnameOrIp:string) (port:Int16) = 
+        use client = new TcpClient()
     
+        client.Connect(hostnameOrIp, port |> Convert.ToInt32)
+        //client.NoDelay <- false
+        let stream = client.GetStream()   
+        Console.WriteLine("Sending handshake request")
+        handshake stream protocol hostnameOrIp port 1 // status
+        let offset = statusRequest stream 0
+        writeMotd 
+        
+    let login protocol (hostnameOrIp:string) (port:Int16) (username:string,password:string)= 
+        use client = new TcpClient()
+        client.Connect(hostnameOrIp, port |> Convert.ToInt32)
+        client.Client.LocalEndPoint :?> System.Net.IPEndPoint
+        |> (fun ep -> sprintf "connected to local port:%i" ep.Port)
+        |> Dump
+        |> ignore
+        
+        let stream = client.GetStream()   
+        let offset = 0
+        let buffer = List<byte>()
+        flush1 buffer stream 0
+        let sharedSecretLength,offset = readVarInt offset buffer
+        let sharedSecret,offset = read
+        // TODO: read secret bytes
+//        [0..sharedSecretLength]
+//        |> Seq.fold (fun (offset,bytes) i -> 
+//            let byte,offset = readByte offset 
+        let sharedSecret,offset = readBytes offset sharedSecretLength
+        client.Connected |> Dump |> ignore
+        
+    let chat (stream:NetworkStream)  = 
+        // writing a chat message doesn't currently work
+        let msg = Encoding.UTF8.GetBytes("chat.post(Merry Christmas from F#)")
+        stream.Write(msg, 0, msg.Length)
+        
+        
 open Minecraft
+    
+let hostnameOrIp = "192.168.0.117"
+let protocol = 47
+let port = 25565s
 
-let sayHello() = 
-    use client = new TcpClient()
-    let hostnameOrIp = "192.168.0.117"
-    let port = 25565s
-    client.Connect(hostnameOrIp, port |> Convert.ToInt32)
-    //client.NoDelay <- false
-    let stream = client.GetStream()   
-    Console.WriteLine("Sending handshake request")
-    handshake stream 47 hostnameOrIp port 1
-    let offset = statusRequest stream 0
-    offset.Dump("after handshake")
+getStatus protocol hostnameOrIp port
 
-    // writing a chat message doesn't currently work
-    let msg = Encoding.UTF8.GetBytes("chat.post(Merry Christmas from F#)")
-    stream.Write(msg, 0, msg.Length)
-sayHello()
+"Done with status".Dump()
+
+let loginInfo = Util.GetPassword "Minecraft.UserName", Util.GetPassword "Minecraft.Password"
+login protocol hostnameOrIp port loginInfo
