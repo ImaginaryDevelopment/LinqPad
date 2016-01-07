@@ -230,49 +230,13 @@ module Projects =
         let projFolder = combine (Path.GetDirectoryName si.Path.Value)
         si.Name, si.Path,
             si.Path |> getCsFiles |> Seq.map (tee (projFolder >> FilePath))
-            |> Seq.choose (fun (fp, relPath) -> match fp with | Success fp -> Some (fp, relPath) | Failure s -> dumph s; None)
-            |> Seq.map (fun (fp, relPath) -> relPath, fp |> Roslyn.getTree |> Roslyn.getRoot)
+            |> Seq.choose (fun (fp, relPath) -> match fp with | Success fp -> Some (relPath,fp) | Failure s -> dumph s; None)
+            |> Seq.map (fun (relPath, fp) -> relPath, fp |> Roslyn.getTree |> Roslyn.getRoot |> Roslyn.Methods.getMethods |> Seq.filter(Roslyn.Methods.isOverride >> not) |> Seq.filter Roslyn.Methods.hasTry |> Seq.filter (Roslyn.Methods.isTryMethodProperlyNamed >> not ))
+            |> Seq.filter (snd >> any) // fun (_, methods) -> Seq.exists (fun _ -> true) methods)
+            |> Seq.map (fun (relPath, methods) -> relPath, methods |> Seq.map(fun m -> m.SpanStart, m.Span.End, m.GetText().ToString()))
     )
     |> dumpt "got cs files"
-    
-//Directory.GetFiles(target, "*.cs", SearchOption.AllDirectories)
-//    .Where(fun fp -> not <| fp.EndsWith(".g.cs") && not <| fp.EndsWith(".g.i.cs") && not <| fp.Contains("\\obj\\"))
-//|> List.ofSeq
-//|> dumpt "files"
-//|> Seq.map FilePath
-//|> Seq.choose id
 
-//|> Seq.map (tuplef (getTree >> getRoot))
-//|> Seq.map (tuplef1 getRoot)
-
-//|> Seq.collect id 
-//(WalkFile).Dump()
-//|> dumpt "walked"
-
-// begin C# comments
-//IEnumerable<object> WalkFile(string filePath)
-//{
-//    SyntaxTree tree = CSharpSyntaxTree.ParseText(File.ReadAllText(filePath));
-//
-//    var root = (CompilationUnitSyntax)tree.GetRoot();
-//
-//
-//    var methods = root.DescendantNodes()
-//                               .OfType<MethodDeclarationSyntax>()
-//                               .ToArray();
-//    if (methods == null || !methods.Any())
-//        yield break;
-//    var tryMethods =
-//        methods
-//            .Where(m =>m.Modifiers.Any(mo => mo.Text != "override") && m.DescendantNodes().OfType<TryStatementSyntax>().Any())
-//            .Select(m => new {Identifier = m.Identifier.Text,Modifiers=m.Modifiers, Body= m.GetText().ToString()  })
-//            .ToArray();
-//    if (!tryMethods.Any())
-//        yield break;
-//    yield return new { File = filePath, TryMethods = tryMethods};
-//
-////}
-//
 //void DoCompilation(SyntaxTree tree)
 //{
 //    var root = (CompilationUnitSyntax)tree.GetRoot();
