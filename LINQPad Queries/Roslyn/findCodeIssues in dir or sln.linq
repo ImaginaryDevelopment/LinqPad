@@ -47,7 +47,6 @@ module Functionalizers =
 //        |> (fun m -> m.Groups.[1].Value, m.Groups.[2].Value)
     let getDescendantNodes (sn :#SyntaxNode) = sn.DescendantNodes()
     
-    
 type Result<'a> =
     |Success of 'a
     |Failure of string
@@ -60,8 +59,10 @@ type Result<'a> =
             match x with
             | Success x -> f x
             | Failure s -> Failure s // must reconstruct as 'a may be changing    
-        static member choose x = 
-            x |> Seq.choose (function | Success x -> Some x | Failure _ -> None)
+            
+        static member choose f x = 
+            x|> Seq.choose (function | Success x -> f x |> Some | Failure _ -> None)
+        
             
 type DirPath = 
     | DirPath of string
@@ -128,12 +129,12 @@ module Sln =
             let combined = combine slnDir relPath
             if Seq.exists (fun ending -> endsWith ending relPath) [ ".proj";".csproj";".fsproj";".dbproj";".sqlproj" ] then
                 match combined |> FilePath with
-                | Success fp -> Project(fp)
-                | Failure s -> Error(s)
+                | Success fp -> Project fp
+                | Failure s -> Error s
             else
                 match combined |> DirPath with
-                | Success dp -> Folder(dp)
-                | Failure s -> Error(s)
+                | Success dp -> Folder dp
+                | Failure s -> Error s
         
         let slnDir = Path.GetDirectoryName slnPath |> DirPath
 
@@ -159,21 +160,28 @@ module Sln =
             match dirPath with 
             |Success dp -> 
                 match dp, path with
-                |Project(fp:FilePath) -> SlnItem.SlnProject(fp) |> Success
+                |Project(fp:FilePath) -> (slnFolderGuid,name,SlnItem.SlnProject fp, itemGuid) |> Success
                 //|_ -> Failure "unmatched case"
-                |Folder(dp:DirPath) -> SlnItem.SlnFolder(dp) |> Success
+                |Folder(dp:DirPath) -> (slnFolderGuid,name,SlnItem.SlnFolder(dp),itemGuid) |> Success
                 |Error(s:string) -> Failure(s)
-                        
+            |Failure s-> Failure s
+            
+        let mapProjectItem = 
+            function
+            | (slnFolderGuid, name, SlnProject fp, itemGuid) -> Some {SlnFolderGuid=slnFolderGuid; Name=name; Path= fp; ProjectGuid = itemGuid}
+            | (_, _, SlnFolder dp, _) -> None
+            
         File.ReadAllLines slnPath
         |> Seq.skipWhile (trimStart >> startsWith "Project(\"{" >> not)
         |> Seq.takeWhile (startsWith "Global" >> not )
         |> Seq.filter (trimStart >> startsWith "Project(\"{")
         |> dumptif "raw sln lines" debug
         |> Seq.map mapProjectLine
-        //|> Seq.filter (fun (_, name, _, _ ) -> name <> "Solution Items")
         |> dumptif "readSln before validation" debug
-        |> Seq.map (fun (slnFolderGuid, name, path, projectGuid) -> slnFolderGuid, name,  combine (Path.GetDirectoryName slnPath) path |> FilePath, projectGuid)
-        |> Seq.map (fun (slnFolderGuid, name, fp, projectGuid) -> match fp with |Success fp -> Success {SlnFolderGuid=slnFolderGuid; Name=name; Path= fp; ProjectGuid = projectGuid} | Failure s -> Failure s)
+        |> Seq.map mapProjectLineItems
+        |> Result.choose mapProjectItem
+//        |> Seq.map (fun (slnFolderGuid, name, path, projectGuid) -> slnFolderGuid, name,  combine (Path.GetDirectoryName slnPath) path |> FilePath, projectGuid)
+//        |> Seq.map (fun (slnFolderGuid, name, fp, projectGuid) -> match fp with |Success fp -> Success {SlnFolderGuid=slnFolderGuid; Name=name; Path= fp; ProjectGuid = projectGuid} | Failure s -> Failure s)
         |> dumpt "readSln"
 
 //        .Select(t => new { t.SlnFolderGuid, t.Name, ProjectFilePath = t.Remainder.After("\"").Before("\""), Remainder = t.Remainder.After("\"").After("\"") })
