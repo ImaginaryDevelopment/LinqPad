@@ -180,12 +180,8 @@ module Sln =
         |> dumptif "readSln before validation" debug
         |> Seq.map mapProjectLineItems
         |> Result.choose mapProjectItem
-//        |> Seq.map (fun (slnFolderGuid, name, path, projectGuid) -> slnFolderGuid, name,  combine (Path.GetDirectoryName slnPath) path |> FilePath, projectGuid)
-//        |> Seq.map (fun (slnFolderGuid, name, fp, projectGuid) -> match fp with |Success fp -> Success {SlnFolderGuid=slnFolderGuid; Name=name; Path= fp; ProjectGuid = projectGuid} | Failure s -> Failure s)
         |> dumpt "readSln"
 
-//        .Select(t => new { t.SlnFolderGuid, t.Name, ProjectFilePath = t.Remainder.After("\"").Before("\""), Remainder = t.Remainder.After("\"").After("\"") })
-//        .Select(t => new { t.SlnFolderGuid, t.Name, t.ProjectFilePath, ProjectGuid = Guid.Parse(t.Remainder.After("\"").Before("\"")) })
 //        .ToDictionary(t => t.ProjectGuid)
 
 let target= System.Environment.GetEnvironmentVariable("devroot") + @"\PracticeManagement\dev\PracticeManagement\"
@@ -195,6 +191,12 @@ target + "PracticeManagementRW_local.sln"
 |> Dump
 |> Result.bind (Sln.readSln >> Success)
 |> Dump
+
+
+//module Projects = 
+//    let getCsFiles (FilePath projectPath as fp) = 
+//        fp.ReadAllLines()
+//        |>
 
 Directory.GetFiles(target, "*.cs", SearchOption.AllDirectories)
     .Where(fun fp -> not <| fp.EndsWith(".g.cs") && not <| fp.EndsWith(".g.i.cs") && not <| fp.Contains("\\obj\\"))
