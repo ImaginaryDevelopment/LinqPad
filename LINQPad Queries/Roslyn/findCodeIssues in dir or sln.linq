@@ -38,7 +38,7 @@ module Functionalizers =
     let startsWith delimiter (s:string) = s.StartsWith delimiter
     let endsWith delimiter (s:string) = s.EndsWith delimiter
     let trimStart (s:string) = s.TrimStart()
-    
+    let tee f x = f x, x
     let combine x y = Path.Combine [| x;y |]
 //    let isRegexMatch pattern input = Regex.IsMatch(input,pattern)
 //    let regexMatch pattern input = Regex.Match(input,pattern).Groups.[1].Value
@@ -84,6 +84,8 @@ type FilePath =
             |FilePath s -> s
         member x.ReadAllLines () = 
             x.Value |> File.ReadAllLines
+        override x.ToString () = 
+            sprintf "%A" x
             
 let FilePath path = 
     if File.Exists path then
@@ -209,21 +211,28 @@ module Projects =
     let getElements (elem:XElement) = elem.Elements()
     let getElementsByName (ns:XNamespace) name (elem:XElement) = elem.Elements(ns + name)
     let getItemGroups (root:XElement) = getElementsByName root.Name.Namespace "ItemGroup" root
-        
+
     slnProjects 
     |> Seq.map (fun si -> si, si.Path.Value |> XDocument.Load |> XDocument.getRoot |> getItemGroups)
     |> dumptif "itemGroups" debug
     |> ignore
-    
-    let getCsFiles (FilePath projectPath as fp) = // did not account for item group conditions, nor target/task generated/modified items
+
+    let getCsFiles (FilePath projectPath as fp) = // did not account for item group conditions, item conditions, nor target/task generated/modified items
         let ns,root = XDocument.loadRoot projectPath
         getItemGroups root
         |> Seq.map getElements
         |> Seq.collect id
+        |> Seq.choose (fun n -> if n.Name.LocalName = "Compile" && n.Attribute(XNamespace.None + "Include").Value |> endsWith ".cs" then n.Attribute(XNamespace.None+"Include").Value |> Some else None)
         //|> dumpt "Items"
-
+    
     slnProjects
-    |> Seq.map (fun si -> si, si.Path |> getCsFiles)
+    |> Seq.map (fun si -> 
+        let projFolder = combine (Path.GetDirectoryName si.Path.Value)
+        si.Name, 
+            si.Path |> getCsFiles |> Seq.map (tee (projFolder >> FilePath))
+            |> Seq.choose (fun (fp,relPath) -> match fp with | Success fp -> Some (fp,relPath) | Failure s -> None)
+            |> Seq.map (fun (fp,relPath) -> fp,relPath)
+    )
     |> dumpt "got cs files"
     
 //Directory.GetFiles(target, "*.cs", SearchOption.AllDirectories)
