@@ -225,26 +225,35 @@ module Projects =
         |> Seq.collect id
         |> Seq.choose (fun n -> if n.Name.LocalName = "Compile" && n.Attribute(XNamespace.None + "Include").Value |> endsWith ".cs" then n.Attribute(XNamespace.None+"Include").Value |> Some else None)
         //|> dumpt "Items"
+        
+type MethodInfo = {SpanStart:int; SpanEnd:int; Text:string}
+type FileInfo = {Path:FilePath; Methods: MethodInfo seq}
+type ProjectFileInfo = {Name:string; Fp:FilePath; Files: FileInfo seq}
 
 let projectFileMethods = 
     slnProjects
     |> Seq.map (fun si -> 
         let projFolder = combine (Path.GetDirectoryName si.Path.Value)
-        si.Name, si.Path,
+        {Name=si.Name; Fp=si.Path;Files = 
             si.Path |> Projects.getCsFiles |> Seq.map (tee (projFolder >> FilePath))
             |> Seq.choose (fun (fp, relPath) -> match fp with | Success fp -> Some (relPath,fp) | Failure s -> dumph s; None)
-            |> Seq.map (fun (relPath, fp) -> relPath, fp |> Roslyn.getTree |> Roslyn.getRoot |> Roslyn.Methods.getMethods |> Seq.filter(Roslyn.Methods.isOverride >> not) |> Seq.filter Roslyn.Methods.hasTry |> Seq.filter (Roslyn.Methods.isTryMethodProperlyNamed >> not ))
+            |> Seq.map (fun (relPath, fp) -> fp, fp |> Roslyn.getTree |> Roslyn.getRoot |> Roslyn.Methods.getMethods |> Seq.filter(Roslyn.Methods.isOverride >> not) |> Seq.filter Roslyn.Methods.hasTry |> Seq.filter (Roslyn.Methods.isTryMethodProperlyNamed >> not ))
             |> Seq.filter (snd >> any) // fun (_, methods) -> Seq.exists (fun _ -> true) methods)
-            |> Seq.map (fun (relPath, methods) -> relPath, methods |> Seq.map(fun m -> m.SpanStart, m.Span.End, m.GetText().ToString()))
+            |> Seq.map (fun (fp, methods) -> fp, methods |> Seq.map(fun m -> m.SpanStart, m.Span.End, m.GetText().ToString()))
+            |> Seq.map (fun (fp, methods) -> {Path= fp; Methods = methods|> Seq.map (fun (spanStart, spanEnd, text) -> {SpanStart=spanStart; SpanEnd= spanEnd; Text=text})})
+        }
     )
-    |> dumpt "got cs files"
+    |> dumptif "got cs files" debug
 
 module Dte = 
-    let dte = System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE.14.0") :?> EnvDTE.DTE
-    do
-        dte.ExecuteCommand("File.OpenFile", @"C:\TFS\PracticeManagement\dev\PracticeManagement\PracticeManagement\Billing\PatientDataGridControlViewModel.cs")
-        "dte done".Dump()
-open Dte
+    let getDte() = System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE.14.0") :?> EnvDTE.DTE
+    let openFile (dte:EnvDTE.DTE) path = dte.ExecuteCommand("File.OpenFile", @"C:\TFS\PracticeManagement\dev\PracticeManagement\PracticeManagement\Billing\PatientDataGridControlViewModel.cs")
+
+projectFileMethods
+|> Seq.map (fun m -> m.Name, m.Fp.Value, m.Files |> Seq.map (fun fi -> fi.Path.Value,LINQPad.Hyperlinq(fi.Path.Value,"Open"),LINQPad.Hyperlinq(new System.Action(fun () -> Dte.openFile (Dte.getDte()) fi.Path.Value), "Open In Vs2015"), fi.Methods ))
+|> dumpt "walked files"
+//|> Seq.map (fun (projName,projPath, methods |> Seq.map (fun (relPath,methods))))
+
 "finished".Dump()
 //void DoCompilation(SyntaxTree tree)
 //{
