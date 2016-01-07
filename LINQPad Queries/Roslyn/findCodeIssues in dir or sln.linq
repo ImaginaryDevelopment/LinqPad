@@ -224,12 +224,13 @@ module Projects =
         |> Seq.collect id
         |> Seq.choose (fun n -> if n.Name.LocalName = "Compile" && n.Attribute(XNamespace.None + "Include").Value |> endsWith ".cs" then n.Attribute(XNamespace.None+"Include").Value |> Some else None)
         //|> dumpt "Items"
-    
+
+let projectFileMethods = 
     slnProjects
     |> Seq.map (fun si -> 
         let projFolder = combine (Path.GetDirectoryName si.Path.Value)
         si.Name, si.Path,
-            si.Path |> getCsFiles |> Seq.map (tee (projFolder >> FilePath))
+            si.Path |> Projects.getCsFiles |> Seq.map (tee (projFolder >> FilePath))
             |> Seq.choose (fun (fp, relPath) -> match fp with | Success fp -> Some (relPath,fp) | Failure s -> dumph s; None)
             |> Seq.map (fun (relPath, fp) -> relPath, fp |> Roslyn.getTree |> Roslyn.getRoot |> Roslyn.Methods.getMethods |> Seq.filter(Roslyn.Methods.isOverride >> not) |> Seq.filter Roslyn.Methods.hasTry |> Seq.filter (Roslyn.Methods.isTryMethodProperlyNamed >> not ))
             |> Seq.filter (snd >> any) // fun (_, methods) -> Seq.exists (fun _ -> true) methods)
@@ -237,6 +238,9 @@ module Projects =
     )
     |> dumpt "got cs files"
 
+//module Dte = 
+//    let dte = System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE.14.0") :?> EnvDTE.DTE
+    
 //void DoCompilation(SyntaxTree tree)
 //{
 //    var root = (CompilationUnitSyntax)tree.GetRoot();
@@ -253,7 +257,8 @@ module Projects =
 
 // ------------------------------------------------------------------
 // end c# comments
-// ------------------------------
-type FileTarget = 
-    |AllFiles of dirPath:String
-    |SolutionProjectFiles of slnPath:String
+// ------------------------------------------------------------------
+
+//type FileTarget = 
+//    |AllFiles of dirPath:String
+//    |SolutionProjectFiles of slnPath:String
