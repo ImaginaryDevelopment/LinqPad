@@ -1,4 +1,5 @@
 <Query Kind="FSharpProgram">
+  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 10.0\Common7\IDE\PublicAssemblies\EnvDTE.dll</Reference>
   <NuGetReference>Microsoft.CodeAnalysis</NuGetReference>
   <NuGetReference>Microsoft.CodeAnalysis.CSharp</NuGetReference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
@@ -238,9 +239,13 @@ let projectFileMethods =
     )
     |> dumpt "got cs files"
 
-//module Dte = 
-//    let dte = System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE.14.0") :?> EnvDTE.DTE
-    
+module Dte = 
+    let dte = System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE.14.0") :?> EnvDTE.DTE
+    do
+        dte.ExecuteCommand("File.OpenFile", @"C:\TFS\PracticeManagement\dev\PracticeManagement\PracticeManagement\Billing\PatientDataGridControlViewModel.cs")
+        "dte done".Dump()
+open Dte
+"finished".Dump()
 //void DoCompilation(SyntaxTree tree)
 //{
 //    var root = (CompilationUnitSyntax)tree.GetRoot();
