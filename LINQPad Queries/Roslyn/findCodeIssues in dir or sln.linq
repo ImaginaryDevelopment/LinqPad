@@ -21,7 +21,7 @@ let debug = false
 module LinqPad =
     let dumpt (title:String) x = x.Dump(title); x
     let dumptif (title:String) b x = if b then dumpt title x else x
-    
+    let dumph x = Util.Highlight(x).Dump() |> ignore
 [<AutoOpen>]
 module LinqHelpers = 
     let ofType<'t> (x:IEnumerable<_>) = x.OfType<'t>()
@@ -96,28 +96,28 @@ let FilePath path =
 //type ValidPath =
 //    |DirPath
 //    |FilePath
-    
-let getTree (FilePath path):SyntaxTree = 
-    File.ReadAllText path
-    |> CSharpSyntaxTree.ParseText
-    
-let getRoot tree = 
-    let getRoot (tree:SyntaxTree) = tree.GetRoot()
-    getRoot tree :?> CompilationUnitSyntax
-
-module Methods = 
-    type private MDS = MethodDeclarationSyntax
-    let getMethods (root:CompilationUnitSyntax) = 
-        root
-        |> getDescendantNodes
-        |> ofType<MDS>
-        |> Array.ofSeq
+module Roslyn = 
+    let getTree (FilePath path):SyntaxTree = 
+        File.ReadAllText path
+        |> CSharpSyntaxTree.ParseText
         
-    let isOverride (mds:MDS) = mds.Modifiers.Any(fun m -> m.Text = "override")
-    let hasTry (mds:MDS) = mds |> getDescendantNodes |> ofType<TryStatementSyntax> |> any
+    let getRoot tree = 
+        let getRoot (tree:SyntaxTree) = tree.GetRoot()
+        getRoot tree :?> CompilationUnitSyntax
     
-    let isTryMethodProperlyNamed (mds:MDS) = 
-        mds.Identifier.Text.StartsWith("Try", StringComparison.CurrentCultureIgnoreCase)
+    module Methods = 
+        type private MDS = MethodDeclarationSyntax
+        let getMethods (root:CompilationUnitSyntax) = 
+            root
+            |> getDescendantNodes
+            |> ofType<MDS>
+            |> Array.ofSeq
+            
+        let isOverride (mds:MDS) = mds.Modifiers.Any(fun m -> m.Text = "override")
+        let hasTry (mds:MDS) = mds |> getDescendantNodes |> ofType<TryStatementSyntax> |> any
+        
+        let isTryMethodProperlyNamed (mds:MDS) = 
+            mds.Identifier.Text.StartsWith("Try", StringComparison.CurrentCultureIgnoreCase)
         
 module Sln = 
     type SlnInfo = { SlnFolderGuid :Guid; Name:string; Path:FilePath; ProjectGuid:Guid}
@@ -228,10 +228,10 @@ module Projects =
     slnProjects
     |> Seq.map (fun si -> 
         let projFolder = combine (Path.GetDirectoryName si.Path.Value)
-        si.Name, 
+        si.Name, si.Path,
             si.Path |> getCsFiles |> Seq.map (tee (projFolder >> FilePath))
-            |> Seq.choose (fun (fp,relPath) -> match fp with | Success fp -> Some (fp,relPath) | Failure s -> None)
-            |> Seq.map (fun (fp,relPath) -> fp,relPath)
+            |> Seq.choose (fun (fp, relPath) -> match fp with | Success fp -> Some (fp, relPath) | Failure s -> dumph s; None)
+            |> Seq.map (fun (fp, relPath) -> relPath, fp |> Roslyn.getTree |> Roslyn.getRoot)
     )
     |> dumpt "got cs files"
     
