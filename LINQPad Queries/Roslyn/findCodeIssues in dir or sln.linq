@@ -62,7 +62,6 @@ type Result<'a> =
             
         static member choose f x = 
             x|> Seq.choose (function | Success x -> f x |> Some | Failure _ -> None)
-        
             
 type DirPath = 
     | DirPath of string
@@ -123,8 +122,10 @@ module Sln =
     type SlnItem = 
         |SlnProject of FilePath
         |SlnFolder of DirPath
+    let isCsProj (FilePath path)= endsWith ".csproj" path
     
     let readSln (FilePath slnPath) = 
+        
         let (|Project|Folder|Error|) (DirPath slnDir, relPath) = 
             let combined = combine slnDir relPath
             if Seq.exists (fun ending -> endsWith ending relPath) [ ".proj";".csproj";".fsproj";".dbproj";".sqlproj" ] then
@@ -150,7 +151,7 @@ module Sln =
             let name, l = l |> betweenQuotes, l |> afterQuote |> afterQuote
             let path, l = l |> betweenQuotes, l |> afterQuote |> afterQuote
             //(slnFolderGuid,name,path,l).Dump("mapping/parsing4")
-            let itemGuid, l = l|> betweenQuotes |> Guid.Parse, l |> afterQuote |> afterQuote
+            let itemGuid, l = l |> betweenQuotes |> Guid.Parse, l |> afterQuote |> afterQuote
             
             (slnFolderGuid, name, path, itemGuid)
             //|> dumpt "mapping/parsing end"
@@ -170,7 +171,7 @@ module Sln =
             function
             | (slnFolderGuid, name, SlnProject fp, itemGuid) -> Some {SlnFolderGuid=slnFolderGuid; Name=name; Path= fp; ProjectGuid = itemGuid}
             | (_, _, SlnFolder dp, _) -> None
-            
+        
         File.ReadAllLines slnPath
         |> Seq.skipWhile (trimStart >> startsWith "Project(\"{" >> not)
         |> Seq.takeWhile (startsWith "Global" >> not )
@@ -180,29 +181,56 @@ module Sln =
         |> dumptif "readSln before validation" debug
         |> Seq.map mapProjectLineItems
         |> Result.choose mapProjectItem
-        |> dumpt "readSln"
+        |> dumptif "readSln" debug
 
 //        .ToDictionary(t => t.ProjectGuid)
 
 let target= System.Environment.GetEnvironmentVariable("devroot") + @"\PracticeManagement\dev\PracticeManagement\"
 
-target + "PracticeManagementRW_local.sln"
-|> FilePath
-|> Dump
-|> Result.bind (Sln.readSln >> Success)
-|> Dump
+let slnProjects : Sln.SlnInfo seq = 
+    target + "PracticeManagementRW_local.sln"
+    |> FilePath
+    |> Dump
+    |> Result.bind (Sln.readSln >> Success)
+    |> function 
+        |Success items -> 
+            items
+            |> Seq.choose id
+            |> Seq.filter (fun si ->  Sln.isCsProj si.Path)
+        | Failure s -> failwithf "%s" s
+    //|> Result.bind (Result.choose id)
+    |> dumptif "slnProjects" debug
 
+module Projects = 
+    type XDocument with
+        static member getRoot (x:XDocument) = x.Root
+        static member loadRoot (path:string) = XDocument.Load(path).Root |> (fun r -> r.Name.Namespace,r)
 
-//module Projects = 
-//    let getCsFiles (FilePath projectPath as fp) = 
-//        fp.ReadAllLines()
-//        |>
+    let getElements (elem:XElement) = elem.Elements()
+    let getElementsByName (ns:XNamespace) name (elem:XElement) = elem.Elements(ns + name)
+    let getItemGroups (root:XElement) = getElementsByName root.Name.Namespace "ItemGroup" root
+        
+    slnProjects 
+    |> Seq.map (fun si -> si, si.Path.Value |> XDocument.Load |> XDocument.getRoot |> getItemGroups)
+    |> dumptif "itemGroups" debug
+    |> ignore
+    
+    let getCsFiles (FilePath projectPath as fp) = // did not account for item group conditions, nor target/task generated/modified items
+        let ns,root = XDocument.loadRoot projectPath
+        getItemGroups root
+        |> Seq.map getElements
+        |> Seq.collect id
+        //|> dumpt "Items"
 
-Directory.GetFiles(target, "*.cs", SearchOption.AllDirectories)
-    .Where(fun fp -> not <| fp.EndsWith(".g.cs") && not <| fp.EndsWith(".g.i.cs") && not <| fp.Contains("\\obj\\"))
-|> List.ofSeq
-|> dumpt "files"
-|> Seq.map FilePath
+    slnProjects
+    |> Seq.map (fun si -> si, si.Path |> getCsFiles)
+    |> dumpt "got cs files"
+    
+//Directory.GetFiles(target, "*.cs", SearchOption.AllDirectories)
+//    .Where(fun fp -> not <| fp.EndsWith(".g.cs") && not <| fp.EndsWith(".g.i.cs") && not <| fp.Contains("\\obj\\"))
+//|> List.ofSeq
+//|> dumpt "files"
+//|> Seq.map FilePath
 //|> Seq.choose id
 
 //|> Seq.map (tuplef (getTree >> getRoot))
@@ -210,7 +238,7 @@ Directory.GetFiles(target, "*.cs", SearchOption.AllDirectories)
 
 //|> Seq.collect id 
 //(WalkFile).Dump()
-|> dumpt "walked"
+//|> dumpt "walked"
 
 // begin C# comments
 //IEnumerable<object> WalkFile(string filePath)
@@ -235,25 +263,6 @@ Directory.GetFiles(target, "*.cs", SearchOption.AllDirectories)
 //    yield return new { File = filePath, TryMethods = tryMethods};
 //
 ////}
-//void ReadSln(string slnPath)
-//{
-//    var slnText = System.IO.File.ReadAllLines(slnPath);
-//    var projects =
-//        slnText.SkipWhile(t => t.TrimStart().StartsWith("Project(\"{") == false)
-//        .TakeWhile(t => t.StartsWith("Global") == false)
-//        .Where(t => t.TrimStart().StartsWith("Project(\"{"))
-//        .Select(t => t.After("Project(\""))
-//        .Select(t => new { SlnFolderGuid = Guid.Parse(t.Before("\"")), Remainder = t.After("\"") })
-//        .Select(t => new { t.SlnFolderGuid, Remainder = t.Remainder.After("\"") })
-//        .Select(t => new { t.SlnFolderGuid, Name = t.Remainder.Before("\""), Remainder = t.Remainder.After("\"") })
-//        .Where(t => t.Name != "Solution Items")
-//        .Select(t => new { t.SlnFolderGuid, t.Name, ProjectFilePath = t.Remainder.After("\"").Before("\""), Remainder = t.Remainder.After("\"").After("\"") })
-//        .Select(t => new { t.SlnFolderGuid, t.Name, t.ProjectFilePath, ProjectGuid = Guid.Parse(t.Remainder.After("\"").Before("\"")) })
-//        .ToDictionary(t => t.ProjectGuid)
-//        ;
-//        projects.Dump();
-//
-//}
 //
 //void DoCompilation(SyntaxTree tree)
 //{
