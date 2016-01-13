@@ -24,7 +24,7 @@ let listen fUntil =
     let onAudio (evArgs:Wave.WaveInEventArgs) = 
         incr captureCount
         blink.Blink( Drawing.Color.Red, TimeSpan.FromSeconds 1. , 2us) |> ignore
-        evArgs.Dump()
+        (DateTime.Now,evArgs).Dump()
     
     use _subscription = waveIn.DataAvailable.Where(fun evArgs -> evArgs.Buffer |> Seq.exists(fun b -> b <> 0uy)).Sample(sampleThrottle).Subscribe( onAudio )
 
