@@ -22,7 +22,87 @@ type UcData() as this =
     do
         this.DataContext <- this
         this.IsVisibleChanged.Add (fun e -> printfn "%A" (e.NewValue,e.OldValue, e.Property))
-        this.Content <- Button()
+        let grid = 
+            let (>=>) (parent:ContentControl) (child:ContentControl) = parent.Content <- child; child 
+            let createBorder content = 
+                let b = Border()
+                b.Child <- content
+                b
+
+            let createButton content = 
+                let b = Button()
+                b.Content <- content
+                b
+
+            let createStackPanel orientation items = 
+                let sp = StackPanel()
+                sp.Orientation <- orientation
+                items |> Seq.iter(sp.Children.Add >> ignore<int>)
+                sp
+
+            let mockContainer x = x
+
+            let createItemsPresenter = mockContainer // HACK: ItemsPresenter has no settable content or child properties, just return the element passed
+
+            let itemsPresenter () = 
+                let virtualizingStackPanel = 
+                    let createPageButton i = 
+                            let cp = ContentPresenter()
+                            let button = createButton  (sprintf "%i" i)
+                            cp.Content <- button
+                            cp
+                    let contentPresenter = createPageButton 1// 1 radio button container
+                      
+                    let contentPresenter2 = createPageButton 2// 2 radio button container
+                    let contentPresenter3 = createPageButton 3
+                    let contentPresenter4 = createPageButton 4
+                    let vp = VirtualizingStackPanel()
+                    [ contentPresenter; contentPresenter2; contentPresenter3; contentPresenter4]
+                    |> Seq.iter (fun c -> vp.Children.Add c |> ignore)
+                    vp
+                createItemsPresenter virtualizingStackPanel
+            let numericElementsPresenter() : StackPanel = 
+                let itemsControl =
+                    let border = 
+                        let itemsPresenter = itemsPresenter ()// shows the 1,2,3,4 page numbers
+                        let b = Border()
+                        b.Child <- itemsPresenter
+                        b
+                    let ic = ItemsControl()
+                    ic.Items.Add border |> ignore
+                    ic
+                let fakeNumericElementsPresenter = createStackPanel Orientation.Horizontal [| itemsControl |]
+                fakeNumericElementsPresenter
+            let itemGrid () = 
+                    let g = Grid()
+                    let sp = 
+                                let moveToFirstPageButton = createButton "First Page" // consider using https://fortawesome.github.io/Font-Awesome/icons/
+                                let moveToPreviousPageButton = Button() 
+                                let border = 
+                                    let nep = numericElementsPresenter()
+                                    createBorder nep 
+                                let moveToNextPageButton = Button()
+                                let moveToLastPageButton = Button()
+
+                                createStackPanel Orientation.Horizontal [ moveToFirstPageButton :> UIElement; upcast moveToPreviousPageButton; upcast border; upcast moveToNextPageButton; upcast moveToLastPageButton]
+
+                    g.Children.Add sp |> ignore<int>
+                    g
+
+            let radDataPager =
+                let dataPagerPresenter = 
+                    let border =
+                        let grid = itemGrid()
+                        createBorder grid
+                    createStackPanel Orientation.Horizontal [ border ]
+
+                mockContainer dataPagerPresenter
+            let g = Grid()
+            g.Children.Add radDataPager |> ignore
+            g
+
+
+        this.Content <- grid 
 
         // compare and constrast this.Content <- vs. this.AddChild
         // this.AddChild (Button())
@@ -79,9 +159,7 @@ let testUc () =
 
 let testDumpContainer(x:obj) =
     dumpHtml x
-    // another option is: 
     //dumpHtml2 [| x |]
     |> display
 
-// testUc()
-testDumpContainer (1,5)
+testUc()
