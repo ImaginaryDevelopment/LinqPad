@@ -9,6 +9,7 @@
 </Query>
 
 // find code issues like methods that have a try but don't say so in the method name
+// consider: also find swallows
 
 //with help from https://github.com/dotnet/roslyn/wiki/Getting-Started-C%23-Semantic-Analysis
 //translate to F# so that we can choose all files under directory, or all files in all projects in a solution
