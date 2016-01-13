@@ -1,6 +1,8 @@
 <Query Kind="FSharpProgram">
   <Reference>&lt;RuntimeDirectory&gt;\WPF\PresentationCore.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\WPF\PresentationFramework.dll</Reference>
+  <NuGetReference>FontAwesome.WPF</NuGetReference>
+  <Namespace>FontAwesome.WPF</Namespace>
 </Query>
 
 #if INTERACTIVE
@@ -11,6 +13,9 @@
 #r "System.Xaml"
 #r "UIAutomationTypes.dll"
 #r "C:\Program Files (x86)\Linqpad\Beta5\LINQPad.exe" 
+#r @"C:\Users\Brandon\AppData\Local\LINQPad\NuGet.FW46\FontAwesome.WPF\FontAwesome.WPF.4.5.0.7\lib\net40\FontAwesome.WPF.dll"
+// TODO: use fontawesome for the paging buttons
+
 // LINQPad.Util.DisplayWebPage("www.google.com")
 #endif
 
