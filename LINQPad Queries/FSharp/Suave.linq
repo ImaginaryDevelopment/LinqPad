@@ -67,22 +67,23 @@ module ServerSamples =
             }
         
         startWebServer {defaultConfig with logger = logger} (Successful.OK "Hello World!")
-            
+    let async() = 
+        let sleep milliseconds message : WebPart = 
+            fun (x:HttpContext) ->
+                async {
+                    do! Async.Sleep milliseconds
+                    return! OK message x
+                }
+        startWebServer defaultConfig (sleep 50 "Hello World Async!")
+        
 let startServer serverType = 
     match serverType with
     | HelloWorld -> ServerSamples.helloWorld()
     | Routing -> ServerSamples.routing ()
     | BasicAuth -> ServerSamples.basicAuth()
     | Logging -> ServerSamples.logging()
-    // TODO: Async section
-//        | Async -> 
-//            let sleep milliseconds message: WebPart =
-//                fun (x : HttpContext) ->
-//                async {
-//                  do! Async.Sleep milliseconds
-//                  return! OK message x
-//                }
+    | Async -> ServerSamples.async ()
             
 LINQPad.Hyperlinq("http://localhost:8083").Dump()
 LINQPad.Hyperlinq("http://localhost:8083/public").Dump()
-startServer BasicAuth
+startServer Async
