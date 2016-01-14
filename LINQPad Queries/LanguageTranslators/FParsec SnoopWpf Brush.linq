@@ -16,6 +16,9 @@
 
 open FParsec
 
+module Seq =
+    let any items = items |> Seq.exists (fun _ -> true)
+
 let sampleText = """<LinearGradientBrush StartPoint="0.5,0" EndPoint="0.5,1" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"><LinearGradientBrush.GradientStops><GradientStop Color="#FF6699CC" Offset="0.33" /><GradientStop Color="#FF3A70A6" Offset="0.66" /><GradientStop Color="#FF1A4C80" Offset="1" /></LinearGradientBrush.GradientStops></LinearGradientBrush>"""
 
 let test p str = 
@@ -64,9 +67,41 @@ let parseBrush =
 // test (pstring "<") sampleText
 test parseBrush sampleText
 
+let tryParseBrush text = 
+    match run parseBrush sampleText with
+    | Success (result, _, _) ->
+        match result with
+        |(lgb, stops) -> {lgb with Stops= stops} |> Some
+    |Failure(errorMsg, _, _) ->printfn "Failure: %s" errorMsg; None
+
 match run parseBrush sampleText with
 |Success (result, _, _) ->
     match result with
     | (lgb,stops) -> {lgb with Stops = stops} |> printfn "yay deconstructed! %A"
-|Failure _ -> printfn "Failed!"
-    
+|Failure (errorMsg, _, _) -> printfn "Failure: %s" errorMsg
+
+module Transformers =
+    type Lgb with
+        member x.ToFSharp () = 
+            let sb = System.Text.StringBuilder()
+            seq{
+                yield "let gb = LinearGradientBrush()"
+                match x.StartPoint with
+                |Some (x,y) -> yield sprintf "gb.StartPoint <- Point(%f,%f)" x y
+                |None -> ()
+                match x.EndPoint with
+                |Some (x,y) -> yield sprintf "gb.EndPoint <- Point(%f,%f)" x y
+                |None -> ()
+                if Seq.any x.Stops then
+                    yield "["
+                    yield! x.Stops |> Seq.map(fun gStop -> sprintf "    GradientStop(argbFromHex \"#%s\",%f)" gStop.Color gStop.Offset) // doesn't account for proper F# formatting of a list
+                    yield "]"
+                    yield sprintf "|> Seq.iter gb.GradientStops.Add"
+                }
+            |> Seq.iter (sb.AppendLine >> ignore)
+            sb.ToString ()
+
+open Transformers
+tryParseBrush sampleText 
+|> Option.bind (fun x -> x.ToFSharp () |> Some)
+
