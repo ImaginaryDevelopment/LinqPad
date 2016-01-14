@@ -15,17 +15,7 @@
 #r "UIAutomationTypes.dll"
 #r "C:\Program Files (x86)\Linqpad\Beta5\LINQPad.exe" 
 #r @"C:\Users\Brandon\AppData\Local\LINQPad\NuGet.FW46\FontAwesome.WPF\FontAwesome.WPF.4.5.0.7\lib\net40\FontAwesome.WPF.dll"
-// TODO: use fontawesome for the paging buttons
-
-// LINQPad.Util.DisplayWebPage("www.google.com")
 #endif
-
-let display html = 
-        let tempPath = 
-            System.IO.Path.GetTempPath()
-            |> (fun d-> System.IO.Path.Combine(d, System.IO.Path.GetTempFileName() + ".html"))
-        System.IO.File.WriteAllText(tempPath, html)
-        System.Diagnostics.Process.Start(tempPath)
 
 #if LINQPAD 
     
@@ -47,6 +37,14 @@ module LinqPad =
         member x.Dump(s) = printfn "%s - %A" s x
 
 #endif
+
+let display html = 
+        let tempPath = 
+            System.IO.Path.GetTempPath()
+            |> (fun d-> System.IO.Path.Combine(d, System.IO.Path.GetTempFileName() + ".html"))
+        System.IO.File.WriteAllText(tempPath, html)
+        System.Diagnostics.Process.Start(tempPath)
+
 
 open System.Windows
 open System.Windows.Controls
@@ -71,10 +69,10 @@ type UcData() as this =
                 b.Content <- content
                 b
 
-            let createFAButton ()= 
+            let createFAButton icon =  
                 let b = Button()
                 let t = FontAwesome.WPF.FontAwesome()
-                t.Icon <- FontAwesome.WPF.FontAwesomeIcon.Flag
+                t.Icon <- icon
                 b.Content <- t
                 b.Click.Add (fun ev -> ev.Dump() |> ignore )
                 b
@@ -123,8 +121,8 @@ type UcData() as this =
             let itemGrid () = 
                     let g = Grid()
                     let sp = 
-                        let moveToFirstPageButton = createButton "First Page" // consider using https://fortawesome.github.io/Font-Awesome/icons/
-                        let moveToPreviousPageButton = createFAButton () 
+                        let moveToFirstPageButton = createFAButton FontAwesome.WPF.FontAwesomeIcon.FastBackward // using https://fortawesome.github.io/Font-Awesome/icons/
+                        let moveToPreviousPageButton = createFAButton FontAwesome.WPF.FontAwesomeIcon.Backward
                         let border = 
                             let nep = numericElementsPresenter()
                             createBorder nep 
