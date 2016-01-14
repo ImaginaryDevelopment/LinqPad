@@ -3,6 +3,9 @@
   <NuGetReference>Suave</NuGetReference>
 </Query>
 
+// imaginarydevelopment.blogspot.com
+// @maslowjax
+
 open Suave
 open Suave.Files
 open Suave.Filters
@@ -41,12 +44,11 @@ module ServerSamples =
     let basicAuth () = 
         let requiresAuthentication _ =
             choose
-                [ GET >=> path "/public" >=> OK (sprintf "Hello anonymous we are in %s" Environment.CurrentDirectory)
+                [ GET >=> path "/public" >=> OK "Default GET"
                   // access to handlers after this one will require authentication
                   Authentication.authenticateBasic ((=) ("foo", "bar")) <|
-                  //GET >=> path "/protected" >=> request (fun x -> OK ("Hello " + (x.userState.["userName"]|> string))) 
                     choose [
-                        GET >=> path "/whereami" >=> OK (sprintf "Hello authenticated person you are currently at %s or possibly %s" Environment.CurrentDirectory (Assembly.GetExecutingAssembly().CodeBase.ToString()))
+                        GET >=> path "/whereami" >=> OK (sprintf "Hello authenticated person ")
                         GET >=> path "/" >=> dirHome
                         GET >=> browseHome //serves file if exists                       
                     ]
@@ -81,4 +83,6 @@ let startServer serverType =
 //                  return! OK message x
 //                }
             
-startServer Logging
+LINQPad.Hyperlinq("http://localhost:8083").Dump()
+LINQPad.Hyperlinq("http://localhost:8083/public").Dump()
+startServer BasicAuth
