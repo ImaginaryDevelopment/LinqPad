@@ -459,7 +459,7 @@ module DataModelToF =
             appendLine 2 ("member x." + cd.ColumnName + " with get () = x." + cd.ColumnName)
     
         appendLine 1 ("interface I" + typeName + "RW with")
-    
+
         for cd in columns do
             appendLine 2 (generateColumnComment cd)
             appendLine 2 ("member x." + cd.ColumnName + " with get () = x." + cd.ColumnName + " and set v = x." + cd.ColumnName + " <- v")
@@ -489,7 +489,7 @@ module DataModelToF =
         appendLine 3 "field <- value"
         appendLine 3 "x.RaisePropertyChanged(propertyNam)"
         appendLine 3 "true"
-                     
+
         appendLine 0 String.Empty
         appendLine 1 "abstract member SetAndNotify<'t,'b> : string * 'b * 't Action * 't -> bool"
         appendLine 1 "default x.SetAndNotify<'t,'b> (propertyName, baseValue:'b, baseSetter: 't Action, value:'t) ="
@@ -704,6 +704,57 @@ module SqlGeneration =
             
             sprintf "CONSTRAINT PK_%s PRIMARY KEY (%s)" tableInfo.Name columns
             |> appendLine' 1
+    let generateInserts title appendLine (manager:MultipleOutputHelper.IManager) targetProject targetProjectFolder (tables:#seq<_>) targetRelativePath =
+        // generate reference data
+        let toGen = tables.Where( fun t -> t.Columns.Any( fun c -> not <| isNull c.ReferenceValuesWithComment && c.ReferenceValuesWithComment.Any())).ToArray()
+        if not <| any toGen then
+            ()
+        else
+            let targetFilename = Path.Combine(targetProjectFolder, targetRelativePath)
+            manager.StartNewFile(targetFilename, targetProject)
+        appendLine "-- Generated file, DO NOT edit directly"
+        appendLine "SET ANSI_NULLS ON"
+        appendLine "GO"
+        appendLine "SET QUOTED_IDENTIFIER ON"
+        appendLine "GO"
+        appendLine (sprintf "PRINT 'Starting %s Synchronization'" title)
+        appendLine "GO"
+        for tbl in toGen do
+        for column in tbl.Columns.Where( fun c -> any c.ReferenceValuesWithComment).ToArray() do
+            let schema, table, columnName = 
+                match column.FKey with
+                | Some fKey -> 
+                    fKey.Schema, fKey.Table, if isNull fKey.Column then column.Name else fKey.Column
+                | None -> failwithf "ReferenceValuesWithComment existed but no fkey"
+            appendLine "---------------------------------------------------"
+            appendLine (sprintf "PRINT 'Synchronizing [%s.%s]'" schema table)
+            appendLine "WITH CTE AS"
+            appendLine "("
+            appendLine (sprintf "    SELECT [%s]" columnName)
+            appendLine "    FROM (VALUES"
+            let mutable i = 0
+            let valueCount = column.ReferenceValuesWithComment.Keys.Count
+            for k in column.ReferenceValuesWithComment.Keys do
+                let comment = match column.ReferenceValuesWithComment.[k] with
+                                |null -> String.Empty
+                                |k -> " -- " + k
+                appendLine (sprintf "        ('%s'%s)%s" (k.Replace("'","''")) (if i < valueCount - 1 then "," else ")" ) comment )
+                i <- i + 1
+            appendLine (sprintf "        AS SOURCE([%s])" columnName)
+            appendLine ")"
+            appendLine (sprintf "MERGE INTO [%s].[%s] AS TARGET" schema table)
+            appendLine "USING CTE"
+            appendLine (sprintf "ON CTE.[%s] = TARGET.[%s]" columnName columnName )
+            appendLine "WHEN NOT MATCHED BY TARGET THEN"
+            appendLine (sprintf "    INSERT([%s])" columnName)
+            appendLine (sprintf "    VALUES([%s]);" columnName)
+            appendLine String.Empty
+            appendLine (sprintf "PRINT 'Done Synchronizing [%s.%s]'" schema table)
+            appendLine "GO"
+            appendLine String.Empty
+            
+        manager.EndBlock()
+// end sql generation module
 
 let sb = StringBuilder()
 let mutable currentFile:string = null
