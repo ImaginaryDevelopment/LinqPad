@@ -6,7 +6,8 @@
 </Query>
 
 #if INTERACTIVE
-#I @"C:\Windows\Microsoft.NET\Framework\v4.0.30319\WPF\"
+//#I @"C:\Windows\Microsoft.NET\Framework\v4.0.30319\WPF\"
+#I @"C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.5"
 #r "WindowsBase.dll"
 #r "PresentationCore.dll"
 #r "PresentationFramework.dll"
@@ -19,8 +20,39 @@
 // LINQPad.Util.DisplayWebPage("www.google.com")
 #endif
 
+let display html = 
+        let tempPath = 
+            System.IO.Path.GetTempPath()
+            |> (fun d-> System.IO.Path.Combine(d, System.IO.Path.GetTempFileName() + ".html"))
+        System.IO.File.WriteAllText(tempPath, html)
+        System.Diagnostics.Process.Start(tempPath)
+
+#if LINQPAD 
+    
+#else
+[<AutoOpen>]
+module LinqPad =
+    let dumpHtml<'t> (x:'t) =
+        let writer = LINQPad.Util.CreateXhtmlWriter true
+        writer.Write x
+        let html = writer.ToString()
+        html
+    let dumpHtml2 items = LINQPad.Util.ToHtmlString items
+
+    type Query = {Name:string}
+    type Util = 
+        static member CurrentQuery = {Name= __SOURCE_FILE__ } // mock of LinqPad's ObjectModel.Query
+    type System.Object with
+        member x.Dump() = printfn "%A" x
+        member x.Dump(s) = printfn "%s - %A" s x
+
+#endif
+
 open System.Windows
 open System.Windows.Controls
+open System.Windows.Data
+open FontAwesome.WPF.Converters
+
 type UcData() as this = 
     inherit UserControl()
 
@@ -37,6 +69,14 @@ type UcData() as this =
             let createButton content = 
                 let b = Button()
                 b.Content <- content
+                b
+
+            let createFAButton ()= 
+                let b = Button()
+                let t = FontAwesome.WPF.FontAwesome()
+                t.Icon <- FontAwesome.WPF.FontAwesomeIcon.Flag
+                b.Content <- t
+                b.Click.Add (fun ev -> ev.Dump() |> ignore )
                 b
 
             let createStackPanel orientation items = 
@@ -62,10 +102,12 @@ type UcData() as this =
                     let contentPresenter3 = createPageButton 3
                     let contentPresenter4 = createPageButton 4
                     let vp = VirtualizingStackPanel()
+                    vp.Orientation <- Orientation.Horizontal
                     [ contentPresenter; contentPresenter2; contentPresenter3; contentPresenter4]
                     |> Seq.iter (fun c -> vp.Children.Add c |> ignore)
                     vp
                 createItemsPresenter virtualizingStackPanel
+
             let numericElementsPresenter() : StackPanel = 
                 let itemsControl =
                     let border = 
@@ -81,15 +123,15 @@ type UcData() as this =
             let itemGrid () = 
                     let g = Grid()
                     let sp = 
-                                let moveToFirstPageButton = createButton "First Page" // consider using https://fortawesome.github.io/Font-Awesome/icons/
-                                let moveToPreviousPageButton = Button() 
-                                let border = 
-                                    let nep = numericElementsPresenter()
-                                    createBorder nep 
-                                let moveToNextPageButton = Button()
-                                let moveToLastPageButton = Button()
+                        let moveToFirstPageButton = createButton "First Page" // consider using https://fortawesome.github.io/Font-Awesome/icons/
+                        let moveToPreviousPageButton = createFAButton () 
+                        let border = 
+                            let nep = numericElementsPresenter()
+                            createBorder nep 
+                        let moveToNextPageButton = Button()
+                        let moveToLastPageButton = Button()
 
-                                createStackPanel Orientation.Horizontal [ moveToFirstPageButton :> UIElement; upcast moveToPreviousPageButton; upcast border; upcast moveToNextPageButton; upcast moveToLastPageButton]
+                        createStackPanel Orientation.Horizontal [ moveToFirstPageButton :> UIElement; upcast moveToPreviousPageButton; upcast border; upcast moveToNextPageButton; upcast moveToLastPageButton]
 
                     g.Children.Add sp |> ignore<int>
                     g
@@ -106,38 +148,11 @@ type UcData() as this =
             g.Children.Add radDataPager |> ignore
             g
 
-
         this.Content <- grid 
 
         // compare and constrast this.Content <- vs. this.AddChild
         // this.AddChild (Button())
 
-#if LINQPAD 
-    
-#else
-[<AutoOpen>]
-module LinqPad =
-    let dumpHtml<'t> (x:'t) =
-        let writer = LINQPad.Util.CreateXhtmlWriter true
-        writer.Write x
-        let html = writer.ToString()
-        html
-    let dumpHtml2 items = LINQPad.Util.ToHtmlString items
-    let display html = 
-        let tempPath = 
-            System.IO.Path.GetTempPath()
-            |> (fun d-> System.IO.Path.Combine(d, System.IO.Path.GetTempFileName() + ".html"))
-        System.IO.File.WriteAllText(tempPath, html)
-        System.Diagnostics.Process.Start(tempPath)
-
-    type Query = {Name:string}
-    type Util = 
-        static member CurrentQuery = {Name= __SOURCE_FILE__ } // mock of LinqPad's ObjectModel.Query
-    type System.Object with
-        member x.Dump() = printfn "%A" x
-        member x.Dump(s) = printfn "%s - %A" s x
-
-#endif
 // http://stackoverflow.com/a/28675069/57883
 type TestWindow(content:obj) as this = 
     inherit Window()
