@@ -96,6 +96,7 @@ let configureAuth (app:IAppBuilder) =
                     SecurityStampValidator.OnValidateIdentity<ApplicationUserManager,AppUser>(
                         validateInterval= TimeSpan.FromMinutes 30.0 ,
                         // we don't have the same AppUser so we don't have the generateUserIdentityAsync method to pretend to have
+                        // notice that the fun delegate in this instance doesn't use any commas, it takes one argument then the other, not a tuple
                         regenerateIdentity= (Func<_,_,_>(fun manager user -> Tasks.Task.FromResult(Security.Claims.ClaimsIdentity())))
             ))))
     
