@@ -87,7 +87,17 @@ let configureAuth (app:IAppBuilder) =
     oAuthBearerOptions <- OAuthBearerAuthenticationOptions()
     app.UseOAuthBearerAuthentication(oAuthBearerOptions)
     
-    app.UseCookieAuthentication(CookieAuthenticationOptions(AuthenticationType= DefaultAuthenticationTypes.ApplicationCookie, LoginPath= PathString("/User/Login")))
+    app.UseCookieAuthentication(
+        CookieAuthenticationOptions( // property initialization looks just almost the same as constructor call
+            AuthenticationType= DefaultAuthenticationTypes.ApplicationCookie,
+            LoginPath= PathString("/User/Login"),
+            Provider=CookieAuthenticationProvider(
+                OnValidateIdentity = 
+                    SecurityStampValidator.OnValidateIdentity<ApplicationUserManager,AppUser>(
+                        validateInterval= TimeSpan.FromMinutes 30.0 ,
+                        // we don't have the same AppUser so we don't have the generateUserIdentityAsync method to pretend to have
+                        regenerateIdentity= (Func<_,_,_>(fun manager user -> Tasks.Task.FromResult(Security.Claims.ClaimsIdentity())))
+            ))))
     
     ()
     
