@@ -1,15 +1,6 @@
-<Query Kind="Statements">
-  <Connection>
-    <ID>4e94eacc-a31d-4687-947b-e4c9804c895a</ID>
-    <Persist>true</Persist>
-    <Server>(local)</Server>
-    <IncludeSystemObjects>true</IncludeSystemObjects>
-    <Database>PmRewriteApplicationDatabase</Database>
-    <ShowServer>true</ShowServer>
-  </Connection>
-</Query>
+<Query Kind="Statements" />
 
-//sln reader
+//sln reader - gets all project build configurations
 var slnPath = @"C:\TFS\XC\Source-development\BuildSolution.sln";
 var slnText = System.IO.File.ReadAllLines(slnPath);
 var projects = 

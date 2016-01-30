@@ -109,7 +109,7 @@ let readCards url =
         |> Seq.skip 1
         |> Seq.head
         |> fun elem -> elem.InnerText
-        |> (fun text -> 
+        |> (fun text ->
             match text.Split([| "—" |],StringSplitOptions.None) |> Seq.map trim |> List.ofSeq with
             |["Planeswalker";typeInfo] -> typeInfo |> after "(" |> before ")" |> System.Int32.Parse |> Toughness.Toughness |> Planeswalker
             |["Enchantment";"Aura"] ->  Enchantment true
@@ -127,7 +127,7 @@ let readCards url =
     let articleElement = htmlDoc.GetElementbyId("WikiaArticle")//.Dump()
     articleElement.ChildNodes.First(fun e-> e.Id = "mw-content-text").ChildNodes
     |> Seq.find (fun e -> e.Name="table" && not <| isNull e.Attributes.["class"] && e.Attributes.["class"].Value.Contains("CardRow"))
-    |> (fun table -> table.Element("tbody")::(table.Elements("tr") |> List.ofSeq))
+    |> fun table -> table.Element("tbody")::(table.Elements("tr") |> List.ofSeq)
     |> Seq.choose (fun e -> if isNull e then None else Some e)
     |> Seq.map(fun cardRow -> cardRow.Elements("td") |> List.ofSeq)
     |> Seq.map (fun cardTds -> 
