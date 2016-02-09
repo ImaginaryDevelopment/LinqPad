@@ -37,33 +37,36 @@ void Main()
     var currentAssembly = this.GetType().Assembly;
 
     Application.ResourceAssembly = targetAssembly;
-    if(debug)
+    if (debug)
         Application.ResourceAssembly.Dump("resource assembly");
-    
-    var rd =(ResourceDictionary) Application.LoadComponent(new Uri("/PracticeManagement;component/CommonUIStylesDictionary.xaml",UriKind.Relative));
-    rd.Dump("rdloaded!");
+
+    var rd = (ResourceDictionary)Application.LoadComponent(new Uri("/PracticeManagement;component/CommonUIStylesDictionary.xaml", UriKind.Relative));
+    if (debug)
+        rd.Dump("rdloaded!");
 
     if (Application.Current == null)
     {
-        var x = new System.Windows.Application();
-        x.Dump("application");
+        var x = new System.Windows.Application(); // magically is assigned to application.current behind the scenes it seems
+        if (debug)
+            x.Dump("application");
     }
-    
+
     Application.Current.Dump("app current");
     Application.Current.Resources = rd;
     Application.Current.Resources.Dump("resources");
     // works but doesn't do what we want in this case:
-        //var loginPopup = Application.LoadComponent(new Uri("/PracticeManagement;component/login/LoginPopup.xaml", UriKind.Relative));
-        //var mw = Application.LoadComponent(new Uri("/PracticeManagement;component/MainWindow.xaml", UriKind.Relative));
-        //System.Windows.Application.LoadComponent(new Uri("PracticeManagement.exe", UriKind.RelativeOrAbsolute));
-    
+    //var loginPopup = Application.LoadComponent(new Uri("/PracticeManagement;component/login/LoginPopup.xaml", UriKind.Relative));
+    //var mw = Application.LoadComponent(new Uri("/PracticeManagement;component/MainWindow.xaml", UriKind.Relative));
+    //System.Windows.Application.LoadComponent(new Uri("PracticeManagement.exe", UriKind.RelativeOrAbsolute));
+
     var mainWindow = new PracticeManagement.MainWindow(this.Connection.ConnectionString);
-    mainWindow.GetType().Assembly.GetManifestResourceNames().Dump();
+    if(debug)
+        mainWindow.GetType().Assembly.GetManifestResourceNames().Dump();
     mainWindow.Show();
-    
+
     // peer section doesn't work, the rest did
     var peer = UIElementAutomationPeer.FromElement(mainWindow);
-    peer.Dump();
+    peer.Dump("peer?");
 }
 
 // Define other methods and classes here
