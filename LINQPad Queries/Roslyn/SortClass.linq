@@ -20,8 +20,6 @@ void Main()
 // Define other methods and classes here
 public class SortClassRewriter : CSharpSyntaxRewriter
 {
-	// this approach won't work with so don't handle nested classes for now
-	ClassDeclarationSyntax _class = null;
 
 	public override SyntaxNode Visit(SyntaxNode node)
 	{
