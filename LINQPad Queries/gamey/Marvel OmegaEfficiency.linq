@@ -126,7 +126,7 @@ let allOmegas critChance =
     [
         {Omegas=physical.exTechOp;Label= "ExTechOp"; Tax=0}
         {Omegas=physical.superSoldierSerum;Label="SuperSoldierSerum" ; Tax=0}
-        {Omegas=physical.showstopperAmmo;Label="ShowstopperAmmo"     ; Tax=0}
+        {Omegas=physical.showstopperAmmo;Label="ShowstopperAmmo"     ; Tax=45}
         {Omegas=physical.deathLokProgram;Label="Deathlok"            ; Tax=0}
         {Omegas=physical.reaverProgram;Label="Reaver"                ; Tax=0}
 
@@ -147,7 +147,7 @@ let allOmegas critChance =
         {Omegas=psionicCharge;Label="PsionicCharge"                  ; Tax = psyTax}
 
         {Omegas=all.spintech;Label= "Spintech"                       ; Tax=0}
-        {Omegas=all.tacticalNeuralImplant critChance;Label= "TacticalNeuralImplant"; Tax=0}
+        {Omegas=all.tacticalNeuralImplant critChance;Label= "TacticalNeuralImplant"; Tax=6}
         {Omegas=all.warpath;Label= "Warpath"; Tax=0}
     ]
     |> Seq.map (fun os -> 
@@ -214,8 +214,8 @@ module tests =
         containsOmega "AssaultRifles" DamageType.All DamageTarget.Ranged false
         containsOmega 
 
-let critRate,damageTypes,damageTargets =0.4, [Mental], Ranged
-let map,points,excluded = optimize (allOmegas critRate) 2426 damageTypes damageTargets false
+let critRate,damageTypes,damageTargets =0.337, [Physical], Melee
+let map,points,excluded = optimize (allOmegas critRate) 3219 damageTypes damageTargets false
 map
 |> dumpt (sprintf "map for %A;%A" damageTypes damageTargets)
 |> ignore
