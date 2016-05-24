@@ -6,14 +6,14 @@
 	//http://weblogs.asp.net/whaggard/archive/2004/04/11/111232.aspx
 void Main()
 {
-string cmdPath=@"C:\Users\bdimperio\Desktop\cmds\";
-if(System.IO.Directory.Exists(cmdPath)==false)
-{
-	Util.Highlight("need a valid cmd directory path").Dump("failed to validate pre-condition");
-	return;
-}
+//string cmdPath=@"C:\Users\bdimperio\Desktop\cmds\";
+//if(System.IO.Directory.Exists(cmdPath)==false)
+//{
+//	Util.Highlight("need a valid cmd directory path").Dump("failed to validate pre-condition");
+//	return;
+//}
 	ShowExistingAppPaths();
-	AddAllInDirectory(cmdPath);
+	//AddAllInDirectory(cmdPath);
 }
 void AddAllInDirectory(string path)
 {
@@ -61,6 +61,6 @@ var appPaths=GetAppPathKey();
 	//appPaths.SubKeyCount.Dump("AppPaths");
 	var q= from ap in appPaths.GetSubKeyNames()
 			let sk=appPaths.OpenSubKey(ap)
-			select new{ap,Value=sk.GetValue(string.Empty),Others=sk.GetValueNames().OrderBy (s => s).Where(s=>s.HasValue()).Select (s => new{Key= s,Value=sk.GetValue(s)})};
+			select new{ap,Value=sk.GetValue(string.Empty),Others=sk.GetValueNames().OrderBy (s => s).Where(s=>s!=null).Select (s => new{Key= s,Value=sk.GetValue(s)})};
 		q.Dump();
 }
