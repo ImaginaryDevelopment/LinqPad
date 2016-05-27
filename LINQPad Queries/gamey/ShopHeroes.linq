@@ -127,11 +127,13 @@ module Items =
     let ``fiery talisman``=     {Level=16uy;    Name="Fiery Talisman";      Category= ItemCategory.Necklace;        EquipValueOpt=None; SkillsRequired= Set [Trade.TexttileWorking; Trade.Magic; Trade.ArtsAndCrafts; Trade.Jewelry; Trade.RuneWriting]}
     let ``freezing scroll``=    {Level=16uy;    Name="Freezing Scroll";     Category= ItemCategory.Scroll;          EquipValueOpt=None; SkillsRequired= Set [Trade.TexttileWorking; Trade.Alchemy; Trade.Magic; Trade.ArtsAndCrafts; Trade.RuneWriting]}
     let ``shuriken`` =          {Level=18uy;    Name="Shuriken";            Category= ItemCategory.Thrown;          EquipValueOpt=None; SkillsRequired= Set [Trade.Metalworking; Trade.Weaponcrafting]}
+    let ``timeless locket`` =   {Level=18uy;    Name="Timeless Locket";     Category= ItemCategory.Necklace;        EquipValueOpt=None; SkillsRequired= Set [Trade.Metalworking; Trade.TexttileWorking; Trade.Magic; Trade.ArtsAndCrafts; Trade.Jewelry; Trade.RuneWriting]}
     let ``double barrel`` =     {Level=19uy;    Name="Double Barrel";       Category= ItemCategory.Pistol;          EquipValueOpt=None; SkillsRequired= Set [Trade.Metalworking; Trade.Woodworking; Trade.Alchemy; Trade.Weaponcrafting; Trade.Tinkering] (*; Unlock=[]*)}
     let ``steel vambrace``=     {Level=19uy;    Name="Steel Vambrace";      Category= ItemCategory.HeavyGlove;      EquipValueOpt=None; SkillsRequired= Set [Trade.Metalworking; Trade.Armorcrafting]}
     let ``magic top``=          {Level=19uy;    Name="Magic Top";           Category= ItemCategory.LightHelm;       EquipValueOpt=None; SkillsRequired= Set [Trade.TexttileWorking; Trade.Magic; Trade.ArtsAndCrafts; Trade.RuneWriting]}
     let ``anti-venom``=         {Level=19uy;    Name="Anti-venom";          Category= ItemCategory.Herb;            EquipValueOpt=None; SkillsRequired= Set [Trade.Alchemy; Trade.Magic; Trade.RuneWriting]}
     let ``venomous buckler``=   {Level=20uy;    Name="Venomous Buckler";    Category= ItemCategory.Shield;          EquipValueOpt=None; SkillsRequired= Set [Trade.Woodworking; Trade.Alchemy; Trade.Armorcrafting]}
+    let ``whispering wand``=    {Level=19uy;    Name="Whispering Wand";     Category= ItemCategory.Stave;           EquipValueOpt=None; SkillsRequired= Set [Trade.Woodworking; Trade.Magic; Trade.ArtsAndCrafts; Trade.RuneWriting]}
 
     let ``knight riders``=      {Level=21uy;    Name="Knight Riders";       Category= ItemCategory.HeavyBoot;       EquipValueOpt=None; SkillsRequired= Set [Trade.Metalworking; Trade.TexttileWorking; Trade.Armorcrafting]}
     let ``bear armor``=         {Level=21uy;    Name="Bear Armor";          Category= ItemCategory.MediumArmor;     EquipValueOpt=None; SkillsRequired= set [Trade.TexttileWorking; Trade.Armorcrafting; Trade.ArtsAndCrafts; Trade.Jewelry]}
@@ -156,10 +158,10 @@ module Items =
             ``military tap``
             ``scimitar``
             ``life stealer``
-            ``hawk``
             ``magic top``
-            ``fiery talisman``
             ``freezing scroll``
+            ``whispering wand``
+            ``timeless locket``
             //``bone spear``
         ] |> set
         
