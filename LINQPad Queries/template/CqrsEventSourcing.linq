@@ -241,15 +241,17 @@ module MyEventStore =
         
         let current = Dictionary<Guid,List<EventDescriptor>>() //map of guid -> events (reversed)
         
-        member x.GetEventsForAggregate guid = if current.ContainsKey guid then current.[guid] |> Seq.map (fun ed -> ed.EventData) else Seq.empty
+        member x.GetEventsForAggregate guid = current.[guid] |> Seq.map (fun ed -> ed.EventData)
         member x.SaveEvents guid expectedVersion (newEvents:Event seq) = 
-            
+            "saving events".Dump()
             if not <| current.ContainsKey guid then
+                "adding new aggregate".Dump()
                 current.[guid] <- List<_>() 
             elif current.[guid].[current.[guid].Count - 1].Version <> expectedVersion && expectedVersion <> -1 then
                 raise <| new System.Data.DBConcurrencyException()
             
             let mutable i = expectedVersion
+            current.Dump("yay adding events")
             let eventDescriptors = current.[guid]
             newEvents
             |> Seq.iter (fun e ->
@@ -268,8 +270,8 @@ open MyEventStore
 let store = EventStore()
 
 let wreckItAggregate = Guid.NewGuid()
-[Events.Event.InventoryItemCreated { Events.InventoryItemCreated.Id=wreckItAggregate; Name="I'm Gonna Wreck It underpants"}]
-store.SaveEvents (Guid.NewGuid()) -1 
-
+[Events.Event.InventoryItemCreated { Events.InventoryItemCreated.Id=Guid.NewGuid(); Name="I'm Gonna Wreck It underpants"}]
+|> store.SaveEvents (wreckItAggregate) -1 
+store.Dump()
 store.GetEventsForAggregate wreckItAggregate
 |> Dump
