@@ -56,44 +56,30 @@ module Events =
         interface
         end
     
-    type EventMetadata =
-        {
-            Version : int
-        }
+    type EventMetadata ={Version : int}
     
     type InventoryItemDeactivated =
-        {
-            Id: Guid
-        }
+        { Id: Guid }
         interface IEvent
-        
     
     type InventoryItemCreated =
-        {
-            Id: Guid
-            Name: string
-        }
+        {   Id: Guid
+            Name: string }
         interface IEvent
     
     type InventoryItemRenamed =
-        {
-            Id: Guid
-            NewName: string
-        }
+        {   Id: Guid
+            NewName: string }
         interface IEvent
     
     type ItemsCheckedInToInventory =
-        {
-            Id: Guid
-            Count: int
-        }
+        {   Id: Guid
+            Count: int }
         interface IEvent
     
     type ItemsRemovedFromInventory =
-        {
-            Id: Guid
-            Count: int
-        }
+        {   Id: Guid
+            Count: int }
         interface IEvent
         
         
@@ -102,6 +88,7 @@ module EventStores =
     type IEventStore =
         abstract member GetEventsForAggregate : Guid -> IEvent seq
         abstract member SaveEvents : Guid -> int -> IEvent seq -> unit
+        
         
 module Domain =
     open Events
@@ -186,6 +173,7 @@ module CommandHandlers =
             applyOn c.InventoryItemId c.OriginalVersion
 
 module ReadModels =
+    open Events
     type InventoryItemListDto = 
         {
             Id: Guid
@@ -241,4 +229,4 @@ module ReadModels =
         member x.Handle (e: InventoryItemDeactivated) =
             database.Details.Remove(e.Id) |> ignore
 
-let store = EventStore()
+//let store = EventStore()
