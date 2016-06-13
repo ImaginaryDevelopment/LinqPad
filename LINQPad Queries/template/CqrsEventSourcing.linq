@@ -4,27 +4,19 @@
 // actual code https://github.com/thinkbeforecoding/m-r/tree/FSharp/FsSimpleCQRS
 
 module Commands =
-
-    type Command =
-        interface
-        end
-    
-    type ICommandSender =
-        abstract member Send : Command -> unit
+    //[<Abstract>]
     
     type DeactivateInventoryItem =
         {
             InventoryItemId: Guid
-            OriginalVersion: int
+            OriginalVersion: int // version I'm acting on, for checking to make sure my change only fires if the data the change was based on is still unchanged
         }
-        interface Command
     
     type CreateInventoryItem =
         {
             InventoryItemId: Guid
             Name: string
         }
-        interface Command
     
     type RenameInventoryItem =
         {
@@ -32,7 +24,6 @@ module Commands =
             NewName: string
             OriginalVersion: int
         }
-        interface Command
     
     type CheckInItemsToInventory =
         {
@@ -40,7 +31,6 @@ module Commands =
             Count: int
             OriginalVersion: int
         }
-        interface Command
     
     type RemoveItemsFromInventory =
         {
@@ -48,46 +38,54 @@ module Commands =
             Count: int
             OriginalVersion: int
         }
-        interface Command
         
+    type Command =
+        |DeactivateInventoryItem of DeactivateInventoryItem
+        |CreateInventoryItem of CreateInventoryItem
+        |RenameInventoryItem of RenameInventoryItem
+        |CheckInItemsToInventory of CheckInItemsToInventory
+        |RemoveItemsFromInventory of RemoveItemsFromInventory
+        
+    type ICommandSender =
+        abstract member Send : Command -> unit 
         
 module Events =    
-    type IEvent = 
-        interface
-        end
     
-    type EventMetadata ={Version : int}
+    type EventMetadata = {Version : int}
     
     type InventoryItemDeactivated =
         { Id: Guid }
-        interface IEvent
     
     type InventoryItemCreated =
         {   Id: Guid
             Name: string }
-        interface IEvent
     
     type InventoryItemRenamed =
         {   Id: Guid
             NewName: string }
-        interface IEvent
     
     type ItemsCheckedInToInventory =
         {   Id: Guid
             Count: int }
-        interface IEvent
     
     type ItemsRemovedFromInventory =
         {   Id: Guid
             Count: int }
-        interface IEvent
+    
+    type Event = 
+        |InventoryItemDeactivated of InventoryItemDeactivated
+        |InventoryItemCreated of InventoryItemCreated
+        |InventoryItemRenamed of InventoryItemRenamed
+        |ItemsCheckedInToInventory of ItemsCheckedInToInventory
+        |ItemsRemovedFromInventory of ItemsRemovedFromInventory
         
+    type VersionedEvent = {Version:int; Event:Event}
         
 module EventStores =
     open Events
     type IEventStore =
-        abstract member GetEventsForAggregate : Guid -> IEvent seq
-        abstract member SaveEvents : Guid -> int -> IEvent seq -> unit
+        abstract member GetEventsForAggregate : Guid -> Event seq
+        abstract member SaveEvents : Guid -> int -> Event seq -> unit
         
         
 module Domain =
@@ -100,32 +98,36 @@ module Domain =
                 Activated: bool
             }
     
-        let fire o =
-            [o :> IEvent]
+        let fire (o:Event) = [o]
     
         let rename newName s =
             if String.IsNullOrEmpty(newName) then raise (ArgumentException "newName")
-            fire {InventoryItemRenamed.Id= s.Id; NewName = newName}
+            InventoryItemRenamed {InventoryItemRenamed.Id= s.Id; NewName = newName}
+            |> fire 
     
         let remove count s =
             if count <= 0 then raise (InvalidOperationException "cant remove negative count from inventory")
-            fire {ItemsRemovedFromInventory.Id = s.Id; Count = count} 
+            ItemsRemovedFromInventory {ItemsRemovedFromInventory.Id = s.Id; Count = count} 
+            |> fire
     
         let checkIn count s =
             if count <= 0 then raise (InvalidOperationException "must have a count greater than 0 to add to inventory")
-            fire {ItemsCheckedInToInventory.Id= s.Id; Count = count} 
+            ItemsCheckedInToInventory {ItemsCheckedInToInventory.Id= s.Id; Count = count} 
+            |> fire
         
         let deactivate s =
             if not s.Activated then raise (InvalidOperationException "already deactivated")
-            fire {InventoryItemDeactivated.Id = s.Id}
+            InventoryItemDeactivated {InventoryItemDeactivated.Id = s.Id}
+            |> fire
     
         let create id name =
-            fire {InventoryItemCreated.Id = id; Name = name}
+            InventoryItemCreated {InventoryItemCreated.Id = id; Name = name}
+            |> fire
     
-        let applyOnInventoryItem s (e: IEvent) =
+        let applyOnInventoryItem s (e: Event) =
             match e with
-            | :? InventoryItemCreated as e -> {Id = e.Id; Activated = true } 
-            | :? InventoryItemDeactivated as e -> {s with Activated = false; }
+            | InventoryItemCreated e -> {Id = e.Id; Activated = true } 
+            | InventoryItemDeactivated _e -> {s with Activated = false; }
             | _ -> s
     
         let replay = Seq.fold
@@ -172,6 +174,7 @@ module CommandHandlers =
             rename c.NewName |> 
             applyOn c.InventoryItemId c.OriginalVersion
 
+
 module ReadModels =
     open Events
     type InventoryItemListDto = 
@@ -191,7 +194,6 @@ module ReadModels =
     type IDatabase =
         abstract member Details : Dictionary<Guid, InventoryItemDetailsDto>
         abstract member List : List<InventoryItemListDto>
-    
     
     type InventoryListView(database: IDatabase) =
         member x.Handle (e: InventoryItemCreated) =
@@ -229,4 +231,45 @@ module ReadModels =
         member x.Handle (e: InventoryItemDeactivated) =
             database.Details.Remove(e.Id) |> ignore
 
-//let store = EventStore()
+module MyEventStore =
+    open Events
+    open EventStores
+        
+    type private EventDescriptor = { EventData:Event; Id:Guid; Version:int}
+    
+    type EventStore() = // based off of https://github.com/gregoryyoung/m-r/blob/master/SimpleCQRS/EventStore.cs since no F# version was found
+        
+        let current = Dictionary<Guid,List<EventDescriptor>>() //map of guid -> events (reversed)
+        
+        member x.GetEventsForAggregate guid = if current.ContainsKey guid then current.[guid] |> Seq.map (fun ed -> ed.EventData) else Seq.empty
+        member x.SaveEvents guid expectedVersion (newEvents:Event seq) = 
+            
+            if not <| current.ContainsKey guid then
+                current.[guid] <- List<_>() 
+            elif current.[guid].[current.[guid].Count - 1].Version <> expectedVersion && expectedVersion <> -1 then
+                raise <| new System.Data.DBConcurrencyException()
+            
+            let mutable i = expectedVersion
+            let eventDescriptors = current.[guid]
+            newEvents
+            |> Seq.iter (fun e ->
+                i <- i + 1
+                eventDescriptors.Add {EventData=e; Id=guid; Version = i}
+                
+                //TODO: |> publisher.Publish
+            )
+        
+        interface IEventStore with
+            member x.GetEventsForAggregate guid = guid |> x.GetEventsForAggregate
+            member x.SaveEvents guid expectedVersion newEvents = x.SaveEvents guid expectedVersion newEvents
+
+open MyEventStore
+
+let store = EventStore()
+
+let wreckItAggregate = Guid.NewGuid()
+[Events.Event.InventoryItemCreated { Events.InventoryItemCreated.Id=wreckItAggregate; Name="I'm Gonna Wreck It underpants"}]
+store.SaveEvents (Guid.NewGuid()) -1 
+
+store.GetEventsForAggregate wreckItAggregate
+|> Dump
