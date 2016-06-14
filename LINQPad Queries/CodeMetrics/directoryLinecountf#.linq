@@ -129,6 +129,15 @@ let  asSummary (files:string[]) :seq<FileSummary> =
 
 let summaries = asSummary filterFilesResult
 let linesOfCode = summaries |> Seq.map (fun e-> e.LineCount) |> Seq.sum
+let linesByFileExtension = 
+    summaries 
+    |> Seq.filter(fun e -> e.Filename.Contains ".generated." |> not ) 
+    |> Seq.filter(fun e -> e.RelativePath.Contains("Pm.ViewModelsC") |> not)
+    |> Seq.groupBy(fun e -> Path.GetExtension e.Filename) 
+    |> Seq.map (fun (fe,items) -> 
+        let lineCount = items |> Seq.map(fun i -> i.LineCount) |> Seq.sum
+        fe, lineCount, items) 
+    |> fun x -> x.Dump("by extension")
 
 metaData <- {metaData with TotalLinesOfCode = linesOfCode}
 metaData.Dump()
