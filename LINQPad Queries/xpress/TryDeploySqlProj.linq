@@ -4,6 +4,8 @@
   <NuGetReference>Rx-Main</NuGetReference>
 </Query>
 
+let dc = new TypedDataContext()
+
 let dumpt (t:string) x = x.Dump(t); x
 
 // getting this into CI http://stackoverflow.com/questions/15556339/how-to-build-sqlproj-projects-on-a-build-server?rq=1
@@ -56,16 +58,17 @@ module SqlCmdExe =
                 sprintf """/TargetDatabaseName:%s%s/TargetServerName:%s%s""" targetDbName Environment.NewLine targetServer Environment.NewLine
             | ConnectionString cs -> sprintf """%s/tcs:"%s"%s""" Environment.NewLine cs Environment.NewLine
         // sql package.ExecutionContext command line reference: https://msdn.microsoft.com/en-us/hh550080(v=vs.103).aspx
-        sprintf """"C:\Program Files (x86)\Microsoft Visual Studio 14.0\Common7\IDE\Extensions\Microsoft\SQLDB\DAC\130\sqlpackage.exe"
-        /Action:Publish 
-        /SourceFile:"%s.dacpac" 
-        %s
-        /p:DropObjectsNotInSource=%b 
-        /p:GenerateSmartDefaults=true 
-        /p:BlockOnPossibleDataLoss=%b
-        /p:ExcludeObjectTypes=Certificates;Credentials;DatabaseRoles;Filegroups;FileTables;LinkedServerLogins;LinkedServers;Logins;ServerAuditSpecifications;ServerRoleMembership;ServerRoles;ServerTriggers;Users
-        /Variables:Environment=%s""" srcFile targetInfo dropObjectsNotInSource blockOnPossibleDataLoss environmentName
+        let cmd = @"""C:\Program Files (x86)\Microsoft Visual Studio 14.0\Common7\IDE\Extensions\Microsoft\SQLDB\DAC\130\sqlpackage.exe"""
+        sprintf """ /Action:Publish 
+                    /SourceFile:"%s.dacpac" 
+                    %s
+                    /p:DropObjectsNotInSource=%b 
+                    /p:GenerateSmartDefaults=true 
+                    /p:BlockOnPossibleDataLoss=%b
+                    /p:ExcludeObjectTypes=Certificates;Credentials;DatabaseRoles;Filegroups;FileTables;LinkedServerLogins;LinkedServers;Logins;ServerAuditSpecifications;ServerRoleMembership;ServerRoles;ServerTriggers;Users
+                    /Variables:Environment=%s""" srcFile targetInfo dropObjectsNotInSource blockOnPossibleDataLoss environmentName
         |> replace Environment.NewLine String.Empty
+        |> fun args -> cmd,args
 
 open System
 open System.IO
@@ -108,10 +111,14 @@ module Process' =
             )
         match startDir with | Some d -> procStartInfo.WorkingDirectory <- d | _ -> ()
 
-        let outputHandler f (_sender:obj) (args:DataReceivedEventArgs) = f args.Data
+        let liveMessageStream = System.Reactive.Subjects.BehaviorSubject<String>(String.Empty)
+        liveMessageStream.DumpLatest() |> ignore
+        let outputHandler f (_sender:obj) (args:DataReceivedEventArgs) = 
+            liveMessageStream.OnNext args.Data
+            f args.Data
         let p = new Process(StartInfo = procStartInfo)
         let filterS f s = if not (String.IsNullOrEmpty s) then f s
-
+        
         p.OutputDataReceived.AddHandler(DataReceivedEventHandler (outputHandler (filterS outF)))
         p.ErrorDataReceived.AddHandler(DataReceivedEventHandler (outputHandler (filterS errorF)))
 
@@ -124,13 +131,28 @@ module Process' =
         if not started then
             failwithf "Failed to start process %s" filename
         printfn "Started %s with pid %i" p.ProcessName p.Id
+        let killIt () = 
+            p.Id.Dump("killing process")
+            p.Kill()
+        let liveKillLink = System.Reactive.Subjects.BehaviorSubject<Hyperlinq>(Hyperlinq(killIt,"Kill Process"))
+        liveKillLink.DumpLatest()
+        
+        
+        
         p.BeginOutputReadLine()
         p.BeginErrorReadLine()
         let onFinish = 
             async{
-                p.WaitForExit()
-                timer.Stop()
-                printfn "Finished %s after %A milliseconds" filename timer.ElapsedMilliseconds
+                try
+                    p.WaitForExit()
+                    timer.Stop()
+                    printfn "Finished %s after %A milliseconds" filename timer.ElapsedMilliseconds
+                    liveMessageStream.OnCompleted()
+                    liveKillLink.OnCompleted()
+                with ex -> 
+                    liveKillLink.OnCompleted()
+                    liveMessageStream.OnCompleted()
+                    reraise()
                 return (p,timer)
             }
         onFinish
@@ -250,10 +272,6 @@ module SqlMgmt =
         |> List.ofSeq
 
     let migrate path dbName =
-        let countValue = System.Reactive.Subjects.BehaviorSubject<int>(0)
-        let runValue = System.Reactive.Subjects.BehaviorSubject<int>(0)
-        let progressValue = System.Reactive.Subjects.BehaviorSubject<int>(0)
-        
         use cn = new SqlConnection(dc.Connection.ConnectionString)
         let sc = Microsoft.SqlServer.Management.Common.ServerConnection(cn)
         let server = new Microsoft.SqlServer.Management.Smo.Server(sc)
@@ -317,7 +335,6 @@ module SqlMgmt =
         lastRun.Dump("last completed operation")
         (run,count).Dump("run, counted sub-scripts")
         
-
 open MsBuild
 open SqlMgmt
 open SqlCmdExe
@@ -343,15 +360,17 @@ let runDeploy dbName deployBehavior =
     newestChild.Dump("dacpac folder")
     let useSqlPackageExe () = 
         
-            let fullCmdLine = 
+            let cmd,args = 
                 let targetDacPac = System.IO.Path.Combine(newestChild, dbName)
                 let targetBehavior = TargetBehavior.ConnectionString dc.Connection.ConnectionString
                 cmdLine targetDacPac DoNotDropObjectsNotInSource true Environment.MachineName targetBehavior
 
-            fullCmdLine.Dump()
+            (cmd,args).Dump()
             try
-                //TODO: change this to use Process'.runProcSync 
-                Util.Cmd(fullCmdLine,false) |> ignore<string[]>
+                //  filename args startDir
+                let output,errors = Process'.runProcSync cmd args None
+                (output,errors).Dump()
+                //Util.Cmd(fullCmdLine,false) |> ignore<string[]>
             with ex -> 
                 ex.Message.Dump()
                 displayText [| ex.Message |]
