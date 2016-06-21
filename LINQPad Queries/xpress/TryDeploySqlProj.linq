@@ -15,6 +15,11 @@ let stringEqualsI s1 (toMatch:string)= toMatch <> null && toMatch.Equals(s1, Str
 let (|StartsWithI|_|) s1 (toMatch:string) = if stringEqualsI s1 toMatch then Some() else None
 
 let replace (target:string) (replacement) (str:string) = str.Replace(target,replacement)
+
+type Railway<'t> =
+    | Success of 't
+    | Failure of exn
+    
 module Seq =
   /// Iterates over elements of the input sequence and groups adjacent elements.
   /// A new group is started when the specified predicate holds about the element
@@ -99,7 +104,7 @@ module Process' =
     open System.Collections.ObjectModel
     type RunProcResult = {Outputs:string ObservableCollection; Errors: string ObservableCollection; }
 
-    let private setupRunProc filename args startDir outF errorF = 
+    let private setupRunProc filename args startDir fBothOpt outF errorF = 
         let timer = System.Diagnostics.Stopwatch.StartNew()
         let procStartInfo = 
             ProcessStartInfo(
@@ -110,12 +115,14 @@ module Process' =
                 Arguments = args
             )
         match startDir with | Some d -> procStartInfo.WorkingDirectory <- d | _ -> ()
-
-        let liveMessageStream = System.Reactive.Subjects.BehaviorSubject<String>(String.Empty)
-        liveMessageStream.DumpLatest() |> ignore
         let outputHandler f (_sender:obj) (args:DataReceivedEventArgs) = 
-            liveMessageStream.OnNext args.Data
-            f args.Data
+            let result = f args.Data
+            match fBothOpt with
+            | Some fBoth -> fBoth args.Data
+            | None -> ()
+            
+            result
+            
         let p = new Process(StartInfo = procStartInfo)
         let filterS f s = if not (String.IsNullOrEmpty s) then f s
         
@@ -125,51 +132,60 @@ module Process' =
         let started = 
             try
                 p.Start()
-            with | ex ->
+            with ex ->
                 ex.Data.Add("filename", filename)
                 reraise()
         if not started then
             failwithf "Failed to start process %s" filename
         printfn "Started %s with pid %i" p.ProcessName p.Id
-        let killIt () = 
-            p.Id.Dump("killing process")
-            p.Kill()
-        let liveKillLink = System.Reactive.Subjects.BehaviorSubject<Hyperlinq>(Hyperlinq(killIt,"Kill Process"))
-        liveKillLink.DumpLatest()
-        
-        
-        
+        let setupKillLinq () = // TODO: try to get the liveKillLink:observable<HyperLinq> deal working
+            let killIt () = 
+                p.Id.Dump("killing process")
+                p.Kill()
+            let h = Hyperlinq(Action(killIt),sprintf "Kill Process:%i" p.Id, runOnNewThread = true)
+            h.Dump()
+            
+
         p.BeginOutputReadLine()
         p.BeginErrorReadLine()
+        setupKillLinq()
         let onFinish = 
             async{
-                try
-                    p.WaitForExit()
-                    timer.Stop()
-                    printfn "Finished %s after %A milliseconds" filename timer.ElapsedMilliseconds
-                    liveMessageStream.OnCompleted()
-                    liveKillLink.OnCompleted()
-                with ex -> 
-                    liveKillLink.OnCompleted()
-                    liveMessageStream.OnCompleted()
-                    reraise()
-                return (p,timer)
+//                try
+                    try
+                        p.WaitForExit()
+                        timer.Stop()
+                        printfn "Finished %s after %A milliseconds" filename timer.ElapsedMilliseconds
+//                        liveKillLink.OnCompleted()
+                        return Railway.Success(p,timer)
+                    with ex -> 
+//                        liveKillLink.OnNext(null)
+//                        liveKillLink.OnError(ex)
+//                        liveKillLink.OnCompleted()
+//                        liveKillLink.Dispose()
+                        return Railway.Failure ex
             }
         onFinish
 
-    let runProcAsync filename args startDir fOutput fError=
+    let runProcAsync filename args startDir fBothOpt fOutput fError=
         let outputs = System.Collections.Generic.List<string>()
         let errors = System.Collections.Generic.List<string>()
         let tree f1 s = 
             f1 s
             s
-        let onFinish = setupRunProc filename args startDir (tree fOutput>>outputs.Add) (tree fError >> errors.Add)
+        let onFinish = setupRunProc filename args startDir fBothOpt (tree fOutput>>outputs.Add) (tree fError >> errors.Add)
         let resultTask = 
             async {
-                let! p,timer = onFinish
-                return outputs,errors
+                let! result = onFinish
+                match result with
+                | Railway.Success t ->
+                    let p,timer = t
+                    return Railway.Success(outputs,errors)
+                | Railway.Failure ex -> 
+                    return Railway.Failure ex
             }
         resultTask
+            
 
     let runProcPrint filename args startDir outputIsErrorF = 
         let errorHandler errS= 
@@ -184,23 +200,34 @@ module Process' =
             | _ -> printfn "%s" s
 
         let resultTask = 
-            async {
-                let! output,errors= runProcAsync filename args startDir outputHandler errorHandler
-                return (output,errors)
-            }
+            runProcAsync filename args startDir None outputHandler errorHandler
 
-        let outputs,errors = Async.RunSynchronously resultTask
-        outputs,errors
+        let result = Async.RunSynchronously resultTask
+        result
 
-    let runProcSync filename args startDir = 
+    let runProcSync filename args startDir fBothOpt fOutputOpt fErrorOpt = 
         let outputs = System.Collections.Generic.List<string>()
         let errors = System.Collections.Generic.List<string>()
-        let p,timer = Async.RunSynchronously (setupRunProc filename args startDir outputs.Add errors.Add)
+        let fOutput txt = 
+            outputs.Add txt
+            match fOutputOpt with
+            |Some f -> 
+                f txt
+            | None ->
+                ()
+        let fError txt =
+            errors.Add txt
+            match fErrorOpt with
+            |Some f ->
+                f txt
+            | None -> ()
+         
+        let r = Async.RunSynchronously (setupRunProc filename args startDir fBothOpt fOutput fError)
         outputs,errors
         
         
 module MsBuild = 
-    let msbuild targetProject buildArgs = 
+    let msbuild targetProject buildArgs fBothOpt fOutputOpt fErrorOpt = 
         let targetFolder = Path.GetDirectoryName targetProject
         let msbuildPath = @"C:\Program Files (x86)\MSBuild\14.0\Bin\MSBuild.exe"
         let errorCount outputs errors = 
@@ -208,7 +235,12 @@ module MsBuild =
             [ outputs;errors] |> Seq.concat  |> Seq.map regex.Match |> Seq.tryFind(fun m -> m.Success)
     
         let args = targetProject::buildArgs |> delimit " "
-        let output,errors = Process'.runProcSync msbuildPath args (Some targetFolder)
+       
+        //liveMessageStream.OnNext args.Data
+        //liveMessageStream.OnCompleted()
+        
+        let output,errors = Process'.runProcSync msbuildPath args (Some targetFolder) fBothOpt fOutputOpt fErrorOpt
+
         match errorCount output errors with
         | Some errorMatch -> 
             let regex = System.Text.RegularExpressions.Regex("Build error", Text.RegularExpressions.RegexOptions.IgnoreCase)
@@ -238,7 +270,7 @@ module MsBuild =
             logger::["/target:Build"]
             |> List.filter (String.IsNullOrWhiteSpace >> not)
         printfn "%A" args
-        let outputs,errors = msbuild sqlProjFile args
+        let outputs,errors = msbuild sqlProjFile args None None None
         let outputs = Array.ofSeq outputs
         displayText outputs "MsBuild"
         printfn "%A" outputs
@@ -280,13 +312,13 @@ module SqlMgmt =
         let mutable lastRun = String.Empty
         let mutable run,count = 0,0
         let subScripts = getSubScripts path
-        use countValue = System.Reactive.Subjects.BehaviorSubject<int>(0)
-        use runValue = System.Reactive.Subjects.BehaviorSubject<int>(0)
-        use progressValue = System.Reactive.Subjects.BehaviorSubject<int>(0)
-        progressValue.DumpLatest("% progress")
-        subScripts.Length.Dump("todo")
-        countValue.DumpLatest("subScripts processed")
-        runValue.DumpLatest("subScripts Completed")
+        use countValue = new System.Reactive.Subjects.BehaviorSubject<int>(0)
+        use runValue = new System.Reactive.Subjects.BehaviorSubject<int>(0)
+        use progressValue = new System.Reactive.Subjects.BehaviorSubject<int>(0)
+        progressValue.DumpLatest("% progress") |> ignore
+        subScripts.Length.Dump("todo") 
+        countValue.DumpLatest("subScripts processed") |> ignore
+        runValue.DumpLatest("subScripts Completed") |> ignore
         
         
         subScripts
@@ -364,18 +396,31 @@ let runDeploy dbName deployBehavior =
                 let targetDacPac = System.IO.Path.Combine(newestChild, dbName)
                 let targetBehavior = TargetBehavior.ConnectionString dc.Connection.ConnectionString
                 cmdLine targetDacPac DoNotDropObjectsNotInSource true Environment.MachineName targetBehavior
-
             (cmd,args).Dump()
+            use liveMessageStream = 
+                let r = new System.Reactive.Subjects.BehaviorSubject<String>(String.Empty)
+                r.DumpLatest() |> ignore
+                r
+            
+            let mutable success = false
             try
-                //  filename args startDir
-                let output,errors = Process'.runProcSync cmd args None
-                (output,errors).Dump()
-                //Util.Cmd(fullCmdLine,false) |> ignore<string[]>
-            with ex -> 
-                ex.Message.Dump()
-                displayText [| ex.Message |]
-                reraise()
-        
+                try
+                    //Util.Cmd(fullCmdLine,false) |> ignore<string[]>
+                    //  filename args startDirOpt fBothOpt fOutputOpt fErrorOpt
+                    let output,errors = Process'.runProcSync cmd args None (Some liveMessageStream.OnNext) None None
+                    success <- true
+                with ex -> 
+                    ex.Message.Dump()
+                    displayText [| ex.Message |]
+                    liveMessageStream.OnError(ex)
+                    reraise()
+            finally
+                liveMessageStream.Dispose()
+            
+            if success then 
+                liveMessageStream.OnCompleted()
+                liveMessageStream.Dispose()
+
     match deployBehavior with
     | UseSqlPackageExeWithPreCompare ->
         let preCompareOpt = 
