@@ -9,6 +9,7 @@ module Option =
         match fOpt with
         | Some f -> f x
         | None -> x
+        
 module Sql = 
     type ColumnInfo = {Name:string; Type:string; IsPK: bool}
     type TableInfo = {Schema:string; Name:string; Columns : ColumnInfo list}
@@ -145,8 +146,14 @@ let rawMap = [ // source, target
                                         "Dia2", Unchanged
                                         "Dia3", Unchanged
                                         "Dia4", Unchanged
-                                        "ChargeDateTime", Becomes "Inserted"
-                                        "ChargeDOS", Unchanged]
+                                        "ChargeDateTime", Becomes "Inserted" ]
+            "dbo.Payments","dbo.Payment", [
+                                        "TimeStamp", Becomes "Created"
+                                        "Amount", Becomes "TotalAmount"
+                                        "PaymentType", Becomes "PaymentTypeId"
+                                        "CheckNumber", Becomes "TransactionNumber"
+                                        
+            ]
             ]
 let maps = 
     rawMap
@@ -157,7 +164,7 @@ let maps =
                 |Unchanged          ->      {Source = s; Target = s; SourceMapOpt = None}
                 |Becomes t          ->      {Source = s; Target = t; SourceMapOpt = None}
                 |FTrans f           ->      {Source = s; Target = s; SourceMapOpt = Some f}
-    )
+        )
     )
 
 type CheckSumRow(diff) =

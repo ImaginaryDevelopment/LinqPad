@@ -404,22 +404,18 @@ let runDeploy dbName deployBehavior =
             
             let mutable success = false
             try
-                try
-                    //Util.Cmd(fullCmdLine,false) |> ignore<string[]>
-                    //  filename args startDirOpt fBothOpt fOutputOpt fErrorOpt
                     let output,errors = Process'.runProcSync cmd args None (Some liveMessageStream.OnNext) None None
-                    success <- true
-                with ex -> 
+                    if errors.Any() then
+                        errors.Dump("errors found")
+                        displayText (errors |> Array.ofSeq) "Errors"
+                    else
+                        success <- true
+                        liveMessageStream.OnCompleted()
+            with ex -> 
                     ex.Message.Dump()
                     displayText [| ex.Message |]
                     liveMessageStream.OnError(ex)
                     reraise()
-            finally
-                liveMessageStream.Dispose()
-            
-            if success then 
-                liveMessageStream.OnCompleted()
-                liveMessageStream.Dispose()
 
     match deployBehavior with
     | UseSqlPackageExeWithPreCompare ->
