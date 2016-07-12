@@ -4,15 +4,19 @@
   <NuGetReference>Rx-Main</NuGetReference>
 </Query>
 
+// build and deploy a .sqlproj -> .dacpac
 let dc = new TypedDataContext()
 
 let dumpt (t:string) x = x.Dump(t); x
+let after (delimiter:string) (x:string) = x.Substring(x.IndexOf(delimiter) + delimiter.Length)
 
 // getting this into CI http://stackoverflow.com/questions/15556339/how-to-build-sqlproj-projects-on-a-build-server?rq=1
 
 let stringEqualsI s1 (toMatch:string)= toMatch <> null && toMatch.Equals(s1, StringComparison.InvariantCultureIgnoreCase)
-    
-let (|StartsWithI|_|) s1 (toMatch:string) = if stringEqualsI s1 toMatch then Some() else None
+let (|StartsWithI|_|) (toMatch:string) (x:string) = 
+    if not <| isNull x && not <| isNull toMatch && toMatch.Length > 0 && x.StartsWith(toMatch, StringComparison.InvariantCultureIgnoreCase) then
+        Some () 
+    else None
 
 let replace (target:string) (replacement) (str:string) = str.Replace(target,replacement)
 
@@ -115,10 +119,10 @@ module Process' =
                 Arguments = args
             )
         match startDir with | Some d -> procStartInfo.WorkingDirectory <- d | _ -> ()
-        let outputHandler f (_sender:obj) (args:DataReceivedEventArgs) = 
+        let outputHandler isError f (_sender:obj) (args:DataReceivedEventArgs) = 
             let result = f args.Data
             match fBothOpt with
-            | Some fBoth -> fBoth args.Data
+            | Some fBoth -> fBoth isError args.Data
             | None -> ()
             
             result
@@ -126,8 +130,8 @@ module Process' =
         let p = new Process(StartInfo = procStartInfo)
         let filterS f s = if not (String.IsNullOrEmpty s) then f s
         
-        p.OutputDataReceived.AddHandler(DataReceivedEventHandler (outputHandler (filterS outF)))
-        p.ErrorDataReceived.AddHandler(DataReceivedEventHandler (outputHandler (filterS errorF)))
+        p.OutputDataReceived.AddHandler(DataReceivedEventHandler (outputHandler false (filterS outF)))
+        p.ErrorDataReceived.AddHandler(DataReceivedEventHandler (outputHandler true (filterS errorF)))
 
         let started = 
             try
@@ -186,7 +190,6 @@ module Process' =
             }
         resultTask
             
-
     let runProcPrint filename args startDir outputIsErrorF = 
         let errorHandler errS= 
             let color = System.Console.ForegroundColor
@@ -255,7 +258,10 @@ module MsBuild =
         output,errors
     
     let displayText lines titling = 
-        let targetFile = Path.Combine(Path.GetTempPath(), titling, Path.GetTempFileName() + ".txt")
+        let tp,tf = 
+            Path.GetTempFileName() 
+            |> fun tf -> Path.GetDirectoryName tf, Path.GetFileName tf
+        let targetFile = Path.Combine(tp, titling + "."+  tf + ".txt")
         File.WriteAllLines(targetFile, lines)
         let p = Process.Start(targetFile)
         printfn "Started textfile %s with id %i @ %s" titling p.Id targetFile
@@ -281,7 +287,6 @@ module MsBuild =
         let xml = outputs |> Seq.last
         targetFolder,xml
     
-
 let findNewest path = 
     Directory.GetFiles path
     |> Seq.map File.GetLastWriteTime
@@ -301,6 +306,7 @@ module SqlMgmt =
             let text = File.ReadLines(path) |> Array.ofSeq // @"C:\TFS\PracticeManagement\dev\PracticeManagement\Db\sql\debug\PmMigration.publish.sql"
             yield! text|> Seq.groupWhen(stringEqualsI "GO")|> Seq.map (Seq.filter (fun l -> not <| stringEqualsI "GO" l && not <| String.IsNullOrWhiteSpace l))
         }
+        |> dumpt "subScripts"
         |> List.ofSeq
 
     let migrate path dbName =
@@ -319,15 +325,31 @@ module SqlMgmt =
         subScripts.Length.Dump("todo") 
         countValue.DumpLatest("subScripts processed") |> ignore
         runValue.DumpLatest("subScripts Completed") |> ignore
-        
-        
-        subScripts
+        let commandGroups = 
+            subScripts 
+            |> Seq.map (fun lines -> 
+                lines 
+                |>Seq.map(fun line ->
+                                let items = 
+                                    seq{  
+                                        match line with
+                                        |StartsWithI ":r " -> yield! getSubScripts (line |> after ":r " |> fun p -> Path.Combine(Path.GetDirectoryName path,p)) |> Seq.collect id
+                                        | _ -> yield line
+                                        }
+                                    |> List.ofSeq
+                                items
+                
+                ) 
+                |> Seq.collect id)
+        commandGroups.Dump("Command Groups")
+        commandGroups
         |> Seq.iter(fun lines -> 
             let prog = float count / float subScripts.Length * 100.0  |> int
             Util.Progress <- Nullable prog
             progressValue.OnNext(prog)
             runValue.OnNext(run)
             countValue.OnNext(count)
+            // handle or throw on sqlcmd call
             if lines |> Seq.exists(fun l -> l.StartsWith(":")) then
                 let mutable ignoredAnyLine = false
                 count <- count + 1
@@ -338,7 +360,8 @@ module SqlMgmt =
                         //setVars.[line |> before
                         ()
                     | ":on error exit" -> ()
-                    | ":" ->
+                    | StartsWithI ":r "
+                    | StartsWithI ":" ->
                         line.Dump("failed to match sqlcmd")
                         raise <| ArgumentOutOfRangeException(line)
                         ()
@@ -372,28 +395,22 @@ open SqlMgmt
 open SqlCmdExe
 
 type DeployBehavior = 
-    | UseSqlPackageExe
+    | BuildThenUseSqlPackageExe
+    | BuildThenUseSqlPackageExeWithPreCompare
     | UseSqlPackageExeWithPreCompare
-    | RunSmo 
+    //| RunSmo 
     
 let runDeploy dbName deployBehavior = 
+    // sql output folder and app output folder are now one and the same
     let projFolder = @"C:\TFS\PracticeManagement\dev\PracticeManagement\Db"
-    // clean output dir before build
-    Path.Combine(projFolder,"sql", "debug")
-    |> Directory.GetFiles
-    |> Array.iter System.IO.File.Delete
     
-    buildSqlProj None projFolder
-    |> Dump
-    |> ignore
-
-    let newestChild = getNewestProjFolder projFolder
-
-    newestChild.Dump("dacpac folder")
+    let outFolder = @"C:\TFS\PracticeManagement\dev\PracticeManagement\bin\sql"
+    
+    outFolder.Dump("dacpac folder")
     let useSqlPackageExe () = 
         
             let cmd,args = 
-                let targetDacPac = System.IO.Path.Combine(newestChild, dbName)
+                let targetDacPac = System.IO.Path.Combine(outFolder, dbName)
                 let targetBehavior = TargetBehavior.ConnectionString dc.Connection.ConnectionString
                 cmdLine targetDacPac DoNotDropObjectsNotInSource true Environment.MachineName targetBehavior
             (cmd,args).Dump()
@@ -401,13 +418,23 @@ let runDeploy dbName deployBehavior =
                 let r = new System.Reactive.Subjects.BehaviorSubject<String>(String.Empty)
                 r.DumpLatest() |> ignore
                 r
+            let sb = StringBuilder()
+            let fBoth isError msg = // markdown
+                //todo: account for whitespacing issues (marks must tightly contain the things they are wrapping no leading/trailing whitespace)
+                if isError then 
+                    sb.AppendLine (sprintf "**%s**" msg) 
+                else 
+                    sb.AppendLine msg
+                |> ignore<StringBuilder>
             
             let mutable success = false
             try
-                    let output,errors = Process'.runProcSync cmd args None (Some liveMessageStream.OnNext) None None
+                    let _,errors = Process'.runProcSync cmd args None (Some (fun isError msg -> fBoth isError msg; liveMessageStream.OnNext msg)) None None
                     if errors.Any() then
-                        errors.Dump("errors found")
-                        displayText (errors |> Array.ofSeq) "Errors"
+                        displayText ([| sb.ToString() |]) "Markdown"    
+                        //Util.OnDemand("NonErrorOutput", fun () -> output).Dump()
+                        //errors.Dump("errors found")
+                        //displayText (errors |> Array.ofSeq) "Errors"
                     else
                         success <- true
                         liveMessageStream.OnCompleted()
@@ -416,29 +443,54 @@ let runDeploy dbName deployBehavior =
                     displayText [| ex.Message |]
                     liveMessageStream.OnError(ex)
                     reraise()
-
+    let buildBehavior () = 
+        
+        // clean output dir before build
+        outFolder
+        |> Directory.GetFiles
+        |> Array.iter System.IO.File.Delete
+        
+        outFolder
+        |> Directory.GetDirectories
+        |> Array.iter (fun d-> IO.Directory.Delete(d,true))
+        
+        buildSqlProj None projFolder
+        |> Dump
+        |> ignore
     match deployBehavior with
-    | UseSqlPackageExeWithPreCompare ->
+    | BuildThenUseSqlPackageExeWithPreCompare ->
+        buildBehavior()
         let preCompareOpt = 
-            Directory.EnumerateFiles(newestChild, "*.sql", SearchOption.AllDirectories) 
-            |> dumpt "files found" 
+            Directory.EnumerateFiles(outFolder, "*.sql", SearchOption.AllDirectories) 
+            |> dumpt "precompare files found" 
             |> Seq.tryFind (fun fPath -> fPath.EndsWith("PreCompareScript.sql") )
         match preCompareOpt with
         | Some preCompare ->SqlMgmt.migrate preCompare dbName
         | None -> failwithf "PreCompareScript not found"
         printfn "PreCompare finished"
         useSqlPackageExe ()
-    | UseSqlPackageExe -> 
+    | BuildThenUseSqlPackageExe -> 
+        buildBehavior()
         useSqlPackageExe ()
         ()
-    | RunSmo ->
-        SqlMgmt.migrate @"C:\TFS\PracticeManagement\dev\PracticeManagement\Db\sql\debug\PmMigration.publish.sql" dbName
+    | UseSqlPackageExeWithPreCompare ->
+        let preCompareOpt = 
+            Directory.EnumerateFiles(outFolder, "*.sql", SearchOption.AllDirectories) 
+            |> dumpt "precompare files found" 
+            |> Seq.tryFind (fun fPath -> fPath.EndsWith("PreCompareScript.sql") )
+        match preCompareOpt with
+        | Some preCompare ->SqlMgmt.migrate preCompare dbName
+        | None -> failwithf "PreCompareScript not found"
+        printfn "PreCompare finished"
+        useSqlPackageExe ()
+//    | RunSmo ->
+//        SqlMgmt.migrate @"C:\TFS\PracticeManagement\dev\PracticeManagement\Db\sql\debug\PmMigration.publish.sql" dbName
     
     
 //
 //let copyDbProjOutputs sqlFolder target = //assume all output to a /sql folder
 //    copyAllFiles sqlFolder target true
-runDeploy "PmMigration" UseSqlPackageExeWithPreCompare
+runDeploy "PmMigration" BuildThenUseSqlPackageExeWithPreCompare
 
 //runDeploy "PmMigration" RunSmo
 
