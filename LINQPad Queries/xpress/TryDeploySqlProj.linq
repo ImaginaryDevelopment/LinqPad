@@ -6,9 +6,18 @@
 
 // build and deploy a .sqlproj -> .dacpac
 let dc = new TypedDataContext()
-
+type System.String with
+    static member subString i (x:string) = x.Substring(i)
+    static member subString2 i e (x:string)= x.Substring(i,e)
+    static member contains s (x:string) = x.Contains(s)
+    
 let dumpt (t:string) x = x.Dump(t); x
-let after (delimiter:string) (x:string) = x.Substring(x.IndexOf(delimiter) + delimiter.Length)
+let after (delimiter:string) (s:string) = s|> String.subString (s.IndexOf delimiter + delimiter.Length)
+let before (delimiter:string) s = s|> String.subString2 0 (s.IndexOf delimiter)
+let afterOrSelf delimiter x = if x|> String.contains delimiter then x |> after delimiter else x
+let beforeOrSelf delimiter x = if x|> String.contains delimiter then x |> before delimiter else x
+let replace (target:string) (replacement) (str:string) = str.Replace(target,replacement)
+let teeTuple f x = x, f x
 
 // getting this into CI http://stackoverflow.com/questions/15556339/how-to-build-sqlproj-projects-on-a-build-server?rq=1
 
@@ -17,8 +26,6 @@ let (|StartsWithI|_|) (toMatch:string) (x:string) =
     if not <| isNull x && not <| isNull toMatch && toMatch.Length > 0 && x.StartsWith(toMatch, StringComparison.InvariantCultureIgnoreCase) then
         Some () 
     else None
-
-let replace (target:string) (replacement) (str:string) = str.Replace(target,replacement)
 
 type Railway<'t> =
     | Success of 't
@@ -47,6 +54,47 @@ module Seq =
       // While there are still elements, start a new group
       while running.Value do
         yield group() |> Seq.ofList }
+        
+        
+module SqlHelpers = 
+    type NonBracketedName = NonBracketedName of string 
+        with override x.ToString() = match x with | NonBracketedName.NonBracketedName s -> s
+//shadow the constructor
+    let NonBracketedName input = 
+        if input |> String.contains "[" || input |> String.contains "]" then None
+        else Some <| NonBracketedName(input)
+
+    type SprocReference = {Name:NonBracketedName;Schema:NonBracketedName} with
+        override x.ToString() = sprintf "[%O].[%O]" (x.Schema |> string) (x.Name |> string)
+    type private SprocDefHolder() =
+        member val Definition = String.Empty with get,set
+        member val ObjectId = 0L with get,set
+    
+    type SprocManager = {R:SprocReference; Add: string; Drop: string; ObjectId:System.Int64} // don't trust that it is int
+    let getManager (sr:SprocReference) drop = 
+        let schema,name = sr.Schema |> string, sr.Name |> string
+        let text = sprintf @"select 
+            --SPECIFIC_CATALOG,SPECIFIC_SCHEMA,SPECIFIC_NAME, 
+    case 
+        when len(ROUTINE_DEFINITION) > 3999 then 
+            (select object_definition([object_id]) 
+            from sys.procedures 
+            where object_schema_name([object_id]) = '%s' and name='%s') 
+        else ROUTINE_DEFINITION end as definition, so.id
+from INFORMATION_SCHEMA.routines r
+    join dbo.sysobjects so 
+    on so.id=object_id(N'[%s].[%s]') and OBJECTPROPERTY(id, N'IsProcedure') = 1
+where ROUTINE_TYPE = 'PROCEDURE' AND SPECIFIC_SCHEMA = '%s' and specific_name = '%s'"
+                    schema name schema name schema name
+        dc.ExecuteQuery<SprocDefHolder>(text)
+        |> List.ofSeq
+        |> function
+            | [x] -> {R=sr; Add=x.Definition; ObjectId=x.ObjectId; Drop=drop}
+            | [] -> failwithf "No definition found for %s using %s" name text
+            | x -> failwithf "More than one result in seq %A" x
+open SqlHelpers
+SqlHelpers.getManager {Schema=(NonBracketedName "dbo").Value; Name=(NonBracketedName "uspClaimsInsUpd").Value;} "drop me"
+|> Dump
 
 module SqlCmdExe =
     type DropBehavior =
@@ -149,7 +197,6 @@ module Process' =
             let h = Hyperlinq(Action(killIt),sprintf "Kill Process:%i" p.Id, runOnNewThread = true)
             h.Dump()
             
-
         p.BeginOutputReadLine()
         p.BeginErrorReadLine()
         setupKillLinq()
@@ -306,7 +353,7 @@ module SqlMgmt =
             let text = File.ReadLines(path) |> Array.ofSeq // @"C:\TFS\PracticeManagement\dev\PracticeManagement\Db\sql\debug\PmMigration.publish.sql"
             yield! text|> Seq.groupWhen(stringEqualsI "GO")|> Seq.map (Seq.filter (fun l -> not <| stringEqualsI "GO" l && not <| String.IsNullOrWhiteSpace l))
         }
-        |> dumpt "subScripts"
+        //|> dumpt "subScripts"
         |> List.ofSeq
 
     let migrate path dbName =
@@ -316,13 +363,14 @@ module SqlMgmt =
         let setVars = Dictionary<string,string>()
         setVars.["DatabaseName"] <- dbName
         let mutable lastRun = String.Empty
-        let mutable run,count = 0,0
+        //let mutable run,count = 0,0
         let subScripts = getSubScripts path
         use countValue = new System.Reactive.Subjects.BehaviorSubject<int>(0)
         use runValue = new System.Reactive.Subjects.BehaviorSubject<int>(0)
-        use progressValue = new System.Reactive.Subjects.BehaviorSubject<int>(0)
-        progressValue.DumpLatest("% progress") |> ignore
-        subScripts.Length.Dump("todo") 
+        // progress stops at 66%, needs attention/maint
+        //use progressValue = new System.Reactive.Subjects.BehaviorSubject<int>(0)
+        //progressValue.DumpLatest("% progress") |> ignore
+         
         countValue.DumpLatest("subScripts processed") |> ignore
         runValue.DumpLatest("subScripts Completed") |> ignore
         let commandGroups = 
@@ -341,18 +389,21 @@ module SqlMgmt =
                 
                 ) 
                 |> Seq.collect id)
-        commandGroups.Dump("Command Groups")
+            |> List.ofSeq
+        commandGroups.Length.Dump("todo")
+        //commandGroups.Dump("Command Groups")
         commandGroups
         |> Seq.iter(fun lines -> 
+            let count = countValue.Value + 1
             let prog = float count / float subScripts.Length * 100.0  |> int
             Util.Progress <- Nullable prog
-            progressValue.OnNext(prog)
-            runValue.OnNext(run)
-            countValue.OnNext(count)
+            //progressValue.OnNext(prog)
+            
+            countValue.OnNext count
             // handle or throw on sqlcmd call
             if lines |> Seq.exists(fun l -> l.StartsWith(":")) then
                 let mutable ignoredAnyLine = false
-                count <- count + 1
+                //count <- count + 1
                 for line in lines do
                     
                     match line with
@@ -369,7 +420,7 @@ module SqlMgmt =
                         ignoredAnyLine <- true
                 if ignoredAnyLine then lines.Dump("has ignored line(s)")
             else
-                count <- count + 1
+                //count <- count + 1
                 let text = String.Join(Environment.NewLine, lines)
                 let reKeyed = text |> fun line -> setVars.Keys |> Seq.fold (fun line replaceKey -> line |> replace (sprintf "$(%s)" replaceKey) setVars.[replaceKey]) line
                 try
@@ -377,7 +428,8 @@ module SqlMgmt =
                     |> server.ConnectionContext.ExecuteNonQuery
                     |> ignore<int>
                     lastRun <- reKeyed
-                    run <- run + 1
+                    //run <- run + 1
+                    runValue.OnNext(runValue.Value + 1)
                 with ex -> 
                     lastRun.Dump("last completed operation")
                     (lines,setVars,ex).Dump()
@@ -385,10 +437,10 @@ module SqlMgmt =
             )
         countValue.OnCompleted()
         runValue.OnCompleted()
-        progressValue.OnCompleted()
+        //progressValue.OnCompleted()
         
         lastRun.Dump("last completed operation")
-        (run,count).Dump("run, counted sub-scripts")
+        //(run,count).Dump("run, counted sub-scripts")
         
 open MsBuild
 open SqlMgmt
@@ -399,7 +451,12 @@ type DeployBehavior =
     | BuildThenUseSqlPackageExeWithPreCompare
     | UseSqlPackageExeWithPreCompare
     //| RunSmo 
-    
+
+
+
+//let sprocRefTest = {Name = NonBracketedName("sp_helptext").Value; Schema=NonBracketedName("dbo").Value}
+//(sprocRefTest,sprocRefTest.ToString()).Dump()
+
 let runDeploy dbName deployBehavior = 
     // sql output folder and app output folder are now one and the same
     let projFolder = @"C:\TFS\PracticeManagement\dev\PracticeManagement\Db"
@@ -407,42 +464,131 @@ let runDeploy dbName deployBehavior =
     let outFolder = @"C:\TFS\PracticeManagement\dev\PracticeManagement\bin\sql"
     
     outFolder.Dump("dacpac folder")
-    let useSqlPackageExe () = 
-        
-            let cmd,args = 
-                let targetDacPac = System.IO.Path.Combine(outFolder, dbName)
-                let targetBehavior = TargetBehavior.ConnectionString dc.Connection.ConnectionString
-                cmdLine targetDacPac DoNotDropObjectsNotInSource true Environment.MachineName targetBehavior
-            (cmd,args).Dump()
-            use liveMessageStream = 
-                let r = new System.Reactive.Subjects.BehaviorSubject<String>(String.Empty)
-                r.DumpLatest() |> ignore
-                r
-            let sb = StringBuilder()
-            let fBoth isError msg = // markdown
-                //todo: account for whitespacing issues (marks must tightly contain the things they are wrapping no leading/trailing whitespace)
-                if isError then 
-                    sb.AppendLine (sprintf "**%s**" msg) 
-                else 
-                    sb.AppendLine msg
-                |> ignore<StringBuilder>
+    let withSprocOnlyErrors fDeploy (sprocErrors:#seq<SprocReference*string>) :unit = 
+        let getDropSprocText (r:SprocReference) = 
+            if r.Schema |> string |> String.contains "[" || r.Name |> string |> String.contains "]" then raise <| invalidOp String.Empty
+            let sprocFullName = r |> string
             
-            let mutable success = false
-            try
-                    let _,errors = Process'.runProcSync cmd args None (Some (fun isError msg -> fBoth isError msg; liveMessageStream.OnNext msg)) None None
-                    if errors.Any() then
-                        displayText ([| sb.ToString() |]) "Markdown"    
-                        //Util.OnDemand("NonErrorOutput", fun () -> output).Dump()
-                        //errors.Dump("errors found")
-                        //displayText (errors |> Array.ofSeq) "Errors"
+            sprintf "IF EXISTS (select * from dbo.sysobjects where id = object_id(N'%s') and OBJECTPROPERTY(id, N'IsProcedure') = 1) \r\n  DROP PROCEDURE %s" sprocFullName sprocFullName
+            
+        try
+            // drop sprocs
+            let dropResults = 
+//                let sprocErrors =
+                    sprocErrors
+                    |> Seq.map(fun (r,def) -> {R=r; Add=def; Drop=getDropSprocText r})
+//                let sprocErrors =
+//                    sprocErrors
+                    |> Seq.map (teeTuple (fun m -> m.Drop |> dc.ExecuteCommand))
+//                sprocErrors
+//                |> List.ofSeq()
+            dropResults.Dump()
+            // re-call deploy
+            fDeploy()
+        finally
+            // re-add sprocs
+            let reAddsWithResults = 
+                sprocErrors
+                |> Seq.map(teeTuple (snd >> dc.ExecuteCommand))
+                |> List.ofSeq
+            reAddsWithResults
+            |> Seq.iter (function 
+                | _,1 -> () 
+                |((n,_),x) -> 
+                    n.Dump("Failed")
+                    reAddsWithResults.Dump("full payload of sproc-readds")
+                    failwithf "Add should have returned 1, but was %i instead" x
+                )
+            //|> Seq.iter(fun (dc.ExecuteCommand
+        sprocErrors
+        |> dumpt "sprocs to remove"
+        |> ignore
+        ()
+        
+    //retry all but the onJustSprocErrorsOpt    
+    let useSqlPackageExe fOnJustSprocErrorsOpt  = 
+        let cmd,args = 
+            let targetDacPac = System.IO.Path.Combine(outFolder, dbName)
+            let targetBehavior = TargetBehavior.ConnectionString dc.Connection.ConnectionString
+            cmdLine targetDacPac DoNotDropObjectsNotInSource true Environment.MachineName targetBehavior
+        (cmd,args).Dump()
+        use liveMessageStream = 
+            let r = new System.Reactive.Subjects.BehaviorSubject<String>(String.Empty)
+            r.DumpLatest() |> ignore
+            r
+        let allOutsAsMarkdown = StringBuilder()
+        let append msg (sb:StringBuilder) = sb.AppendLine msg |> ignore
+        let bonafideErrors = List<string>()
+        let fBoth isError msg = // markdown
+            if not <| String.IsNullOrWhiteSpace msg then
+                if isError then 
+                    let leadingStarsAndSpace = @"^[* \t]*"
+                    let content = @"(\w.*)"
+                    let markdowned = Regex.Replace(msg,sprintf "(%s)(%s)[ \t]*" leadingStarsAndSpace content,@"$1**$2**",RegexOptions.Multiline)
+                    if msg.StartsWith "Error SQL" then
+                        bonafideErrors.Add msg
+                    allOutsAsMarkdown |> append markdowned 
+                else 
+                    allOutsAsMarkdown |> append msg
+        
+        let mutable success = false
+        try
+                let _,errors = Process'.runProcSync cmd args None (Some (fun isError msg -> fBoth isError msg; liveMessageStream.OnNext msg)) None None
+                if errors.Any() then
+                    Util.OnDemand("Full output markdown", fun() -> displayText ([| allOutsAsMarkdown.ToString() |]) "Markdown").Dump()
+                    let blocked72031Regex = "Error SQL72031: This deployment may encounter errors during execution because changes to (.*) are blocked by (.*)'s dependency in the target database."
+                    let tryGetSprocInfo input = 
+                        match Regex.Match(input, blocked72031Regex) with
+                        | reg when reg.Success -> 
+                            // warning: this table only contains the first 4000 chars, if it is longer it is truncated
+                            let routine = dc.INFORMATION_SCHEMA.ROUTINES.FirstOrDefault(fun r -> r.ROUTINE_TYPE = "Procedure" && not (r.ROUTINE_NAME.StartsWith("sp_")))
+                            if not <| isNull routine then
+                                
+                                Some (reg.Groups.[2].Value, routine)
+                            else None
+                        | _ -> None
+                    let getSprocRef fullname =
+                        let schema, sprocName = fullname |> afterOrSelf "[" |> before "." |> beforeOrSelf "]", fullname |> after "." |> beforeOrSelf "]" |> afterOrSelf "["
+                        { Schema = (NonBracketedName schema).Value; Name= (NonBracketedName sprocName).Value}
+                    
+                    let sprocErrors = bonafideErrors |> Seq.map tryGetSprocInfo |> List.ofSeq
+                    if sprocErrors |> Seq.forall (Option.isSome) then
+                        match fOnJustSprocErrorsOpt with
+                        | Some f ->
+                            // if all errors are of the sproc type, copy sproc definitions, drop them, retry deploy, and re-add them
+                            let mapSprocSize (sprocRef:SprocReference,def:string) = 
+                                if def.Length >= 3999 then // http://sqlblog.com/blogs/aaron_bertrand/archive/2011/11/08/t-sql-tuesday-24-dude-where-s-the-rest-of-my-procedure.aspx
+                                    sprocRef.ToString().Dump("big un") //  untested branch, has not been hit thus far
+                                    let query = 
+                                        sprintf "select object_definition([object_id]) from sys.procedures where object_schema_name([object_id]) = '%O' and name='%O'" 
+                                            sprocRef.Schema sprocRef.Name
+                                    sprocRef, (dc.ExecuteQuery<string>(query) |> Seq.head)
+                                else sprocRef, def
+                                
+                            let sprocErrors = 
+                                sprocErrors 
+                                |> Seq.choose id
+                                |> Seq.map(fun (name,routine) -> getSprocRef name, routine.ROUTINE_DEFINITION)
+                                |> Seq.map mapSprocSize
+                            f sprocErrors 
+                        | None -> failwithf "No options for dealing with sproc only errors %A" sprocErrors               
+                        ()
                     else
-                        success <- true
-                        liveMessageStream.OnCompleted()
-            with ex -> 
-                    ex.Message.Dump()
-                    displayText [| ex.Message |]
-                    liveMessageStream.OnError(ex)
-                    reraise()
+                        bonafideErrors.Dump()
+                    //errors.Dump("errors found")
+                    //displayText (errors |> Array.ofSeq) "Errors"
+                else
+                    success <- true
+                    liveMessageStream.OnCompleted()
+        with ex -> 
+                ex.Message.Dump()
+                displayText [| ex.Message |]
+                liveMessageStream.OnError(ex)
+                reraise()
+                
+    // avoiding any possibility of infinite recursion
+    
+    let useSqlPackageWithSprocRetry ()= useSqlPackageExe (Some(withSprocOnlyErrors (fun () -> useSqlPackageExe None)))
     let buildBehavior () = 
         
         // clean output dir before build
@@ -468,10 +614,10 @@ let runDeploy dbName deployBehavior =
         | Some preCompare ->SqlMgmt.migrate preCompare dbName
         | None -> failwithf "PreCompareScript not found"
         printfn "PreCompare finished"
-        useSqlPackageExe ()
+        useSqlPackageWithSprocRetry ()
     | BuildThenUseSqlPackageExe -> 
         buildBehavior()
-        useSqlPackageExe ()
+        useSqlPackageWithSprocRetry ()
         ()
     | UseSqlPackageExeWithPreCompare ->
         let preCompareOpt = 
@@ -482,15 +628,12 @@ let runDeploy dbName deployBehavior =
         | Some preCompare ->SqlMgmt.migrate preCompare dbName
         | None -> failwithf "PreCompareScript not found"
         printfn "PreCompare finished"
-        useSqlPackageExe ()
+        useSqlPackageWithSprocRetry ()
 //    | RunSmo ->
 //        SqlMgmt.migrate @"C:\TFS\PracticeManagement\dev\PracticeManagement\Db\sql\debug\PmMigration.publish.sql" dbName
-    
-    
-//
-//let copyDbProjOutputs sqlFolder target = //assume all output to a /sql folder
-//    copyAllFiles sqlFolder target true
-runDeploy "PmMigration" BuildThenUseSqlPackageExeWithPreCompare
+
+//runDeploy "PmMigration" BuildThenUseSqlPackageExeWithPreCompare
+runDeploy "PmMigration" UseSqlPackageExeWithPreCompare
 
 //runDeploy "PmMigration" RunSmo
 
