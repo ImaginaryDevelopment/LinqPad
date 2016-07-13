@@ -18,6 +18,7 @@ let afterOrSelf delimiter x = if x|> String.contains delimiter then x |> after d
 let beforeOrSelf delimiter x = if x|> String.contains delimiter then x |> before delimiter else x
 let replace (target:string) (replacement) (str:string) = str.Replace(target,replacement)
 let teeTuple f x = x, f x
+let tee f x = f x; x
 
 // getting this into CI http://stackoverflow.com/questions/15556339/how-to-build-sqlproj-projects-on-a-build-server?rq=1
 
@@ -26,10 +27,38 @@ let (|StartsWithI|_|) (toMatch:string) (x:string) =
     if not <| isNull x && not <| isNull toMatch && toMatch.Length > 0 && x.StartsWith(toMatch, StringComparison.InvariantCultureIgnoreCase) then
         Some () 
     else None
+module Railways =
+    type Railway<'t,'tError> =
+        | Success of 't
+        | Failure of 'tError
+    let bind f x = 
+        match x with
+        | Success x -> f x
+        | Failure x -> Failure x
+    let bind2 fSuccessToRail fFailure x = 
+        match x with 
+        | Success x -> fSuccessToRail x
+        | Failure x -> fFailure x
+    let map f rx = 
+        match rx with
+        | Success x -> f x |> Success
+        | Failure x -> Failure x
+    
+    let tryCatch f fEx x =
+        try
+            f x |> Success
+        with ex -> fEx |> Failure
 
-type Railway<'t> =
-    | Success of 't
-    | Failure of exn
+    let map2 fSuccess fFailure rx =
+        match rx with 
+        | Success x -> fSuccess x |> Success
+        | Failure x -> fFailure x |> Failure
+    
+    // exception paths must use the same types
+    let switch f1 f2 = f1 >> bind f2
+    let isSuccess = function | Success _ -> true | _ -> false
+    let chooseSuccess = Seq.choose(function |Success x -> Some x | _ -> None)
+    
     
 module Seq =
   /// Iterates over elements of the input sequence and groups adjacent elements.
@@ -57,44 +86,60 @@ module Seq =
         
         
 module SqlHelpers = 
+    open Railways
     type NonBracketedName = NonBracketedName of string 
-        with override x.ToString() = match x with | NonBracketedName.NonBracketedName s -> s
-//shadow the constructor
+        with
+            member x.Value = match x with NonBracketedName.NonBracketedName s -> s
+            override x.ToString() = x.Value
+    //shadow the constructor
     let NonBracketedName input = 
         if input |> String.contains "[" || input |> String.contains "]" then None
         else Some <| NonBracketedName(input)
 
-    type SprocReference = {Name:NonBracketedName;Schema:NonBracketedName} with
+    type ObjectReference = {Schema:NonBracketedName;Name:NonBracketedName} with
         override x.ToString() = sprintf "[%O].[%O]" (x.Schema |> string) (x.Name |> string)
+        static member TryCreate schema name :Railway<_,string>=
+            match NonBracketedName schema, NonBracketedName name with
+            | Some nbSchema, Some nbName -> Success {Schema=nbSchema;Name=nbName}
+            | Some _, None -> Failure (sprintf "Could not read name '%s'" name)
+            | None, Some _ -> Failure (sprintf "Could not read schema '%s'" schema)
+            | None, None -> Failure (sprintf "Could not read schema nor name '%s','%s'" schema name)
+            
     type private SprocDefHolder() =
         member val Definition = String.Empty with get,set
-        member val ObjectId = 0L with get,set
+        member val Object_Id = 0 with get,set
     
-    type SprocManager = {R:SprocReference; Add: string; Drop: string; ObjectId:System.Int64} // don't trust that it is int
-    let getManager (sr:SprocReference) drop = 
+    type SprocManager = {R:ObjectReference; Add: string; Drop: string; ObjectId:int}
+    
+    let getIsSprocText (r:ObjectReference) = 
+        r
+        |> string
+        |> sprintf "select cast(case when EXISTS (select * from dbo.sysobjects where id = object_id(N'%s') and OBJECTPROPERTY(id, N'IsProcedure') = 1) then 1 else 0 end as bit)"
+    let getDropSprocText (r:ObjectReference) : string = 
+        r
+        |> getIsSprocText
+        |> fun test -> sprintf "IF %s \r\n  DROP PROCEDURE %s" test (r |> string)
+        
+    let getManager (sr:ObjectReference) drop = 
         let schema,name = sr.Schema |> string, sr.Name |> string
-        let text = sprintf @"select 
-            --SPECIFIC_CATALOG,SPECIFIC_SCHEMA,SPECIFIC_NAME, 
+        let text = sprintf @"select SPECIFIC_CATALOG,SPECIFIC_SCHEMA,SPECIFIC_NAME, 
     case 
         when len(ROUTINE_DEFINITION) > 3999 then 
-            (select object_definition([object_id]) 
-            from sys.procedures 
-            where object_schema_name([object_id]) = '%s' and name='%s') 
-        else ROUTINE_DEFINITION end as definition, so.id
+            object_definition([object_id]) 
+
+        else ROUTINE_DEFINITION end as definition, [object_id]
 from INFORMATION_SCHEMA.routines r
-    join dbo.sysobjects so 
-    on so.id=object_id(N'[%s].[%s]') and OBJECTPROPERTY(id, N'IsProcedure') = 1
-where ROUTINE_TYPE = 'PROCEDURE' AND SPECIFIC_SCHEMA = '%s' and specific_name = '%s'"
-                    schema name schema name schema name
+    join sys.procedures p
+        on object_schema_name([object_id]) = r.Specific_schema and p.name = r.specific_name
+    
+where r.ROUTINE_TYPE = 'PROCEDURE' AND r.SPECIFIC_SCHEMA = '%s' and r.specific_name = '%s'"
+                    schema name
         dc.ExecuteQuery<SprocDefHolder>(text)
         |> List.ofSeq
         |> function
-            | [x] -> {R=sr; Add=x.Definition; ObjectId=x.ObjectId; Drop=drop}
-            | [] -> failwithf "No definition found for %s using %s" name text
+            | [x] -> Success {R=sr; Add=x.Definition; ObjectId=x.Object_Id; Drop=drop}
+            | [] -> Failure (sprintf "No definition found for %s using %s" name text)
             | x -> failwithf "More than one result in seq %A" x
-open SqlHelpers
-SqlHelpers.getManager {Schema=(NonBracketedName "dbo").Value; Name=(NonBracketedName "uspClaimsInsUpd").Value;} "drop me"
-|> Dump
 
 module SqlCmdExe =
     type DropBehavior =
@@ -154,6 +199,7 @@ let copyAllFiles sourceDir targetDir overwrite =
 
 module Process' = 
     open System.Collections.ObjectModel
+    open Railways
     type RunProcResult = {Outputs:string ObservableCollection; Errors: string ObservableCollection; }
 
     let private setupRunProc filename args startDir fBothOpt outF errorF = 
@@ -453,10 +499,15 @@ type DeployBehavior =
     //| RunSmo 
 
 
-
+open SqlHelpers
+open Railways
 //let sprocRefTest = {Name = NonBracketedName("sp_helptext").Value; Schema=NonBracketedName("dbo").Value}
 //(sprocRefTest,sprocRefTest.ToString()).Dump()
-
+//let sprocRefTest = SprocReference.TryCreate "dbo" "sp_helptext"
+//sprocRefTest.Dump()
+type SqlPackageError =
+    |DependencyBlocked of ObjectReference
+    |Other of string
 let runDeploy dbName deployBehavior = 
     // sql output folder and app output folder are now one and the same
     let projFolder = @"C:\TFS\PracticeManagement\dev\PracticeManagement\Db"
@@ -464,24 +515,13 @@ let runDeploy dbName deployBehavior =
     let outFolder = @"C:\TFS\PracticeManagement\dev\PracticeManagement\bin\sql"
     
     outFolder.Dump("dacpac folder")
-    let withSprocOnlyErrors fDeploy (sprocErrors:#seq<SprocReference*string>) :unit = 
-        let getDropSprocText (r:SprocReference) = 
-            if r.Schema |> string |> String.contains "[" || r.Name |> string |> String.contains "]" then raise <| invalidOp String.Empty
-            let sprocFullName = r |> string
-            
-            sprintf "IF EXISTS (select * from dbo.sysobjects where id = object_id(N'%s') and OBJECTPROPERTY(id, N'IsProcedure') = 1) \r\n  DROP PROCEDURE %s" sprocFullName sprocFullName
-            
+    let withSprocOnlyErrors fDeploy (sprocErrors:#seq<SprocManager>) : unit = 
         try
             // drop sprocs
             let dropResults = 
-//                let sprocErrors =
-                    sprocErrors
-                    |> Seq.map(fun (r,def) -> {R=r; Add=def; Drop=getDropSprocText r})
-//                let sprocErrors =
-//                    sprocErrors
-                    |> Seq.map (teeTuple (fun m -> m.Drop |> dc.ExecuteCommand))
-//                sprocErrors
-//                |> List.ofSeq()
+                sprocErrors
+                |> Seq.map (teeTuple (fun m -> m.Drop |> dc.ExecuteCommand))
+                |> List.ofSeq
             dropResults.Dump()
             // re-call deploy
             fDeploy()
@@ -489,13 +529,13 @@ let runDeploy dbName deployBehavior =
             // re-add sprocs
             let reAddsWithResults = 
                 sprocErrors
-                |> Seq.map(teeTuple (snd >> dc.ExecuteCommand))
+                |> Seq.map(teeTuple (fun m -> m.Add |> dc.ExecuteCommand))
                 |> List.ofSeq
             reAddsWithResults
             |> Seq.iter (function 
                 | _,1 -> () 
-                |((n,_),x) -> 
-                    n.Dump("Failed")
+                |(m,x) -> 
+                    m.Dump("Failed")
                     reAddsWithResults.Dump("full payload of sproc-readds")
                     failwithf "Add should have returned 1, but was %i instead" x
                 )
@@ -537,40 +577,35 @@ let runDeploy dbName deployBehavior =
                 if errors.Any() then
                     Util.OnDemand("Full output markdown", fun() -> displayText ([| allOutsAsMarkdown.ToString() |]) "Markdown").Dump()
                     let blocked72031Regex = "Error SQL72031: This deployment may encounter errors during execution because changes to (.*) are blocked by (.*)'s dependency in the target database."
-                    let tryGetSprocInfo input = 
+                    let getNamedFailure input = // return Seq<Some sprocInfo> so we can say if all errors are sproc errors
+                        let getObjectRef fullname =
+                            let schema, sprocName = fullname |> afterOrSelf "[" |> before "." |> beforeOrSelf "]", fullname |> after "." |> beforeOrSelf "]" |> afterOrSelf "["
+                            ObjectReference.TryCreate schema sprocName
                         match Regex.Match(input, blocked72031Regex) with
                         | reg when reg.Success -> 
-                            // warning: this table only contains the first 4000 chars, if it is longer it is truncated
-                            let routine = dc.INFORMATION_SCHEMA.ROUTINES.FirstOrDefault(fun r -> r.ROUTINE_TYPE = "Procedure" && not (r.ROUTINE_NAME.StartsWith("sp_")))
-                            if not <| isNull routine then
-                                
-                                Some (reg.Groups.[2].Value, routine)
-                            else None
-                        | _ -> None
-                    let getSprocRef fullname =
-                        let schema, sprocName = fullname |> afterOrSelf "[" |> before "." |> beforeOrSelf "]", fullname |> after "." |> beforeOrSelf "]" |> afterOrSelf "["
-                        { Schema = (NonBracketedName schema).Value; Name= (NonBracketedName sprocName).Value}
+                            reg.Groups.[2].Value
+                            |> getObjectRef
+                            |> function | Success r -> Success r | Failure getObjectError -> Failure [ input; getObjectError]
+                        | _ -> Failure [input]
                     
-                    let sprocErrors = bonafideErrors |> Seq.map tryGetSprocInfo |> List.ofSeq
-                    if sprocErrors |> Seq.forall (Option.isSome) then
+                    let sprocErrorsRail =
+                        bonafideErrors
+                        |> Seq.map getNamedFailure
+                        // have not verified it is actually a sproc yet, just an object reference
+                        |> Seq.map (Railways.bind (fun r -> 
+                                        let text = SqlHelpers.getIsSprocText r
+                                        try
+                                            if text |> dc.ExecuteCommand = 1 then Success r else Failure ["Item is not a sproc"]
+                                        with ex -> 
+                                            ex.Data.Add("sql",text)
+                                            reraise()
+                                    ))
+                        |> Seq.map (Railways.bind (fun r -> getManager r (getDropSprocText r) |> Railways.map2 id (fun s-> [s])))
+                        |> List.ofSeq
+                    if sprocErrorsRail |> Seq.forall (Railways.isSuccess) then
+                        let sprocErrors = sprocErrorsRail |> chooseSuccess
                         match fOnJustSprocErrorsOpt with
-                        | Some f ->
-                            // if all errors are of the sproc type, copy sproc definitions, drop them, retry deploy, and re-add them
-                            let mapSprocSize (sprocRef:SprocReference,def:string) = 
-                                if def.Length >= 3999 then // http://sqlblog.com/blogs/aaron_bertrand/archive/2011/11/08/t-sql-tuesday-24-dude-where-s-the-rest-of-my-procedure.aspx
-                                    sprocRef.ToString().Dump("big un") //  untested branch, has not been hit thus far
-                                    let query = 
-                                        sprintf "select object_definition([object_id]) from sys.procedures where object_schema_name([object_id]) = '%O' and name='%O'" 
-                                            sprocRef.Schema sprocRef.Name
-                                    sprocRef, (dc.ExecuteQuery<string>(query) |> Seq.head)
-                                else sprocRef, def
-                                
-                            let sprocErrors = 
-                                sprocErrors 
-                                |> Seq.choose id
-                                |> Seq.map(fun (name,routine) -> getSprocRef name, routine.ROUTINE_DEFINITION)
-                                |> Seq.map mapSprocSize
-                            f sprocErrors 
+                        | Some f -> f sprocErrors
                         | None -> failwithf "No options for dealing with sproc only errors %A" sprocErrors               
                         ()
                     else
