@@ -43,17 +43,23 @@ module Railways =
         match rx with
         | Success x -> f x |> Success
         | Failure x -> Failure x
-    
+
+    let ofOption failure xOpt = match xOpt with |Some x -> Success x |None -> Failure failure
+//    let tryPick x fItems = 
+//        fItems 
+//        |> Seq.tryPick (fun fAttempt -> match fAttempt x with |Success result -> Some result | Failure _ -> None)
+//        |> function | Some fResult -> Success fResult | None -> Failure [ "Could not find an item to pick"]
     let tryCatch f fEx x =
         try
             f x |> Success
         with ex -> fEx |> Failure
-
+    
     let map2 fSuccess fFailure rx =
         match rx with 
         | Success x -> fSuccess x |> Success
         | Failure x -> fFailure x |> Failure
     
+        
     // exception paths must use the same types
     let switch f1 f2 = f1 >> bind f2
     let isSuccess = function | Success _ -> true | _ -> false
@@ -83,8 +89,7 @@ module Seq =
       // While there are still elements, start a new group
       while running.Value do
         yield group() |> Seq.ofList }
-        
-        
+
 module SqlHelpers = 
     open Railways
     type NonBracketedName = NonBracketedName of string 
@@ -105,24 +110,30 @@ module SqlHelpers =
             | None, Some _ -> Failure (sprintf "Could not read schema '%s'" schema)
             | None, None -> Failure (sprintf "Could not read schema nor name '%s','%s'" schema name)
             
-    type private SprocDefHolder() =
+    type ObjectDefHolder() =
         member val Definition = String.Empty with get,set
         member val Object_Id = 0 with get,set
     
-    type SprocManager = {R:ObjectReference; Add: string; Drop: string; ObjectId:int}
+    type ObjectManager = {R:ObjectReference; Add: string; Drop: string; ObjectId:int}
     
     let getIsSprocText (r:ObjectReference) = 
         r
         |> string
         |> sprintf "select cast(case when EXISTS (select * from dbo.sysobjects where id = object_id(N'%s') and OBJECTPROPERTY(id, N'IsProcedure') = 1) then 1 else 0 end as bit)"
+    let getIsTriggerText (r:ObjectReference) = 
+        r
+        |> string
+        |> sprintf "select cast(case when EXISTS (select * from dbo.sysobjects where id = object_id(N'%s') and OBJECTPROPERTY(id, N'IsTrigger') = 1) then 1 else 0 end as bit)"
     let getDropSprocText (r:ObjectReference) : string = 
         r
         |> getIsSprocText
         |> fun test -> sprintf "IF %s \r\n  DROP PROCEDURE %s" test (r |> string)
+    let getDropTriggerText (r:ObjectReference) :string =
+        sprintf "disable trigger %s" (r |> string)
         
-    let getManager (sr:ObjectReference) drop = 
+    let tryGetMeta sr t= 
         let schema,name = sr.Schema |> string, sr.Name |> string
-        let text = sprintf @"select SPECIFIC_CATALOG,SPECIFIC_SCHEMA,SPECIFIC_NAME, 
+        sprintf @"select --SPECIFIC_CATALOG,SPECIFIC_SCHEMA,SPECIFIC_NAME, 
     case 
         when len(ROUTINE_DEFINITION) > 3999 then 
             object_definition([object_id]) 
@@ -132,16 +143,17 @@ from INFORMATION_SCHEMA.routines r
     join sys.procedures p
         on object_schema_name([object_id]) = r.Specific_schema and p.name = r.specific_name
     
-where r.ROUTINE_TYPE = 'PROCEDURE' AND r.SPECIFIC_SCHEMA = '%s' and r.specific_name = '%s'"
-                    schema name
-        dc.ExecuteQuery<SprocDefHolder>(text)
-        |> List.ofSeq
+where r.ROUTINE_TYPE = '%s' AND r.SPECIFIC_SCHEMA = '%s' and r.specific_name = '%s'"
+                                    t schema name
+        |> fun text -> text,dc.ExecuteQuery<ObjectDefHolder> text |> List.ofSeq
         |> function
-            | [x] -> Success {R=sr; Add=x.Definition; ObjectId=x.Object_Id; Drop=drop}
-            | [] -> Failure (sprintf "No definition found for %s using %s" name text)
-            | x -> failwithf "More than one result in seq %A" x
+            | _,[x] -> Success x
+            | text,[] -> Failure (sprintf "No definition found for %s using %s" name text)
+            | _,x -> failwithf "More than one result in seq %A" x
 
 module SqlCmdExe =
+    open Railways
+    open SqlHelpers
     type DropBehavior =
         |DoNotDropObjectsNotInSource
         |DropObjectsNotInSource
@@ -150,6 +162,41 @@ module SqlCmdExe =
         |ServerNameDbName of string * string
         |ConnectionString of string
         
+    type Handleable =
+        |Sproc
+        |Trigger
+    
+    type SqlPackageError =
+        |CanHandle of ObjectReference * Handleable
+        |Other of string
+//    type Manager = Handleable * ObjectManager
+
+    let getManagerRail (sr:ObjectReference) handleable = 
+        let schema,name = sr.Schema |> string, sr.Name |> string
+        match handleable with
+        | Sproc -> getDropSprocText sr, "P"
+        | Trigger -> getDropTriggerText sr, "TR"
+        |> fun (drop,t) -> 
+            match tryGetMeta sr t with 
+            | Success od -> Success {R=sr; Add=od.Definition; ObjectId=od.Object_Id; Drop=drop}
+            | Failure msg -> Failure msg
+
+            
+    let getIsHandleable (r:ObjectReference) : Handleable option=
+        let tryGetIs (handleable:Handleable) getExistsText : Handleable option =
+            try
+                if getExistsText |> dc.ExecuteCommand = 1 then Some handleable else None
+            with ex -> 
+                ex.Data.Add("sql",getExistsText)
+                reraise()
+        [
+            SqlHelpers.getIsSprocText >> tryGetIs Handleable.Sproc
+            SqlHelpers.getIsTriggerText >> tryGetIs Handleable.Trigger
+        ]
+        |> Seq.tryPick (fun f -> f r)
+        
+//        |> Option.map(fun h -> CanHandle(r,h))
+
     let cmdLine srcFile dropBehavior blockOnPossibleDataLoss environmentName targetBehavior = 
         let dropObjectsNotInSource,excludeOpt = 
             match dropBehavior with
@@ -505,9 +552,8 @@ open Railways
 //(sprocRefTest,sprocRefTest.ToString()).Dump()
 //let sprocRefTest = SprocReference.TryCreate "dbo" "sp_helptext"
 //sprocRefTest.Dump()
-type SqlPackageError =
-    |DependencyBlocked of ObjectReference
-    |Other of string
+
+    
 let runDeploy dbName deployBehavior = 
     // sql output folder and app output folder are now one and the same
     let projFolder = @"C:\TFS\PracticeManagement\dev\PracticeManagement\Db"
@@ -515,11 +561,11 @@ let runDeploy dbName deployBehavior =
     let outFolder = @"C:\TFS\PracticeManagement\dev\PracticeManagement\bin\sql"
     
     outFolder.Dump("dacpac folder")
-    let withSprocOnlyErrors fDeploy (sprocErrors:#seq<SprocManager>) : unit = 
+    let withHandleableOnlyErrors fDeploy (e:#seq<ObjectManager>) : unit = 
         try
             // drop sprocs
             let dropResults = 
-                sprocErrors
+                e
                 |> Seq.map (teeTuple (fun m -> m.Drop |> dc.ExecuteCommand))
                 |> List.ofSeq
             dropResults.Dump()
@@ -528,7 +574,7 @@ let runDeploy dbName deployBehavior =
         finally
             // re-add sprocs
             let reAddsWithResults = 
-                sprocErrors
+                e
                 |> Seq.map(teeTuple (fun m -> m.Add |> dc.ExecuteCommand))
                 |> List.ofSeq
             reAddsWithResults
@@ -536,17 +582,17 @@ let runDeploy dbName deployBehavior =
                 | _,1 -> () 
                 |(m,x) -> 
                     m.Dump("Failed")
-                    reAddsWithResults.Dump("full payload of sproc-readds")
+                    reAddsWithResults.Dump("full payload of object-readds")
                     failwithf "Add should have returned 1, but was %i instead" x
                 )
             //|> Seq.iter(fun (dc.ExecuteCommand
-        sprocErrors
-        |> dumpt "sprocs to remove"
+        e
+        |> dumpt "objects to disable or remove"
         |> ignore
         ()
-        
+
     //retry all but the onJustSprocErrorsOpt    
-    let useSqlPackageExe fOnJustSprocErrorsOpt  = 
+    let useSqlPackageExe fOnErrorsOpt  = 
         let cmd,args = 
             let targetDacPac = System.IO.Path.Combine(outFolder, dbName)
             let targetBehavior = TargetBehavior.ConnectionString dc.Connection.ConnectionString
@@ -577,7 +623,7 @@ let runDeploy dbName deployBehavior =
                 if errors.Any() then
                     Util.OnDemand("Full output markdown", fun() -> displayText ([| allOutsAsMarkdown.ToString() |]) "Markdown").Dump()
                     let blocked72031Regex = "Error SQL72031: This deployment may encounter errors during execution because changes to (.*) are blocked by (.*)'s dependency in the target database."
-                    let getNamedFailure input = // return Seq<Some sprocInfo> so we can say if all errors are sproc errors
+                    let getNamedFailure input : string * Railway<ObjectReference,_> = // return Seq<Some sprocInfo> so we can say if all errors are sproc errors
                         let getObjectRef fullname =
                             let schema, sprocName = fullname |> afterOrSelf "[" |> before "." |> beforeOrSelf "]", fullname |> after "." |> beforeOrSelf "]" |> afterOrSelf "["
                             ObjectReference.TryCreate schema sprocName
@@ -587,26 +633,38 @@ let runDeploy dbName deployBehavior =
                             |> getObjectRef
                             |> function | Success r -> Success r | Failure getObjectError -> Failure [ input; getObjectError]
                         | _ -> Failure [input]
+                        |> fun h -> input,h
                     
-                    let sprocErrorsRail =
+                    
+    
+                    let areErrorsHandleableRail : (string * (ObjectReference*Handleable) option) list =
                         bonafideErrors
                         |> Seq.map getNamedFailure
-                        // have not verified it is actually a sproc yet, just an object reference
-                        |> Seq.map (Railways.bind (fun r -> 
-                                        let text = SqlHelpers.getIsSprocText r
-                                        try
-                                            if text |> dc.ExecuteCommand = 1 then Success r else Failure ["Item is not a sproc"]
-                                        with ex -> 
-                                            ex.Data.Add("sql",text)
-                                            reraise()
-                                    ))
-                        |> Seq.map (Railways.bind (fun r -> getManager r (getDropSprocText r) |> Railways.map2 id (fun s-> [s])))
+                        // have not verified it is actually handleable yet, just an object reference
+                        |> Seq.map (fun (i,oRRail) -> 
+                                        oRRail 
+                                        |> function 
+                                            |Success o -> 
+                                                getIsHandleable o 
+                                                |> function 
+                                                    | Some h -> i,(Some (o,h))
+                                                    | None -> i,None 
+                                            |Failure _ -> i,None
+                                    )
+                                        
                         |> List.ofSeq
-                    if sprocErrorsRail |> Seq.forall (Railways.isSuccess) then
-                        let sprocErrors = sprocErrorsRail |> chooseSuccess
-                        match fOnJustSprocErrorsOpt with
-                        | Some f -> f sprocErrors
-                        | None -> failwithf "No options for dealing with sproc only errors %A" sprocErrors               
+                    ()
+                    if areErrorsHandleableRail |> Seq.forall (snd >> Option.isSome) then
+                        let handleableErrors : (ObjectReference*Handleable) seq = areErrorsHandleableRail |> Seq.map snd |> Seq.choose id
+                        match fOnErrorsOpt with
+                        | Some f -> 
+                            handleableErrors 
+                            |> Seq.map (fun (o,h) -> getManagerRail o h) 
+                            |> fun errorManagersRail -> 
+                                if errorManagersRail |> Seq.forall isSuccess then 
+                                    errorManagersRail |> Railways.chooseSuccess |> f 
+                                else errorManagersRail |> Seq.filter (Railways.isSuccess >> not) |> failwithf "Some handleables failed: %A"
+                        | None -> failwithf "No options for dealing with handleable errors %A" handleableErrors               
                         ()
                     else
                         bonafideErrors.Dump()
@@ -617,13 +675,13 @@ let runDeploy dbName deployBehavior =
                     liveMessageStream.OnCompleted()
         with ex -> 
                 ex.Message.Dump()
-                displayText [| ex.Message |]
+                displayText [| ex.Message |] "Failure"
                 liveMessageStream.OnError(ex)
                 reraise()
                 
     // avoiding any possibility of infinite recursion
     
-    let useSqlPackageWithSprocRetry ()= useSqlPackageExe (Some(withSprocOnlyErrors (fun () -> useSqlPackageExe None)))
+    let useSqlPackageWithSprocRetry ()= useSqlPackageExe (Some(withHandleableOnlyErrors (fun () -> useSqlPackageExe None)))
     let buildBehavior () = 
         
         // clean output dir before build
