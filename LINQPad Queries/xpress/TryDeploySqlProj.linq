@@ -27,22 +27,26 @@ let (|StartsWithI|_|) (toMatch:string) (x:string) =
     if not <| isNull x && not <| isNull toMatch && toMatch.Length > 0 && x.StartsWith(toMatch, StringComparison.InvariantCultureIgnoreCase) then
         Some () 
     else None
+    
 module Railways =
     type Railway<'t,'tError> =
         | Success of 't
         | Failure of 'tError
-    let bind f x = 
-        match x with
-        | Success x -> f x
-        | Failure x -> Failure x
-    let bind2 fSuccessToRail fFailure x = 
-        match x with 
-        | Success x -> fSuccessToRail x
-        | Failure x -> fFailure x
-    let map f rx = 
+    /// rail -> one track function lifted to pretend it is two track
+    let map f1to1 rx =  
         match rx with
-        | Success x -> f x |> Success
+        | Success s -> f1to1 s |> Success
         | Failure x -> Failure x
+    /// rail -> one-in two out function -> outRail 
+    let bind f1to2 x =
+        match x with
+        | Success s -> f1to2 s
+        | Failure x -> Failure x
+    /// rail-in to two different functions that have the same return type     
+    let bind2 fSuccessToRail fFailure rx = 
+        match rx with 
+        | Success s -> fSuccessToRail s
+        | Failure x -> fFailure x
 
     let ofOption failure xOpt = match xOpt with |Some x -> Success x |None -> Failure failure
 //    let tryPick x fItems = 
@@ -53,18 +57,24 @@ module Railways =
         try
             f x |> Success
         with ex -> fEx |> Failure
-    
-    let map2 fSuccess fFailure rx =
+    /// rail-in -> map both the success and failure types to new rail (id on both should work)
+    let map2 fSuccess1to1 fFailure1to1 rx =
         match rx with 
-        | Success x -> fSuccess x |> Success
-        | Failure x -> fFailure x |> Failure
+        | Success s -> fSuccess1to1 s |> Success
+        | Failure x -> fFailure1to1 x |> Failure
     
         
     // exception paths must use the same types
+    
     let switch f1 f2 = f1 >> bind f2
     let isSuccess = function | Success _ -> true | _ -> false
-    let chooseSuccess = Seq.choose(function |Success x -> Some x | _ -> None)
-    
+    let toSuccessOption = function | Success s -> Some s |Failure _ -> None
+    let toFailureOption = function | Success _ -> None | Failure s -> Some s
+    let forAllF fAll items = 
+        let items = items |> List.ofSeq
+        if items |> Seq.forall fAll then 
+            items |> Seq.choose toSuccessOption |> Success
+        else items |> Seq.choose toFailureOption |> Failure
     
 module Seq =
   /// Iterates over elements of the input sequence and groups adjacent elements.
@@ -121,9 +131,8 @@ module SqlHelpers =
         |> string
         |> sprintf "select cast(case when EXISTS (select * from dbo.sysobjects where id = object_id(N'%s') and OBJECTPROPERTY(id, N'IsProcedure') = 1) then 1 else 0 end as bit)"
     let getIsTriggerText (r:ObjectReference) = 
-        r
-        |> string
-        |> sprintf "select cast(case when EXISTS (select * from dbo.sysobjects where id = object_id(N'%s') and OBJECTPROPERTY(id, N'IsTrigger') = 1) then 1 else 0 end as bit)"
+        let text = string r |> sprintf "select cast(case when EXISTS (select * from dbo.sysobjects where id = object_id(N'%s') and OBJECTPROPERTY(id, N'IsTrigger') = 1) then 1 else 0 end as bit)"
+        text
     let getDropSprocText (r:ObjectReference) : string = 
         r
         |> getIsSprocText
@@ -182,19 +191,35 @@ module SqlCmdExe =
             | Failure msg -> Failure msg
 
             
-    let getIsHandleable (r:ObjectReference) : Handleable option=
-        let tryGetIs (handleable:Handleable) getExistsText : Handleable option =
-            try
-                if getExistsText |> dc.ExecuteCommand = 1 then Some handleable else None
-            with ex -> 
-                ex.Data.Add("sql",getExistsText)
-                reraise()
-        [
-            SqlHelpers.getIsSprocText >> tryGetIs Handleable.Sproc
-            SqlHelpers.getIsTriggerText >> tryGetIs Handleable.Trigger
-        ]
-        |> Seq.tryPick (fun f -> f r)
-        
+    let getIsHandleable (r:ObjectReference) : Railway<ObjectReference*Handleable,string list>=
+        let attemptResults =
+            let tryGetIs (handleable:Handleable) getExistsText : Handleable option =
+                try
+                    if getExistsText |> dc.ExecuteCommand = 1 then 
+                        Some handleable 
+                    else None
+                with ex -> 
+                    ex.Data.Add("sql",getExistsText)
+                    reraise()
+            let fAttempts =
+                [   //let teeTuple f x = x, f x
+                    SqlHelpers.getIsSprocText >> teeTuple (tryGetIs Handleable.Sproc)
+                    SqlHelpers.getIsTriggerText >> teeTuple (tryGetIs Handleable.Trigger)
+                ]
+            let fAttemptResults = fAttempts |> Seq.map (fun f -> f r)
+            fAttemptResults
+            |> Seq.map (fun (text:string,hOpt:Handleable option)  ->
+                    match hOpt with 
+                    | Some h -> Success h 
+                    | None -> Failure [sprintf "Could not locate a handler for %A" r.Name.Value; text])
+            |> List.ofSeq
+        match attemptResults |> Seq.tryFind isSuccess with
+        | Some (Success h) -> Success (r,h)
+        | None -> 
+            let failures = attemptResults |> Seq.choose Railways.toFailureOption
+            failures |> Seq.collect id |> List.ofSeq |> Failure
+            
+    
 //        |> Option.map(fun h -> CanHandle(r,h))
 
     let cmdLine srcFile dropBehavior blockOnPossibleDataLoss environmentName targetBehavior = 
@@ -623,46 +648,34 @@ let runDeploy dbName deployBehavior =
                 if errors.Any() then
                     Util.OnDemand("Full output markdown", fun() -> displayText ([| allOutsAsMarkdown.ToString() |]) "Markdown").Dump()
                     let blocked72031Regex = "Error SQL72031: This deployment may encounter errors during execution because changes to (.*) are blocked by (.*)'s dependency in the target database."
-                    let getNamedFailure input : string * Railway<ObjectReference,_> = // return Seq<Some sprocInfo> so we can say if all errors are sproc errors
+                    let trygetObjectR rawErrorLine : Railway<ObjectReference,string list> = // return Seq<Some sprocInfo> so we can say if all errors are sproc errors
                         let getObjectRef fullname =
                             let schema, sprocName = fullname |> afterOrSelf "[" |> before "." |> beforeOrSelf "]", fullname |> after "." |> beforeOrSelf "]" |> afterOrSelf "["
                             ObjectReference.TryCreate schema sprocName
-                        match Regex.Match(input, blocked72031Regex) with
+                        match Regex.Match(rawErrorLine, blocked72031Regex) with
                         | reg when reg.Success -> 
                             reg.Groups.[2].Value
                             |> getObjectRef
-                            |> function | Success r -> Success r | Failure getObjectError -> Failure [ input; getObjectError]
-                        | _ -> Failure [input]
-                        |> fun h -> input,h
+                            |> function | Success r -> Success r | Failure getObjectError -> Failure [ rawErrorLine; getObjectError]
+                        | _ -> Failure ["did not match Regex";rawErrorLine]
+                        //|> fun h -> rawErrorLine,h
                     
-                    
-    
-                    let areErrorsHandleableRail : (string * (ObjectReference*Handleable) option) list =
+                    let getisHandleable2 = bind getIsHandleable
+                    // should include all errors, handleable and not
+                    let areErrorsHandleableRail : Railway<ObjectReference*Handleable,_> list =
                         bonafideErrors
-                        |> Seq.map getNamedFailure
-                        // have not verified it is actually handleable yet, just an object reference
-                        |> Seq.map (fun (i,oRRail) -> 
-                                        oRRail 
-                                        |> function 
-                                            |Success o -> 
-                                                getIsHandleable o 
-                                                |> function 
-                                                    | Some h -> i,(Some (o,h))
-                                                    | None -> i,None 
-                                            |Failure _ -> i,None
-                                    )
-                                        
+                        |> Seq.map (trygetObjectR >> bind getIsHandleable)
                         |> List.ofSeq
                     ()
-                    if areErrorsHandleableRail |> Seq.forall (snd >> Option.isSome) then
-                        let handleableErrors : (ObjectReference*Handleable) seq = areErrorsHandleableRail |> Seq.map snd |> Seq.choose id
+                    if areErrorsHandleableRail |> Seq.forall isSuccess then
+                        let handleableErrors : (ObjectReference*Handleable) seq = areErrorsHandleableRail |> Seq.map (bind2 Some (fun _ -> None)) |> Seq.choose id
                         match fOnErrorsOpt with
                         | Some f -> 
                             handleableErrors 
                             |> Seq.map (fun (o,h) -> getManagerRail o h) 
                             |> fun errorManagersRail -> 
                                 if errorManagersRail |> Seq.forall isSuccess then 
-                                    errorManagersRail |> Railways.chooseSuccess |> f 
+                                    errorManagersRail |> Seq.map (bind2 Some (fun _ -> None)) |> Seq.choose id|> f 
                                 else errorManagersRail |> Seq.filter (Railways.isSuccess >> not) |> failwithf "Some handleables failed: %A"
                         | None -> failwithf "No options for dealing with handleable errors %A" handleableErrors               
                         ()
