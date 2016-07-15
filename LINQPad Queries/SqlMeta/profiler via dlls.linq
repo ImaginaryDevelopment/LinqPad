@@ -71,9 +71,19 @@ let runTrace () =
     trace.InitializeAsReader(ci, tf)
     try
         while(trace.Read()) do
-            "dumping a trace!".Dump()
-            let traceItems = [0..trace.FieldCount-1] |> Seq.map(fun i -> trace.GetName(i), trace.GetValue(i)) |> Array.ofSeq
-            traceItems.Dump("traceItems!")
+            //"dumping a trace!".Dump()
+            let getValueStrOrNull i = 
+                trace.GetValue i
+                |> fun v -> if isNull v then null else v |> string
+            let rowDict = [0..trace.FieldCount-1] |> Seq.map(fun i -> trace.GetName(i), getValueStrOrNull i) |> dict
+            try
+                match rowDict.["EventClass"] with
+                | "ExistingConnection" as x -> Util.OnDemand(x, fun () -> rowDict).Dump()
+                | _ -> rowDict.Dump()
+            with ex -> 
+                rowDict.Dump("traceItems!")    
+            ()
+            
             //trace.FieldCount.Dump("trace")
     finally 
         trace.Stop()
