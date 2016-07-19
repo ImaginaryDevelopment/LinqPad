@@ -94,7 +94,7 @@ module SqlCmdExe =
             let failures = attemptResults |> Seq.choose Railways.toFailureOption
             failures |> Seq.collect id |> List.ofSeq |> Failure
 
-    let cmdLine srcFile dropBehavior blockOnPossibleDataLoss environmentName targetBehavior = 
+    let cmdLine srcFile dropBehavior blockOnPossibleDataLoss environmentName targetBehavior includeTransactionalScripts = 
         let dropObjectsNotInSource,excludeOpt = 
             match dropBehavior with
             | DoNotDropObjectsNotInSource -> false, None
@@ -103,6 +103,8 @@ module SqlCmdExe =
             | ServerNameDbName (targetServer,targetDbName) ->
                 sprintf """/TargetDatabaseName:%s%s/TargetServerName:%s%s""" targetDbName Environment.NewLine targetServer Environment.NewLine
             | ConnectionString cs -> sprintf """%s/tcs:"%s"%s""" Environment.NewLine cs Environment.NewLine
+        let otherOptionText = match includeTransactionalScripts with | true -> sprintf "/p:IncludeTransactionalScripts=True" | false -> String.Empty
+        
         // sql package.ExecutionContext command line reference: https://msdn.microsoft.com/en-us/hh550080(v=vs.103).aspx
         let cmd = @"""C:\Program Files (x86)\Microsoft Visual Studio 14.0\Common7\IDE\Extensions\Microsoft\SQLDB\DAC\130\sqlpackage.exe"""
         sprintf """ /Action:Publish 
@@ -112,7 +114,8 @@ module SqlCmdExe =
                     /p:GenerateSmartDefaults=true 
                     /p:BlockOnPossibleDataLoss=%b
                     /p:ExcludeObjectTypes=Certificates;Credentials;DatabaseRoles;Filegroups;FileTables;LinkedServerLogins;LinkedServers;Logins;ServerAuditSpecifications;ServerRoleMembership;ServerRoles;ServerTriggers;Users
-                    /Variables:Environment=%s""" srcFile targetInfo dropObjectsNotInSource blockOnPossibleDataLoss environmentName
+                    %s
+                    /Variables:Environment=%s""" srcFile targetInfo dropObjectsNotInSource blockOnPossibleDataLoss otherOptionText environmentName
         |> replace Environment.NewLine String.Empty
         |> fun args -> cmd,args
 
@@ -272,11 +275,6 @@ type DeployBehavior =
 
 open SqlHelpers
 open Railways
-//let sprocRefTest = {Name = NonBracketedName("sp_helptext").Value; Schema=NonBracketedName("dbo").Value}
-//(sprocRefTest,sprocRefTest.ToString()).Dump()
-//let sprocRefTest = SprocReference.TryCreate "dbo" "sp_helptext"
-//sprocRefTest.Dump()
-
     
 let runDeploy dbName deployBehavior = 
     "running deploy".Dump()
@@ -287,12 +285,12 @@ let runDeploy dbName deployBehavior =
     
     outFolder.Dump("dacpac folder")
     
-    let runSqlPackageExe () = 
+    let runSqlPackageExe includeTransactionalScripts = 
         let cmd,args = 
             let targetDacPac = System.IO.Path.Combine(outFolder, dbName)
             let targetBehavior = TargetBehavior.ConnectionString dc.Connection.ConnectionString
-            cmdLine targetDacPac DoNotDropObjectsNotInSource true Environment.MachineName targetBehavior
-        (cmd,args).Dump()
+            cmdLine targetDacPac DoNotDropObjectsNotInSource true Environment.MachineName targetBehavior includeTransactionalScripts
+        (Environment.CurrentDirectory, cmd,args).Dump("SqlPackageSetup")
         use liveMessageStream = 
             let r = new System.Reactive.Subjects.BehaviorSubject<String>(String.Empty)
             r.DumpLatest() |> ignore
@@ -315,8 +313,8 @@ let runDeploy dbName deployBehavior =
         let mutable success = false
         try
                 let _,errors = Macros.ProcessMacros.runProcSync cmd args None (Some (fun isError msg -> fBoth isError msg; liveMessageStream.OnNext msg)) None None
+                Util.OnDemand("Full output markdown", fun() -> displayText ([| allOutsAsMarkdown.ToString() |]) "Markdown").Dump()
                 if errors.Any() then
-                    Util.OnDemand("Full output markdown", fun() -> displayText ([| allOutsAsMarkdown.ToString() |]) "Markdown").Dump()
                     Failure (bonafideErrors |> List.ofSeq)
                 else Success ()
         with ex -> 
@@ -327,101 +325,62 @@ let runDeploy dbName deployBehavior =
                 
                 
     //retry all but the fOnErrorsOpt    
-    let useSqlPackageExe fOnErrorsOpt  = 
-        let cmd,args = 
-            let targetDacPac = System.IO.Path.Combine(outFolder, dbName)
-            let targetBehavior = TargetBehavior.ConnectionString dc.Connection.ConnectionString
-            cmdLine targetDacPac DoNotDropObjectsNotInSource true Environment.MachineName targetBehavior
-        (cmd,args).Dump()
-        use liveMessageStream = 
-            let r = new System.Reactive.Subjects.BehaviorSubject<String>(String.Empty)
-            r.DumpLatest() |> ignore
-            r
-        let allOutsAsMarkdown = StringBuilder()
-        let append msg (sb:StringBuilder) = sb.AppendLine msg |> ignore
-        let bonafideErrors = List<string>()
-        let fBoth isError msg = // markdown
-            if not <| String.IsNullOrWhiteSpace msg then
-                if isError then 
-                    let leadingStarsAndSpace = @"^[* \t]*"
-                    let content = @"(\w.*)"
-                    let markdowned = Regex.Replace(msg,sprintf "(%s)(%s)[ \t]*" leadingStarsAndSpace content,@"$1**$2**",RegexOptions.Multiline)
-                    if msg.StartsWith "Error SQL" then
-                        bonafideErrors.Add msg
-                    allOutsAsMarkdown |> append markdowned 
-                else 
-                    allOutsAsMarkdown |> append msg
-        
-        let mutable success = false
-        try
-                let _,errors = Macros.ProcessMacros.runProcSync cmd args None (Some (fun isError msg -> fBoth isError msg; liveMessageStream.OnNext msg)) None None
-                if errors.Any() then
-                    Util.OnDemand("Full output markdown", fun() -> displayText ([| allOutsAsMarkdown.ToString() |]) "Markdown").Dump()
-                    let blocked72031Regex = "Error SQL72031: This deployment may encounter errors during execution because changes to (.*) are blocked by (.*)'s dependency in the target database."
-                    let trygetObjectR rawErrorLine : Railway<ObjectReference,string list> = // return Seq<Some sprocInfo> so we can say if all errors are sproc errors
-                        let getObjectRef fullname =
-                            let schema, sprocName = fullname |> afterOrSelf "[" |> before "." |> beforeOrSelf "]", fullname |> after "." |> beforeOrSelf "]" |> afterOrSelf "["
-                            ObjectReference.TryCreate schema sprocName
-                        match Regex.Match(rawErrorLine, blocked72031Regex) with
-                        | reg when reg.Success -> 
-                            getObjectRef reg.Groups.[2].Value
-                            |> function 
-                                |Success violated -> 
-                                    //(rawErrorLine, violated).Dump("tryGetObjRef success")
-                                    Success violated
-                                | Failure getObjectError -> Failure [ rawErrorLine; getObjectError]
-                        | _ -> Failure ["did not match Regex";rawErrorLine]
-                        //|> fun h -> rawErrorLine,h
-                    
-                    let getisHandleable2 = bind getIsHandleable
-                    // should include all errors, handleable and not
-                    let areErrorsHandleableRail : Railway<ObjectReference*Handleable,_> list =
-                        bonafideErrors
-                        |> Seq.map (trygetObjectR >> bind getIsHandleable)
-                        |> List.ofSeq
-                    areErrorsHandleableRail.Dump()
-                    ()
-                    if areErrorsHandleableRail |> Seq.forall isSuccess then
-                        let handleableErrors = //: (ConflictedObjectReference*Handleable) list = 
-                            areErrorsHandleableRail 
-                            |> Seq.map (bind2 Some (fun _ -> None)) 
-                            |> Seq.choose id 
-                            
-                            |> List.ofSeq
-                        let errorManagersRail = handleableErrors |> Seq.map (fun (r,h) -> r,h,getManagerRail r h) |> List.ofSeq
-                        match fOnErrorsOpt with
-                        | Some f -> 
-//                            if errorManagersRail |> Seq.forall isSuccess then 
-//                                errorManagersRail |> Seq.map (bind2 Some (fun _ -> None)) |> Seq.choose id|> f 
-//                            else errorManagersRail |> Seq.filter (Railways.isSuccess >> not) |> failwithf "Some handleables failed: %A"
-                            () // retry/`automatic drop and re-add` isn't working properly anyhow
-                        | None -> 
-                            ()
-                            // drop/disablers with exist clauses
-                            errorManagersRail 
-                            |> Seq.map (fun (_,_, managerRail) -> match managerRail with | Success m -> m.Drop | Failure s -> failwithf "%s" s)//) match handler with | Trigger -> getDisableTriggerWithExists cor.Violated od |Sproc -> getDropSprocText cor.Violated)
-                            |> fun s -> String.Join("\r\nGO\r\n\r\n",s)
-                            |> dumpt "disable/drops"
-                            |> ignore
-
-                            Util.OnDemand("errorManagersRail", fun () -> errorManagersRail) |> Dump |> ignore
-                            Util.OnDemand("handleableErrors", fun () -> handleableErrors) |> Dump  |> ignore
-                            ()
-                            //failwithf "No options for dealing with handleable errors %A" handleableErrors               
-                        ()
-                    else
+    let useSqlPackageExe includeTransactionalScripts = 
+        let result = runSqlPackageExe includeTransactionalScripts
+        match result with 
+        |Success _ -> ()
+        |Failure errorList ->
+            if errorList.Any() then
                         
-                        bonafideErrors.Dump()
-                    //errors.Dump("errors found")
-                    //displayText (errors |> Array.ofSeq) "Errors"
+                let blocked72031Regex = "Error SQL72031: This deployment may encounter errors during execution because changes to (.*) are blocked by (.*)'s dependency in the target database."
+                let trygetObjectR rawErrorLine : Railway<ObjectReference,string list> = // return Seq<Some sprocInfo> so we can say if all errors are sproc errors
+                    let getObjectRef fullname =
+                        let schema, sprocName = fullname |> afterOrSelf "[" |> before "." |> beforeOrSelf "]", fullname |> after "." |> beforeOrSelf "]" |> afterOrSelf "["
+                        ObjectReference.TryCreate schema sprocName
+                    match Regex.Match(rawErrorLine, blocked72031Regex) with
+                    | reg when reg.Success -> 
+                        getObjectRef reg.Groups.[2].Value
+                        |> function 
+                            |Success violated -> 
+                                //(rawErrorLine, violated).Dump("tryGetObjRef success")
+                                Success violated
+                            | Failure getObjectError -> Failure [ rawErrorLine; getObjectError]
+                    | _ -> Failure ["did not match Regex";rawErrorLine]
+                    //|> fun h -> rawErrorLine,h
+                
+                let getisHandleable2 = bind getIsHandleable
+                // should include all errors, handleable and not
+                let areErrorsHandleableRail : Railway<ObjectReference*Handleable,_> list =
+                    errorList
+                    |> Seq.map (trygetObjectR >> bind getIsHandleable)
+                    |> List.ofSeq
+                areErrorsHandleableRail.Dump()
+                ()
+                if areErrorsHandleableRail |> Seq.forall isSuccess then
+                    let handleableErrors = //: (ConflictedObjectReference*Handleable) list = 
+                        areErrorsHandleableRail 
+                        |> Seq.map (bind2 Some (fun _ -> None)) 
+                        |> Seq.choose id 
+                        
+                        |> List.ofSeq
+                    let errorManagersRail = handleableErrors |> Seq.map (fun (r,h) -> r,h,getManagerRail r h) |> List.ofSeq
+                    
+                        // drop/disablers with exist clauses
+                    errorManagersRail 
+                    |> Seq.map (fun (_,_, managerRail) -> match managerRail with | Success m -> m.Drop | Failure s -> failwithf "%s" s)//) match handler with | Trigger -> getDisableTriggerWithExists cor.Violated od |Sproc -> getDropSprocText cor.Violated)
+                    |> fun s -> String.Join("\r\nGO\r\n\r\n",s)
+                    |> dumpt "disable/drops"
+                    |> ignore
+
+                    Util.OnDemand("errorManagersRail", fun () -> errorManagersRail) |> Dump |> ignore
+                    Util.OnDemand("handleableErrors", fun () -> handleableErrors) |> Dump  |> ignore
+                    ()
+                    //failwithf "No options for dealing with handleable errors %A" handleableErrors               
+                    ()
                 else
-                    success <- true
-                    liveMessageStream.OnCompleted()
-        with ex -> 
-                ex.Message.Dump()
-                displayText [| ex.Message |] "Failure"
-                liveMessageStream.OnError(ex)
-                reraise()
+                    errorList.Dump()
+                        //errors.Dump("errors found")
+                        //displayText (errors |> Array.ofSeq) "Errors"
                 
     // avoiding any possibility of infinite recursion
     
@@ -443,7 +402,7 @@ let runDeploy dbName deployBehavior =
         
     let useSqlPackageExe () = 
             //useSqlPackageWithSprocRetry()
-            useSqlPackageExe None
+            useSqlPackageExe true
     match deployBehavior with
     | BuildThenUseSqlPackageExeWithPreCompare ->
         buildBehavior()
