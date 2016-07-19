@@ -80,7 +80,11 @@ let tfAdd basePath items =
     items |> Seq.iter (addItem >> readOutputs)
 
 let tfCheckout basePath items =
-    let checkout item = sprintf "checkout %s" item |> tf basePath
+    let getCheckoutText item =
+        let text = sprintf "checkout %s" item  
+        printfn "tfCheckout: '%s'" text
+        text
+    let runCheckout item = getCheckoutText item |> tf basePath
     let readOutputs (o,e) = 
         if e|> Seq.exists (fun e' -> String.IsNullOrWhiteSpace( e' ) = false) then
             o |> Seq.iter (printfn "tfCheckout:%s")
@@ -89,7 +93,7 @@ let tfCheckout basePath items =
         elif o |> Seq.exists( fun o' -> String.IsNullOrWhiteSpace( o' ) = false) then
             o |> Seq.iter (printfn "tfCheckout:%s")
         else () // no non-whitespace characters in output streams
-    items |> Seq.iter (checkout >> readOutputs)
+    items |> Seq.iter (runCheckout >> readOutputs)
 
 type Diagnosis = {Code:string;Desc:string;IsBillable:bool; Unextended:string}
 
