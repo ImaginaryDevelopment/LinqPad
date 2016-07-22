@@ -1,0 +1,81 @@
+﻿<#@ template debug="True" language="C#" hostspecific="True" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="System.Data" #>
+<#@ assembly name="System.Data.Entity.Design" #>
+<#@ import namespace="System.Globalization" #>
+<#@ import namespace="System.IO" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.Data.Entity.Design.PluralizationServices" #>
+<#@ output extension=".txt" #>
+<# 
+    DTE Dte; 
+    var doMultiFile=true;
+    //this relies on the nuget packages: T4EnvDte and T4MultiFile
+#>
+<#@ include file="MultipleOutputHelper.ttinclude" #>
+<#@ include file="EnvDteHelper.ttinclude"#>
+<#@ include file="SqlGeneration.ttinclude" #> 
+<# 
+    var manager = Manager.Create(Host, GenerationEnvironment);
+    var projects = RecurseSolutionProjects(Dte); 
+
+    var targetProjectName = "ApplicationDatabase";
+    var targetInsertRelativePath = @"Scripts\Post-Deployment\TableInserts\Accounting1.5\AccountingGeneratorInserts.sql";
+    var toGen = new [] 
+        {
+            new TableInfo{
+                Schema="Accounts",
+                Name="Account",
+                Columns = new []{
+                    new ColumnInfo{ Name = "AccountID", Type = typeof(int), Attributes = new []{"identity","primary key"}},
+                    new ColumnInfo{ Name = "AccountTypeId", Type = typeof(string), Length=50,
+                        FKey= new FKeyInfo{Schema="Accounts",Table="AccountType",Column="AccountTypeId"},
+                        GenerateReferenceTable=true,
+                        ReferenceValuesWithComment = new []{"Patient", "Payer", "System", "ThirdParty"}.ToDictionary(f => f, f => (string)null),
+                    },
+                    new ColumnInfo{ Name = "Name", Type = typeof(string), Length=150, IsUnique= true}, // make unique constraint
+                    CreateFKeyedColumn<int>("PayerID", new FKeyInfo{ Schema="dbo", Table="Payers" }, /* allowNull: */ true),
+
+                }
+            },
+            new TableInfo{
+                Schema="Accounts",
+                Name="JournalEntry",
+                Columns = new []{
+                    new ColumnInfo{ Name = "JournalEntryID", Type = typeof(int), Attributes = new []{"identity","primary key"}},
+                    CreateFKeyedColumn<int>("CreditAccountID", new FKeyInfo{Schema="Accounts",Table="Account",Column="AccountID"}),
+                    CreateFKeyedColumn<int>("DebitAccountID", new FKeyInfo{Schema="Accounts",Table="Account",Column="AccountID"}),
+                    new ColumnInfo{ Name = "Amount", Type = typeof(decimal), Precision=12,Scale=2},
+                    
+                    CreateFKeyedColumn<int>("ChargeID", new FKeyInfo{Schema="dbo",Table="Charge"}, /* allowNull: */ true),
+                    CreateFKeyedColumn<int>("PaymentID", new FKeyInfo{Schema="dbo",Table="Payment"}, /* allowNull: */ true),
+                    CreateFKeyedColumn<int>("PaymentItemID", new FKeyInfo{Schema="Payments",Table="PaymentItem"}, /* allowNull: */ true),
+                    CreateFKeyedColumn<int>("PatientID", new FKeyInfo{Schema="dbo",Table="Patients"}, /* allowNull: */ true),
+                    CreateFKeyedColumn<int>("AppointmentID", new FKeyInfo{Schema="dbo",Table="Appointments"}, /* allowNull: */ true),
+
+                    CreateUserIdColumn(null, true, "null to allow system inserts/adjustments that aren't done by a user"),
+                    new ColumnInfo{
+                        Name="Entered", Type = typeof(DateTime),
+                    },
+                    new ColumnInfo{
+                        Name="Comments", Type = typeof(string),
+                        UseMax=true,
+                        AllowNull=true,
+                    },
+                }
+            },
+        };
+#>
+Main File Output
+<# foreach(var proj in projects){ #>
+<#= proj.Name#>
+<# } #>
+<#
+	var targetProject = projects.First(p => p.Name==targetProjectName);
+    var targetProjectFolder = Path.GetDirectoryName(targetProject.FullName);
+    GenerateTablesAndReferenceTables(manager, targetProject, targetProjectFolder, toGen);
+    GenerateAccountingInserts(manager, targetProject, targetProjectFolder, toGen, null, targetInsertRelativePath);
+    manager.Process(doMultiFile); 
+#>

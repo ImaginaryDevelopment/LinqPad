@@ -1,0 +1,584 @@
+﻿<#@ assembly name="System.Core" #>
+<#@ assembly name="System.Data" #>
+<#@ assembly name="System.Data.Entity.Design" #>
+<#@ import namespace="System.Globalization" #>
+<#@ import namespace="System.IO" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.Data.Entity.Design.PluralizationServices" #>
+<# EnvDTE.DTE Dte; 
+    //this relies on the nuget packages: T4EnvDte and T4MultiFile
+#>
+<#@ include file="MultipleOutputHelper.ttinclude" #>
+<#@ include file="EnvDteHelper.ttinclude" #>
+Main File Output(DataModelToF.ttinclude)
+<#+ 
+
+static Manager Generate(ITextTemplatingEngineHost host, EnvDTE.DTE dte, StringBuilder generationEnvironment, string targetProjectName, IEnumerable<TableInfo> tables, IDictionary<string,IEnumerable<string>> columnBlacklistOpt, bool generateValueRecords, IEnumerable<string> measures, IEnumerable<string> measureBlacklist, string cString, bool includeNonDboSchemaInNamespace, string targetNamespace)
+{ 
+    generationEnvironment.AppendLine("");
+    generationEnvironment.AppendLine(host.TemplateFile);
+    generationEnvironment.AppendLine("");
+
+    Action<int,string> appendLine = (indentLevels, text) => generationEnvironment.AppendLine(String.Join(string.Empty, Enumerable.Repeat("    ", indentLevels)) + text);
+    var useOptions = false;
+    var manager = Manager.Create(host, generationEnvironment);
+
+    var projects = RecurseSolutionProjects(dte);
+    var targetProject = projects.First(p => p.Name == targetProjectName);
+    var targetProjectFolder = Path.GetDirectoryName(targetProject.FullName);
+    var pluralizer = PluralizationService.CreateService(new CultureInfo("en")); // https://msdn.microsoft.com/en-us/library/system.data.entity.design.pluralizationservices.pluralizationservice(v=vs.110).aspx
+
+    generationEnvironment.AppendLine("Main file output");
+    foreach(var p in projects)
+    {
+        string name = null;
+        string fullName = null;
+        try
+        {
+            name = p.Name;
+        }
+        catch (Exception ex) { name = ex.Message; }
+        try
+        {
+            fullName = p.FullName;
+        }
+        catch (Exception ex){ fullName = ex.Message; }
+
+        appendLine(1, name + " " + fullName);
+    }
+
+    generationEnvironment.AppendLine("");
+    generationEnvironment.AppendLine("Tables");
+    foreach(var t in tables)
+    {
+        appendLine(1, t.Schema + "."+ t.Table);
+    }
+    generationEnvironment.AppendLine("");
+
+    using(var cn = new System.Data.SqlClient.SqlConnection(cString))
+    {
+        cn.Open();
+        foreach(var tableInfo in tables)
+        {
+            var typeName = pluralizer.Singularize(tableInfo.Table);
+            appendLine(0, "Starting table " + tableInfo.Table + " as type " + typeName);
+            manager.StartNewFile(Path.Combine(targetProjectFolder, tableInfo.Table + ".generated.fs"), targetProject); 
+            var columns = new List<ColumnDescription>();
+            var identities = new List<string>();
+            using(var cmd= new System.Data.SqlClient.SqlCommand("sp_help '" + tableInfo.Schema + "." + tableInfo.Table + "'", cn))
+            using(var r = cmd.ExecuteReader())
+            {
+                r.NextResult(); // ignore the first tables
+                while(r.Read()) // column info
+                {
+                    // columns and info
+                    var columnName = r["Column_name"].ToString();
+                    var type = r["Type"].ToString();
+                    // var computed = r["Computed"];
+                    var length = Convert.ToInt32(r["Length"]);
+                    // var prec = r["Prec"];
+                    columns.Add(new ColumnDescription{ColumnName= columnName, Type= type, Measure=measures.FirstOrDefault(m => !measureBlacklist.Contains(columnName) && columnName.IndexOf(m, StringComparison.InvariantCultureIgnoreCase) >= 0), Length= length, Nullable = r["Nullable"].ToString() == "yes"});
+                }
+
+                r.NextResult();
+
+                while(r.Read()) // identities
+                {
+                    if(r["Seed"] != System.DBNull.Value) // only valid identities (sql uses the identity column to say there are none defined instead of an empty set)
+                    identities.Add(r["Identity"].ToString());
+                }
+            }
+
+            columns = columns.Where(c => columnBlacklistOpt == null || columnBlacklistOpt.ContainsKey(tableInfo.Table) == false || columnBlacklistOpt[tableInfo.Table].Contains(c.ColumnName) == false).ToList();
+            foreach(var c in columns)
+                if (identities.Contains(c.ColumnName))
+                    c.IsIdentity = true;
+
+            columns = columns.OrderBy(c => c.ColumnName).ToList();
+            var typeTargetNamespace = includeNonDboSchemaInNamespace ? (tableInfo.Schema != "dbo" ? tableInfo.Schema + "." : String.Empty) : String.Empty;
+            generationEnvironment.AppendLine("namespace " + targetNamespace + "." +  typeTargetNamespace + pluralizer.Pluralize(typeName) + " // Generated by item in namespace " + manager.DefaultProjectNamespace );
+
+            generationEnvironment.AppendLine(string.Empty);
+            generationEnvironment.AppendLine("open System");
+            generationEnvironment.AppendLine("open System.ComponentModel");
+            generationEnvironment.AppendLine("open System.Linq.Expressions");
+            generationEnvironment.AppendLine(string.Empty);
+            generationEnvironment.AppendLine("open FSharp.NullHelpers");
+            if (columns.Any(c => !String.IsNullOrEmpty(c.Measure)))
+                generationEnvironment.AppendLine("open Pm.Schema");
+            generationEnvironment.AppendLine("open Pm.Schema.BReusable");
+
+            GenerateInterface(typeName, columns, appendLine, writeable:false, useOptions:useOptions);
+
+            if(tableInfo.GenerateFull)
+                GenerateInterface(typeName, columns, appendLine, writeable:true, useOptions:useOptions);
+
+            GenerateRecords(typeName, columns, appendLine, useOptions, generateValueRecords);
+            GenerateModule(typeName, columns, tableInfo.Schema, tableInfo.Table, appendLine, useOptions);
+
+            if(tableInfo.GenerateFull)
+            {
+                GenerateClass(typeName, columns, appendLine, useOptions);
+            }
+
+            manager.EndBlock();
+            foreach(var column in columns)
+                appendLine(1, column.ColumnName + (string.IsNullOrEmpty(column.Measure)? string.Empty : "<" + column.Measure + ">"));
+
+        }
+    }
+
+    return manager;
+}
+
+public static void GenerateInterface(string typeName, IEnumerable<ColumnDescription> columns, Action<int,string> appendLine, bool writeable, bool useOptions)
+{
+    appendLine(0, GenerateTypeComment(columns.Count()));
+    appendLine(0, "type I" + typeName + (writeable ? "RW" : string.Empty) + " =");
+    if(writeable)
+        appendLine(1,"inherit I"+typeName);
+    foreach(var cd in columns)
+    {
+        appendLine(1, GenerateColumnComment(cd));
+        appendLine(1, "abstract member " + cd.ColumnName + ":" + MapSqlType(cd.Type, cd.Nullable, cd.Measure, useOptions) + " with get" + (writeable ? ",set" : string.Empty));
+    }
+
+    appendLine(0, string.Empty);
+}
+
+public static void GenerateRecords(string typeName, IEnumerable<ColumnDescription> columns, Action<int,string> appendLine, bool useOptions, bool generateValueRecords)
+{
+    if(generateValueRecords)
+    {
+        appendLine(0, GenerateTypeComment(columns.Count()));
+        appendLine(0, "[<StructuralEquality;NoComparison>]");
+        appendLine(0, "type " + typeName + "ValueRecord =");
+        appendLine(1, "{");
+
+        foreach(var cd in columns.Where(cd => !cd.IsPrimaryKey))
+        {
+            appendLine(1, GenerateColumnComment(cd));
+            appendLine(1, cd.ColumnName + ":" + MapSqlType(cd.Type, cd.Nullable, cd.Measure, useOptions));
+        }
+
+        appendLine(1, "}");
+        appendLine(0, string.Empty);
+    }
+
+    appendLine(0, GenerateTypeComment(columns.Count()));
+
+    if (!useOptions)
+    {
+        appendLine(0, "[<NoComparison>]");
+    }
+
+    appendLine(0, "type " + typeName + "Record =");
+    appendLine(1, "{");
+
+    foreach(var cd in columns)
+    {
+        appendLine(1, GenerateColumnComment(cd));
+        appendLine(1, cd.ColumnName + ":" + MapSqlType(cd.Type, cd.Nullable, cd.Measure, useOptions));
+    }
+
+    appendLine(1, "}");
+    appendLine(1, "interface I" + typeName + " with");
+
+    foreach(var cd in columns )
+    {
+        appendLine(2, "member x." + cd.ColumnName + " with get () = x." + cd.ColumnName);
+    }
+
+    appendLine(0, string.Empty);
+    appendLine(1, "static member Zero () = ");
+    appendLine(2, "{");
+
+    foreach(var cd in columns )
+    {
+        var mapped = MapSqlType(cd.Type, cd.Nullable, cd.Measure, useOptions);
+        appendLine(2, cd.ColumnName + " = " + GetDefaultValue(mapped, cd.Measure));
+    }
+
+    appendLine(2, "}");
+    appendLine(0, string.Empty);
+}
+
+public static void GenerateModule(string typeName, IEnumerable<ColumnDescription> columns, string schemaName, string tableName, Action<int,string> appendLine, bool useOptions)
+{
+    var camelType = ToCamel(typeName);
+    appendLine(0, "module " + typeName + "Helpers =");
+    appendLine(1, "open Microsoft.FSharp.Core.Operators.Unchecked");
+
+    appendLine(0, string.Empty);
+
+    appendLine(1, "module Meta = ");
+    if(string.IsNullOrEmpty(schemaName) == false)
+        appendLine(2, "let schemaName = \"" + schemaName + "\"");
+    appendLine(2, "let tableName = \"" + tableName + "\"");
+    foreach(var cd in columns)
+    {
+        appendLine(2, "let " + cd.ColumnName +" = \"" + cd.ColumnName + "\"");
+    }
+
+    appendLine(1, "let ToRecord (i" + typeName + ":I" + typeName + ") =");
+    appendLine(2, "{");
+
+    foreach(var cd in columns )
+    {
+        var mapped = MapSqlType(cd.Type, cd.Nullable, cd.Measure, useOptions);
+        appendLine(2, cd.ColumnName + " = i" + typeName + "." + cd.ColumnName);
+    }
+
+    appendLine(2, "}");
+    appendLine(0, string.Empty);
+
+    appendLine(1, "let toRecord (" + camelType + ":I" + typeName + ") =");
+    appendLine(2, "{");
+
+    foreach(var cd in columns )
+    {
+        var mapped = MapSqlType(cd.Type, cd.Nullable, cd.Measure, useOptions);
+        appendLine(2, cd.ColumnName + " = " + camelType + "." + cd.ColumnName);
+    }
+
+    appendLine(2, "}");
+    appendLine(0,string.Empty);
+
+    appendLine(1, "let FromF (camelTypeF:Func<string,obj option>) =");
+    appendLine(2, "{");
+    var nonNullables = new [] {"string","String","byte[]"};
+    foreach(var cd in columns )
+    {
+        var mapped = MapSqlType(cd.Type, cd.Nullable, cd.Measure, useOptions);
+        var converter = MapConverter(cd.Type, cd.Nullable, useOptions);
+        appendLine(2, cd.ColumnName + " = ");
+        appendLine(3, "match camelTypeF.Invoke \"" + cd.ColumnName + "\" with " + "// " + mapped);
+        var measure = string.IsNullOrEmpty(cd.Measure) ? string.Empty : " |> (*) 1<" + cd.Measure + ">";
+        if(cd.Nullable && !nonNullables.Contains(mapped))
+            appendLine(3, "|Some x -> Nullable (Convert." + converter + " x" + measure + ")");
+        else
+            appendLine(3, "|Some x -> Convert." + converter + " x" + measure);
+            appendLine(3, "|None -> Unchecked.defaultof<_>");
+    }
+
+    appendLine(2, "}");
+
+    appendLine(0, string.Empty);
+
+    appendLine(1, "let inline toRecordStp (" + camelType + ": ^a) =");
+    appendLine(2, "{");
+
+    foreach(var cd in columns )
+    {
+        //var mapped = MapSqlType(cd.Type,cd.Nullable, cd.Measure, useOptions);
+        var measure = string.IsNullOrEmpty(cd.Measure) ? string.Empty : cd.Nullable ? " (*) 1<" + cd.Measure + ">" : "* 1<" + cd.Measure + ">";
+        var mappedMeasure = cd.Nullable && !string.IsNullOrEmpty(cd.Measure) ? "|> Nullable.map (" + measure + ")" : measure;
+        appendLine(2, cd.ColumnName + " = (^a: (member " + cd.ColumnName + ": _) " + camelType + ")"+ mappedMeasure);
+    }
+
+    appendLine(2, "}");
+
+    var canDoInsert =  !columns.Any(c => c.Type == "image" || c.Type == "byte[]");
+    if(canDoInsert)
+    {
+        appendLine(0, string.Empty);
+        appendLine(1, "let createInsert (r:I" + typeName + ") =");
+        var needsQuotedTypes = new []{"varchar", "char", "nvarchar", "nchar", "datetime", "xml", "datetime2"};
+        Func<ColumnDescription,bool> needsQuoted = cd => needsQuotedTypes.Contains(cd.Type.ToLower());
+
+        var needsQuoteF = columns.Any(c=> !c.IsIdentity && needsQuoted(c));
+        if (needsQuoteF)
+            appendLine(2, "let quoted (s:string) = \"'\" + s.Replace(\"'\",\"''\") + \"'\" //" + columns.First(c => !c.IsIdentity && needsQuoted(c)).Type.ToLower());
+        Func<ColumnDescription,string,string> mapValue = (cd, prefix) => {
+            switch(cd.Type.ToLower()){
+                case "varchar":
+                    return "if String.IsNullOrEmpty " 
+                        + prefix 
+                        + cd.ColumnName
+                        +  " then \"null\" else quoted " 
+                        + prefix 
+                        + cd.ColumnName;
+
+                case "int":
+                    return cd.Nullable
+                        ? "if isNull (box " 
+                            + prefix 
+                            + cd.ColumnName 
+                            + ") then \"null\" else " 
+                            + prefix 
+                            + cd.ColumnName 
+                            + " |> string" 
+                        : prefix 
+                            + cd.ColumnName 
+                            + " |> string";
+
+                default:
+                    return cd.Nullable
+                        ? "if isNull (box " 
+                            + prefix 
+                            + cd.ColumnName 
+                            + ") then \"null\" else " 
+                            + prefix 
+                            + cd.ColumnName 
+                            + " |> string |> quoted" 
+                        : prefix 
+                            + cd.ColumnName 
+                            + " |> string |> quoted";
+            }
+        };
+
+        appendLine(2, "[");
+
+        foreach(var cd in columns.Where(c => !c.IsIdentity))  // inserts shouldn't include identity columns
+        {
+            var mapped = "\"" + cd.ColumnName + "\", " 
+                + mapValue(cd, "r.");
+            appendLine(3, mapped);
+        }
+
+        appendLine(2, "]");
+        appendLine(2, "|> fun pairs -> sprintf \"insert into " 
+            + schemaName 
+            + "." 
+            + tableName 
+            + "(%s) values (%s)\" (String.Join(\",\", pairs |> Seq.map fst )) (String.Join(\",\", pairs |> Seq.map snd))" );
+        appendLine(2, "|> sprintf \"%s;select SCOPE_IDENTITY()\"");
+    }
+
+    appendLine(0, string.Empty);
+}
+
+public static void GenerateClass(string typeName, IEnumerable<ColumnDescription> columns, Action<int,string> appendLine, bool useOptions)
+{
+    appendLine(0, GenerateTypeComment(columns.Count()));
+    appendLine(0, "type "+ typeName + "N (model:" + typeName + "Record) = ");
+    appendLine(0, string.Empty);
+    appendLine(1, "let propertyChanged = new Event<_, _>()");
+
+    appendLine(0, string.Empty);
+    foreach(var cd in columns) // https://fadsworld.wordpress.com/2011/05/18/f-quotations-for-inotifypropertychanged/
+    {
+        var camel = MapFieldNameFromType(cd.ColumnName);
+        appendLine(1, "let mutable " + camel + " = model." + cd.ColumnName);
+    }
+
+    appendLine(0, string.Empty);
+
+    appendLine(1, "interface I" + typeName + " with");
+
+    foreach(var cd in columns)
+    {
+        appendLine(2, GenerateColumnComment(cd));
+        appendLine(2, "member x." + cd.ColumnName + " with get () = x." + cd.ColumnName);
+    }
+
+    appendLine(0, string.Empty);
+    appendLine(1, "interface I" + typeName + "RW with" );
+
+    foreach(var cd in columns)
+    {
+        appendLine(2, GenerateColumnComment(cd));
+        appendLine(2, "member x." + cd.ColumnName + " with get () = x." + cd.ColumnName + " and set v = x." + cd.ColumnName + " <- v");
+    }
+
+    appendLine(0, string.Empty);
+    appendLine(1, "member x.MakeRecord () =");
+    appendLine(2, "{");
+
+    foreach(var cd in columns)
+    {
+        appendLine(2, cd.ColumnName + " = x." + cd.ColumnName);
+    }
+
+    appendLine(2, "}");
+
+    appendLine(0, string.Empty);
+
+    appendLine(1, "interface INotifyPropertyChanged with");
+    appendLine(2, "[<CLIEvent>]");
+    appendLine(2, "member x.PropertyChanged = propertyChanged.Publish");
+    appendLine(0, string.Empty);
+    appendLine(1, "abstract member RaisePropertyChanged : string -> unit");
+    appendLine(1, "default x.RaisePropertyChanged(propertyName : string) = propertyChanged.Trigger(x, PropertyChangedEventArgs(propertyName))");
+
+//    appendLine(0, string.Empty);
+//    appendLine(1, "abstract member SetAndNotify<'t> : string * 't ref * 't -> bool");
+//    appendLine(1, "default x.SetAndNotify<'t> (propertyName, field: 't ref, value:'t) =");
+//    appendLine(2, "if obj.ReferenceEquals(box field,box value) then false");
+//    appendLine(2, "else");
+//    appendLine(3, "field := value");
+//    appendLine(3, "x.RaisePropertyChanged propertyName");
+//    appendLine(3, "true");
+
+//    appendLine(0, string.Empty);
+//    appendLine(1, "abstract member SetAndNotify2<'t> : string * 't byref * 't -> bool");
+//    appendLine(1, "default x.SetAndNotify2<'t> (propertyName, field: 't byref, value:'t) =");
+//    appendLine(2, "if obj.ReferenceEquals(box field,box value) then false");
+//    appendLine(2, "else");
+//    appendLine(3, "field <- value");
+//    appendLine(3, "x.RaisePropertyChanged(propertyName)");
+//    appendLine(3, "true");
+
+    appendLine(0, string.Empty);
+    appendLine(1, "abstract member SetAndNotify<'t,'b> : string * 'b * 't Action * 't -> bool");
+    appendLine(1, "default x.SetAndNotify<'t,'b> (propertyName, baseValue:'b, baseSetter: 't Action, value:'t) =");
+    appendLine(2, "if obj.ReferenceEquals(box baseValue,box value) then false");
+    appendLine(2, "else");
+    appendLine(3, "baseSetter.Invoke value");
+    appendLine(3, "x.RaisePropertyChanged(propertyName)");
+    appendLine(3, "true");
+
+    foreach(var cd in columns)
+    {
+        var camel = MapFieldNameFromType(cd.ColumnName);
+        appendLine(0, string.Empty);
+        appendLine(1, GenerateColumnComment(cd));
+        appendLine(1, "member x."+ cd.ColumnName);
+        appendLine(2, "with get() = " + camel);
+        appendLine(2, "and set v = ");
+        appendLine(3, camel +" <- v");
+        appendLine(3, "x.RaisePropertyChanged \"" + cd.ColumnName +"\"");
+    }
+}
+
+public class TableInfo
+{
+    public string Path {get;set;}
+    public string Schema {get;set;}
+    public string Table {get;set;}
+    public bool GenerateFull {get;set;}
+}
+
+public class ColumnDescription
+{
+    public string ColumnName {get;set;}
+    public string Measure {get;set;}
+    public string Type {get;set;}
+    public int Length {get;set;}
+    public bool Nullable {get;set;}
+    public bool IsPrimaryKey {get;set;}
+    public bool IsIdentity {get;set;}
+}
+
+public static IEnumerable<TableInfo> GetTables(string dbPath)
+{
+    return 
+        Directory.GetFiles(dbPath, "*.table.sql", SearchOption.AllDirectories)
+        .Select(tp => new TableInfo{ 
+            Path=BHelpers.After(tp,"\\devDb\\"),
+            Schema=BHelpers.Before(BHelpers.After(tp, "Schemas\\"), "\\"),
+            Table=Path.GetFileNameWithoutExtension(Path.GetFileNameWithoutExtension(tp))
+        });
+}
+
+static string MapNullableType(string targetType, bool nullable, string measure, bool useOptions)
+{
+    return targetType + (string.IsNullOrEmpty(measure)? string.Empty : "<" + measure + ">") + (nullable ? (useOptions ? " option" : " Nullable") : string.Empty);
+}
+
+static string MapSqlType(string type, bool nullable, string measure, bool useOptions)
+{
+    switch (type.ToLower()){
+        case "char":
+        case "nchar":
+        case "nvarchar":
+        case "xml":
+        case "varchar": return "string";
+        case "bit": return MapNullableType("bool", nullable, measure, useOptions);
+        case "timestamp": return MapNullableType("Int64", nullable, measure, useOptions);
+        case "date":
+        case "datetime":
+        case "datetime2":
+        case "smalldatetime": return MapNullableType("DateTime", nullable, measure, useOptions);
+        case "image": return "byte[]";
+        case "uniqueidentifier" : return MapNullableType("Guid", nullable, measure, useOptions);
+        case "int": return MapNullableType("int", nullable, measure, useOptions);
+        case "decimal": return MapNullableType("decimal", nullable, measure, useOptions);
+        case "float" : return MapNullableType("float", nullable, measure, useOptions);
+        default : return type ?? string.Empty;
+    }
+}
+
+static string MapConverter(string type, bool nullable, bool useOptions)
+{
+    switch (type.ToLower()){
+        case "char":
+        case "nchar":
+        case "nvarchar":
+        case "xml":
+        case "varchar": return "ToString";
+        case "bit": return "ToBoolean";
+        case "image": return "ToBinaryData";
+        case "date":
+        case "datetime":
+        case "datetime2":
+        case "smalldatetime": return "ToDateTime";
+        case "uniqueidentifier" : return "ToGuid";
+        case "timestamp" : return "ToInt64";
+        case "int": return "ToInt32";
+        case "decimal": return "ToDecimal";
+        case "float" : return "ToDouble";
+        default : return type ?? string.Empty;
+        }
+}
+
+static string MapFieldNameFromType(string columnName)
+{
+    var camel = ToCamel(columnName);
+        if(camel == "type") 
+            return "type'";
+    return camel;
+}
+
+static string GetDefaultValue(string mappedType, string measure)
+{
+    if(mappedType.EndsWith("Nullable"))
+        return "Nullable()";
+    if(mappedType.EndsWith("option"))
+        return "None";
+
+    var reMappedType = String.IsNullOrEmpty(measure) ? mappedType : mappedType.Substring(0,mappedType.IndexOf("<"));
+    var measuredValue = String.IsNullOrEmpty(measure) ? string.Empty : "<" + measure + ">";
+    switch(reMappedType.ToLower()){
+        case "int": return "0" + measuredValue;
+        case "int64": return "0L" + measuredValue;
+        case "bool": return "false";
+        case "decimal": return "0m" + measuredValue;
+        case "float": return "0." + measuredValue;
+        case "datetime": return "System.DateTime.MinValue";
+        case "uniqueidentifier" : return "Guid.Empty";
+        default : return "null";
+    }
+}
+
+static string GenerateColumnComment(ColumnDescription cd)
+{
+    return "/// " + (cd.Type ?? "null") + " (" + cd.Length + ") " + (cd.Nullable? "null" : "not null") + (cd.IsIdentity ? " identity" : string.Empty);
+}
+
+static string GenerateTypeComment(int columnCount)
+{
+    return "/// " + columnCount + " properties";
+}
+
+static string ToCamel(string s) // https://github.com/ayoung/Newtonsoft.Json/blob/master/Newtonsoft.Json/Utilities/StringUtils.cs
+{ 
+    if (string.IsNullOrEmpty(s))
+        return s;
+    if (s[0]== '_' && !char.IsUpper(s[1]))
+        return s;
+    if (s[0] != '_' && !char.IsUpper(s[0]))
+        return s;
+    var prefix = char.IsLetter(s[0])? s[0].ToString() : "";
+    var remainder = char.IsLetter(s[0]) ? s.Substring(1) : s.Substring(2);
+    var toCamel = char.IsLetter(s[0]) ? s[0].ToString() : char.ToLower(s[1]).ToString(CultureInfo.InvariantCulture);
+
+    string camelCase = char.ToLower(s[0] == '_' ? s[1] : s[0], CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture);
+    if (s.Length > 1)
+        camelCase += s.Substring(1);
+
+    return camelCase;
+}
+#>

@@ -1,0 +1,127 @@
+﻿<#@ assembly name="EnvDTE" #>
+<#@ assembly name="EnvDTE80"#>
+<#@ assembly name="System.Core"#>
+<#@ import namespace="EnvDTE" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#
+var hostServiceProvider = (IServiceProvider)Host;
+Dte = (EnvDTE.DTE)hostServiceProvider.GetService(typeof(EnvDTE.DTE));
+if(Dte == null) {
+            throw new Exception("T4Generator can only execute through the Visual Studio host");
+}#>
+<#+
+Project GetProjectContainingT4File(DTE dte,bool keepDirty) {
+
+    // Find the .tt file's ProjectItem
+    ProjectItem projectItem = dte.Solution.FindProjectItem(Host.TemplateFile);
+
+    // If the .tt file is not opened, open it
+    if (projectItem.Document == null)
+        projectItem.Open(Constants.vsViewKindCode);
+
+    if (keepDirty) {
+        // Mark the .tt file as unsaved. This way it will be saved and update itself next time the
+        // project is built. Basically, it keeps marking itself as unsaved to make the next build work.
+        // Note: this is certainly hacky, but is the best I could come up with so far.
+        projectItem.Document.Saved = false;
+    }
+
+    return projectItem.ContainingProject;
+}
+
+#>
+<#+ 
+	static IEnumerable<T> Descendants<T>(IEnumerable<T> source,Func<T, IEnumerable<T>> descendBy)
+	{
+		foreach(T value in source)
+		{
+			yield return value;
+			foreach(T child in Descendants(descendBy(value),descendBy))
+			{
+				yield return child;
+			}
+		}
+	}
+
+	static IEnumerable<CodeInterface> FindCodeModelInterfaces(IEnumerable<CodeElement> ces){
+		foreach(var ce in ces)
+		switch(ce.Kind)
+		{
+			case EnvDTE.vsCMElement.vsCMElementInterface:
+					yield return (CodeInterface)ce;
+				break;
+			case EnvDTE.vsCMElement.vsCMElementNamespace:
+				foreach(var elem in FindCodeModelInterfaces((ce as EnvDTE.CodeNamespace).Members.Cast<CodeElement>()))
+					yield return elem;
+				break;
+		}
+	}
+
+	static IEnumerable<CodeProperty> FindCodeModelImplementedInterfaceProperties(CodeInterface ci){
+		if(ci.Bases==null)
+			yield break;
+		foreach(var ii in ci.Bases.Cast<CodeInterface>()){
+			foreach(var ip in FindCodeModelProperties(ii))
+				yield return ip;
+			foreach(var iip in FindCodeModelImplementedInterfaceProperties(ii))
+				yield return iip;
+        }
+    }
+
+    static IEnumerable<CodeProperty> FindCodeModelProperties(CodeInterface ci){
+	   foreach(var cp in ci.Members.Cast<CodeElement>().OfType<CodeProperty>()){
+	       yield return cp;
+	   }
+    }
+
+    static IEnumerable<ProjectItem> RecurseProjectItems(Project proj)
+    {
+	   return Descendants(proj.ProjectItems.Cast<ProjectItem>(),pi=>pi.ProjectItems.Cast<ProjectItem>());
+    }
+
+    static IEnumerable<Project> RecurseSolutionProjects(DTE dte)
+    {
+	
+    	Projects projects = dte.Solution.Projects;
+    	List<Project> list = new List<Project>();
+    	var item = projects.GetEnumerator();
+    	while (item.MoveNext())
+    	{
+    		var project = item.Current as Project;
+    		if (project == null)
+    		{
+    			continue;
+    		}
+    		if (project.Kind == EnvDTE80.ProjectKinds.vsProjectKindSolutionFolder)
+    		{
+    			list.AddRange(GetSolutionFolderProjects(project));
+    		}
+    		else
+    		{
+    			list.Add(project);
+    		}
+    	}
+        return list;
+    }
+
+    static IEnumerable<Project> GetSolutionFolderProjects(Project solutionFolder)
+    {
+        List<Project> list = new List<Project>();
+        for (var i = 1; i <= solutionFolder.ProjectItems.Count; i++)
+        {
+            var subProject = solutionFolder.ProjectItems.Item(i).SubProject;
+            if (subProject == null)
+            {
+                continue;
+            }
+            // If this is another solution folder, do a recursive call, otherwise add
+            if (subProject.Kind == EnvDTE80.ProjectKinds.vsProjectKindSolutionFolder)
+            {
+                list.AddRange(GetSolutionFolderProjects(subProject));
+            } else {
+                list.Add(subProject);
+            }
+        }
+        return list;
+    }
+#>
