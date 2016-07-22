@@ -29,6 +29,8 @@ type TypedDataContext with
 
 let dc = new TypedDataContext() 
 
+let cs = dc.Connection.ConnectionString
+//cs.Dump()
 module SqlHelpers = 
     let tryGetMeta sr t= 
         tryGetMeta (fun s -> dc.ExecuteQuery<ObjectDefHolder> s) sr t
@@ -171,9 +173,11 @@ module SqlMgmt =
         |> List.ofSeq
 
     let migrate path dbName =
-        use cn = new SqlConnection(dc.Connection.ConnectionString)
+        dc.Connection.ConnectionString.Dump()
+        use cn = new SqlConnection(cs)
         let sc = Microsoft.SqlServer.Management.Common.ServerConnection(cn)
         let server = new Microsoft.SqlServer.Management.Smo.Server(sc)
+        server.ConnectionContext.Connect()
         let setVars = Dictionary<string,string>()
         setVars.["DatabaseName"] <- dbName
         let mutable lastRun = String.Empty
@@ -245,14 +249,16 @@ module SqlMgmt =
                     //run <- run + 1
                     runValue.OnNext(runValue.Value + 1)
                 with ex -> 
+                    lastRun.Dump("last completed operation")
+                    (lines,setVars,ex).Dump()
                     let exeScalar (s:string) = server.ConnectionContext.ExecuteScalar s
                     ex.Data.Add("@@servicename", exeScalar "SELECT @@servicename")
                     ex.Data.Add("@@servername", exeScalar "select @@servername")
                     ex.Data.Add("db_name", exeScalar "select DB_NAME()")
                     ex.Data.Add("user_name", exeScalar "select user_name()")
                     ex.Data.Add("suser_name", exeScalar "select suser_name()")
-                    lastRun.Dump("last completed operation")
-                    (lines,setVars,ex).Dump()
+                    
+                    
                     reraise()
             )
         countValue.OnCompleted()
@@ -288,7 +294,7 @@ let runDeploy dbName deployBehavior =
     let runSqlPackageExe includeTransactionalScripts = 
         let cmd,args = 
             let targetDacPac = System.IO.Path.Combine(outFolder, dbName)
-            let targetBehavior = TargetBehavior.ConnectionString dc.Connection.ConnectionString
+            let targetBehavior = TargetBehavior.ConnectionString cs
             cmdLine targetDacPac DoNotDropObjectsNotInSource true Environment.MachineName targetBehavior includeTransactionalScripts
         (Environment.CurrentDirectory, cmd,args).Dump("SqlPackageSetup")
         use liveMessageStream = 
@@ -386,7 +392,6 @@ let runDeploy dbName deployBehavior =
     
     
     let buildBehavior () = 
-        
         // clean output dir before build
         outFolder
         |> Directory.GetFiles

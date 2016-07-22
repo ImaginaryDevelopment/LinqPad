@@ -276,6 +276,7 @@ maps
         generateInsertMap s t wOpt maps
         |> dumpt "insert"
         let maps = maps |> Seq.filter(fun m -> match m.SourceExpressionOpt with | Some NoAliasing -> false | _ -> true)
+        // planned feature: check count of rows on each table if they don't match up, some data didn't migrate from source to target
         let fNeedsLimit cOpt : Railway<string, string * _ > = 
             let text = generateCheckSum s t (Option.isSome cOpt) (match cOpt with |Some c -> Some (fun columns -> columns |> Seq.take c) | None -> None) jc wOpt maps
             try
