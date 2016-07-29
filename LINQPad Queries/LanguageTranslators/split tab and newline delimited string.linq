@@ -1,13 +1,4 @@
-<Query Kind="Statements">
-  <Connection>
-    <ID>98063b47-89b9-46fb-a9bc-a976f3e1e9e6</ID>
-    <Persist>true</Persist>
-    <Server>wrdne21430,15001</Server>
-    <Database>GTPM_Init1_SIT</Database>
-    <DisplayName>GTPM.SIT</DisplayName>
-  </Connection>
-</Query>
-
+<Query Kind="Statements" />
 
 var columns=@"	
 LogFilename (S)             LogRow (I)                  date (T)

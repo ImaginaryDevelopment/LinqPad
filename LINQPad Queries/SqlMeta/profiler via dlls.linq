@@ -90,7 +90,9 @@ let runTrace () =
     // TODO: rotate these into a table or observable object perhaps
     use lastBatch = setupSubject<(string*int)>("lastBatch") (null,0)
     use stmtStarted = setupSubject<(string*int)>("stmtStarted") (null,0)
+    
     use stmtCompleted = setupSubject<(string*int)>("stmtCompleted") (null, 0)
+    stmtStarted.Dump()
     use trace = new TraceServer()
     let tf = 
         // first two are confirmed functional
@@ -120,6 +122,7 @@ let runTrace () =
                     match rowDict.["TextData"] with
                     |null 
                     |"" -> ()
+                    | "select max (modify_date) from sys.objects"
                     | "SELECT ISNULL(SESSIONPROPERTY ('ANSI_NULLS'), 0), ISNULL(SESSIONPROPERTY ('QUOTED_IDENTIFIER'), 1)" -> () // ignore spammy message
                     | x when x.Length = 138 && x.TrimEnd().EndsWith("SET NUMERIC_ROUNDABORT OFF;") -> () // ignore spammy message
                     |x when x.Length > 4000 -> 
@@ -134,12 +137,14 @@ let runTrace () =
                     match rowDict.["TextData"] with
                     | null
                     |"" -> ()
+                    | "select max (modify_date) from sys.objects" -> ()
                     | x -> stmtStarted.OnNext(x,x.Length)
                     ()
                 | "SQL:StmtCompleted" when rowDict.ContainsKey "TextData" ->
                     match rowDict.["TextData"] with
                     | null
                     |"" -> ()
+                    | "select max (modify_date) from sys.objects" -> ()
                     | x -> stmtCompleted.OnNext(x,x.Length)
 
                 | _ -> 
