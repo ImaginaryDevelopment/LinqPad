@@ -478,6 +478,10 @@ getLargestPayment()
 runDeploy "PmMigration" BuildThenUseSqlPackageExeWithPreCompare
 //runDeploy "PmMigration" UseSqlPackageExeWithPreCompare
 
+DateTime.Now.Dump("starting deploy")
+//runDeploy "PmMigration" BuildThenUseSqlPackageExeWithPreCompare
+runDeploy "PmMigration" UseSqlPackageExeWithPreCompare
+DateTime.Now.Dump("finishing deploy")
 //runDeploy "PmMigration" RunSmo
 
 //Util.Cmd(cmdLine).Dump()

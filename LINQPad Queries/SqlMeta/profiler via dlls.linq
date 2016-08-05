@@ -43,6 +43,15 @@ let parseCString input =
     
 //dc.Connection.ConnectionString.Dump()
 
+//type SetCollection<'t>() =
+//    inherit System.Collections.ObjectModel.ObservableCollection<'t>()
+//    override x.InsertItem(index, item:'t) =
+//        if not <| x.Contains item then
+//            base.InsertItem(index,item)
+//    override x.SetItem(index, item) =
+//        let i = x.IndexOf(item)
+//        if i < 0 then base.SetItem(index,item)
+        
 
 let testedGood = 
     [   
@@ -76,6 +85,7 @@ let testConnectionInfo () =
     cn.Open()
     cn.Dump()
     cn.Dispose()
+    
 IntPtr.Size.Dump()
 module Subjects = 
     let inline setupSubject (name:string) (defaultValue:'t) = 
@@ -83,17 +93,8 @@ module Subjects =
         let _ = subject.DumpLatest(name)
         subject
 open Subjects
-
-let runTrace () = 
-    
-    use lastEventClass = setupSubject<string option> ("lastEvent") (None)
-    // TODO: rotate these into a table or observable object perhaps
-    use lastBatch = setupSubject<(string*int)>("lastBatch") (null,0)
-    use stmtStarted = setupSubject<(string*int)>("stmtStarted") (null,0)
-    
-    use stmtCompleted = setupSubject<(string*int)>("stmtCompleted") (null, 0)
-    stmtStarted.Dump()
-    use trace = new TraceServer()
+let startedNotFinishedStatements = List<string>()
+let setupRunTrace () = 
     let tf = 
         // first two are confirmed functional
         //@"C:\projects\LinqPad\LinqPad\LINQPad Queries\standard.tdf"
@@ -102,63 +103,128 @@ let runTrace () =
         //@"C:\Program Files (x86)\Microsoft SQL Server\100\Tools\Profiler\Templates\Microsoft SQL Server\1050\TSQL.tdf"
     if not <| IO.File.Exists tf then raise <| invalidOp "File not found"
 //SELECT ISNULL(SESSIONPROPERTY ('ANSI_NULLS'), 0), ISNULL(SESSIONPROPERTY ('QUOTED_IDENTIFIER'), 1)
-    let mutable pauseForUI = false
-    trace.InitializeAsReader(ci, tf)
-    try
-        while(trace.Read()) do
-            if pauseForUI then
-                System.Threading.Thread.Sleep(1000) // try to let ui catch up
-            //"dumping a trace!".Dump()
-            let getValueStrOrNull i = 
-                trace.GetValue i
-                |> fun v -> if isNull v then null else v |> string
-            let rowDict = [0..trace.FieldCount-1] |> Seq.map(fun i -> trace.GetName(i), getValueStrOrNull i) |> dict
-            lastEventClass.OnNext(Some "EventClass")
-            try
-                match rowDict.["EventClass"] with
-                | "Trace Skipped Records" -> ()
-                | "ExistingConnection" as x -> Util.OnDemand(x, fun () -> rowDict).Dump()
-                | "SQL:BatchStarting" when rowDict.ContainsKey "TextData" -> 
-                    match rowDict.["TextData"] with
-                    |null 
-                    |"" -> ()
-                    | "select max (modify_date) from sys.objects"
-                    | "SELECT ISNULL(SESSIONPROPERTY ('ANSI_NULLS'), 0), ISNULL(SESSIONPROPERTY ('QUOTED_IDENTIFIER'), 1)" -> () // ignore spammy message
-                    | x when x.Length = 138 && x.TrimEnd().EndsWith("SET NUMERIC_ROUNDABORT OFF;") -> () // ignore spammy message
-                    |x when x.Length > 4000 -> 
-                        // didn't function
-                        //let tryGetFullTextLink = Util.OnDemand("full text?", fun() -> pauseForUI <- true; x)
-                        (x.Substring(0,1000), x.Length) |>  lastBatch.OnNext
-                    |x -> lastBatch.OnNext(x,x.Length)
-                    () 
-                    // swallowing for now if needed uncomment the following
-                    //Util.OnDemand("Huge statement",fun () -> rowDict
-                | "SQL:StmtStarting" when rowDict.ContainsKey "TextData" -> 
-                    match rowDict.["TextData"] with
-                    | null
-                    |"" -> ()
-                    | "select max (modify_date) from sys.objects" -> ()
-                    | x -> stmtStarted.OnNext(x,x.Length)
-                    ()
-                | "SQL:StmtCompleted" when rowDict.ContainsKey "TextData" ->
-                    match rowDict.["TextData"] with
-                    | null
-                    |"" -> ()
-                    | "select max (modify_date) from sys.objects" -> ()
-                    | x -> stmtCompleted.OnNext(x,x.Length)
+    
+    let runner() =
+        use lastEventClass = setupSubject<string option> ("lastEvent") (None)
+        // TODO: rotate these into a table or observable object perhaps
+        use lastBatch = setupSubject<(string*int)>("lastBatch") (null,0)
+        use stmtStarted = setupSubject<(string*int)>("stmtStarted") (null,0)
+        
+        let eventClassesAdder = 
+            let hash = HashSet<string>()
+            let subject = new BehaviorSubject<string>(null)
+            // known classes: 
+            //Trace Start ,ExistingConnection ,RPC:Completed ,User Error Message ,Audit Login ,SQL:BatchStarting ,SQL:StmtStarting ,SQL:StmtCompleted ,SQL:BatchCompleted ,Audit Logout ,Trace Skipped Records ,Object:Created ,Object:Altered ,Object:Deleted 
 
-                | _ -> 
-                    ()
-                    //rowDict.Dump()
-            with ex -> 
-                rowDict.Dump("traceItems!")    
-            ()
+            subject.Dump("EventClasses")
+            let add x = 
+                if not <| hash.Contains x then
+                    hash.Add x
+                    subject.OnNext x
+            add
+        
+        use stmtCompleted = setupSubject<(string*int)>("stmtCompleted") (null, 0)
+        let batchCompleted = setupSubject "batchCompleted" (String.Empty,0)
+        let r = HashSet<string>()
+        let dc = DumpContainer(r).Dump<_>()
+        
+        //stmtStarted.Dump("stmtStarted")
+        use trace = new TraceServer()
+        trace.InitializeAsReader(ci, tf)
+        let sleepRead() = 
+            System.Threading.Thread.Sleep(100) // try to let ui catch up
+            trace.Read()
+        try
+            while(sleepRead()) do
+                //"dumping a trace!".Dump()
+                let getValueStrOrNull i = 
+                    trace.GetValue i
+                    |> fun v -> if isNull v then null else v |> string
+                let rowDict = [0..trace.FieldCount-1] |> Seq.map(fun i -> trace.GetName(i), getValueStrOrNull i) |> dict
+                eventClassesAdder(rowDict.["EventClass"])
+                lastEventClass.OnNext(Some rowDict.["EventClass"])
+
+                try
+                    match rowDict.["EventClass"] with
+                    | "Trace Skipped Records" -> ()
+                    | "ExistingConnection" as x -> Util.OnDemand(x, fun () -> rowDict).Dump()
+                    | "SQL:BatchStarting" when rowDict.ContainsKey "TextData" -> 
+                        match rowDict.["TextData"] with
+                        |null 
+                        |"" -> ()
+                        | "select max (modify_date) from sys.objects"
+                        | "SELECT ISNULL(SESSIONPROPERTY ('ANSI_NULLS'), 0), ISNULL(SESSIONPROPERTY ('QUOTED_IDENTIFIER'), 1)" -> () // ignore spammy message
+                        | x when x.Length = 138 && x.TrimEnd().EndsWith("SET NUMERIC_ROUNDABORT OFF;") -> () // ignore spammy message
+                        |x when x.Length > 4000 -> 
+                            // didn't function
+                            //let tryGetFullTextLink = Util.OnDemand("full text?", fun() -> pauseForUI <- true; x)
+                            (x.Substring(0,1000), x.Length) |>  lastBatch.OnNext
+                        |x -> lastBatch.OnNext(x,x.Length)
+                        () 
+                        // swallowing for now if needed uncomment the following
+                        //Util.OnDemand("Huge statement",fun () -> rowDict
+                    | "SQL:StmtStarting" when rowDict.ContainsKey "TextData" -> 
+                        match rowDict.["TextData"] with
+                        | null
+                        |"" -> ()
+                        | "select max (modify_date) from sys.objects" -> ()
+                        | x -> 
+                            startedNotFinishedStatements.Add(x)
+                            stmtStarted.OnNext(x,x.Length)
+                        ()
+                    | "SQL:StmtCompleted" when rowDict.ContainsKey "TextData" ->
+                        match rowDict.["TextData"] with
+                        | null
+                        |"" -> ()
+                        | "select max (modify_date) from sys.objects" -> ()
+                        | x -> 
+                            startedNotFinishedStatements.Remove x |> ignore<bool>
+                            stmtCompleted.OnNext(x,x.Length)
+                    | "SQL:BatchCompleted" when rowDict.ContainsKey "TextData" ->
+                        match rowDict.["TextData"] with
+                        | null
+                        |""  -> ()
+                        | x -> batchCompleted.OnNext(x,x.Length)
+                    | _ -> 
+                    
+                        ()
+                        //rowDict.Dump()
+                with ex -> 
+                    rowDict.Dump("traceItems!")    
+                ()
+                
+                //trace.FieldCount.Dump("trace")
+        finally 
+            trace.Stop()
+            trace.Close()
             
-            //trace.FieldCount.Dump("trace")
-    finally 
-        trace.Stop()
-        trace.Close()
-runTrace()
+    //let t = System.Threading.Thread(ThreadStart(toThread))
+    //t
+    runner
+    
+let runIt() = 
+    let cancellation = CancellationTokenSource()
+    
+    let task = System.Threading.Tasks.Task.Run(setupRunTrace(), cancellation.Token)
+    task.Dump()
+    
+    //let running = Util.KeepRunning()
+    let abort() = 
+        try
+            cancellation.Cancel()
+            
+            //thread.Abort()
+        with ex -> ex.Dump()
+        //running.Dispose()
+        "finished!".Dump()
+        startedNotFinishedStatements.Dump()
+    Hyperlinq(Action(abort), "Abort profiler").Dump()
+    //while (thread.IsAlive) do
+        //System.Threading.Thread.Sleep(1000)
+    //Tasks.Task.WaitAll(task)
+
+runIt()
+
 
 //typeof<Microsoft.SqlServer.Management.Trace.>.Assembly.DefinedTypes
 //|> Dump
