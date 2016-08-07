@@ -1,6 +1,6 @@
 <Query Kind="FSharpProgram" />
 
-// reverse engineer sql file into generator
+// reverse engineer sql create table file into generator
 
 // assume foreign keys of type VARCHAR(50) are single column reference tables
 // do not attempt to account for multi-line comments or lines that are proceeded by comments

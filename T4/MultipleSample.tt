@@ -1,0 +1,12 @@
+﻿<#@ template debug="True" language="C#" hostspecific="True" #>
+<#@ output extension=".txt"#>
+<#@ include file="MultipleOutputHelper.ttinclude" #>
+<#  bool doMultiFile=true;
+#>
+<# var manager = Manager.Create(Host, GenerationEnvironment);#>
+Main file output
+<# manager.StartNewFile("MultipleTest.generated.cs"); #>
+public class MultipleTest {
+}
+<# manager.EndBlock(); #>
+<# manager.Process(doMultiFile); #>

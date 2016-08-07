@@ -38,7 +38,7 @@ void Main()
 	var commands=dte.Commands.Cast<Command>().Select (c =>new{c.LocalizedName,c.ID,Bindings=((object[]) c.Bindings).Cast<string>().ToArray()} );
 	var toDisplayCommands=commands;
 	var commandFilter = Util.ReadLine("search term?","resharper",new []{"resharper","build","save"});
-	if(commandFilter.IsNullOrEmpty()==false)
+	if(String.IsNullOrEmpty(commandFilter)==false)
 		toDisplayCommands=commands.Where(c=>c.LocalizedName.IndexOf(commandFilter,StringComparison.CurrentCultureIgnoreCase)>=0);
 		
 	//var saveCommand = commands.Where(c=>c.LocalizedName.IndexOf("save",StringComparison.CurrentCultureIgnoreCase)>=0).Dump("save commands");
@@ -47,7 +47,7 @@ void Main()
 	//).Dump("resharper bindings");
 	toDisplayCommands.Dump(commandFilter ??"all");
 	var toRun=Util.ReadLine("Run Command?",null,commands.Select(c=>c.LocalizedName));
-	if(toRun.IsNullOrEmpty()==false)
+	if(String.IsNullOrEmpty(toRun)==false)
 		dte.ExecuteCommand(toRun);
 	
 	

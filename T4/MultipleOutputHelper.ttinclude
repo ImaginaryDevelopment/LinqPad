@@ -1,0 +1,316 @@
+﻿<#@ assembly name="System.Core"
+#><#@ assembly name="System.Data.Linq"
+#><#@ assembly name="EnvDTE"
+#><#@ assembly name="EnvDTE80"
+#><#@ assembly name="System.Xml"
+#><#@ assembly name="System.Xml.Linq"
+#><#@ import namespace="System"
+#><#@ import namespace="System.CodeDom"
+#><#@ import namespace="System.CodeDom.Compiler"
+#><#@ import namespace="System.Collections.Generic"
+#><#@ import namespace="System.Data.Linq"
+#><#@ import namespace="System.Data.Linq.Mapping"
+#><#@ import namespace="System.IO"
+#><#@ import namespace="System.Linq"
+#><#@ import namespace="System.Reflection"
+#><#@ import namespace="System.Text"
+#><#@ import namespace="System.Xml.Linq"
+#><#@ import namespace="Microsoft.VisualStudio.TextTemplating"
+#><#+
+
+// Manager class records the various blocks so it can split them up
+class Manager 
+{
+    private class Block 
+    {
+        public string Name;
+        public EnvDTE.Project Project;
+        public int Start, Length;
+    }
+
+    Block currentBlock;
+    List<Block> files = new List<Block>();
+    Block footer = new Block();
+    Block header = new Block();
+    ITextTemplatingEngineHost host;
+    StringBuilder template;
+
+    protected List<String> generatedFileNames = new List<String>();
+
+    public static Manager Create(ITextTemplatingEngineHost host, StringBuilder template) 
+    {
+        return (host is IServiceProvider) ? new VSManager(host, template) : new Manager(host, template);
+    }
+
+    public void StartNewFile(string name,EnvDTE.Project project = null) 
+    {
+        if (name == null)
+            throw new ArgumentNullException("name");
+        CurrentBlock = new Block { Name = name,Project = project };
+    }
+
+    public void StartFooter() 
+    {
+        CurrentBlock = footer;
+    }
+
+    public void StartHeader() 
+    {
+        CurrentBlock = header;
+    }
+
+    public void EndBlock() 
+    {
+        if (CurrentBlock == null)
+            return;
+        CurrentBlock.Length = template.Length - CurrentBlock.Start;
+        if (CurrentBlock != header && CurrentBlock != footer)
+            files.Add(CurrentBlock);
+        currentBlock = null;
+    }
+
+    public virtual void Process(bool split) 
+    {
+        if (split) {
+            EndBlock();
+            string headerText = template.ToString(header.Start, header.Length);
+            string footerText = template.ToString(footer.Start, footer.Length);
+            string outputPath = Path.GetDirectoryName(host.TemplateFile);
+            files.Reverse();
+            foreach(Block block in files) {
+                string fileName = Path.Combine(outputPath, block.Name);
+                string content = headerText + template.ToString(block.Start, block.Length) + footerText;
+                generatedFileNames.Add(fileName);
+                CreateFile(fileName, content);
+                template.Remove(block.Start, block.Length);
+            }
+        }
+    }
+
+    protected virtual void CreateFile(string fileName, string content) 
+    {
+        if (IsFileContentDifferent(fileName, content))
+            File.WriteAllText(fileName, content);
+    }
+
+    public virtual String GetCustomToolNamespace(String fileName) 
+    {
+        return null;
+    }
+
+    public virtual String DefaultProjectNamespace 
+    {
+        get { return null; }
+    }
+
+    protected bool IsFileContentDifferent(String fileName, String newContent) 
+    {
+        return !(File.Exists(fileName) && File.ReadAllText(fileName) == newContent);
+    }
+
+    Manager(ITextTemplatingEngineHost host, StringBuilder template) 
+    {
+        this.host = host;
+        this.template = template;
+    }
+
+    Block CurrentBlock 
+    {
+        get { return currentBlock; }
+        set {
+            if (CurrentBlock != null)
+                EndBlock();
+            if (value != null)
+                value.Start = template.Length;
+            currentBlock = value;
+        }
+    }
+
+    private class VSManager: Manager 
+    {
+        EnvDTE.ProjectItem templateProjectItem;
+        EnvDTE.DTE dte;
+        Action<String> checkOutAction;
+        Action<IEnumerable<String>> projectSyncAction;
+
+        public override String DefaultProjectNamespace 
+        {
+            get {
+                return templateProjectItem.ContainingProject.Properties.Item("DefaultNamespace").Value.ToString();
+            }
+        }
+
+        public override String GetCustomToolNamespace(string fileName) 
+        {
+            return dte.Solution.FindProjectItem(fileName).Properties.Item("CustomToolNamespace").Value.ToString();
+        }
+
+        public override void Process(bool split) 
+        {
+            if (templateProjectItem.ProjectItems == null)
+                return;
+            base.Process(split);
+            if(generatedFileNames == null || generatedFileNames.Any() == false)
+                throw new InvalidOperationException("generatedFileNames");
+            projectSyncAction.EndInvoke(projectSyncAction.BeginInvoke(generatedFileNames, null, null));
+        }
+
+        protected override void CreateFile(String fileName, String content) 
+        {
+            if (IsFileContentDifferent(fileName, content)) 
+            {
+                CheckoutFileIfRequired(fileName);
+                File.WriteAllText(fileName, content);
+            }
+        }
+
+        internal VSManager(ITextTemplatingEngineHost host, StringBuilder template)
+            : base(host, template) 
+        {
+            var hostServiceProvider = (IServiceProvider) host;
+            if (hostServiceProvider == null)
+                throw new ArgumentNullException("Could not obtain IServiceProvider");
+            dte = (EnvDTE.DTE) hostServiceProvider.GetService(typeof(EnvDTE.DTE));
+            if (dte == null)
+                throw new ArgumentNullException("Could not obtain DTE from host");
+            templateProjectItem = dte.Solution.FindProjectItem(host.TemplateFile);
+            checkOutAction = (String fileName) => dte.SourceControl.CheckOutItem(fileName);
+            projectSyncAction = (IEnumerable<String> keepFileNames) => ProjectSync(templateProjectItem, keepFileNames);
+        }
+
+        static void WriteLnToOutputPane(EnvDTE.DTE dte, string s)
+        {
+            var window = (EnvDTE.OutputWindow) dte.Windows.Item(EnvDTE.Constants.vsWindowKindOutput).Object;
+            window.ActivePane.Activate();
+            window.ActivePane.OutputString(s + Environment.NewLine);
+        }
+
+        static void ProjectSync(EnvDTE.ProjectItem templateProjectItem, IEnumerable<string> keepFileNames) 
+        {
+            var keepFileNameSet = new HashSet<string>(keepFileNames);
+            var projectFiles = new Dictionary<string, EnvDTE.ProjectItem>();
+            var dte = templateProjectItem.Collection.DTE;
+            var project = templateProjectItem.Collection.ContainingProject;
+            WriteLnToOutputPane(dte,"Starting ProjectSync for t4 in " + project.Name + "\\" + templateProjectItem.Name);
+            var templateProjectDirectory = System.IO.Path.GetDirectoryName(project.FullName);
+            var projects = RecurseSolutionProjects(dte); 
+            Func<string,bool> isInCurrentProject = fileName => fileName.StartsWith(templateProjectDirectory);
+            var originalFilePrefix = Path.GetFileNameWithoutExtension(templateProjectItem.get_FileNames(0)) + ".";
+            foreach(EnvDTE.ProjectItem projectItem in templateProjectItem.ProjectItems)
+                    projectFiles.Add(projectItem.get_FileNames(0), projectItem);
+
+            // Remove unused items from the project
+            foreach(var pair in projectFiles)
+                if (!keepFileNames.Contains(pair.Key) && !(Path.GetFileNameWithoutExtension(pair.Key) + ".").StartsWith(originalFilePrefix))
+                    pair.Value.Delete();
+
+
+            // Add missing files to the project
+            foreach(String fileName in keepFileNameSet)
+            {
+
+                if(isInCurrentProject(fileName))
+                {
+                        if (!projectFiles.ContainsKey(fileName))
+                        {
+                            templateProjectItem.ProjectItems.AddFromFile(fileName);
+                            WriteLnToOutputPane(dte,"added " + fileName);
+                        }
+                } else // add to another project
+                {
+                    // only one this appears to be skipping in a solutionfolder
+                    var unloadedProject = "{67294A52-A4F0-11D2-AA88-00C04F688DDE}";
+
+                    var canReadProjects = projects.Where(p => p.Kind != unloadedProject && p.Kind != EnvDTE80.ProjectKinds.vsProjectKindSolutionFolder).ToArray();
+                    //{
+                    //    try
+                    //    {
+                    //        var x = p.FullName;
+                            //var y = p.Name;
+                            //WriteLnToOutputPane(dte,"found project:" + y + ";FullName=" + x);
+                    //        return true;
+                    //    }
+                     //   catch (Exception ex)
+                     //   {
+                     //       return false;
+                    //    }
+                    //}).ToArray();
+                    //var projectNames = canReadProjects.Select(p=> {
+                    //try
+                    //{
+                    //    return p.FullName;
+                    //}
+                    //catch (Exception ex){ return p.Name;}
+
+                    //});
+                    var targetProject = canReadProjects.FirstOrDefault(p => 
+                    {
+                        try
+                        {
+                            return p.Kind != EnvDTE80.ProjectKinds.vsProjectKindSolutionFolder && fileName.StartsWith(System.IO.Path.GetDirectoryName(p.FullName));
+                        }
+                        catch (Exception ex)
+                        {
+                            WriteLnToOutputPane(dte, "failing to read project with kind= " + p.Kind);
+                            WriteLnToOutputPane(dte, "expected kind= " + EnvDTE80.ProjectKinds.vsProjectKindSolutionFolder);
+                            WriteLnToOutputPane(dte, "hi! my name is "+ p.Name);
+                            throw;
+                        }
+                    });
+                    if(targetProject == null)
+                        throw new InvalidOperationException(fileName+", could not find in ("+ projects.Count() +") projects." + canReadProjects.Select(p => p.FullName).Aggregate((s1,s2) => s1+","+s2));
+
+                    if(targetProject.FullName.EndsWith(".dbproj") || targetProject.FullName.EndsWith(".sqlproj"))
+                    {
+                        // normal adding, traversing, expanding view did not work at all.
+                        var projectItems = targetProject.ProjectItems;
+                        var toDescend = fileName.Substring(System.IO.Path.GetDirectoryName(targetProject.FullName).Length).Trim('\\').Trim('/').Split(new []{"\\","/"}, StringSplitOptions.None);
+                        foreach(var td in toDescend.Take(toDescend.Length - 1))
+                        {
+                            WriteLnToOutputPane(dte,"Descending into \"" + td +"\"");
+                            var childProjectItem = projectItems.Cast<ProjectItem>().FirstOrDefault(pi => 
+                            {
+                                    var isMatch = Path.GetFileName(pi.get_FileNames(0)) == td;
+                                    return isMatch;
+                            });
+
+                            if(childProjectItem == null)
+                            {
+                                WriteLnToOutputPane(dte,"Failed to find \"" + td +"\"");
+                                foreach(var pi in projectItems.Cast<ProjectItem>().Select(pi => pi.get_FileNames(0)))
+                                {
+                                    WriteLnToOutputPane(dte,"\tWe did however find \"" + pi +"\"");
+                                }
+                            }
+                            else
+                            {
+                                WriteLnToOutputPane(dte,"Appears we found \"" + td +"\" and it has projectItems:" + (childProjectItem.ProjectItems != null));
+                                if(childProjectItem.ProjectItems != null)
+                                {
+                                    projectItems = childProjectItem.ProjectItems;
+                                }
+                            }
+                            
+                        }
+                        WriteLnToOutputPane(dte,"Generating \"" + fileName +"\" into " + targetProject.FullName);
+
+                        var projectItem = projectItems.AddFromFile(fileName);
+                        WriteLnToOutputPane(dte,"AddFromFile put it @" + projectItem.get_FileNames(0));
+                    } else {
+                        WriteLnToOutputPane(dte,"Generating \"" + fileName +"\" into " + targetProject.FullName);
+                        var projectItem = targetProject.ProjectItems.AddFromFile(fileName);
+                        WriteLnToOutputPane(dte,"AddFromFile put it @" + projectItem.get_FileNames(0));
+                    }
+                    
+                }
+            }
+        }
+
+        void CheckoutFileIfRequired(string fileName) 
+        {
+            var sc = dte.SourceControl;
+            if (sc != null && sc.IsItemUnderSCC(fileName) && !sc.IsItemCheckedOut(fileName))
+                checkOutAction.EndInvoke(checkOutAction.BeginInvoke(fileName, null, null));
+        }
+    }
+} #>

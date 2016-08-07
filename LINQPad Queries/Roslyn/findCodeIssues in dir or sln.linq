@@ -1,7 +1,6 @@
 <Query Kind="FSharpProgram">
   <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 10.0\Common7\IDE\PublicAssemblies\EnvDTE.dll</Reference>
   <NuGetReference>Microsoft.CodeAnalysis</NuGetReference>
-  <NuGetReference>Microsoft.CodeAnalysis.CSharp</NuGetReference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
   <Namespace>Microsoft.CodeAnalysis</Namespace>
   <Namespace>Microsoft.CodeAnalysis.CSharp</Namespace>
@@ -17,6 +16,8 @@
 // if we decide to have the file/method auto open on click in the output this is the hook
 // var devEnvs = System.Diagnostics.Process.GetProcessesByName("devenv"); //.Dump();
 
+// this roslyn version is working as of 7/21/2016 with Microsoft.CodeAnalysis 1.3.2
+// syntax reference site: http://source.roslyn.codeplex.com/#Microsoft.CodeAnalysis.CSharp/Syntax.xml.Generated.cs,4a09ef72a9269723
 let debug = false
 
 [<AutoOpen>]
@@ -24,6 +25,7 @@ module LinqPad =
     let dumpt (title:String) x = x.Dump(title); x
     let dumptif (title:String) b x = if b then dumpt title x else x
     let dumph x = Util.Highlight(x).Dump() |> ignore
+    
 [<AutoOpen>]
 module LinqHelpers = 
     let ofType<'t> (x:IEnumerable<_>) = x.OfType<'t>()
@@ -98,7 +100,7 @@ let FilePath path =
 //type ValidPath =
 //    |DirPath
 //    |FilePath
-module Roslyn = 
+module BRoslyn = 
     let getTree (FilePath path):SyntaxTree = 
         File.ReadAllText path
         |> CSharpSyntaxTree.ParseText
@@ -120,7 +122,8 @@ module Roslyn =
         
         let isTryMethodProperlyNamed (mds:MDS) = 
             mds.Identifier.Text.StartsWith("Try", StringComparison.CurrentCultureIgnoreCase)
-        
+            
+// code related to reading the raw .sln file        
 module Sln = 
     type SlnInfo = { SlnFolderGuid :Guid; Name:string; Path:FilePath; ProjectGuid:Guid}
     type SlnItem = 
@@ -129,7 +132,6 @@ module Sln =
     let isCsProj (FilePath path)= endsWith ".csproj" path
     
     let readSln (FilePath slnPath) = 
-        
         let (|Project|Folder|Error|) (DirPath slnDir, relPath) = 
             let combined = combine slnDir relPath
             if Seq.exists (fun ending -> endsWith ending relPath) [ ".proj";".csproj";".fsproj";".dbproj";".sqlproj" ] then
@@ -203,7 +205,9 @@ let slnProjects : Sln.SlnInfo seq =
             |> Seq.filter (fun si ->  Sln.isCsProj si.Path)
         | Failure s -> failwithf "%s" s
     //|> Result.bind (Result.choose id)
-    |> dumptif "slnProjects" debug
+    |> List.ofSeq
+    |> Seq.ofList
+    //|> dumptif "slnProjects" debug
 
 module Projects = 
     type XDocument with
@@ -224,56 +228,69 @@ module Projects =
         getItemGroups root
         |> Seq.map getElements
         |> Seq.collect id
-        |> Seq.choose (fun n -> if n.Name.LocalName = "Compile" && n.Attribute(XNamespace.None + "Include").Value |> endsWith ".cs" then n.Attribute(XNamespace.None+"Include").Value |> Some else None)
+        |> Seq.choose (fun n -> 
+            if n.Name.LocalName = "Compile" && n.Attribute(XNamespace.None + "Include").Value |> endsWith ".cs" then 
+                n.Attribute(XNamespace.None+"Include").Value |> Some 
+            else None)
         //|> dumpt "Items"
         
 type MethodInfo = {SpanStart:int; SpanEnd:int; Text:string}
 type FileInfo = {Path:FilePath; Methods: MethodInfo seq}
 type ProjectFileInfo = {Name:string; Fp:FilePath; Files: FileInfo seq}
 
+slnProjects |> Seq.length |> dumptif "checking x projects" debug |> ignore
+
+
 let projectFileMethods = 
     slnProjects
     |> Seq.map (fun si -> 
         let projFolder = combine (Path.GetDirectoryName si.Path.Value)
         {Name=si.Name; Fp=si.Path;Files = 
-            si.Path |> Projects.getCsFiles |> Seq.map (tee (projFolder >> FilePath))
+            si.Path 
+            |> Projects.getCsFiles 
+            |> dumptif "project cs files!" debug
+            |> Seq.map (tee (projFolder >> FilePath))
             |> Seq.choose (fun (fp, relPath) -> match fp with | Success fp -> Some (relPath,fp) | Failure s -> dumph s; None)
-            |> Seq.map (fun (relPath, fp) -> fp, fp |> Roslyn.getTree |> Roslyn.getRoot |> Roslyn.Methods.getMethods |> Seq.filter(Roslyn.Methods.isOverride >> not) |> Seq.filter Roslyn.Methods.hasTry |> Seq.filter (Roslyn.Methods.isTryMethodProperlyNamed >> not ))
+            |> Seq.map (fun (relPath, fp) -> fp, 
+                                                fp 
+                                                |> BRoslyn.getTree 
+                                                |> BRoslyn.getRoot 
+                                                // get all methods declared in file
+                                                |> BRoslyn.Methods.getMethods 
+                                                // find methods that are not overrides (I want to address the root, not the fallout)
+                                                |> Seq.filter(BRoslyn.Methods.isOverride >> not) 
+                                                // find methods that have a try inside them
+                                                |> Seq.filter BRoslyn.Methods.hasTry // TODO: check for catch without re-throw, not just any try
+                                                // find method that don't mention try in the name
+                                                |> Seq.filter (BRoslyn.Methods.isTryMethodProperlyNamed >> not )
+                                                |> List.ofSeq
+                                            )
             |> Seq.filter (snd >> any) // fun (_, methods) -> Seq.exists (fun _ -> true) methods)
-            |> Seq.map (fun (fp, methods) -> fp, methods |> Seq.map(fun m -> m.SpanStart, m.Span.End, m.GetText().ToString()))
+            |> Seq.map (fun (fp, methods) -> fp, methods 
+                                                    |> Seq.map(fun m -> m.SpanStart, m.Span.End, m.GetText().ToString()
+//                                                                            , 
+//                                                                            m.DescendantNodes()
+//                                                                            |> Seq.filter ( fun n -> n.IsKind(SyntaxKind.ConditionalExpression)) 
+//                                                                            //|> Seq.map(fun n -> n.ToString().Dump(); n)
+//                                                                            |> List.ofSeq
+                                                                ) 
+                                                                            
+                                                                            )
+                        
             |> Seq.map (fun (fp, methods) -> {Path= fp; Methods = methods|> Seq.map (fun (spanStart, spanEnd, text) -> {SpanStart=spanStart; SpanEnd= spanEnd; Text=text})})
+            |> List.ofSeq
         }
     )
+    |> List.ofSeq
     |> dumptif "got cs files" debug
 
 module Dte = 
     let getDte() = System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE.14.0") :?> EnvDTE.DTE
-    let openFile (dte:EnvDTE.DTE) path = dte.ExecuteCommand("File.OpenFile", @"C:\TFS\PracticeManagement\dev\PracticeManagement\PracticeManagement\Billing\PatientDataGridControlViewModel.cs")
+    let openFile (dte:EnvDTE.DTE) path = dte.ExecuteCommand("File.OpenFile", path) //@"C:\TFS\PracticeManagement\dev\PracticeManagement\PracticeManagement\Billing\PatientDataGridControlViewModel.cs"
 
 projectFileMethods
-|> Seq.map (fun m -> m.Name, m.Fp.Value, m.Files |> Seq.map (fun fi -> fi.Path.Value,LINQPad.Hyperlinq(fi.Path.Value,"Open"),LINQPad.Hyperlinq(new System.Action(fun () -> Dte.openFile (Dte.getDte()) fi.Path.Value), "Open In Vs2015"), fi.Methods ))
-|> dumpt "walked files"
+|> Seq.map (fun m -> m.Name, m.Files |> Seq.map (fun fi -> fi.Path.Value,LINQPad.Hyperlinq(fi.Path.Value,"Open"),LINQPad.Hyperlinq(new System.Action(fun () -> Dte.openFile (Dte.getDte()) fi.Path.Value), "Open In Vs2015"), fi.Methods),
+                                        m.Fp.Value
+            )
+|> dumpt "projects to files with badly named try methods"
 //|> Seq.map (fun (projName,projPath, methods |> Seq.map (fun (relPath,methods))))
-
-"finished".Dump()
-//void DoCompilation(SyntaxTree tree)
-//{
-//    var root = (CompilationUnitSyntax)tree.GetRoot();
-//    var compilation = CSharpCompilation.Create("HelloWorld")
-//                                         .AddReferences(
-//                                              MetadataReference.CreateFromFile(
-//                                                  typeof(object).Assembly.Location))
-//                                         .AddSyntaxTrees(tree);
-//    var model = compilation.GetSemanticModel(tree);
-//    var nameInfo = model.GetSymbolInfo(root.Usings[0].Name);
-//    var systemSymbol = (INamespaceSymbol)nameInfo.Symbol;
-//    var members = systemSymbol.GetNamespaceMembers().Select(s => s.Name);
-//}
-
-// ------------------------------------------------------------------
-// end c# comments
-// ------------------------------------------------------------------
-
-//type FileTarget = 
-//    |AllFiles of dirPath:String
-//    |SolutionProjectFiles of slnPath:String

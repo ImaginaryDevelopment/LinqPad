@@ -1,1 +1,6 @@
 *.dll
+
+Fsx/packages/
+Fsx/paket.dependencies
+Fsx/paket.exe
+Fsx/paket.lock

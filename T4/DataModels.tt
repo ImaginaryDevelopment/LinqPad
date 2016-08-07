@@ -1,0 +1,119 @@
+﻿<#@ template debug="True" language="C#" hostspecific="True" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="System.Data" #>
+<#@ assembly name="System.Data.Entity.Design" #>
+<#@ import namespace="System.Globalization" #>
+<#@ import namespace="System.IO" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.Data.Entity.Design.PluralizationServices" #>
+<#@ output extension=".txt" #>
+<#@ include file="DataModelToF.ttinclude" #><# 
+
+var cString = "Data Source";
+var tables = new []{
+    "Accidents",
+    "Accounts.Account",
+    "Accounts.JournalEntry",
+    "Appointments",
+    "AppointmentTypes",
+    "AppointmentTypeMappings",
+    "AuthorizationExceptions",
+    "B2BEligibility",
+    "Charge",
+    "ChargeProfiles",
+    "Claims",
+    "ClaimFilingIndicator",
+    "ClaimPaperworkItem",
+    "Codes",
+    "CodeChargeMappings",
+    "Facilities",
+    "PaperworkType",
+    "Patients",
+    "PatientsInfo",
+    "PayerProfile",
+    "PayerProfileInfo",
+    "Payers",
+    "Payment",
+    "PaymentItem",
+    "Users",
+    };
+
+var blacklist = new []{
+    "Payments"
+};
+var measureList = new []{
+    "AppointmentId",
+    "PatientId"
+};
+var measureBlacklist = new []{
+    "PatientIdentificationID"
+};
+var columnBlacklist = new Dictionary<string,IEnumerable<string>>{
+    {"Claims",new []{"_CurrentLevel_", "_MaxLevel_"}},
+};
+
+var targetProjectName = "Pm.Schema";
+var doMultiFile = true;
+var generatePartials = false;
+var generateValueRecords = false;
+
+var currentDir = Path.GetDirectoryName(Host.TemplateFile);
+
+// for each table in the dbproj that aren't in the tables list
+var dbPath = Path.GetFullPath(Path.Combine(currentDir, "..", "..", "..", "devDb"));
+if(Directory.Exists(dbPath))
+{
+#>found dbProjectFolder at <#= dbPath #> 
+<# 
+}
+var dbTables = Directory.Exists(dbPath) ? GetTables(dbPath) : null;
+Action<int,string> appendLine = (indentLevels, text) => GenerationEnvironment.AppendLine(String.Join(string.Empty, Enumerable.Repeat("    ", indentLevels)) + text);
+GenerationEnvironment.AppendLine("dbTables");
+foreach(var dt in dbTables?? Enumerable.Empty<TableInfo>())
+{
+    appendLine(1, dt.Schema + "." + dt.Table);
+}
+appendLine(0,string.Empty);
+
+var allTables = (Directory.Exists(dbPath) 
+    ? dbTables.Select(t => {t.GenerateFull = tables.Contains(t.Table) || tables.Contains(t.Schema + "." + t.Table); return t; }) 
+    : tables.Select(t => new TableInfo{Schema="dbo", Table=t, GenerateFull = true}))
+    .Where(t => !blacklist.Contains(t.Table))
+    .Where(t => generatePartials || t.GenerateFull)
+    .ToArray();
+
+if(Directory.Exists(dbPath))
+{
+    appendLine(0, "allTables");
+    foreach(var tablePath in allTables)
+    // TODO: generate just the records and helper
+    {
+        appendLine(1, tablePath.Schema + "." + tablePath.Table + "," + tablePath.Path);
+    }
+} else {#>
+didn't find it at <#= dbPath #>
+<#}
+
+var manager = Generate(Host, Dte, GenerationEnvironment, targetProjectName, allTables, columnBlacklist, generateValueRecords, measureList, measureBlacklist, cString, true, "Pm.Schema.DataModels");
+
+//GenerationEnvironment.AppendLine("");
+
+manager.Process(doMultiFile);
+#>
+<#+
+
+    public static class BHelpers
+    {
+        public static string After(string text, string delimiter, int padding = 0)
+        {
+            return text.Substring(text.IndexOf(delimiter) + delimiter.Length + padding);
+        }
+
+        public static string Before(string text, string delimiter)
+        {
+            return text.Substring(0, text.IndexOf(delimiter));
+        }
+    }
+#>

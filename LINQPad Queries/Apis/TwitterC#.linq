@@ -1,4 +1,6 @@
 <Query Kind="Program">
+  <Reference>&lt;RuntimeDirectory&gt;\System.Net.Http.dll</Reference>
+  <NuGetReference>Newtonsoft.Json</NuGetReference>
   <Namespace>System.Net.Http</Namespace>
 </Query>
 

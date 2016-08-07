@@ -1,0 +1,241 @@
+﻿<#+ 
+    public class FKeyInfo
+    {
+        public string Schema {get;set;}
+        public string Table{get;set;}
+        public string Column{get;set;}
+    }
+
+    public class ColumnInfo 
+	{
+        public string Name {get;set;}
+        public Type Type {get;set;}
+        public int? Length {get;set;}
+        public int? Precision {get;set;}
+        public int? Scale {get;set;}
+        public bool UseMax {get;set;}
+        public bool AllowNull {get;set;}
+        public IEnumerable<string> Attributes {get;set;}
+        public FKeyInfo FKey {get;set;}
+        public IEnumerable<string> Comments {get;set;}
+        public bool GenerateReferenceTable {get;set;}
+        public IDictionary<string,string> ReferenceValuesWithComment {get;set;}
+        public bool IsUnique {get;set;}
+    }
+
+    public class TableInfo
+	{
+        public string Name {get;set;}
+		public string Schema {get;set;}
+        public IEnumerable<ColumnInfo> Columns {get;set;}
+    }
+
+    public class ReferenceData
+    {
+        public ReferenceData(string schema, string table, string column, IDictionary<string,string> valuesWithComments)
+        {
+            Schema = schema;
+            Table = table;
+            Column = column;
+            ValuesWithComments = valuesWithComments;
+        }
+
+        public string Schema{get;set;}
+        public string Table{get;set;}
+        public string Column{get;set;}
+        public IDictionary<string,string> ValuesWithComments {get;set;}
+    }
+
+    void GenerateTable(Manager manager, EnvDTE.Project targetProject, string targetProjectFolder, TableInfo ti)
+    {
+        var targetFilename = Path.Combine(targetProjectFolder, "Schema Objects", "Schemas", ti.Schema, "Tables", ti.Name + ".table.sql");
+	    WriteLine("Generating into " + targetFilename + " for project " + targetProject.Name);
+        manager.StartNewFile(targetFilename, targetProject); 
+#>
+-- Generated file, DO NOT edit directly
+CREATE TABLE [<#=ti.Schema#>].[<#= ti.Name#>] (
+<#+ 
+        var i = 0;
+    var columnCount = ti.Columns.Count();
+        var hasCombinationPK = ti.Columns.Count(ci => ci.Attributes != null && ci.Attributes.Contains("primary key")) > 1;
+foreach(var ci in ti.Columns)
+{
+            var fKey = FormatFKey(ti.Name,ci.Name,ci.FKey);
+            var unique = ci.IsUnique ? " CONSTRAINT UQ_" + ti.Name + "_" + ci.Name + " UNIQUE" : string.Empty;
+            
+            var multipleComments = ci.Comments != null && ci.Comments.Count() > 1;
+            if(multipleComments)
+                WriteLine("\r\n" + string.Join("\r\n", ci.Comments.Select(c => "    -- " + c)));
+            var comment = ci.Comments != null && ci.Comments.Count() == 1 ? " -- " + ci.Comments.First() : string.Empty;
+            if(ci.ReferenceValuesWithComment != null && ci.ReferenceValuesWithComment.Any() && (multipleComments || ci.Comments == null || !ci.Comments.Any()))
+                comment = " -- " + string.Join(",", ci.ReferenceValuesWithComment.Keys);
+#>
+    <#= ("[" + ci.Name + "]").PadRight(32, ' ') #><#= MapTypeToSql(ci.Type,ci.Length,ci.Precision,ci.Scale,ci.UseMax).PadRight(16,' ')#><#= FormatAttributes(ci.Attributes,hasCombinationPK,fKey,ci.AllowNull) + unique #><#= i < columnCount - 1 || hasCombinationPK ? "," : string.Empty#><#= multipleComments? Environment.NewLine : string.Empty#><#= comment #>
+<#+ 
+            i++;
+}
+
+if(hasCombinationPK)
+    WriteLine("CONSTRAINT PK_" + ti.Name + " PRIMARY KEY ("+ string.Join(",",ti.Columns.Where(ci => ci.Attributes != null && ci.Attributes.Contains("primary key")).Select(ci => ci.Name)) + ")" ); #>
+);
+<#+ manager.EndBlock();
+    }
+    
+    void GenerateInsert(ReferenceData rd) 
+    {
+        //foreach(var column in tbl.Columns.Where(c => c.ReferenceValuesWithComment != null && c.ReferenceValuesWithComment.Any()).ToArray())
+        
+        var schema = rd.Schema; // column.FKey.Schema;
+        var table = rd.Table; // column.FKey.Table;
+        var columnName = rd.Column; // column.FKey.Column ?? column.Name;
+#>
+---------------------------------------------------
+PRINT 'Synchronizing [<#= schema #>.<#= table #>]';
+WITH CTE_<#= table #>(<#= columnName #>) AS
+(
+    SELECT [<#= columnName #>]
+    FROM (VALUES
+<#+     
+        var i = 0;
+        var valueCount =  rd.ValuesWithComments.Keys.Count(); //column.ReferenceValuesWithComment.Keys.Count();
+        foreach(var v in rd.ValuesWithComments.Keys /* column.ReferenceValuesWithComment.Keys */){ #>
+            ('<#= v.Replace("'","''") #>')<#= i < valueCount - 1 ? "," : ")" #><#= rd.ValuesWithComments[v] != null /* column.ReferenceValuesWithComment[v] != null*/ ? " -- " + rd.ValuesWithComments[v] /*column.ReferenceValuesWithComment[v]*/ : string.Empty #>
+<#+                    
+                i++;                            
+        } #>
+        AS SOURCE([<#= columnName  #>])
+)
+MERGE INTO [<#= schema #>].[<#= table  #>] AS TARGET
+USING CTE_<#= table #>
+ON CTE_<#= table #>.[<#= columnName #>] = TARGET.[<#= columnName #>]
+WHEN NOT MATCHED BY TARGET THEN
+    INSERT([<#= columnName #>])
+    VALUES([<#= columnName #>]);
+
+PRINT 'Done Synchronizing [<#= schema #>.<#= table #>]';
+GO
+
+<#+
+        
+    }
+
+    void GenerateAccountingInserts(Manager manager, EnvDTE.Project targetProject, string targetProjectFolder, IEnumerable<TableInfo> tables,IEnumerable<ReferenceData> referenceInserts, string targetRelativePath)
+    {
+    // generate reference data
+        var toGen = tables.Where(t=> t.Columns.Any(c=> c.ReferenceValuesWithComment != null && c.ReferenceValuesWithComment.Any())).ToArray();
+        if(!toGen.Any() && (referenceInserts == null || !referenceInserts.Any()))
+            return;
+        var targetFilename = Path.Combine(targetProjectFolder,targetRelativePath);
+        manager.StartNewFile(targetFilename, targetProject); #>
+
+-- Generated file, DO NOT edit directly
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+PRINT 'Starting Accounting Synchronization'
+GO
+<#+
+        foreach(var tbl in toGen)
+        foreach(var column in tbl.Columns.Where(c => c.ReferenceValuesWithComment != null && c.ReferenceValuesWithComment.Any()).ToArray())
+        {
+               var rd = new ReferenceData(column.FKey.Schema, column.FKey.Table, column.FKey.Column ?? column.Name, column.ReferenceValuesWithComment);
+                GenerateInsert(rd);
+        }
+
+        foreach(var ri in referenceInserts ?? Enumerable.Empty<ReferenceData>())
+            GenerateInsert(ri);
+
+        manager.EndBlock();
+    }
+
+    public static string FormatAttributes(IEnumerable<string> attributes,bool hasCombinationPK, string fKey, bool allowNull)
+    {
+        var isPk = attributes != null && attributes.Contains("primary key");
+        var needsStarter = allowNull || !isPk || hasCombinationPK;
+        var starter = (allowNull ? "null" : needsStarter ? "not null" : string.Empty) + (needsStarter ? " " : string.Empty); 
+        if (attributes == null) return starter + (fKey != null? " " + fKey : null);
+        var attribs = starter + string.Join(" ", hasCombinationPK && attributes != null ? attributes.Except(new []{"primary key"}) : attributes);
+        if(fKey == null)
+            return attribs;
+
+        return attribs + " " + fKey;
+    }
+
+	public static string MapTypeToSql(Type type,int? length, int? precision,int? scale, bool useMax)
+	{
+		if(type == typeof(int))
+			return "int";
+        if(type == typeof(string))
+            return "varchar(" + (useMax?"MAX":length.ToString()) + ")";
+        if(type == typeof(decimal))
+            return "decimal" + (scale.HasValue&& precision.HasValue? "("+precision+","+scale+")" : string.Empty);
+        if(type == typeof(DateTime))
+            return "datetime";
+        if(type == typeof(bool))
+            return "bit";
+		return type.Name;
+	}
+
+    public static string FormatFKey(string table, string column, FKeyInfo fKey)
+    {
+        if(fKey == null)
+            return null;
+        // sprintf "CONSTRAINT [FK_%s_%s_%s_%s] FOREIGN KEY ([%s]) REFERENCES [dbo].[%s] ([%s])" tableName targetColumn fkeyTable fkeyColumn targetColumn fkeyTable fkeyColumn
+        var fKeyColumn = fKey.Column ?? column;
+        return "CONSTRAINT [FK_"+ table + "_" + column + "_" + fKey.Table + "_" + fKeyColumn + "] FOREIGN KEY ([" + column + "]) REFERENCES [" + fKey.Schema + "].[" + fKey.Table + "] ([" + fKeyColumn + "])";
+    }
+
+    void GenerateTablesAndReferenceTables(Manager manager, Project targetProject, string targetProjectFolder, IEnumerable<TableInfo> toGen) 
+    {
+        foreach(var ti in toGen)
+        { 
+
+            GenerateTable(manager, targetProject, targetProjectFolder, ti);
+    
+            foreach(var childCi in ti.Columns.Where(ci => ci.GenerateReferenceTable))
+            {
+                    var pkeyColumn = new ColumnInfo{ Name=childCi.Name, Type = childCi.Type, Attributes = new []{ "primary key" }, Length= childCi.Length, UseMax= childCi.UseMax };
+                    var columns = new []{ pkeyColumn};
+                    var name = childCi.FKey.Table;
+                    var table = new TableInfo{ Schema=childCi.FKey.Schema, Name=name,Columns=columns};
+                    GenerateTable(manager, targetProject, targetProjectFolder, table);
+            }
+        }
+    }
+
+    public static ColumnInfo  CreateFKeyedColumn<T>(string name, FKeyInfo fkey)
+    {
+        return CreateFKeyedColumn<T>(name,fkey, false);
+    }
+
+    public static ColumnInfo CreateFKeyedColumn<T>(string name, FKeyInfo fkey, bool allowNull)
+    {
+        return CreateFKeyedColumn<T>(name, fkey, allowNull, null);
+    }
+
+    public static ColumnInfo CreateFKeyedColumn<T>(string name, FKeyInfo fkey, bool allowNull, string comment)
+    {
+                return new ColumnInfo{
+            Name=name, Type = typeof(T),
+                AllowNull=allowNull,
+                FKey=fkey,
+                Comments = comment != null? new[]{ comment} : null
+                };
+    }
+
+    public static ColumnInfo CreatePatientIdColumn(string prefix, bool allowNull, string comment)
+    {
+        return CreateFKeyedColumn<int>(prefix + "PatientID", new FKeyInfo{ Schema="dbo", Table="Patients",Column="PatientID" }, allowNull, comment);
+    }
+
+    public static ColumnInfo CreateUserIdColumn(string prefix, bool allowNull, string comment)
+    {
+        return CreateFKeyedColumn<int>(prefix + "UserID", new FKeyInfo{ Schema="dbo", Table="Users",Column="UserID" }, allowNull, comment);
+    }
+
+    public static ColumnInfo MakeNullable50(string name)
+    {
+        return new ColumnInfo{ Name = name, Type = typeof(string), AllowNull = true, Length = 50 };
+    }
+#>

@@ -38,12 +38,26 @@ let sqlRowTemplate tableSpec :(string * (string * string) seq) seq =
     }
 
 //goal: be completely ignorant of type
-let sqlTemplate chunkValuesThreshold identifier hasIdentity tableSpec  :int*string= 
+let getSqlTemplate hashOpt chunkValuesThreshold identifier hasIdentity tableSpec  :int*string= 
     let spacing = "    "
+    let ifHash = // no GO statements inside if-begin
+        match hashOpt with
+        | Some x -> 
+            let startIf = sprintf @"print 'checking diagnoses for icd10 hash'
+if (select checksum_agg(checksum(*)) from %s where CodeType = 'ICD10') <> %i -- hash idea from http://stackoverflow.com/a/1560450/57883
+begin
+"                           tableSpec.TableName x
+            let endIf = @"end
+else
+begin
+    print 'skipping icd10 inserts, hash matches'
+end"
+            startIf,endIf
+        | None -> String.Empty,String.Empty
     let identity =
-        let on = sprintf "SET IDENTITY_INSERT %s ON;" tableSpec.TableName
-        let off = sprintf "SET IDENTITY_INSERT %s OFF;" tableSpec.TableName
         if hasIdentity then
+            let on = sprintf "SET IDENTITY_INSERT %s ON;" tableSpec.TableName
+            let off = sprintf "SET IDENTITY_INSERT %s OFF;" tableSpec.TableName
             on,off
         else
             "",""
@@ -72,55 +86,57 @@ let sqlTemplate chunkValuesThreshold identifier hasIdentity tableSpec  :int*stri
           INSERT(%s)
           VALUES(%s)
         WHEN MATCHED AND CTE.ISBILLABLE <> TARGET.ISBILLABLE THEN
-            UPDATE set target.isbillable=cte.isbillable
-          ;
-        """ columnList chunkValues columnList tableSpec.TableName onClause columnList columnList
+            UPDATE set target.isbillable=cte.isbillable ; """ columnList chunkValues columnList tableSpec.TableName onClause columnList columnList
 
     let chunks = 
         let length = Seq.length values
         values 
         |> Seq.mapi (fun i v-> 
             if length > 1 then
-                sprintf "%s;%sprint 'finished chunk %i of %i';%sGO%s" (createMergeStatement v) Environment.NewLine (i+1) length Environment.NewLine Environment.NewLine
+                sprintf "%s\r\n%sprint 'finished chunk %i of %i';%s" (createMergeStatement v) Environment.NewLine (i+1) length Environment.NewLine 
             else sprintf "%s;%s" (createMergeStatement v) Environment.NewLine)  
         |> delimit (Environment.NewLine + Environment.NewLine)
 
     rowCount,(sprintf """
 SET ANSI_NULLS ON
-GO
 SET QUOTED_IDENTIFIER ON
-GO
 PRINT 'Starting %s %s'
 PRINT 'Synchronization for %i values'
-GO
+%s
 %s
 -- chunks
 %s
 -- end chunks
 %s
+%s
 PRINT 'Done Synchronizing %s'
-GO
-    """ tableSpec.TableName identifier rowCount (fst identity) chunks (snd identity) tableSpec.TableName)
+    """ tableSpec.TableName identifier rowCount (fst ifHash) (fst identity) chunks (snd identity) (snd ifHash) tableSpec.TableName)
 
 let useDiagnosis values valueF = 
-    let values = values |> Seq.map (fun v -> {v with Code = replace "." "" v.Code}) |> Seq.map (fun v -> [v.Code;"ICD10";v.Desc;v.Desc;v.Desc;sprintf "%s %s" v.Code v.Desc;sprintf "%b" v.IsBillable ] |> Seq.ofList |> valueF) 
+    let values = 
+        values 
+        |> Seq.map (fun v -> {v with Code = replace "." "" v.Code}) 
+        |> Seq.map (fun v -> 
+            [v.Code;"ICD10";v.Desc;v.Desc;v.Desc;sprintf "%s %s" v.Code v.Desc;sprintf "%b" v.IsBillable ] 
+            |> Seq.ofList 
+            |> valueF) 
     let tbl = "[dbo].[Diagnoses]"
     let matchColumns = ["IcdCode";"CodeType"] |> List.map (fun c -> {Name=c;IsMatch=true})
     let columns = ["Diagnosis";"ShortDescription";"LongDescription";"FullTextSearch";"IsBillable"] |> List.map (fun c -> {Name=c;IsMatch=false})
     let columns = matchColumns @ columns
     {Values = values; HasIdentity=true; TableName = tbl; Columns = columns }
 
-let diagnosisTemplate identifier values =
+let getDiagnosisTemplate hashOpt identifier values =
     let valueF values' = values' |> Seq.map(replace "'" "''") |> Seq.map (wrap "'")
     let tableSpec =  useDiagnosis values valueF
-    sqlTemplate 3000 identifier false tableSpec
+    getSqlTemplate hashOpt 3000 identifier false tableSpec
 
 let tryIt () = 
     let values = [
         {Code="A00"; Desc="Cholera"; IsBillable=false;Unextended=null}
         {Code="A00.0";Desc="Cholera due to Vibrio cholerae 01, biovar cholerae";IsBillable=false;Unextended=null}
         ]
-    diagnosisTemplate "tryIt" values
+    getDiagnosisTemplate None "tryIt" values
 
 let checkForMissingCodes (chapter,title,diagnoses:#seq<Diagnosis>) = 
     match chapter with
@@ -137,18 +153,20 @@ let checkForMissingCodes (chapter,title,diagnoses:#seq<Diagnosis>) =
         (chapter,title,diagnoses)
     | _ -> (chapter,title,diagnoses)
 
-let scriptifySections interestedCodeBeginnings chapterFilter = 
+let scriptifySections interestedCodeBeginnings chapterFilter hashOpt = 
     let diags = Icd10Reader.Diags.getIcd10Diags drugPath interestedCodeBeginnings
     match chapterFilter with 
     |Some f -> diags |> Seq.filter f
     |None -> diags
     |> Seq.map checkForMissingCodes
-    |> Seq.map (fun (name,desc, diagnoses) -> sprintf "Icd10_Chapter%s_Inserts.sql" name, diagnosisTemplate (sprintf "Chapter%s(%s)" name desc) diagnoses)
+    |> Seq.map (fun (name,desc, diagnoses) -> sprintf "Icd10_Chapter%s_Inserts.sql" name, getDiagnosisTemplate hashOpt (sprintf "Chapter%s(%s)" name desc) diagnoses)
 
-let scriptTargetPath = @"C:\TFS\Pm-Rewrite\Source-dev-rewrite\PracticeManagement\ApplicationDatabase\Scripts\Post-Deployment\TableInserts\Icd10"
+let scriptTargetPath = @"C:\TFS\PracticeManagement\dev\PracticeManagement\Db\Scripts\Post-Deployment\TableInserts\Icd10"
 
-let writeDiagnosisScripts beforeWriteF interestedCodeBeginnings chapterFilter= 
-    scriptifySections interestedCodeBeginnings chapterFilter
+let writeDiagnosisScripts hashOpt beforeWriteF interestedCodeBeginnings chapterFilter= 
+    if not <| System.IO.Directory.Exists scriptTargetPath then
+        failwithf "Script target directory did not exist: %s" scriptTargetPath
+    scriptifySections interestedCodeBeginnings chapterFilter hashOpt
     |> Seq.map (fun (filename,(rowCount,text)) ->
         let fullpath = System.IO.Path.Combine(scriptTargetPath, filename)
         match beforeWriteF with
@@ -208,6 +226,6 @@ let tryIt2 () =
 let writeWithCheckout() = 
     let interestedCodeBeginnings = (Some ["S548"])
     let diagFilter = None //(Some (fun (ch,_,_) -> ch="19"))
-    writeDiagnosisScripts (Some (fun i -> tfCheckout (Some(scriptTargetPath)) [i])) interestedCodeBeginnings diagFilter
+    writeDiagnosisScripts (Some 792943353) (Some (fun i -> tfCheckout (Some(scriptTargetPath)) [i])) interestedCodeBeginnings diagFilter
 
 writeWithCheckout()
