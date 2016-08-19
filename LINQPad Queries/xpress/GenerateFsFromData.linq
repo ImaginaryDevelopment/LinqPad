@@ -1,24 +1,13 @@
 <Query Kind="FSharpProgram">
-  <Connection>
-    <ID>3da1b433-c8cb-407a-9c25-1d4f2ea04d64</ID>
-    <Persist>true</Persist>
-    <Server>192.168.0.187</Server>
-    <SqlSecurity>true</SqlSecurity>
-    <UserName>xpu10</UserName>
-    <Password>AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAAfs+fvOIuHkq5uisIQafUpAAAAAACAAAAAAAQZgAAAAEAACAAAACQAkUvjSn5aeB96QXgdsjjFqXPvptKHgnaCGMhNRDMSgAAAAAOgAAAAAIAACAAAABbiFmT0lVrhHmtBPdMe3xyU1OjyKeaaH7eR33/SwSecRAAAAABJ/MPPwEPOgIlPCyxKQuIQAAAAIT7pUPnPxbVciisX+r/MmPla5oOVfqYvr9sRtZbeRrH/OKX3Rc7PSVpRIZFGC/3DIrOyo2W19KDU8GleIkcCIM=</Password>
-    <IncludeSystemObjects>true</IncludeSystemObjects>
-    <Database>ApplicationDatabase</Database>
-    <ShowServer>true</ShowServer>
-  </Connection>
   <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 10.0\Common7\IDE\PublicAssemblies\EnvDTE.dll</Reference>
   <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 10.0\Common7\IDE\PublicAssemblies\EnvDTE80.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.Data.Entity.Design.dll</Reference>
   <GACReference>Microsoft.VisualStudio.TextTemplating.Interfaces.10.0, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
 </Query>
 
+// .tt translations
 let dc = new TypedDataContext()
 
-// .tt translations
 open System
 open Microsoft.VisualStudio.TextTemplating
 type CultureInfo = System.Globalization.CultureInfo
@@ -66,6 +55,7 @@ module EnvDteHelper =
         		else
         			list.Add(project)
         list
+        
     
 // MultipleOutputHelper.ttinclude
 module MultipleOutputHelper = 
@@ -83,6 +73,7 @@ module MultipleOutputHelper =
         abstract member EndBlock: unit -> unit
         abstract member Process: doMultiFile:bool -> unit
         abstract member DefaultProjectNamespace: string with get
+        abstract member GeneratedFileNames : string seq with get
         
     module Managers = 
         type Manager internal (host,template) = 
@@ -99,6 +90,7 @@ module MultipleOutputHelper =
             member __.GeneratedFileNames with get() = generatedFileNames    
             member __.StartNewFile(name, ?project) =
                 if isNull name then raise <| new ArgumentNullException("name")
+                printfn "Starting new file at %s" name
                 let project = defaultArg project null
                 currentBlock <- new Block(Name=name,Project=project)
                 
@@ -112,7 +104,7 @@ module MultipleOutputHelper =
                     currentBlock.Length <- template.Length - currentBlock.Start
                     if currentBlock <> header && currentBlock <> footer then
                         files.Add currentBlock
-                    x.CurrentBlock <- null
+                    currentBlock <- null
                     
             abstract Process : split:bool -> unit
             default x.Process split = 
@@ -132,6 +124,7 @@ module MultipleOutputHelper =
             abstract CreateFile : fileName:string -> content:string -> unit
             default x.CreateFile fileName content = 
                 if x.IsFileContentDifferent fileName content then
+                    printfn "Writing a file to %s" fileName
                     File.WriteAllText(fileName, content)
                     
             abstract GetCustomToolNamespace: fileName: string -> string
@@ -142,8 +135,10 @@ module MultipleOutputHelper =
             
             abstract IsFileContentDifferent : fileName:string -> newContent:string -> bool
             default __.IsFileContentDifferent fileName newContent =
-                File.Exists fileName && File.ReadAllText(fileName) = newContent
-                |> not
+                let isFileContentDifferent =
+                    (File.Exists fileName && File.ReadAllText(fileName) = newContent)
+                    |> not
+                isFileContentDifferent
                 
             member x.CurrentBlock
                 with get() = currentBlock
@@ -169,6 +164,7 @@ module MultipleOutputHelper =
                 override x.DefaultProjectNamespace = x.DefaultProjectNamespace
                 override x.Dte = None
                 override x.TemplateFile = host.TemplateFile
+                override x.GeneratedFileNames = upcast generatedFileNames
                 
         and VsManager private (host,dte,template,templateProjectItem,checkOutAction, projectSyncAction) =
                 inherit Manager(host,template)
@@ -760,17 +756,49 @@ let sb = StringBuilder()
 let mutable currentFile:string = null
 let pluralizer = createPluralizer()
 
-let manager = 
-    { new MultipleOutputHelper.IManager
-         with 
-            override this.StartNewFile (s,p) = currentFile <- s;  sb.AppendLine(sprintf "// Starting a new file '%s' s for project opt '%A'" s p) |> ignore
-            override this.EndBlock () = sb.AppendLine(String.Empty) |> ignore; sb.AppendLine(sprintf "// file finished '%s'" currentFile) |> ignore
-            override this.Process doMultiFile = ()
-            override this.DefaultProjectNamespace with get() = "DefaultProjectNamespace"
-            override this.Dte = None
-            override this.TemplateFile with get() = "DataModels.tt"
-    }
+type GenerationStrategy = 
+    | UseMultipleOutputHelperCode
+    | UseCustomManager
+let getManager strat : MultipleOutputHelper.IManager = 
+    match strat with 
+    |UseMultipleOutputHelperCode -> // WIP - generates a file, just to the wrong dir
+    
+        let host = 
+            let assRefs = List<string>()
+            let currentDir = Path.Combine(Environment.ExpandEnvironmentVariables "%devroot%","PracticeManagement","dev","PracticeManagement", "PracticeManagement.Foundation") //Path.GetDirectory(Host.TemplateFile)
+            printfn "CurrentDirectory was %s" Environment.CurrentDirectory
+            Environment.CurrentDirectory <- currentDir
+            {new ITextTemplatingEngineHost
+                with
+                    override __.GetHostOption optionName = printfn "Option requested:%s" optionName; null 
+                    override __.LoadIncludeText (x,y,z) = printfn "LoadIncludetext:%A" (x,y,z); false
+                    override __.LogErrors errors =printfn "loggedErrors: %A" (errors); Unchecked.defaultof<_>
+                    override __.ProvideTemplatingAppDomain content = printfn "ProvideTemplatingAppDomain:%A" content; AppDomain.CreateDomain content
+                    override __.ResolveAssemblyReference _ = printfn "ResolveAssemblyReference" ;Unchecked.defaultof<_>
+                    override __.ResolveDirectiveProcessor _ = printfn "ResolveDirectiveProcessor"; Unchecked.defaultof<_>
+                    override __.ResolveParameterValue (_,_,_) = printfn "ResolveParameterValue" ; Unchecked.defaultof<_>
+                    override __.ResolvePath _ = printfn "ResolvePath"; Unchecked.defaultof<_>
+                    override __.SetFileExtension _ = ()
+                    override __.SetOutputEncoding (_, _) = ()
+                    override __.StandardAssemblyReferences with get() = printfn "getting assRefs";  upcast assRefs 
+                    override __.StandardImports with get() = printfn "getting StandardImports"; upcast assRefs
+                    override __.TemplateFile with get() =printfn "GettingTemplateFile"; "DataModels.tt" //Path.Combine(currentDir,"DataModels.tt")
+            }
+        upcast MultipleOutputHelper.Managers.Manager(host,sb)
+    | UseCustomManager -> 
+        let generatedFileNames = List<string>()
+        { new MultipleOutputHelper.IManager
+             with 
+                override this.StartNewFile (s,p) = currentFile <- s;  sb.AppendLine(sprintf "// Starting a new file '%s' s for project opt '%A'" s p) |> ignore
+                override this.EndBlock () = sb.AppendLine(String.Empty) |> ignore; sb.AppendLine(sprintf "// file finished '%s'" currentFile) |> ignore
+                override this.Process doMultiFile = ()
+                override this.DefaultProjectNamespace with get() = "DefaultProjectNamespace"
+                override this.Dte = None
+                override this.TemplateFile with get() = "DataModels.tt"
+                override this.GeneratedFileNames = upcast generatedFileNames
+        }
 
+let manager = getManager UseMultipleOutputHelperCode
 SqlGeneration.generateTable manager sb None 
     {
     Name="Users"; Schema="dbo"; 
@@ -790,7 +818,6 @@ SqlGeneration.generateTable manager sb None
     }
 
 //let generate(manager:IManager, generationEnvironment:StringBuilder , targetProjectName:string , tables:string seq, cString:string , doMultiFile:bool) (pluralizer:string -> string) (singularizer:string -> string) useOptions=
-DataModelToF.generate (manager, sb, "Pm.Schema", ["Users"], dc.Connection.ConnectionString, true) pluralizer.Pluralize pluralizer.Singularize false
-
+DataModelToF.generate (manager, sb, "Pm.Schema", ["Users"], dc.Connection.ConnectionString, (* doMultiFile *) true) pluralizer.Pluralize pluralizer.Singularize false
+manager.GeneratedFileNames.Dump("files generated")
 sb.ToString().Dump("generated")
-    
