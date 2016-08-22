@@ -1,4 +1,6 @@
 <Query Kind="FSharpProgram" />
+<Query Kind="FSharpProgram">
+</Query>
 
 // adapted from http://stackoverflow.com/questions/2779746/is-there-a-textwriter-interface-to-the-system-diagnostics-debug-class
 type HandyOutStream(f, flushOpt:(unit->unit) option) =
