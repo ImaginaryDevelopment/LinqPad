@@ -1,8 +1,8 @@
 ﻿//parse brush pasting from snoop
 
 #if INTERACTIVE
-#I @"..\LINQPad\NuGet.FW46\FParsec\FParsec.1.0.2\lib\net40-client\" // references AppData\local\ ...  since . is %localappdata%\TEMP
-// #I @"C:\Users\Brandon\AppData\Local\LINQPad\NuGet.FW46\FParsec\FParsec.1.0.2\lib\net40-client\"
+#I @"C:\Users\Brandon\AppData\Local\LINQPad\NuGet.FW46\FParsec\FParsec.1.0.2\lib\net40-client\" // references AppData\local\ ...  since . is %localappdata%\TEMP
+// #I 
 #r "FParsecCS.dll"
 #r @"FParsec.dll"
 #endif
@@ -97,4 +97,4 @@ module Transformers =
 open Transformers
 tryParseBrush sampleText 
 |> Option.bind (fun x -> x.ToFSharp () |> Some)
-
+|> printfn "%A"
