@@ -276,20 +276,27 @@ type DeployBehavior =
     | BuildThenUseSqlPackageExe
     | BuildThenUseSqlPackageExeWithPreCompare
     | UseSqlPackageExeWithPreCompare
+    | GetSqlPackageCommandLine
     //| RunSmo 
 
 
 open SqlHelpers
 open Railways
+let outFolder = @"C:\TFS\PracticeManagement\dev\PracticeManagement\bin\sql"
+    
+outFolder.Dump("dacpac folder")
+let getSqlPackageCommandLine dbProjectOutputName includeTransactionalScripts = 
+    let cmd,args = 
+            let targetDacPac = System.IO.Path.Combine(outFolder, dbProjectOutputName)
+            let targetBehavior = TargetBehavior.ConnectionString cs
+            cmdLine targetDacPac DoNotDropObjectsNotInSource true Environment.MachineName targetBehavior includeTransactionalScripts
+    cmd,args
     
 let runDeploy dbName deployBehavior = 
     "running deploy".Dump()
+    
     // sql output folder and app output folder are now one and the same
     let projFolder = @"C:\TFS\PracticeManagement\dev\PracticeManagement\Db"
-    
-    let outFolder = @"C:\TFS\PracticeManagement\dev\PracticeManagement\bin\sql"
-    
-    outFolder.Dump("dacpac folder")
     
     let runSqlPackageExe includeTransactionalScripts = 
         let cmd,args = 
@@ -404,10 +411,10 @@ let runDeploy dbName deployBehavior =
         buildSqlProj None projFolder
         |> Dump
         |> ignore
-        
+    let useTransactionalScripts = true
     let useSqlPackageExe () = 
             //useSqlPackageWithSprocRetry()
-            useSqlPackageExe true
+            useSqlPackageExe useTransactionalScripts 
     match deployBehavior with
     | BuildThenUseSqlPackageExeWithPreCompare ->
         buildBehavior()
@@ -435,53 +442,61 @@ let runDeploy dbName deployBehavior =
         | None -> failwithf "PreCompareScript not found"
         printfn "PreCompare finished"
         useSqlPackageExe ()
+    | GetSqlPackageCommandLine ->
+        getSqlPackageCommandLine dbName useTransactionalScripts 
+        |> printfn "CommandLine: %A"
+        
 //    | RunSmo ->
 //        SqlMgmt.migrate @"C:\TFS\PracticeManagement\dev\PracticeManagement\Db\sql\debug\PmMigration.publish.sql" dbName
+//
 
-let checkForInvalidCharges () = 
-    let invalidCharges = 
-        dc.ExecuteQuery<Charges> @"
-select c.*
-from dbo.charges c 
-left join dbo.appointments a 
-    on c.appointmentid = a.appointmentid
-where a.appointmentid is null"
-        |> List.ofSeq
-    invalidCharges.Dump("invalid charges")
+// ***********************************************************************
+// this section requires a linqpad connection, commented out so it will work without one
+//let checkForInvalidCharges () = 
+//    let invalidCharges = 
+//        dc.ExecuteQuery<Charges> @"
+//select c.*
+//from dbo.charges c 
+//left join dbo.appointments a 
+//    on c.appointmentid = a.appointmentid
+//where a.appointmentid is null"
+//        |> List.ofSeq
+//    invalidCharges.Dump("invalid charges")
+//
+//    failwithf "Invalid charges, can not deploy or process"
+//
+//let checkForInvalidPaymentTypes () = 
+//    let invalidPayments = 
+//        dc.ExecuteQuery<Payments> @"select * from payments where paymenttype = 0"
+//        |> List.ofSeq
+//    invalidPayments.Dump("invalid payments")
+//    failwithf "Invalid payments, can not deploy or process"
+//    
+//type LargestPaymentInfo () = 
+//    member val PaymentID = 0 with get,set
+//    member val Amount = 0m with get,set
+//    member val DataLength = 0 with get,set
+//    member val Length = 0 with get,set
+//    
+//let getLargestPayment () = 
+//    dc.ExecuteQuery<LargestPaymentInfo> @"select len(amount) as length, DATALENGTH(amount) as datalength, * 
+//    from payments p
+//    where p.amount = (select max(amount) from payments)"
+//    |> Seq.tryHead // table could be empty
+//    |> function 
+//        | Some lpi ->  lpi.Dump()
+//        | None -> ()
+//        
+//getLargestPayment()
+// **********************************************************************
 
-    failwithf "Invalid charges, can not deploy or process"
 
-let checkForInvalidPaymentTypes () = 
-    let invalidPayments = 
-        dc.ExecuteQuery<Payments> @"select * from payments where paymenttype = 0"
-        |> List.ofSeq
-    invalidPayments.Dump("invalid payments")
-    failwithf "Invalid payments, can not deploy or process"
-    
-type LargestPaymentInfo () = 
-    member val PaymentID = 0 with get,set
-    member val Amount = 0m with get,set
-    member val DataLength = 0 with get,set
-    member val Length = 0 with get,set
-    
-let getLargestPayment () = 
-    dc.ExecuteQuery<LargestPaymentInfo> @"select len(amount) as length, DATALENGTH(amount) as datalength, * 
-    from payments p
-    where p.amount = (select max(amount) from payments)"
-    |> Seq.tryHead // table could be empty
-    |> function 
-        | Some lpi ->  lpi.Dump()
-        | None -> ()
-        
-getLargestPayment()
-
-runDeploy "PmMigration" BuildThenUseSqlPackageExeWithPreCompare
-//runDeploy "PmMigration" UseSqlPackageExeWithPreCompare
-
+let dbProjectOutputName = "PmMigration" // project outputs a PmMigration.dacpac
 DateTime.Now.Dump("starting deploy")
-//runDeploy "PmMigration" BuildThenUseSqlPackageExeWithPreCompare
-runDeploy "PmMigration" UseSqlPackageExeWithPreCompare
+//runDeploy dbProjectOutputName BuildThenUseSqlPackageExeWithPreCompare
+runDeploy dbProjectOutputName GetSqlPackageCommandLine
+//runDeploy dbProjectOutputName UseSqlPackageExeWithPreCompare
 DateTime.Now.Dump("finishing deploy")
-//runDeploy "PmMigration" RunSmo
+//runDeploy dbProjectOutputName RunSmo
 
 //Util.Cmd(cmdLine).Dump()
