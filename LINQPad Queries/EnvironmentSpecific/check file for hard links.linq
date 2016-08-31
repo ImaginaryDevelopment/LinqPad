@@ -6,6 +6,15 @@
 // check for junctions/hard linked files
 // based somewhat on http://stackoverflow.com/questions/4510269/c-sharp-count-and-list-hardlink-locations-of-a-file
 // based loosely on https://blogs.msdn.microsoft.com/vbteam/2008/09/23/to-compare-two-filenames-lucian-wischik/
+
+type System.String with
+    static member startsWithI (toMatch:string) (x:string) = not <| isNull x && not <| isNull toMatch && toMatch.Length > 0 && x.StartsWith(toMatch, StringComparison.InvariantCultureIgnoreCase)
+    static member containsI (sub:string) (x:string) = if isNull x then false elif sub = "" then failwithf "bad contains call" else x.IndexOf(sub, StringComparison.InvariantCultureIgnoreCase) >= 0
+
+let (|StartsWithI|_|) s1 (toMatch:string) = if toMatch <> null && toMatch.StartsWith(s1, StringComparison.InvariantCultureIgnoreCase) then Some () else None
+/// take a function that expects 2 arguments and flips them before applying to the function
+let inline flip f x y = f y x
+
 [<RequireQualifiedAccess>]
 module PInvoke = 
     [<Struct>]
@@ -104,14 +113,36 @@ module Wrapper =
             |> List.ofSeq
             |> Seq.ofList
         else Seq.empty
-
-let filename = @"C:\projects\LinqPad\LinqPad\T4\DataModelToF.ttinclude"
-Wrapper.getFileHardLinks(filename)
-|> List.ofSeq
-|> Dump
-
-let getFileInfoSample() = 
+        
+let getFileInfoSample filename = 
     let handle = Wrapper.getHandle filename
     let success,info = Wrapper.getFileInformationByHandle handle
     (success,info)
     |> Dump
+
+// want to make sure all files in this directory are hard linked to the actual usage spots
+// check that all usages of the filename are linked to here.
+
+
+let directoryToCheck = @"C:\projects\LinqPad\LinqPad\T4\"
+let devBlackLists = [
+    //String.containsI "Pm.DbAutomation"
+    
+    ]
+    
+directoryToCheck
+|> Directory.GetFiles
+|> Seq.map (fun f -> 
+    let links = Wrapper.getFileHardLinks f
+    let startDir = Environment.ExpandEnvironmentVariables("%devroot%")
+    let extension = Path.GetExtension(f)
+    let isBlackListed filePath = devBlackLists |> Seq.exists (fun f -> f filePath)
+    let devLocations = 
+        Directory.GetFiles(startDir, Path.GetFileName(f), SearchOption.AllDirectories)
+        |> Seq.filter (isBlackListed>>not)
+    f,links,devLocations  //Util.HighlightIf(links, fun l -> Seq.length l < 2)
+    )
+|> List.ofSeq
+|> Dump
+
+

@@ -4,8 +4,9 @@
 </Query>
 
 // connect to twitter, save all my liked/favorited tweets in case the owner deletes their account or the tweet.
-// WIP: everything except the favorites is working
+// desired feature: unshorten any urls found
 open System.Globalization
+open System.Net
 open System.Net.Http
 open Newtonsoft.Json
 
@@ -176,7 +177,11 @@ let getAppRateLimitStatus() =
     |> dumpt "rate limit status"
     
 // https://dev.twitter.com/rest/reference/get/favorites/list
-type FavoriteResult = {coordinates:string; id:Int64 Nullable;  truncated:bool Nullable ; favorited:bool Nullable; created_at:string; id_str:string; in_reply_to_user_id_str:Int64 Nullable; text:string } // entities:string; text:string;
+type User = { name:string; profile_image_url:string;id:Int64 Nullable; screen_name:string; location:string; description:string; url:string;}
+type Media = { Id:Int64 Nullable; Media_Url:string;Expanded_Url:string; Type:string; Display_Url:string}
+type Url = {Url:string; Expanded_url:string; Display_url:string}
+type Entity = { Media: Media[]; Urls: Url[]}
+type FavoriteResult = {Coordinates:string; Id:Int64 Nullable; Truncated:bool Nullable ; Favorited:bool Nullable; Created_at:string; Id_str:string; In_reply_to_user_id_str:Int64 Nullable; Text:string; User:User; Entities:Entity}
 
 let getFavorites useCache userIdOpt screenNameOpt countOpt since_idOpt max_idOpt _include_entities =
     let getFavoritesRaw () = 
@@ -222,8 +227,34 @@ let getFavorites useCache userIdOpt screenNameOpt countOpt since_idOpt max_idOpt
         |> dumpt "Deserialized"
     prettyPrintHead()
     favoriteResults
-    
-    
 
+
+module Unshortening =
+    type unshortenResult = 
+        | Success of status:HttpStatusCode*url:string 
+        | Failure of HttpStatusCode
+        | FailureStatus of WebExceptionStatus
+        
+    let unshorten (url:string) = // with help from http://stackoverflow.com/a/9761793/57883
+        let req = WebRequest.Create(url) :?> HttpWebRequest
+        req.AllowAutoRedirect <- false
+        try 
+            use resp = req.GetResponse()
+            use hResp = resp :?> HttpWebResponse
+            match hResp.StatusCode with
+            | HttpStatusCode.MovedPermanently // they should all be returning this code if they are shortened (also seems to return this to redirect to the same url in https)
+            | _ -> 
+                let realUrl = resp.Headers.["Location"]
+                Success (hResp.StatusCode,realUrl) // unless it redirects to another shortened link
+        with :? WebException as e ->
+            match e.Status = WebExceptionStatus.ProtocolError with
+            | true ->
+                use resp = e.Response 
+                use hResp = resp :?> HttpWebResponse
+                Failure hResp.StatusCode   
+            | false -> 
+                FailureStatus e.Status
+                
 let cacheResult = true
 getFavorites cacheResult None (Some "maslowjax") (Some 2) None None false
+
