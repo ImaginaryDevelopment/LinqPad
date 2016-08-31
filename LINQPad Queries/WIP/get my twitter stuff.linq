@@ -4,24 +4,25 @@
 </Query>
 
 // connect to twitter, save all my liked/favorited tweets in case the owner deletes their account or the tweet.
-// WIP: nothing works yet
+// WIP: everything except the favorites is working
 open System.Globalization
 open System.Net.Http
 open Newtonsoft.Json
 
-//// trying to follow: https://dev.twitter.com/overview/api/tls
-//let myHandle = "MaslowJax"
-//let myApiPath = "https://api.twitter.com/1.1/yourpathgoeshere"
+// for OAuth isntead of this app only thing see: https://dev.twitter.com/oauth/reference/post/oauth2/token
 
-let consumerKey = Util.GetPassword("TwitterApiKey")
+let isDebug = false
+let consumerKey = Util.GetPassword "TwitterApiKey"
 let consumerSecret = 
     //Util.SetPassword("TwitterSecret",null); 
-    Util.GetPassword("TwitterSecret")
-let cacheBearer = false
-printfn "Key %s" consumerKey
-printfn "Secret %s" consumerSecret
-if consumerKey.StartsWith(" ") then failwith "Copy paste failed on consumer key"
-if consumerSecret.StartsWith(" ") then failwith "Copy paste failed on consumer secret"
+    Util.GetPassword "TwitterSecret"
+
+if consumerKey.StartsWith(" ") then 
+    if isDebug then printfn "Key %s" consumerKey
+    failwith "Copy paste failed on consumer key"
+if consumerSecret.StartsWith(" ") then 
+    if isDebug then printfn "Secret %s" consumerSecret
+    failwith "Copy paste failed on consumer secret"
 let dumpt (t:string) x = x.Dump(t); x
 let getType x = x.GetType()
 let rec getValueOpt (genTypeOpt:Type option) (typeOpt:Type option)  (o:obj) = 
@@ -73,66 +74,31 @@ module StringHelpers =
     let endsWith d (s:string) = s.EndsWith d
     let endsWithC (c:char) (s:string) = s |> endsWith (c |> string)
     let getIndexOf (d:string) (s:string) = match s.IndexOf d with | -1 -> None | x -> Some x
-    // translation of https://github.com/linvi/tweetinvi/blob/master/Tweetinvi.Core/Core/Extensions/StringExtension.cs#L264
-    // does not return query, so that strings or stringBuilder can be used
-    let buildParameter query name value = 
-        if String.IsNullOrEmpty name || String.IsNullOrEmpty value then
-            null
-        else
-            let rawText = format "{0}={1}" [| name;value|]
-            let result = 
-                let leadingText = 
-                    if query |> contains "?" |> not then 
-                        "?" 
-                    elif query |> endsWithC '?' |> not && query |> endsWithC '&' |> not then 
-                        "&" 
-                    else 
-                        String.Empty
-                leadingText + rawText
-            result
-
-
-    // translation of https://github.com/linvi/tweetinvi/blob/master/Tweetinvi.Core/Core/Extensions/StringExtension.cs#L308   
-    let buildParameterForQuery<'t> query name (value:'t) =
-        // valuable is for generics that you should be able to get the value of
-        let (|IgnorePair|InvalidNullable|Valueable|OtherParam|) (name,value:'t) =
-            // handles NullableNulls
-            match String.IsNullOrEmpty name || isNull (box value) with
-            | true -> IgnorePair
-            | _ ->
-                let v:obj = upcast value
-                //match Nullable.GetUnderlyingType typeof<'t> |> isNull |> not with
-                match v with
-                | Nullish -> IgnorePair
-                | NullableObj gt -> 
-                    // no idea why this is in the source, but leaving it
-                    match value |> getType |> string = (v |> string) with 
-                    | true -> InvalidNullable
-                    | false -> Valueable (gt,v)
-                |SomeObj gt ->
-                    Valueable (gt,v)
-                | _ -> OtherParam v
-                    
-        match (name,value) with
-        | IgnorePair 
-        | InvalidNullable
-            -> None
-        | Valueable (gt,v) ->
-            getValueOpt (Some gt) None v
-        | OtherParam v ->
-            Some v
-        |> Option.map 
-            (fun v -> 
-                v
-                |> function
-                    | :? Double as v ->
-                        v.ToString(CultureInfo.InvariantCulture)
-                        |> buildParameter query name
-                    | _ -> v |> string |> toLowerInvariant |> buildParameter query name 
-            )
-
+    let prettifyJsonObj o = JsonConvert.SerializeObject(o, Formatting.Indented)
+    let prettifyJson s = s |> JsonConvert.DeserializeObject |> prettifyJsonObj
+    let delimit delimiter (values:#seq<string>) = String.Join(delimiter, Array.ofSeq values)
+    
 module Array =
     let ofOne x = [| x |]
+module Seq = 
+    let any x = x |> Seq.exists(fun _ -> true)
+// failed to write this: kept on compiling as ints only
+//module Option =
+//    let add<'t when 't (member: (+))> (x:'t) (vOpt: 't option) = 
+//        match vOpt with
+//        | Some v -> x + v
+//        | None -> x
+let buildParam name value = 
+    sprintf "%s=%s" name value
+    
+let addParams query queryParams = 
+    match queryParams |> Seq.any with
+    | true ->
+        queryParams
+        |> delimit "&"
+        |> sprintf "%s?%s" query
+    | false -> query
+    
 let baseUrl = "https://api.twitter.com/"
 module Bearer = 
 
@@ -147,6 +113,9 @@ module Bearer =
         // also didn't work: 
         //let encodedPair = sprintf "userName=%s&password=%s" consumerKey consumerSecret |> Encoding.UTF8.GetBytes |> Convert.ToBase64String
         let getRawText () = 
+            if isDebug then 
+                printfn "Key %s" consumerKey
+                printfn "Secret %s" consumerSecret
             let encodedPair = sprintf "%s:%s" consumerKey consumerSecret |> dumpt "before encoding" |> Encoding.UTF8.GetBytes |> Convert.ToBase64String
             encodedPair.Dump("encoded pair")
             use client = new HttpClient()
@@ -165,10 +134,10 @@ module Bearer =
             let bearerData = response.Content.ReadAsStringAsync().Result
             bearerData.Dump("raw response")
             bearerData
-        let bearerData = if useCache then Util.Cache(Func<_>(getRawText)) else getRawText()
+        let bearerData = if useCache then Util.Cache(Func<_>(getRawText),"bearerData") else getRawText()
         let bearerData = 
             JsonConvert.DeserializeObject<BearerTokenResponse>(bearerData)
-            |> dumpt "response"
+            //|> dumpt "response"
         if isNull bearerData.errors || bearerData.errors |> Seq.length = 0 then
             if bearerData.token_type <> "bearer" then Console.Error.WriteLine(sprintf "Warning: token type was '%s', expected '%s'" bearerData.token_type "bearer")
             Bearer.Token bearerData.access_token
@@ -177,6 +146,9 @@ module Bearer =
         
 //    ()
 open Bearer    
+
+let cacheBearer = true
+
 let bearer = 
     match getBearer cacheBearer with
     | Bearer.Token t -> t
@@ -184,138 +156,74 @@ let bearer =
 
 
 let getApi apiPath = 
-    let sampleFailure = """{"request":"\/1.1\/statuses\/user_timeline.json","error":"Not authorized."}"""
+    printfn "Getting %s" apiPath
+    //let sampleFailure = """{"request":"\/1.1\/statuses\/user_timeline.json","error":"Not authorized."}"""
     use req = new HttpRequestMessage(HttpMethod.Get, baseUrl + apiPath)
     printfn "using bearer %s" bearer
     if not <| req.Headers.TryAddWithoutValidation("Authorization", sprintf "Bearer %s" bearer) then failwith "validation failed to add to request"
     use client = new HttpClient()
     let response = client.SendAsync(req).Result
     response.Content.ReadAsStringAsync().Result
+
+let runExampleGet() = 
+    getApi "1.1/statuses/user_timeline.json?count=2&screen_name=twitterapi"
+    |> dumpt "api call success?"  
+// type AppRateLimitStatus = {rate_limit_context: string; resources: AppRateLimitStatusResource list}
+let getAppRateLimitStatus() = 
+    getApi "1.1/application/rate_limit_status.json"
+    |> dumpt "Raw app rate limit status"
+    |> prettifyJson 
+    |> dumpt "rate limit status"
     
-getApi "1.1/statuses/user_timeline.json?count=2&screen_name=twitterapi"
-|> dumpt "api call success?"
+// https://dev.twitter.com/rest/reference/get/favorites/list
+type FavoriteResult = {coordinates:string; id:Int64 Nullable;  truncated:bool Nullable ; favorited:bool Nullable; created_at:string; id_str:string; in_reply_to_user_id_str:Int64 Nullable; text:string } // entities:string; text:string;
+
+let getFavorites useCache userIdOpt screenNameOpt countOpt since_idOpt max_idOpt _include_entities =
+    let getFavoritesRaw () = 
+        let url = "1.1/favorites/list.json"
+        
+        let getIntParamOpt name (vOpt:int option) = match vOpt with | Some i -> sprintf "%s=%i" name i |> Some | None -> None
+        let getStrParamOpt name (vOpt:string option) = match vOpt with | Some v -> sprintf "%s=%s" name v |> Some | None -> None
+        let paramsToAdd = 
+            [
+                getIntParamOpt "user_id" userIdOpt
+                getStrParamOpt "screen_name" screenNameOpt
+                getIntParamOpt "count" countOpt
+                getIntParamOpt "since_id" since_idOpt
+                getIntParamOpt "max_id" max_idOpt
+            ]
+            |> Seq.choose id
+            |> List.ofSeq
+        let rawOutput = 
+            if Seq.any paramsToAdd then
+                paramsToAdd |> delimit "&" |> sprintf "%s?%s" url
+            else url
+            |> getApi 
+        rawOutput
+    let rawOutput = 
+        if useCache then Util.Cache(Func<_>(getFavoritesRaw),"favoritesRaw") else getFavoritesRaw()
+        //|> dumpt "Raw favorites output"
+    let items =
+        rawOutput
+        |> fun t -> JsonConvert.DeserializeObject<obj[]>(t)
+    let prettyPrintHead() = 
+        items
+        |> Seq.head 
+        |> prettifyJsonObj
+        |> dumpt "first favorite"
+        |> ignore
+    if isDebug then // turning this on while I work out the format of a single favorite object
+        prettyPrintHead()
+    let favoriteResults = 
+        items
+        |> Seq.map JsonConvert.SerializeObject
+        |> Seq.map (fun t -> JsonConvert.DeserializeObject<FavoriteResult>(t))
+        |> List.ofSeq
+        |> dumpt "Deserialized"
+    prettyPrintHead()
+    favoriteResults
     
-//
-//// try to use the code exposed by the repo: https://github.com/linvi/tweetinvi/wiki/Introduction
-//// DI map @ https://github.com/linvi/tweetinvi/blob/master/Tweetinvi.Core/TweetinviCoreModule.cs
-////module UserQueryParameterGenerator = // https://github.com/linvi/tweetinvi/blob/master/Tweetinvi.Controllers/User/UserQueryParameterGenerator.cs
-////    let 
-////module User = // https://github.com/linvi/tweetinvi/blob/master/Tweetinvi.Controllers/User/UserController.cs
-//    
-////// ITweetController.PublishTweet
-////let tweet consumerKey consumerSecret access token accessTokenSecret words =
-////    let isSetupForAppAuthentication = not <| String.IsNullOrEmpty consumerKey && not <| String.IsNullOrEmpty consumerSecret // https://github.com/linvi/tweetinvi/blob/master/Tweetinvi.Core/Public/Models/Authentication/ConsumerCredentials.cs
-////    let isSetupForUserAuthentication = isSetupForAppAuthentication && not <| String.IsNullOrEmpty accessToken && accessTokenSecret // https://github.com/linvi/tweetinvi/blob/master/Tweetinvi.Core/Public/Models/Authentication/TwitterCredentials.cs
-////    ()
-//
-//type TweetMode = 
-//    | Extended
-//    | Compat
-//    with override x.ToString() = sprintf "%A" x
-//type UserIdentifier = 
-//    | UserId of Int64
-//    | ScreenName of string
-//type THttpMethod =
-//    | Get
-//    | Post of HttpContent
-//    | Delete
-//    
-//type HttpRequestParameters = {Query:string; HttpMethod: THttpMethod }
-//
-//type ConsumerCredentials = {ConsumerKey:string; ConsumerSecret:string}
-//type TwitterCredentials = {AccessToken:string; AccessTokenSecret:string ; ConsumerCredentials: ConsumerCredentials}
-//type OAuthQueryParameter = {Key:string; Value:string; RequiredForSignature:bool; RequiredForHeader:bool; IsPartOfOAuthSecretKey: bool}
-//type TwitterQuery = {HttpRequestParameters:HttpRequestParameters; Proxy:string; Timeout:TimeSpan;TwitterCredentials:TwitterCredentials;QueryParameters: OAuthQueryParameter list}
-//
-//
-//
-//// Tweetinvi.WebLogic.HttpClientWebHelper
-//// not currently supporting anything but get
-//let getHttpResponse (twitterQuery:TwitterQuery) = 
-//    use client = new HttpClient()
-//    client.Timeout <- twitterQuery.Timeout
-//    match twitterQuery.HttpRequestParameters.HttpMethod with
-//    | Get -> 
-//        use request = new HttpRequestMessage(HttpMethod.Get, twitterQuery.HttpRequestParameters.Query)
-//        client.SendAsync(request).Result
-//    | Post content -> client.PostAsync(twitterQuery.HttpRequestParameters.Query, content).Result
-//    
-////    
-////    
-////// Tweetinvi.WebLogic.WebRequestExecutor.cs 
-////let executeQuery twitterQuery = 
-////    getHttpResponse twitterQuery
-////// Tweetinvi.WebLogic.TwitterRequestHandler.cs 
-////let executeQuery httpMethod handlerOpt (credentials:TwitterCredentials) url = 
-////    let url = 
-////        match url |> getIndexOf "?" with
-////        | None -> url
-////        | Some index -> 
-////            match url |> endsWith "?" with
-////            | true -> url.TrimEnd([| '?' |])
-////            | false -> 
-////                if url.Length > index && url.[index + 1] = '&' then
-////                    url.Remove(index + 1, 1)
-////                else 
-////                    url
-////    //let rateLimitTrackOpt = rateLimitTrackerMode
-////    // prepare request
-////    // TwitterQueryFactor.Create
-////    let create() = 
-////        let queryUrlParam = (Uri url).AbsoluteUri // "queryURL", 
-////        
-////        let requestParams = {Query= queryUrlParam; HttpMethod = httpMethod}
-////        printfn "Uri:%s" queryUrlParam
-////        // we are assuming proxies in this case are actual proxies, not something OAuth relies on
-////        let twitterQuery = {HttpRequestParameters = requestParams; Proxy = null; Timeout = TimeSpan.FromMinutes(1.); TwitterCredentials = credentials; QueryParameters = list.Empty}
-////    //let credentials = defaultArg credentialsOpt currentThreadCredentials
-////        ()
-////    create()
-////    
-////    ()
-////// Tweetinvi.Credentials.TwitterAccessor.cs #378
-////let executeCredentialsQuery query tMethod =
-////    if String.IsNullOrEmpty query then failwithf "invalid query"
-////    executeQuery tMethod query
-////let getUserFromIdentifier credentials = 
-////    function 
-////    | ScreenName s -> 
-////        let url = 
-////            s
-////            |> box
-////            |> Array.ofOne
-////            |> format "https://api.twitter.com/1.1/users/show.json?user_id={0}"
-////        url
-////        |> executeQuery THttpMethod.Get None credentials
-////        |> Convert.ToInt64
-////    | UserId l ->
-////        l
-////    //|> ExecuteGETQuery<IUserDTO>
-////// IUserController.GetFavoriteTweets
-////let getUserFavorites userIdentifier = 
-////    
-////    // https://github.com/linvi/tweetinvi/blob/master/Examplinvi/Program.cs#L645
-////    let user = getUserFromIdentifier userIdentifier
-////    //https://github.com/linvi/tweetinvi/blob/master/Tweetinvi.Controllers/User/UserQueryGenerator.cs#L62
-////    let getFavoriteTweetsQuery tweetModeOpt formattedCustomQueryParametersOpt = 
-////        // translated via https://github.com/linvi/tweetinvi/blob/master/Tweetinvi.Controllers/Properties/Resources.cs
-////        let query = StringBuilder("https://api.twitter.com/1.1/favorites/list.json?" + (user |> string)) // resources_user_getFavorites + userIdentifierParameter)
-////        let inline addParameterToQuery name (value:'t) = 
-////            let paramTextOpt = buildParameterForQuery (query|> string) name value
-////            paramTextOpt
-////            |> Option.iter (query.Append >> ignore<StringBuilder>)
-////        //guessing on parameter types for now
-////        addParameterToQuery "include_entities" true
-////        addParameterToQuery "since_id" 0
-////        addParameterToQuery "max_id" -1
-////        addParameterToQuery "count" 10
-////        tweetModeOpt |> Option.iter (string >> toLowerInvariant >> query.Append >> ignore<StringBuilder>)
-////        formattedCustomQueryParametersOpt |> Option.iter (Array.ofOne >> format "&{0}" >> query.Append >> ignore<StringBuilder>)
-////        query |> string
-////    let userIdentifierParameter (userId:string) = 
-////        //_userQueryParameterGenerator.GenerateIdOrScreenNameParameter(favoriteParameters.UserIdentifier);
-////        [| "user_id";userId |] |> Array.map box |> format "{0}={1}"
-////    let query = getFavoriteTweetsQuery None None 
-////    let result = _twitterAccessor.ExecuteGETQuery<IEnumerable<ITweetDTO>>(query)
-////    // involves : https://github.com/linvi/tweetinvi/blob/master/Tweetinvi.Core/Public/Parameters/GetUserFavoritesParameters.cs
-////    ()
+    
+
+let cacheResult = true
+getFavorites cacheResult None (Some "maslowjax") (Some 2) None None false
