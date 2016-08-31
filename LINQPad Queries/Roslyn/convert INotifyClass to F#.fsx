@@ -1,4 +1,5 @@
 ﻿// configuration of autorun options is done in module ScriptOptions
+// obsoleted -> MacroRunner.CodeGeneration.Convert... .fsx
 open System
 open System.Collections.Generic
 open System.IO

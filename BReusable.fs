@@ -114,25 +114,26 @@ type System.Convert with
     static member ToBinaryData(o:obj) = o :?> byte[] // http://stackoverflow.com/a/5371281/57883
 
 type System.String with
+    static member defaultComparison = StringComparison.InvariantCultureIgnoreCase
     static member Null:string = null
     static member emptyToNull (x:string) = if String.IsNullOrEmpty x then null else x
     //let replace (target:string) (r:string) (x:string) = if String.IsNullOrEmpty target then invalidOp "bad target" else x.Replace(target,r)
     static member replace (target:string) (replacement) (str:string) = if String.IsNullOrEmpty target then invalidOp "bad target" else str.Replace(target,replacement)
-    static member strCompI (x:string) (x2:string) = String.Equals(x, x2, StringComparison.CurrentCultureIgnoreCase)
-    static member containsI (sub:string) (x:string) = if isNull x then false elif sub = "" then failwithf "bad contains call" else x.IndexOf(sub, StringComparison.InvariantCultureIgnoreCase) >= 0
+    static member equalsI (x:string) (x2:string) = not <| isNull x && not <| isNull x2 && x.Equals(x2, StringComparison.InvariantCultureIgnoreCase)
+    static member containsI (sub:string) (x:string) = if isNull x then false elif sub = "" then failwithf "bad contains call" else x.IndexOf(sub, String.defaultComparison) >= 0
+    static member startsWithI (toMatch:string) (x:string) = not <| isNull x && not <| isNull toMatch && toMatch.Length > 0 && x.StartsWith(toMatch, String.defaultComparison)
+    static member isNumeric (x:string) = not <| isNull x && x.Length > 0 && x |> String.forall Char.IsNumber
     static member before (delimiter:string) (x:string)  = x.Substring(0, x.IndexOf delimiter)
     static member after (delimiter:string) (x:string) =  
         match x.IndexOf delimiter with
         | i when i < 0 -> failwithf "after called without matching substring in '%s'(%s)" x delimiter
         | i -> x.Substring(i + delimiter.Length)
-    static member afterI (delimiter:string) (x:string) = x.Substring(x.IndexOf(delimiter, StringComparison.InvariantCultureIgnoreCase) + delimiter.Length)
+    static member afterI (delimiter:string) (x:string) = x.Substring(x.IndexOf(delimiter, String.defaultComparison) + delimiter.Length)
     static member afterOrSelf (delimiter:string) (x:string) = if x.Contains delimiter then String.after delimiter x else x
     static member afterOrSelfI (delimiter:string) (x:string) = if String.containsI delimiter x then String.afterI delimiter x else x
     static member splitLines(x:string) = x.Split([| "\r\n";"\n"|], StringSplitOptions.None)
     static member substring i (x:string) = x.Substring i
     static member substring2 i length (x:string)  = x.Substring(i, length)
-    static member isNumeric (x:string) = not <| isNull x && x.Length > 0 && x |> String.forall Char.IsNumber
-    static member startsWithI (toMatch:string) (x:string) = not <| isNull x && not <| isNull toMatch && toMatch.Length > 0 && x.StartsWith(toMatch, StringComparison.InvariantCultureIgnoreCase)
     
     static member beforeAnyOf (delimiters:string list) (x:string) = 
         let index, _ = 
@@ -143,9 +144,25 @@ type System.String with
         x.Substring(0,index)
 
 let (|StartsWithI|_|) s1 (toMatch:string) = if toMatch <> null && toMatch.StartsWith(s1, StringComparison.InvariantCultureIgnoreCase) then Some () else None
-let (|StringEqualsI|_|) s1 (toMatch:string) = if toMatch <> null && toMatch.Equals(s1, StringComparison.InvariantCultureIgnoreCase) then Some() else None
+let (|StringEqualsI|_|) s1 (toMatch:string) = if String.equalsI toMatch s1 then Some() else None
 let (|IsNumeric|_|) (s:string) = if not <| isNull s && s.Length > 0 && s |> String.forall Char.IsNumber then Some() else None
 
+// based on http://stackoverflow.com/questions/15115050/f-type-constraints-on-enums
+type System.Enum with // I think enum<int> is the only allowed enum-ish constraint allowed in all of .net
+    static member parse<'t when 't : enum<int>> x = Enum.Parse(typeof<'t>,x)
+    static member parseT t x = Enum.Parse(t, x) 
+    static member fromString<'t when 't:enum<int>> x = Enum.parse<'t> x :?> 't
+    static member getName<'t when 't : enum<int>> x = Enum.GetName(typeof<'t>,x)
+    static member getAll<'t when 't : enum<int>>() = 
+        Enum.GetValues(typeof<'t>)
+        |> Seq.cast<int>
+        |> Seq.map (fun x -> Enum.getName<'t> x)
+        |> Seq.map (fun x -> Enum.parse<'t> x :?> 't)
+    static member fromInt<'t when 't :enum<int>>(i:int) = 
+        Enum.getName<'t> i
+        |> fun x -> Enum.parse<'t> x :?> 't
+
+ 
 // taken from SO http://stackoverflow.com/a/1595311/57883
 type System.DateTime with
     static member addDays (dt:DateTime) = dt.AddDays
