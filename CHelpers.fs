@@ -37,7 +37,7 @@ module CHelpers =
     let ToSome x = Some x
     // set None/null option to Some(null) because it was explicitly set to null, not unset.
     [<Extension>]
-    let ToSomeNull<'t when 't:null>() : 't option = Some null
+    let ToSomeNull<'t when 't:null>(_:'t option) : 't option = Some null
 
     [<Extension>]
     let Map(x: _ option) (f:Func<_,_>) = 
@@ -74,6 +74,7 @@ module CHelpers =
         |NullableNull -> None
         |NullableValue x -> Some x
 
+    // move this to breusable, and perhaps link this extension to calling it
     // taken from SO http://stackoverflow.com/a/1595311/57883
     [<Extension>]
     let GetAge(dob:DateTime, now:DateTime) =
@@ -83,6 +84,7 @@ module CHelpers =
         else
             age
 
+    // move this to breusable, and perhaps link this extension to calling it
     [<Extension>]
     let GetAgeInMonths (dob:DateTime, now:DateTime) = ((now.Year - dob.Year) * 12) + now.Month - dob.Month
 
@@ -96,6 +98,7 @@ module CHelpers =
 //            return xmlDoc;
 //        }
 //    }
+
 // http://blogs.msdn.com/b/jaredpar/archive/2010/07/27/converting-system-func-lt-t1-tn-gt-to-fsharpfunc-lt-t-tresult-gt.aspx
 [<Extension>]
 type public FSharpFuncUtil =
@@ -139,8 +142,6 @@ type public FSharpFuncUtil =
 
     static member Create<'a,'b,'c,'d> (func:Func<'a,'b,'c,'d>) = FSharpFuncUtil.ToFSharpFunc func
 
-open System.ComponentModel
-open System.Collections.Specialized
 
 type private SimpleMonitor() =
     let mutable busyCount = 0
@@ -154,118 +155,121 @@ type private SimpleMonitor() =
     interface System.IDisposable with
         member x.Dispose() = x.Dispose()
 
-type CollectionChangedDelegate = 
-        delegate of 
-            sender:obj * e:NotifyCollectionChangedEventArgs -> unit
-
-/// Initializes a new instance of ObservableCollection that is empty and has default initial capacity.
-/// translated from http://referencesource.microsoft.com/#System/compmod/system/collections/objectmodel/observablecollection.cs
-type ReObservableCollection<'t>(list: 't List) as self = // http://referencesource.microsoft.com/#System/compmod/system/collections/objectmodel/observablecollection.cs
-    inherit System.Collections.ObjectModel.Collection<'t>(if not <| isNull list then List<_>(list.Count) else list)
-        do
-            if not<| isNull list then
-                self.copyFrom list
-    let collectionChanged = Event< _ , _ > ( )
-    let propertyChangedEvent = new DelegateEvent<PropertyChangedEventHandler>()
-    let monitor = new SimpleMonitor()
-
-    static let IndexerName = "Item[]"
-
-    new () = ReObservableCollection(null)
-    new (collection : _ seq) as self =
-        ReObservableCollection(null)
-            then
-                if isNull collection then
-                    raise <| System.ArgumentNullException("collection")
-                    self.copyFrom collection
-
-    member x.Move oldIndex newIndex = x.MoveItem (oldIndex, newIndex)
-    override x.ClearItems() =
-        x.CheckReentrancy ()
-        base.ClearItems ()
-        x.OnPropertyChanged "Count"
-        x.OnPropertyChanged IndexerName
-        x.OnCollectionReset ()
-
-    override x.RemoveItem (index:int) = 
-        x.CheckReentrancy ()
-        let removedItem = x.Item index
-        base.RemoveItem index
-        x.OnPropertyChanged "Count"
-        x.OnPropertyChanged IndexerName
-        x.OnCollectionChanged (NotifyCollectionChangedAction.Remove, removedItem, index)
-
-    override x.InsertItem (index, item) = 
-        x.CheckReentrancy()
-        base.InsertItem (index, item)
-
-    override x.SetItem (index, item) = 
-        x.CheckReentrancy ()
-        let originalItem = x.Item index
-        base.SetItem(index, item)
-
-        x.OnPropertyChanged IndexerName
-        x.OnCollectionChanged (NotifyCollectionChangedAction.Replace, originalItem, item, index)
-
-    member private x.MoveItem (oldIndex, newIndex) = 
-        x.CheckReentrancy ()
-        let removedItem = x.[oldIndex]
-        base.RemoveItem oldIndex
-        base.InsertItem(newIndex, removedItem)
-        x.OnPropertyChanged IndexerName
-        x.OnCollectionChanged(NotifyCollectionChangedAction.Move, removedItem, newIndex, oldIndex)
-
-    member private x.OnPropertyChanged (e:PropertyChangedEventArgs) = propertyChangedEvent.Trigger [| x;e |]
-
-    member private x.OnPropertyChanged name = 
-        PropertyChangedEventArgs name
-        |> x.OnPropertyChanged
-
-    member private x.OnCollectionChanged (e:NotifyCollectionChangedEventArgs) = 
-        use __ = x.BlockReentrancy()
-        collectionChanged.Trigger(x, e)
-
-    member private x.OnCollectionChanged (action, item, index:int) =
-        NotifyCollectionChangedEventArgs(action, item, index)
-        |> x.OnCollectionChanged
-
-    member private x.OnCollectionChanged (action, item, index:int, oldIndex:int) =
-        NotifyCollectionChangedEventArgs(action, item, index, oldIndex)
-        |> x.OnCollectionChanged
-
-    member private x.OnCollectionChanged (action, oldItem:obj, newItem:obj, index:int) =
-        NotifyCollectionChangedEventArgs(action, newItem, oldItem, index)
-        |> x.OnCollectionChanged
-
-    member x.OnCollectionReset() =
-        NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset)
-        |> x.OnCollectionChanged
-
-    member private __.BlockReentrancy () = 
-        monitor.Enter () 
-        monitor :> IDisposable
-
-    member private x.CheckReentrancy () = 
-        if monitor.Busy then
-            let _inotif = x :> INotifyCollectionChanged
-
-            // TODO block reentrancy
-            //let _x = inotif :> System.MulticastDelegate
-            //let multicast = inotif.CollectionChanged :> System.MulticastDelegate
-            //if not <| isNull inotif.CollectionChanged. && collectionChanged.GetInvocationList().Length > 1 then
-            //raise <| InvalidOperationException("Reentrancy is not allowed")
-            ()
-    member private x.copyFrom (collection : _ seq ) =
-        let items = x.Items
-        if not <| isNull collection && not <| isNull items then
-            use enumerator = collection.GetEnumerator()
-            while enumerator.MoveNext() do
-                items.Add enumerator.Current
-
-    interface INotifyCollectionChanged with
-        [<CLIEvent>]
-        member __.CollectionChanged = collectionChanged.Publish
-
-    interface INotifyPropertyChanged with
-        [<CLIEvent>]
-        member __.PropertyChanged = propertyChangedEvent.Publish
+//// WIP: untested, unused.
+//module ReObservable = 
+//    open System.ComponentModel
+//    open System.Collections.Specialized
+//    type CollectionChangedDelegate = 
+//            delegate of 
+//                sender:obj * e:NotifyCollectionChangedEventArgs -> unit
+//    /// Initializes a new instance of ObservableCollection that is empty and has default initial capacity.
+//    /// translated from http://referencesource.microsoft.com/#System/compmod/system/collections/objectmodel/observablecollection.cs
+//    type ReObservableCollection<'t>(list: 't List) as self = // http://referencesource.microsoft.com/#System/compmod/system/collections/objectmodel/observablecollection.cs
+//        inherit System.Collections.ObjectModel.Collection<'t>(if not <| isNull list then List<_>(list.Count) else list)
+//            do
+//                if not<| isNull list then
+//                    self.copyFrom list
+//        let collectionChanged = Event< _ , _ > ( )
+//        let propertyChangedEvent = new DelegateEvent<PropertyChangedEventHandler>()
+//        let monitor = new SimpleMonitor()
+//
+//        static let IndexerName = "Item[]"
+//
+//        new () = ReObservableCollection(null)
+//        new (collection : _ seq) as self =
+//            ReObservableCollection(null)
+//                then
+//                    if isNull collection then
+//                        raise <| System.ArgumentNullException("collection")
+//                        self.copyFrom collection
+//
+//        member x.Move oldIndex newIndex = x.MoveItem (oldIndex, newIndex)
+//        override x.ClearItems() =
+//            x.CheckReentrancy ()
+//            base.ClearItems ()
+//            x.OnPropertyChanged "Count"
+//            x.OnPropertyChanged IndexerName
+//            x.OnCollectionReset ()
+//
+//        override x.RemoveItem (index:int) = 
+//            x.CheckReentrancy ()
+//            let removedItem = x.Item index
+//            base.RemoveItem index
+//            x.OnPropertyChanged "Count"
+//            x.OnPropertyChanged IndexerName
+//            x.OnCollectionChanged (NotifyCollectionChangedAction.Remove, removedItem, index)
+//
+//        override x.InsertItem (index, item) = 
+//            x.CheckReentrancy()
+//            base.InsertItem (index, item)
+//
+//        override x.SetItem (index, item) = 
+//            x.CheckReentrancy ()
+//            let originalItem = x.Item index
+//            base.SetItem(index, item)
+//
+//            x.OnPropertyChanged IndexerName
+//            x.OnCollectionChanged (NotifyCollectionChangedAction.Replace, originalItem, item, index)
+//
+//        member private x.MoveItem (oldIndex, newIndex) = 
+//            x.CheckReentrancy ()
+//            let removedItem = x.[oldIndex]
+//            base.RemoveItem oldIndex
+//            base.InsertItem(newIndex, removedItem)
+//            x.OnPropertyChanged IndexerName
+//            x.OnCollectionChanged(NotifyCollectionChangedAction.Move, removedItem, newIndex, oldIndex)
+//
+//        member private x.OnPropertyChanged (e:PropertyChangedEventArgs) = propertyChangedEvent.Trigger [| x;e |]
+//
+//        member private x.OnPropertyChanged name = 
+//            PropertyChangedEventArgs name
+//            |> x.OnPropertyChanged
+//
+//        member private x.OnCollectionChanged (e:NotifyCollectionChangedEventArgs) = 
+//            use __ = x.BlockReentrancy()
+//            collectionChanged.Trigger(x, e)
+//
+//        member private x.OnCollectionChanged (action, item, index:int) =
+//            NotifyCollectionChangedEventArgs(action, item, index)
+//            |> x.OnCollectionChanged
+//
+//        member private x.OnCollectionChanged (action, item, index:int, oldIndex:int) =
+//            NotifyCollectionChangedEventArgs(action, item, index, oldIndex)
+//            |> x.OnCollectionChanged
+//
+//        member private x.OnCollectionChanged (action, oldItem:obj, newItem:obj, index:int) =
+//            NotifyCollectionChangedEventArgs(action, newItem, oldItem, index)
+//            |> x.OnCollectionChanged
+//
+//        member x.OnCollectionReset() =
+//            NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset)
+//            |> x.OnCollectionChanged
+//
+//        member private __.BlockReentrancy () = 
+//            monitor.Enter () 
+//            monitor :> IDisposable
+//
+//        member private x.CheckReentrancy () = 
+//            if monitor.Busy then
+//                let _inotif = x :> INotifyCollectionChanged
+//
+//                // TODO block reentrancy
+//                //let _x = inotif :> System.MulticastDelegate
+//                //let multicast = inotif.CollectionChanged :> System.MulticastDelegate
+//                //if not <| isNull inotif.CollectionChanged. && collectionChanged.GetInvocationList().Length > 1 then
+//                //raise <| InvalidOperationException("Reentrancy is not allowed")
+//                ()
+//        member private x.copyFrom (collection : _ seq ) =
+//            let items = x.Items
+//            if not <| isNull collection && not <| isNull items then
+//                use enumerator = collection.GetEnumerator()
+//                while enumerator.MoveNext() do
+//                    items.Add enumerator.Current
+//
+//        interface INotifyCollectionChanged with
+//            [<CLIEvent>]
+//            member __.CollectionChanged = collectionChanged.Publish
+//
+//        interface INotifyPropertyChanged with
+//            [<CLIEvent>]
+//            member __.PropertyChanged = propertyChangedEvent.Publish

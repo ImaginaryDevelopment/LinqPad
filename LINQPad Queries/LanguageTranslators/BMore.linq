@@ -1,17 +1,14 @@
 <Query Kind="FSharpProgram">
   <Connection>
-    <ID>73195492-a414-4da3-b1c8-71d567112c5e</ID>
     <Persist>true</Persist>
-    <Server>tcp:n6tkfzga4x.database.windows.net,1433</Server>
     <SqlSecurity>true</SqlSecurity>
-    <Database>VIN_Billing_DEV</Database>
-    <UserName>vinbillinguser</UserName>
-    <Password>AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAAZXI0kKLoAk26lXdoZmUdJQAAAAACAAAAAAAQZgAAAAEAACAAAACRqWukAaHeX1rQf4qT8p1RvEP5eX8E4o0kBAg2tqlXiwAAAAAOgAAAAAIAACAAAAA1crJOL/EQSfZmmlZibpdka2/eKVMod/Vs189p9uhcGRAAAACrc2m1O6A/OpJ+I9opQRMWQAAAAEwce2DVPInbz7z6z+aGdABybG/lnEuPfot5B9HfQaB/EWyqCJUQvJtUX9ScCV4m/brYgUqmSOWJu3nqSNfsboU=</Password>
-    <DbVersion>Azure</DbVersion>
   </Connection>
+  <NuGetReference>Newtonsoft.Json</NuGetReference>
+  <Namespace>Newtonsoft.Json</Namespace>
 </Query>
 
 let dc = new TypedDataContext()
+// obsolected by MacroRunner: CodeGeneration.GenerateFromTypes
 let (|TypeDefOf|_|) (_:'a) t = 
     if t = typedefof<'a> then Some() else None
 let (|TypeOf|_|) (_:'a) t  = 
@@ -118,4 +115,3 @@ finally
     types
     |> Dump
     |> ignore
-    
