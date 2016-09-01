@@ -21,7 +21,7 @@ let createPluralizer () = PluralizationService.CreateService(CultureInfo "en") /
 let inline delimit (delimiter:string) (text:#seq<string>) = String.Join(delimiter,text)
 let first (x:#seq<_>) = x.First()
 let any (x:#seq<_>) = x.Any()
-let count (x:#seq<_>) = x.Count()
+let count = Seq.length
 let contains y (x:seq<_>) = x.Contains(y)
 
 // -----------------------------------                

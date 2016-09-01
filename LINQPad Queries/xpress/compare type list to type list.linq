@@ -8,6 +8,7 @@
     <ShowServer>true</ShowServer>
   </Connection>
   <Reference>C:\TFS\PracticeManagement\dev\PracticeManagement\bin\Pm.Dal.dll</Reference>
+  <Reference>C:\TFS\PracticeManagement\dev\PracticeManagement\bin\Pm.Schema.dll</Reference>
   <Reference>C:\TFS\PracticeManagement\dev\PracticeManagement\bin\PracticeManagement.Foundation.dll</Reference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
 </Query>

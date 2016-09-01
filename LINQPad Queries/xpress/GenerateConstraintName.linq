@@ -6,17 +6,18 @@ let trim (s:string) = if isNull s then null else s.Trim()
 let after (delimiter:string) (s:string) = s.Substring(s.IndexOf delimiter + delimiter.Length)
 let before (delimiter:string) (s:string) = s.Substring(0,s.IndexOf delimiter)
 let beforeI (delimiter:string) (s:string) = s.Substring(0,s.IndexOf(delimiter, StringComparison.CurrentCultureIgnoreCase))
+let beforeIOrSelf (delimiter:string) (s:string) = if s.Contains delimiter then s |> beforeI delimiter else s
 let capture (pattern:string) (s:string) = Regex.Match(s, pattern).Groups.[1].Value
 
 // assume tablename matches with file (e.g. Payment.Table.sql) and is properly cased
 let getTableName filename = Path.GetFileNameWithoutExtension(Path.GetFileNameWithoutExtension(filename))
-let dbProjPath = @"C:\TFS\PracticeManagement\devDb" 
+let dbProjPath = @"C:\TFS\PracticeManagement\dev\PracticeManagement\Db" 
 let sqlTableFiles = 
     Directory.GetFiles(dbProjPath, "*.table.sql", SearchOption.AllDirectories)
     |> Array.map(fun fn -> getTableName fn, fn)
 let tryFindTableName columnName = // assume column name ends with ID
     columnName
-    |> beforeI "ID"
+    |> beforeIOrSelf "ID"
     |> (fun name -> sqlTableFiles |> Seq.tryFind(fun (tn,_) -> String.Equals(tn,name, StringComparison.CurrentCultureIgnoreCase)))
     |> function
         | Some (tableName,_) -> tableName
