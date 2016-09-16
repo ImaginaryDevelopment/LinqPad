@@ -3,6 +3,8 @@
   <Reference>&lt;RuntimeDirectory&gt;\WPF\PresentationFramework.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.Xaml.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\WPF\WindowsBase.dll</Reference>
+  <NuGetReference>Newtonsoft.Json</NuGetReference>
+  <Namespace>Newtonsoft.Json</Namespace>
 </Query>
 
 // face sheet
@@ -16,7 +18,14 @@ open System.Windows.Input
 open System.Windows.Markup
 
 let getType x = x.GetType()
-
+module Cereal = 
+    open Newtonsoft.Json
+    type private Deserializer<'t> =
+        static member deserializeObject<'t> x = JsonConvert.DeserializeObject<'t>(x)
+    let serialize usePretty x =
+        JsonConvert.SerializeObject(x, if usePretty then Formatting.Indented else Formatting.None)
+    let deserialize<'t> x = 
+        JsonConvert.DeserializeObject<'t> x
 module Behaviors = 
     type CloseThisWindowCommand private () =
         let canExecuteChanged = new Event<_, _>()
@@ -58,16 +67,16 @@ module Behaviors =
     
         static member Instance = new CloseThisWindowCommand()
 
+let path = @"C:\TFS\PracticeManagement\dev\PracticeManagement\PracticeManagement\PatientDataGrid\PatientFaceSheet.xaml"
 
 let rootElement = 
-    use s = new FileStream(@"C:\TFS\PracticeManagement\dev\PracticeManagement\PracticeManagement\PatientDataGrid\PatientFaceSheet.xaml", FileMode.Open)
-    XamlReader.Load s
+    
+    let text = Regex.Replace(File.ReadAllText path, "x:Class=\".+\"", String.Empty)
+    XamlReader.Parse text
 
 let flow = rootElement :?> System.Windows.Documents.FlowDocument
 
-type DisplayStrategy = 
-    | WindowDirect
-    | WindowContentWrapped
+type DisplayStrategy = // consider adding each of these: https://wpf.2000things.com/2011/03/23/254-types-of-containers-for-hosting-flowdocument/
     | FlowGridDocScrollViewer
     | FlowDocScrollViewerRaw
     
@@ -77,12 +86,6 @@ let inline showDialog x = (^a: (member ShowDialog:unit -> bool Nullable) x)
 let displayFlow vm ds=
     let window = 
         match ds with
-        // doesn't seem to display correctly
-        | WindowDirect -> Window(Content = flow)
-        // doesn't seem to display correctly
-        | WindowContentWrapped ->
-            let container = ContentControl(Content=flow,HorizontalContentAlignment = HorizontalAlignment.Center, HorizontalAlignment=HorizontalAlignment.Center)
-            Window(Content=container,Title="Hello aunt flow")
         // yay centering
         |FlowGridDocScrollViewer ->
             let fdsv = FlowDocumentScrollViewer(Document = flow)
@@ -95,13 +98,20 @@ let displayFlow vm ds=
     window.DataContext <- vm
     window
 type FacilityInfo = {FacilityName:string; FacilityAddress1:string; FacilityAddress2:string; FacilityPhone:string;FacilityFax:string}
-type PatientInfo = {PatientID: int;FirstName:string;MiddleInitial:string;LastName:string;DOB:DateTime;Age:string; Address1:string}
-type ViewModel =  {Facility:FacilityInfo;Patient:PatientInfo;Generated:DateTime}
+type PatientInfo = {PatientID: int;FirstName:string;MiddleInitial:string;LastName:string;DOB:DateTime;Age:string; Address1:string; City:string; State:string; Zip:string; MaritalStatus:string; Gender:string;PrimaryPhone:string;SecondaryPhone:string;EmergencyContactLastName:string;EmergencyContactFirstName:string;EmergencyContactPhone:string}
+type ViewModel =  {Facility:FacilityInfo;Patient:PatientInfo;Generated:DateTime; LastVisit:DateTime option}
 
 let vm = 
-    let facilityInfo = {FacilityName="Qualified Emergency Group, PA"; FacilityAddress1 = "11048-9 Baymeadows Road"; FacilityAddress2 = "Jacksonville, FL 32256"; FacilityPhone ="(904) 954-7911"; FacilityFax= "(904) 111-1111"} // "Phone: (904) 854-7911 | Fax: (904) 111-1111"}
-    let patientInfo = {PatientID=2530; FirstName="Heather"; MiddleInitial="M"; LastName="Hutto"; DOB=DateTime(1977,10,19);Age="38yr";Address1="1832 Jefferson Rd"}
-    {Facility = facilityInfo;Patient= patientInfo; Generated = DateTime.Now}
+    let savePath = Path.Combine (Path.GetDirectoryName path, sprintf "%s.vm.json" (Path.GetFileNameWithoutExtension path))
+    let rawText = File.ReadAllText savePath
+    let deserialized:ViewModel = Cereal.deserialize rawText
+    // make any updates/property additions here
+    // ....
+    // 
+    let serialized = Cereal.serialize true deserialized
+    if rawText <> serialized then
+        File.WriteAllText(savePath,serialized)
+    deserialized
     
 type Listener() = 
     inherit TraceListener("DataBindingErrorListener")
@@ -116,7 +126,7 @@ let listenForBindingErrors() =
         |> PresentationTraceSources.DataBindingSource.Listeners.Add
         |> Some
     else
-        printfn "Trace listener already attached"
+        printfn "Trace listener(s) already attached (%i)" PresentationTraceSources.DataBindingSource.Listeners.Count
         None
         
 listenForBindingErrors() |> ignore
