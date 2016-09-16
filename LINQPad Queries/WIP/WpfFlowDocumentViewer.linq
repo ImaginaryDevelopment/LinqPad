@@ -99,7 +99,15 @@ let displayFlow vm ds=
     window
 type FacilityInfo = {FacilityName:string; FacilityAddress1:string; FacilityAddress2:string; FacilityPhone:string;FacilityFax:string}
 type PatientInfo = {PatientID: int;FirstName:string;MiddleInitial:string;LastName:string;DOB:DateTime;Age:string; Address1:string; City:string; State:string; Zip:string; MaritalStatus:string; Gender:string;PrimaryPhone:string;SecondaryPhone:string;EmergencyContactLastName:string;EmergencyContactFirstName:string;EmergencyContactPhone:string}
-type ViewModel =  {Facility:FacilityInfo;Patient:PatientInfo;Generated:DateTime; LastVisit:DateTime option}
+type PatientSummary = {FirstName:string; LastName:string; MiddleInitial:string; DOB:DateTime; Gender:string; Age:string;} 
+    with 
+        static member fromPatientInfo (x:PatientInfo):PatientSummary = 
+            //{FirstName=x.FirstName; LastName=x.LastName; MiddleInitial= }
+            let cereal :PatientSummary = Cereal.serialize false x |> Cereal.deserialize
+            cereal
+
+type PayerInfo = {Name:string; PayerType:string; Subscriber:PatientSummary;}
+type ViewModel =  {Facility:FacilityInfo;Patient:PatientInfo;Payers:PayerInfo list; Generated:DateTime; LastVisit:DateTime option}
 
 let vm = 
     let savePath = Path.Combine (Path.GetDirectoryName path, sprintf "%s.vm.json" (Path.GetFileNameWithoutExtension path))
@@ -108,25 +116,34 @@ let vm =
     // make any updates/property additions here
     // ....
     // 
-    let serialized = Cereal.serialize true deserialized
-    if rawText <> serialized then
-        File.WriteAllText(savePath,serialized)
-    deserialized
+    let vm = {deserialized with Payers = [ {Name="BCBS Florida"; PayerType="Primary"; Subscriber = PatientSummary.fromPatientInfo deserialized.Patient}]}
+    let reserialized = Cereal.serialize true vm
+    if rawText <> reserialized then
+        printfn "Writing vm update to filesystem"
+        File.WriteAllText(savePath,reserialized)
+    vm
     
-type Listener() = 
+type Listener(created:DateTime) = 
     inherit TraceListener("DataBindingErrorListener")
     override x.Write (msg:string) = printf "%s" msg
     override x.WriteLine (msg:string) = printfn "%s" msg
+    member __.Created= created
     
 // sometimes this works, sometimes it doesn't
 let listenForBindingErrors() = 
-    let alreadyAdded = PresentationTraceSources.DataBindingSource.Listeners |> Seq.cast<TraceListener> |> Seq.exists (getType >> (=) typeof<Listener>)
+    let getTypeName x = x.GetType().Name
+    let alreadyAdded = PresentationTraceSources.DataBindingSource.Listeners |> Seq.cast<TraceListener> |> Seq.exists (getTypeName >> (=) typeof<Listener>.Name)
     if not alreadyAdded then
-        new Listener()
+        new Listener(DateTime.Now)
         |> PresentationTraceSources.DataBindingSource.Listeners.Add
         |> Some
     else
         printfn "Trace listener(s) already attached (%i)" PresentationTraceSources.DataBindingSource.Listeners.Count
+        PresentationTraceSources.DataBindingSource.Listeners 
+        |> Seq.cast<TraceListener> 
+        |> Seq.map getTypeName 
+        |> List.ofSeq
+        |> printfn "TraceListenerTypes: %A"
         None
         
 listenForBindingErrors() |> ignore
