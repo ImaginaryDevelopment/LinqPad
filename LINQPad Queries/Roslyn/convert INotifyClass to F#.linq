@@ -115,11 +115,11 @@ module NugetAlternative =
 #r "System.Threading.Tasks"
 #endif
 
-type Path = |Path of string
-type Code = |Code of (Path option) * string
+type PathF = |PathF of string
+type Code = |Code of (PathF option) * string
 type PromoteUnitializedStructsToNullables = | Flag of bool
 type TargetCode =
-    | File of Path
+    | File of PathF
     | CodeTarget of Code
     | ClipboardCode
 type PropertyOptions =
@@ -134,8 +134,8 @@ type CodeGenTarget =
     |InterfaceBasedRecord
     |RecordBasedClass of PropertyOptions * PromoteUnitializedStructsToNullables 
 
-type CodeSource = | Text of Code | File of Path
-type CodeSources = | CodeSource of CodeSource | Directory of Path
+type CodeSource = | Text of Code | File of PathF
+type CodeSources = | CodeSource of CodeSource | Directory of PathF
 
 type ConversionRunOptions = {Target:CodeGenTarget; TypeAttributes: string list; Source: CodeSources; }
 
@@ -189,7 +189,7 @@ type TypeSpecification = | Type of Type | Kind of SyntaxKind
 //type DebugPredicate = |ByName of (string -> DebugOpt) |ByExpr of (SyntaxNode -> DebugOpt)
 
         
-type ClassDeclaration = { ClassAttributes: string list; Name:string; BaseClass :string option; Fields: string list; Members: ClassMember list} with
+type ClassDeclaration = { ClassAttributes: string list; Name:string; BaseClass :string option; Fields: string list; Members: ClassMember list; Interfaces : ClassMember list} with
     member x.AttributeText() = x.ClassAttributes |> Seq.map (fun ta -> sprintf "[<%s>]" ta) |> String.join "\r\n" 
     member x.FieldText spacing = x.Fields |> Seq.map (fun f -> spacing + f) |> String.join "\r\n"
 module Array = 
@@ -282,7 +282,7 @@ module FileWalker =
     let getSrcCode codeSrc = 
         match codeSrc with
         | Text code -> code
-        | File (Path path) -> path |> readAllText |> (fun c -> Code (Some(Path path),c))
+        | File (PathF path) -> path |> readAllText |> (fun c -> Code (Some(PathF path),c))
 
     let walkCode code = 
         let src = match code with |Code (_p,src) -> src
@@ -294,7 +294,8 @@ module FileWalker =
             let dic = ModelCollector.VisitClassInterfaces root
             dic
             //|> Seq.dumps "interfaces!"
-            |> Seq.filter (fun i -> i.Key <> null && (i.Value |> (* Seq.dumps "bases" |> *) Seq.exists (fun v -> v = "DataModelBase")))
+            // only convert classes that inherit DataModelBase, why?
+            //|> Seq.filter (fun i -> i.Key <> null && (i.Value |> (* Seq.dumps "bases" |> *) Seq.exists (fun v -> v = "DataModelBase")))
             |> Seq.iter (fun kvp -> clsToBases.Add(kvp.Key, kvp.Value))
             clsToBases
         if classesToBases.Count > 0 then
@@ -302,17 +303,21 @@ module FileWalker =
         else None
 
 let getFiles source = 
-    let codeSourceMap cs = cs |> FileWalker.getSrcCode |> FileWalker.walkCode
-    match source with
-    | CodeSource cs ->
-        [ codeSourceMap cs ]
-    | Directory (Path dir) -> 
-        printfn "rootPath = %s" dir
-        enumerateAllFiles dir "*DataModel.cs"
-        |> Seq.map Path
-        |> Seq.map CodeSource.File
-        |> Seq.map codeSourceMap
-        |> List.ofSeq
+    let codeSourceMap cs = 
+        let codeSourceResult = cs |> FileWalker.getSrcCode |> FileWalker.walkCode
+        codeSourceResult
+    let files = 
+        match source with
+        | CodeSource cs ->
+            [ codeSourceMap cs ]
+        | Directory (PathF dir) -> 
+            printfn "rootPath = %s" dir
+            enumerateAllFiles dir "*DataModel.cs"
+            |> Seq.map PathF
+            |> Seq.map CodeSource.File
+            |> Seq.map codeSourceMap
+            |> List.ofSeq
+    files
 
 
 type PropertyInfoB = { IsINotify:bool; Type:string; FieldName: string option; PropertyName:string; Getter:AccessorDeclarationSyntax option; Setter:AccessorDeclarationSyntax option}
@@ -369,11 +374,15 @@ let getProperties (root:CompilationUnitSyntax) =
     |> Seq.ofType<PropertyDeclarationSyntax> 
     |> Seq.map mapPropertyDeclaration
 
-type FileInfoB = {File:Code; Class':string; Bases: string list;Fields:FieldDeclarationSyntax list; Properties: PropertyInfoB list}
+type FileInfoB = {File:Code; Class':string; Bases: string list;Fields:FieldDeclarationSyntax list; Properties: PropertyInfoB list} with
+    member x.getMemberNames() = 
+        [x.Fields |> Seq.map (fun f -> f.ident)]
 type TranslateOptions = {GetNextDebugState:DebugDelegate -> DebugVote -> DebugOpt * DebugDelegate; IsDebugNode: SyntaxNode -> DebugVote; Spacing:string; SelfIdentifier:string;IsDebugNodeResult:string -> DebugVote; IsDebugPropPred:string -> DebugVote}
 
 let getFileInfoFromSource (source:(_*_*Dictionary<string,string list>) option seq) = 
+
     let files' = source |> Seq.choose id |> Array.ofSeq
+    //printfn "Files: %A" files'
     let filesToClassesToBases = 
         files' |> Seq.length |> printfn "Checking %i files"   
         files' 
@@ -395,37 +404,6 @@ module Declarations =
     let (|EmptyEnumerable|NonEmpty|) (items: _ IEnumerable) =
         if Seq.isEmpty items then EmptyEnumerable else NonEmpty
 
-    let (|ArrayMatch|_|) (typeSpecifications: TypeSpecification[]) (nodes:SyntaxNode[]) =
-        if nodes.Length = typeSpecifications.Length then
-            let zipped = Seq.zip typeSpecifications nodes
-            if zipped |> Seq.forall(fun (ts,node) -> match ts with |Type t -> t.IsAssignableFrom(node.GetType()) | Kind k-> node.Kind() = k) then
-                Some()
-            else None
-        else
-            None
-            
-    let (|SimplerInit|_|) (nodes:SyntaxNode[]) = 
-        let simplerSpecs = [|TypeSpecification.Type(typeof<IdentifierNameSyntax>); TypeSpecification.Type(typeof<VariableDeclaratorSyntax>)  |]
-        match nodes with
-        | ArrayMatch simplerSpecs -> Some(nodes.[0] :?> IdentifierNameSyntax, nodes.[1] :?> VariableDeclaratorSyntax)
-        | _ -> None
-
-    let (|NullableSimplerInit|_|) (nodes:SyntaxNode[]) = 
-        if nodes.Length = 3
-            && nodes.[0] :? NullableTypeSyntax
-            && nodes.[1] :? PredefinedTypeSyntax
-            && nodes.[2] :? VariableDeclaratorSyntax then
-                Some()
-            else None
-    let (|NullableSimpleInit|_|) (nodes:SyntaxNode[]) =
-        if nodes.Length = 5
-            && nodes.[0] :? NullableTypeSyntax
-            && nodes.[1] :? IdentifierNameSyntax
-            && nodes.[2] :? VariableDeclaratorSyntax
-            && nodes.[3] :? EqualsValueClauseSyntax
-            && nodes.[4].Kind() = SyntaxKind.NullLiteralExpression
-            then Some ()
-            else None
     let (|AutoProperty|_|) (getter'setter:AccessorDeclarationSyntax option*AccessorDeclarationSyntax option) =
         let getter,setter = fst getter'setter, snd getter'setter
         match getter,setter with
@@ -457,7 +435,6 @@ let rec mapNode translateOptions promoteUninitializedStructsToNullable spacing (
     let mapNodeP node = mapNode translateOptions promoteUninitializedStructsToNullable spacing memberNames getDebugOpt node
     
     let mapChildren delimiter (node:#SyntaxNode) = node.ChildNodes() |> Seq.map mapNodeP |> String.join delimiter
-    
     match node with
     | null -> failwithf "null node"
     | :? BlockSyntax as bs -> "BlockSyntax", mapChildren "\r\n" bs
@@ -465,15 +442,21 @@ let rec mapNode translateOptions promoteUninitializedStructsToNullable spacing (
     | :? ReturnStatementSyntax as rss -> "ReturnStatementSyntax", mapChildren  "\r\n" rss
     | :? InvocationExpressionSyntax as ies -> 
         
+        
         let expr = mapNodeP ies.Expression
-
+        let expr = 
+            if memberNames.Contains(expr) then
+                sprintf "%s.%s" translateOptions.SelfIdentifier expr
+            else expr   
         if  expr.Contains("AddMinutes") then
             dump "IES:AddMinutes" ies.ArgumentList.Arguments.[0]
         let ignoredResult = expr.StartsWith("builder.Append")
         
         //dump "ies details" <| sprintf "%A" (expr,ies.Expression.GetType().Name, ies.ArgumentList.Arguments, ies.ChildNodes())
-        let arguments =ies.ArgumentList.Arguments|> Seq.map mapNodeP |> String.join ","
-        "InvocationExpressionSyntax", sprintf "%s(%s)%s" expr arguments (if ignoredResult then "|> ignore" else String.Empty)
+        let arguments= ies.ArgumentList.Arguments|> Seq.map mapNodeP |> String.join ","
+        let iesText = sprintf "%s(%s)%s" expr arguments (if ignoredResult then "|> ignore" else String.Empty)
+        
+        "InvocationExpressionSyntax", iesText
     | :? LocalDeclarationStatementSyntax as ldss ->
         let full = if ldss.Declaration.Variables.Count> 0 then Some (mapNodeP ldss.Declaration.Variables.[0]) else None
         match ldss.Declaration.Type.IsVar, ldss.Declaration.Variables.Count, full with
@@ -567,20 +550,55 @@ let rec mapNode translateOptions promoteUninitializedStructsToNullable spacing (
         "BreakStatementSyntax", String.Empty
     | :? MemberAccessExpressionSyntax as maes -> 
         //dump "maes details" <| sprintf "%A" (maes.Name,maes.Expression, maes.OperatorToken)
-        
+        let expr = 
+            match maes.Expression with
+            | :? ThisExpressionSyntax as tes -> translateOptions.SelfIdentifier
+            | _ -> 
+                let exprResult = mapNodeP maes.Expression
+                exprResult
+            
         let expr = mapNodeP maes.Expression
         let token = mapToken maes.OperatorToken
         let name = mapNodeP maes.Name
+        
         dump "maes details2" <| sprintf "%A" (expr,token,name)
-        match expr, token with
-        | "this","." -> "This(maes)", sprintf "%s.%s" translateOptions.SelfIdentifier (mapName name)
-        | "string","." -> "string(maes)", (sprintf "%s.%s" "String" name|> dumps "maes result")
-        | x, _ when x.Contains("this.") -> "this.(maes)", x|> String.replace "this." "x."
-        |_ -> "MemberAccessExpressionSyntax", sprintf "%s%s%s" expr token (mapName name)
+        let maesResult = 
+            let defaultPathResult = sprintf "%s%s%s" expr token (mapName name)
+            let mt, actualResult = 
+                match expr, token with
+                | "this","." -> "This(maes)", sprintf "%s.%s" translateOptions.SelfIdentifier (mapName name)
+                | "string","." -> "string(maes)", (sprintf "%s.%s" "String" name|> dumps "maes result")
+                | x, _ when x.Contains("this.") -> "this.(maes)", x|> String.replace "this." "x."
+                |_ -> "MemberAccessExpressionSyntax", defaultPathResult
+            if mt <> "MemberAccessExpressionSyntax" then Util.Break()
+            if actualResult |> String.contains "x.x" then Util.Break()
+            mt,actualResult
+        
+        maesResult
     | :? ThisExpressionSyntax as tes -> "ThisExpressionSyntax", "x"
-    | :? ArgumentSyntax as arg -> "ArgumentSyntax", mapChildren String.Empty arg 
+    | :? ArgumentSyntax as arg -> 
+        let argText = mapChildren String.Empty arg 
+        "ArgumentSyntax", argText
     | :? BinaryExpressionSyntax as bes -> "BinaryExpressionSyntax", sprintf "%s %s %s" (mapNodeP bes.Left) (mapToken bes.OperatorToken) (mapNodeP bes.Right)
-    | :? ExpressionStatementSyntax as ess -> "ExpressionStatementSyntax", mapChildren String.Empty ess
+    | :? ExpressionStatementSyntax as ess -> 
+        
+        let essText = 
+            match ess.Expression with
+            | :? InvocationExpressionSyntax as ies ->
+                let iesExprText = mapNodeP ies.Expression
+                if memberNames.Contains iesExprText then
+                    sprintf "%s.%s" translateOptions.SelfIdentifier (mapChildren String.Empty ess)
+                else mapChildren String.Empty ess
+            |_ ->mapChildren String.Empty ess
+        if essText.StartsWith("RaiseProperty") then 
+            let exprType = ess.Expression.GetType().Name
+            let children = ess.ChildNodes() |> Array.ofSeq
+            
+            Util.Break()
+            box children = box ess.Expression |> ignore<bool>
+            ()
+        
+        "ExpressionStatementSyntax", essText
     | :? EqualsValueClauseSyntax as evcs -> 
             "EqualsValueClauseSyntax", sprintf "= %s" (mapNodeP evcs.Value)
     | :? VariableDeclaratorSyntax as vds ->
@@ -591,18 +609,32 @@ let rec mapNode translateOptions promoteUninitializedStructsToNullable spacing (
 
         let ident = ins.Identifier
         if ident.ValueText = null then failwithf "no ValueText for ins %s" (toFull ins)
-        let value = mapName ins.Identifier.ValueText
+        let value = mapName ident.ValueText
         //dump "ins" <| sprintf "(parentType %A, parent %A, isVar %A, arity %A,identifier %A,kind %A)" (ins.Parent.GetType()) ins.Parent ins.IsVar ins.Arity ins.Identifier (ins.Kind())
-        if memberNames.Contains(value) && value.Contains(".") = false && ins.Parent :? MemberAccessExpressionSyntax = false then
-            "Ins:(propName)", sprintf "x.%s" value
-        else
-            let name = mapName ins.Identifier.ValueText
-            if name.StartsWith("_") then 
-                "Ins:(_)", sprintf "%s" name
-            else  if ins.Parent :? ArgumentSyntax then  
-                "Ins:()", sprintf "x.%s" name
-            else
-                 "IdentifierNameSyntax", sprintf "%s" (mapName ins.Identifier.ValueText)
+        
+        let insText = 
+//            let isMemberAccess = memberNames.Contains value
+//            if isMemberAccess && not <| ins.Parent.contvalue.Contains "." then
+//                "Ins:(propName)", sprintf "x.%s" value
+//            else
+                let name = mapName ident.ValueText
+                if name.StartsWith("_") then 
+                    "Ins:(_)", sprintf "%s" name
+                else  if ins.Parent :? ArgumentSyntax then  
+                    "Ins:()", sprintf "%s" name
+                else
+                     "IdentifierNameSyntax", sprintf "%s" (mapName ident.ValueText)
+        insText
+    | :? PredefinedTypeSyntax as pts ->
+        printNodeDiagnostics pts
+        let text = pts.ToFullString()
+        
+        "PredefinedTypeSyntax", sprintf "%s" text
+        
+    | :? ObjectCreationExpressionSyntax as oces ->
+        printNodeDiagnostics oces
+        "ObjectCreationExpressionSyntax", oces.ToFullString()
+    
     | n when n.Kind() = SyntaxKind.AddExpression ->
         //if printDebug then 
             //printfn "AddExpression is type %s" (n.GetType().Name)
@@ -611,16 +643,35 @@ let rec mapNode translateOptions promoteUninitializedStructsToNullable spacing (
         //if printDebug then 
             //result |> dumps "mapNode:AddExpressionText" |> ignore
         "AddExpression", result
+    | :? ForEachStatementSyntax as fess ->
+        let children = fess.ChildNodes() |> Array.ofSeq
+        
+        let identifier = children.[0] :?> IdentifierNameSyntax
+        let mappedChildren = 
+            
+            mapChildren String.Empty fess.Statement
+        let fessText = sprintf "for %s in %s do\r\n%s%s" (mapToken fess.Identifier) (mapNodeP children.[1]) spacing mappedChildren
+        //let fessText = mapChildren String.Empty fess |> sprintf "for %s"
+        "forEach", fessText
+    | :? GenericNameSyntax
+    | :? NullableTypeSyntax
+    | :? CastExpressionSyntax // needs to be handled for (int?)null casts
+    
+    | :? QualifiedNameSyntax -> 
+        let knownUnmapped = node |> toFull 
+        "known unmapped", knownUnmapped
     | _ -> "default",node |> toFull
     |> fun (t,o) -> 
+        if o |> String.contains "x.x" then Util.Break()
         let debugOption,getDebugOpt = translateOptions.GetNextDebugState getDebugOpt (translateOptions.IsDebugNodeResult o)
         let dumpResult matchType r = dumpf matchType debugOption (fun r-> (node.GetType().Name + "," + matchType + "," + node.Kind().ToString()) + "=\""+ r.ToString()+"\"") r
-        dumpResult (sprintf "%s.%s" t <| node.Kind().ToString()) o
+        let mapResult = dumpResult (sprintf "%s.%s" t <| node.Kind().ToString()) o
+        let memberKnowsRaise = memberNames.Contains("RaisePropertyChanged")
+        if not memberKnowsRaise && node.ToString().Contains("RaisePropertyChanged") then
+            memberNames.Dump("memberNames")
+        mapResult
 
-let mapNodeChildren translateOptions promoteUninitializedStructsToNullable spacing (memberNames:Set<string>) (getDebugOpt:DebugDelegate) delimiter (node:SyntaxNode) = 
-    let debugOption, getDebugOpt = translateOptions.GetNextDebugState getDebugOpt (translateOptions.IsDebugNode node)
-    let mapNodeC = mapNode translateOptions promoteUninitializedStructsToNullable spacing memberNames getDebugOpt
-    node.ChildNodes() |> Seq.map mapNodeC |> String.join delimiter
+
 
 (* end of proper functional approach (from here on out, things may close over important script options *)
 
@@ -643,16 +694,23 @@ module ScriptOptions =
             else
             searchLinqPadQueriesForSample()
     #else
-    let srcPath = searchLinqPadQueriesForSample()
+    let srcPath = 
+        //searchLinqPadQueriesForSample()
+        let target = @"C:\TFS\PracticeManagement\dev\PracticeManagement\XpteReportLibrary\ReportInputsViewModel.cs"
+        match Directory.Exists target, File.Exists target with
+        | false,false -> failwith "Invalid target directory or file"
+        | _, true -> CodeSources.CodeSource(CodeSource.File (PathF target))
+        | true, _ -> CodeSources.Directory(PathF target)
+        
     #endif
-
-    printfn "searching path %s" srcPath
-    let getDefaultRunOptions () = {Target = CodeGenTarget.Class (PropertyOptions.InheritFsharpViewModule, PromoteUnitializedStructsToNullables.Flag(true)); TypeAttributes = ["AllowNullLiteral"]; Source = CodeSources.Directory (Path srcPath (*  Environment.ExpandEnvironmentVariables("%devroot%"); *) )}
+    
+    printfn "searching path %A" srcPath
+    let getDefaultRunOptions () = {Target = CodeGenTarget.Class (PropertyOptions.KeepNotify, PromoteUnitializedStructsToNullables.Flag(true)); TypeAttributes = ["AllowNullLiteral"]; Source = srcPath (*  Environment.ExpandEnvironmentVariables("%devroot%"); *) }
     let promoteUninitializedStructsToNullable = true
     let includeOriginalInComments = true
     let includeMatchTypeInComments = true
     let selfIdentifier = "x"
-    let spacing = "  "
+    let spacing = Enumerable.Repeat(' ',4) |> Array.ofSeq |> String
 
     let isDebugFieldPred name = if name ="_AppointmentEndTime" then Promote else Demote
     let isDebugPropPred name = if name = "LOS" then Promote else Demote
@@ -686,7 +744,6 @@ module FieldConversion =
         
         let inline mapNode memberNames = mapNode translateOptions promoteUninitializedStructsToNullable memberNames
         let toFType = toFType promoteUninitializedStructsToNullable
-        let mapNodeChildren memberNames = mapNodeChildren translateOptions promoteUninitializedStructsToNullable memberNames
         let debugOption, getDebugOpt = translateOptions.GetNextDebugState getDebugOpt  (ScriptOptions.isDebugClass cls.Class')
 
         let fieldNames = 
@@ -714,16 +771,40 @@ module FieldConversion =
 
                 let debugOption, getDebugOpt = getDebugFieldOptions fieldname
                 let inline mapNode node = mapNode spacing fieldNames getDebugOpt node // (memberNames:Set<string>) (getDebugOpt: DebugDelegate) (node:SyntaxNode)
+                let (|EmptyInitializerMap|_|) (declaration: VariableDeclarationSyntax) = 
+                    match declaration.Type with
+                    | null -> failwithf "declaration type was null"
+                    | :? IdentifierNameSyntax as ins -> 
+                        match ins.Identifier.Text with
+                        | "Visibility" -> Some "= Visibility.Visible"
+                        | _ -> None
+                    | :? PredefinedTypeSyntax as pts -> Some "= Unchecked.defaultof<_>"
+                    | :? QualifiedNameSyntax as qns -> 
+                        None
+                    | :? GenericNameSyntax as gns ->
+                        None
+                    | x -> 
+                        printfn "unexpected type for declation.Type %s %A" (x.GetType().Name) x
+                        None
+                
+                //let isTypeIdentifier = vDeclaration.Type :? IdentifierNameSyntax
                 let initializer = if var.Initializer <> null then 
                                         let initializer = mapNode var.Initializer
                                         initializer |> Some 
-                                    else None
-                {
-                    Type = toFType <| mapNode vDeclaration.Type
-                    Name= fieldname
-                    Initial =  initializer
-                    Declaration = vDeclaration
-                } )
+                                  else 
+                                    match vDeclaration with
+                                    |EmptyInitializerMap s -> Some s
+                                    |_ -> None
+                                    
+                let result = 
+                    {
+                        Type = toFType <| mapNode vDeclaration.Type
+                        Name= fieldname
+                        Initial =  initializer
+                        Declaration = vDeclaration
+                    } 
+                result
+                )
             |> Seq.sortBy (fun f-> f.Name)
             |> Array.ofSeq
 
@@ -745,7 +826,7 @@ module FieldConversion =
                         if ScriptOptions.includeMatchTypeInComments then yield matchType
                         if ScriptOptions.includeOriginalInComments then yield sprintf "(%s)" (toFull vDeclaration)
                     } |> Array.ofSeq
-                let comments = if Seq.isEmpty comments then String.Empty else String.Join(";",comments) |> sprintf "//%s"
+                let comments = if Seq.isEmpty comments then String.Empty else String.Join(";",comments) |> sprintf " //%s"
                 sprintf "let mutable %s : %s %s%s" name type' init comments
             let eqNullable = "=Nullable()"
             match initial with
@@ -753,37 +834,37 @@ module FieldConversion =
                 fDec "= System.String.Empty " "(string.Empty-transform)"
             | Some x -> fDec x "mappedInitializer"
             |_ -> 
-                let children = vDeclaration.ChildNodes() |> Array.ofSeq
-                let inline debugLines node items = debugLines node items
-                match vDeclaration.DescendantNodes() |> Array.ofSeq with //descendant nodes was a poor choice, but it's serving some purpose now
-                | NullableSimplerInit -> fDec eqNullable  "NullableSimplerInit"
-                | NullableSimpleInit -> fDec eqNullable  "NullableSimpleInit"
-                | SimplerInit(_,_) -> fDec  (if type'.Contains("Nullable") then eqNullable  else  "=null") "simpler init" //(Some (fun shouldLift -> if shouldLift then "Nullable()" else fDec "null"))
-                | _ -> 
-                    debugLines vDeclaration [
-                        yield "fieldDefaultsChildNodes"
-                        yield! (vDeclaration.ChildNodes() |> Seq.map (fun n -> n.Kind().ToString()) |> Seq.map (fun m -> sprintf "  %s" m) |> List.ofSeq)
-                        ]
-                    let debugOpt,getDebugOpt = ScriptOptions.getNextDebugState getDebugOpt  (ScriptOptions.isDebugNode vDeclaration)
-                    fDec ("=" + (mapNodeChildren spacing memberNames getDebugOpt String.Empty vDeclaration)) "default init" 
+                let debugOpt,getDebugOpt = ScriptOptions.getNextDebugState getDebugOpt  (ScriptOptions.isDebugNode vDeclaration)
+                debugLines vDeclaration [
+                    yield "fieldDefaultsChildNodes"
+                    yield! (vDeclaration.ChildNodes() |> Seq.map (fun n -> n.Kind().ToString()) |> Seq.map (fun m -> sprintf "  %s" m) |> List.ofSeq)
+                    ]
+                
+                
+                let result= fDec ("= null") "default init" 
+                result
 
         let fields = fields |> Seq.map (toFField fieldNames getDebugOpt) |> List.ofSeq
         fields
 
 module PropConversion = 
     open Declarations
-
-    let toFProp translateOptions target spacing (propertyNames:Set<string>) (pib:PropertyInfoB) (getDebugOpt:DebugDelegate) = 
+    let (|RegexMatch|_|) pattern input = 
+        let m = Regex.Match(input,pattern)
+        if m.Success then
+            Some m
+        else None
+    let toFProp translateOptions target spacing (memberNames:Set<string>) (pib:PropertyInfoB) (getDebugOpt:DebugDelegate) = 
         let debugOpt, getDebugOpt = translateOptions.GetNextDebugState getDebugOpt (translateOptions.IsDebugPropPred pib.PropertyName)
         match target with
         |CodeGenTarget.Interface -> sprintf "member %s:%s" pib.PropertyName pib.Type
         |Class(propertyHandling, promote) ->
             let promote = match promote with |PromoteUnitializedStructsToNullables.Flag b -> b
-            let mapNode = mapNode translateOptions promote spacing propertyNames
+            let mapNode = mapNode translateOptions promote spacing memberNames
             let fDec getter setter matchType= 
                 let spc = translateOptions.Spacing
                 match getter,setter with
-                | Some getter, Some setter -> sprintf "member x.%s //%s\r\n%swith get() = %s\r\n%sand set v = %s\r\n" pib.PropertyName matchType spc getter spc setter
+                | Some getter, Some setter -> sprintf "member x.%s //%s\r\n%swith get() = %s\r\n%sand set value = %s\r\n" pib.PropertyName matchType spc getter spc setter
                 | Some getter, None -> sprintf "member x.%s //%s\r\n%swith get() = %s\r\n" pib.PropertyName matchType spc getter
                 | None, Some setter -> sprintf "member x.%s //%s\r\n%swith set v = %s\r\n" pib.PropertyName matchType spc setter
                 | None,None -> sprintf "//could not declare property %s" matchType
@@ -819,23 +900,31 @@ module PropConversion =
             let mapGetter name = mapAccessor name "getter"
             let mapSetter name = mapAccessor name "setter"
 
-            let spacing = spacing + spacing + spacing
-            let mapAccessor map childnodes = childnodes |> Seq.toArray |> map pib.PropertyName |> String.replace "\r\n" (sprintf "\r\n%s" spacing) |> Some
+            let mapAccessor map childnodes = 
+                childnodes 
+                |> Seq.toArray 
+//                |> fun x -> 
+//                    printfn "%A" x
+//                    Util.Break()
+//                    x
+                |> map pib.PropertyName 
+                |> String.replace "\r\n" (sprintf "\r\n%s" (spacing + spacing)) |> Some
             let mapGetter (getter:AccessorDeclarationSyntax) = getter.ChildNodes()|> mapAccessor mapGetter
             let mapSetter (setter:AccessorDeclarationSyntax) = setter.ChildNodes()|> mapAccessor mapSetter
             let value = match pib.Type with | "bool" -> "false" | _ -> "null"
             match pib.Getter,pib.Setter with
             | AutoProperty -> 
                 debugPropLines pib.PropertyName None [sprintf "AutoProperty type,value:(%s,%s)" pib.Type value]
-                sprintf "%smember val %s : %s = %s with get, set\r\n" spacing pib.PropertyName pib.Type value
+                let autoProp= sprintf "%smember val %s : %s = %s with get, set\r\n" spacing pib.PropertyName pib.Type value
+                autoProp
             | Some getter, Some setter ->
                 let getter = mapGetter getter
                 let matchType,setter' = 
                     let full = toFull setter
                     // for case insensitivity on the field name use @"set\s*{\s*this\.SetAndNotify\(\(\)\s*=>\s*this\.(?<name>\w+),\s*ref\s*_(?i)\k<name>,\s*value\);\s*}"
-                    let match' = System.Text.RegularExpressions.Regex.Match(full,@"set\s*{\s*this\.SetAndNotify\(\(\)\s*=>\s*this\.(?<name>\w+),\s*ref\s*_\k<name>,\s*value\);\s*}")
-                    if match'.Success then
-                        let fieldName = match pib.FieldName with | Some fn -> fn | _ -> ("_" + match'.Groups.[1].Value)
+                    match full with
+                    | RegexMatch @"set\s*{\s*this\.SetAndNotify\(\(\)\s*=>\s*this\.(?<name>\w+),\s*ref\s*_\k<name>,\s*value\);\s*}" m ->
+                        let fieldName = match pib.FieldName with | Some fn -> fn | _ -> ("_" + m.Groups.[1].Value)
                         let debugPropLines = debugPropLines pib.PropertyName
                         let result = 
                             match propertyHandling with 
@@ -849,25 +938,25 @@ module PropConversion =
                             result
                         ]
                         "mapSetterMatchINotify", Some result
-                    else
-                        "using existing getter and setter",mapSetter setter
+                    | _ ->
+                        let setterText = mapSetter setter
+                        "using existing getter and setter",setterText
                 fDec getter setter' matchType
             | Some getter, None ->
                 fDec (mapGetter getter) None "using existing getter"
             | _ -> sprintf "  // could not generate property for %A\r\n" pib.PropertyName
 
-    let convertProperties translateOptions target spacing (fileInfoB:FileInfoB) = 
+    let convertProperties translateOptions target spacing memberNames (fileInfoB:FileInfoB) = 
         let debugOpt,getDebugOpt = ScriptOptions.startDebugState None (ScriptOptions.isDebugCode fileInfoB.File)
-        let propNames = fileInfoB.Properties|> Seq.map(fun p -> mapName p.PropertyName) |> Set.ofSeq
         let props promote = fileInfoB.Properties |> Seq.map(fun p -> {p with PropertyName=mapName p.PropertyName;Type=toFType promote p.Type}) |> Seq.sortBy ( fun p -> p.PropertyName) 
         match target with
         | CodeGenTarget.Interface -> //target spacing (propertyNames:Set<string>) (pib:PropertyInfoB) (getDebugOpt:DebugDelegate) 
-            let f (prop:PropertyInfoB) = toFProp translateOptions target spacing propNames prop getDebugOpt
+            let f (prop:PropertyInfoB) = toFProp translateOptions target spacing memberNames prop getDebugOpt
             props false |> Seq.map f
         | CodeGenTarget.Class(_,promote) -> 
             let promoteUninitializedStructsToNullable = (match promote with |Flag promote -> promote)
             let toFType = toFType promoteUninitializedStructsToNullable 
-            let f (prop:PropertyInfoB) = toFProp translateOptions target spacing propNames prop getDebugOpt
+            let f (prop:PropertyInfoB) = toFProp translateOptions target spacing memberNames prop getDebugOpt
             props promoteUninitializedStructsToNullable |> Seq.map f
 
 let convertFile translateOptions spacing typeAttrs target (cls:FileInfoB) = 
@@ -886,25 +975,42 @@ let convertFile translateOptions spacing typeAttrs target (cls:FileInfoB) =
         let classD = {
             ClassAttributes = typeAttrs
             Name=cls.Class'
-            BaseClass= match propertyPrefs with | PropertyOptions.InheritFsharpViewModule -> Some "  inherit FSharp.ViewModule.ViewModelBase()" |_ -> None
+            BaseClass= 
+                match propertyPrefs with 
+                | PropertyOptions.InheritFsharpViewModule -> Some "  inherit FSharp.ViewModule.ViewModelBase()" 
+                |_ -> if cls.Bases.Any() then cls.Bases |> Seq.head |> sprintf "inherit %s()" |> Some else None
             Fields=  List.empty
             Members = List.empty
+            Interfaces = List.empty
             }
         let classD = 
-            let buildInterface() : ClassMember = ClassMember.Interface <| sprintf " interface %s\r\n" "System.ComponentModel.INotifyPropertyChanged"
-            match propertyPrefs with | PropertyOptions.KeepNotify -> {classD with Members = buildInterface() :: classD.Members} |_ -> classD
+            cls.Bases.Dump("bases")
+            let buildInterface() : ClassMember list = 
+                [
+                    ClassMember.Interface <| sprintf " interface %s\r\n" "System.ComponentModel.INotifyPropertyChanged"
+                    ClassMember.Method "RaisePropertyChanged"
+                ]
+            match propertyPrefs with 
+            | PropertyOptions.KeepNotify -> 
+                {classD with Members = buildInterface() @ classD.Members} 
+            |_ -> classD
 
         let classD ={classD with Fields = FieldConversion.convertFileFields translateOptions promote spacing  cls getDebugOpt}
         let props = PropConversion.convertProperties translateOptions target spacing cls |> Seq.map (String.indent spacing)
         let filename = match cls.File with 
-                        |Code (Some path,_) -> match path with |Path p -> p
+                        |Code (Some path,_) -> match path with |PathF p -> p
                         | _ -> "unknown"
-        let text = sprintf "%s\r\ntype %s() = \\\\ translated from %s\r\n%s\r\n\r\n" (classD.AttributeText()) cls.Class' filename (translateOptions.Spacing + String.optionToStringOrEmpty classD.BaseClass)
+        let text = sprintf "%s\r\ntype %s() = // translated from %s\r\n%s\r\n\r\n" (classD.AttributeText()) cls.Class' filename (translateOptions.Spacing + String.optionToStringOrEmpty classD.BaseClass)
         let text = new System.Text.StringBuilder(text)
-        text.AppendLine(classD.FieldText spacing).AppendLine(String.join "\r\n" props).ToString()
+        text
+            .AppendLine(classD.FieldText spacing)
+            .AppendLine(String.Empty)
+            .AppendLine(String.join "\r\n" props).ToString()
 
 let ``convertToF#`` translateOptions (runOptions:ConversionRunOptions option) limit =
     let runOptions = match runOptions with |Some ro -> ro | None -> ScriptOptions.getDefaultRunOptions()
+    printfn "runOptions.Source = %A" runOptions.Source
+    runOptions.Source.Dump("runOptions.Source")
     let lines = ref 0
     let classes = ref 0
     let converted ()= 
@@ -952,7 +1058,7 @@ let apm () = getClassToClip (fun s -> apm' (getFileInfoFrom s))
 
 let chargeDataModelToInterface() = 
     let options = {
-        ConversionRunOptions.Source= Path @"C:\TFS\Pm-Rewrite\Source-dev-rewrite\PracticeManagement\Pm.ViewModelsC\DataModels\ChargeDataModel.cs" |> CodeSource.File |> CodeSources.CodeSource 
+        ConversionRunOptions.Source= PathF @"C:\TFS\Pm-Rewrite\Source-dev-rewrite\PracticeManagement\Pm.ViewModelsC\DataModels\ChargeDataModel.cs" |> CodeSource.File |> CodeSources.CodeSource 
         Target = CodeGenTarget.Interface
         ConversionRunOptions.TypeAttributes = List.empty
     }

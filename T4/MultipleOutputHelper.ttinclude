@@ -299,7 +299,14 @@ class Manager
                     } else {
                         WriteLnToOutputPane(dte,"Generating \"" + fileName +"\" into " + targetProject.FullName);
                         var projectItem = targetProject.ProjectItems.AddFromFile(fileName);
-                        WriteLnToOutputPane(dte,"AddFromFile put it @" + projectItem.get_FileNames(0));
+                        try
+                        {
+                            WriteLnToOutputPane(dte,"AddFromFile put it @" + projectItem.get_FileNames(0));
+                        }
+                        catch(Exception ex)
+                        {
+                            WriteLnToOutputPane(dte,"get_FileNames(0) failed for " + fileName + " into " + targetProject.Name);
+                        }
                     }
                     
                 }

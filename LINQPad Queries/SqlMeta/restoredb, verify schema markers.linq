@@ -118,6 +118,7 @@ let checkTableSchema name (expected:_ seq) (unexpected:_ seq) =
     ``contains no unexpected`` ()
 
 ()
+DateTime.Now.Dump("restore started")
 match runType with
 | Restore ->
     ProfilerCaptured("E:\prod16\pr16.bak", 

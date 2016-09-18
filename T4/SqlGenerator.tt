@@ -43,6 +43,10 @@
                     new ColumnInfo{Name="PaymentID", Type = typeof(int), 
                         Attributes = new []{"identity","primary key"},
                         },
+                    CreateFKeyedColumn<int>("AppointmentId", new FKeyInfo{Schema="dbo",Table="Appointments",Column="AppointmentId"}, /* allowNull= */ true),
+                    //new ColumnInfo{Name="AppointmentID", Type = typeof(int)},
+                    //    FKey = new FKeyInfo{Schema="dbo",Table="Appointments",Column="AppointmentId"}
+                    //    },
                     new ColumnInfo
                     {
                         Name="PaymentTypeId", Type= typeof(string), Length=50,
@@ -80,14 +84,6 @@
                     CreateUserIdColumn(null, true, "null to allow system inserts/adjustments that aren't done by a user"),
                     CreateFKeyedColumn<int>("PayerID", new FKeyInfo{ Schema="dbo", Table="Payers" }, /* allowNull= */ true),
                     CreatePatientIdColumn(null, true,null),
-                    new ColumnInfo{
-                        Name="PaymentTierId", Type = typeof(string),
-                        Length=50,
-                        GenerateReferenceTable = true,
-                        AllowNull=true,
-                        FKey=new FKeyInfo{ Schema="Payments", Table="PaymentTier",Column="PaymentTierId" },
-                        ReferenceValuesWithComment = new []{"Primary", "Secondary", "Tertiary", "Workman'sComp"}.ToDictionary(f=>f,f=> (string)null),
-                        },
                     new ColumnInfo{
                         Name="Created", Type = typeof(DateTime),
                         AllowNull=true,
@@ -150,6 +146,22 @@
                         GenerateReferenceTable=true, FKey= new FKeyInfo{Schema="Payments", Table="PaymentItemType", Column="PaymentItemTypeId"},
                         ReferenceValuesWithComment = new []{"EraPayment", "EraAdjustment", "PtRespDeductible", "PtRespCoPay","PtRespCoIns","Other"}.ToDictionary(f => f, f => (string)null),
                     },
+                    new ColumnInfo{
+                        Name="PaymentTierId", Type = typeof(string),
+                        Length=50,
+                        GenerateReferenceTable = true,
+                        AllowNull=true,
+                        FKey=new FKeyInfo{ Schema="Payments", Table="PaymentTier",Column="PaymentTierId" },
+                        ReferenceValuesWithComment = new []{"Primary", "Secondary", "Tertiary", "Worker'sComp"}.ToDictionary(f=>f,f=> (string)null),
+                        },
+                    new ColumnInfo{
+                        Name="PtRespTypeId", Type = typeof(string),
+                        Length=50,
+                        GenerateReferenceTable = true,
+                        AllowNull=true,
+                        FKey=new FKeyInfo{ Schema="Payments", Table="PtRespType",Column="PtRespTypeId" },
+                        ReferenceValuesWithComment = new []{"Deductible", "CoIns", "CoPay"}.ToDictionary(f=>f,f=> (string)null),
+                        },
                     new ColumnInfo{ Name = "Created", Type= typeof(DateTime)},
                     new ColumnInfo{ Name = "Amount", Type= typeof(decimal), Precision=8, Scale=2},
                     new ColumnInfo{ Name = "PatientResponsiblityAmt", Type = typeof(decimal), Precision=8, Scale=2},

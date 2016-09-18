@@ -60,6 +60,8 @@ static Manager Generate(ITextTemplatingEngineHost host, EnvDTE.DTE dte, StringBu
     using(var cn = new System.Data.SqlClient.SqlConnection(cString))
     {
         cn.Open();
+        // connected to cn.DataSource + cn.Database
+        appendLine(0, "Connected to " + cn.DataSource+","+ cn.Database);
         foreach(var tableInfo in tables)
         {
             var typeName = pluralizer.Singularize(tableInfo.Table);
@@ -284,7 +286,7 @@ public static void GenerateModule(string typeName, IEnumerable<ColumnDescription
     if(canDoInsert)
     {
         appendLine(0, string.Empty);
-        appendLine(1, "let createInsert (r:I" + typeName + ") =");
+        appendLine(1, "let createInsert blacklist (r:I" + typeName + ") =");
         var needsQuotedTypes = new []{"varchar", "char", "nvarchar", "nchar", "datetime", "xml", "datetime2"};
         Func<ColumnDescription,bool> needsQuoted = cd => needsQuotedTypes.Contains(cd.Type.ToLower());
 
@@ -339,6 +341,7 @@ public static void GenerateModule(string typeName, IEnumerable<ColumnDescription
         }
 
         appendLine(2, "]");
+        appendLine(2, "|> Seq.filter (fun kvp -> blacklist |> Seq.contains(fst kvp) |> not)");
         appendLine(2, "|> fun pairs -> sprintf \"insert into " 
             + schemaName 
             + "." 
@@ -467,7 +470,7 @@ public static IEnumerable<TableInfo> GetTables(string dbPath)
     return 
         Directory.GetFiles(dbPath, "*.table.sql", SearchOption.AllDirectories)
         .Select(tp => new TableInfo{ 
-            Path=BHelpers.After(tp,"\\devDb\\"),
+            Path=tp,
             Schema=BHelpers.Before(BHelpers.After(tp, "Schemas\\"), "\\"),
             Table=Path.GetFileNameWithoutExtension(Path.GetFileNameWithoutExtension(tp))
         });

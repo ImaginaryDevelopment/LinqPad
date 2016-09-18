@@ -10,10 +10,12 @@
 
 void Main()
 {
-	var path=System.Environment.GetEnvironmentVariable("devroot")+@"\Products\CVS\Common\CVS.DataAccess\";
+	var path=System.Environment.GetEnvironmentVariable("devroot");// + "\\PM";
+    if(!Directory.Exists(path))
+        throw new DirectoryNotFoundException("starting path not found");
 	var doNotDescend = new[]{"$tf",".git"};
 	var fieldToFind="verified_bit_field";
-	var adoReferences=from i in RecurseDirectory(path,doNotDescend,".cs")
+	var adoReferences=from i in RecurseDirectory(path,doNotDescend,".cs") //.Dump("Files found")
 		from line in System.IO.File.ReadAllLines(i).Select ((l,x) =>new{l,index=x} )
 		where line.l.Contains("\"[") && line.l.Contains("].[")
 		let fullname=line.l.DumpIf(s=>s.Contains("]\"")==false,i).After("\"").Before("\"")

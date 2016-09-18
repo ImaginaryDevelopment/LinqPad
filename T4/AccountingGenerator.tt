@@ -51,7 +51,7 @@
                     
                     CreateFKeyedColumn<int>("ChargeID", new FKeyInfo{Schema="dbo",Table="Charge"}, /* allowNull: */ true),
                     CreateFKeyedColumn<int>("PaymentID", new FKeyInfo{Schema="dbo",Table="Payment"}, /* allowNull: */ true),
-                    CreateFKeyedColumn<int>("PaymentItemID", new FKeyInfo{Schema="Payments",Table="PaymentItem"}, /* allowNull: */ true),
+                    CreateFKeyedColumn<int>("PaymentItemID", new FKeyInfo{Schema="Accounts",Table="PaymentItem"}, /* allowNull: */ true),
                     CreateFKeyedColumn<int>("PatientID", new FKeyInfo{Schema="dbo",Table="Patients"}, /* allowNull: */ true),
                     CreateFKeyedColumn<int>("AppointmentID", new FKeyInfo{Schema="dbo",Table="Appointments"}, /* allowNull: */ true),
 
