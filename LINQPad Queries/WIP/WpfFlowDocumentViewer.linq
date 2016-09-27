@@ -10,6 +10,9 @@
 </Query>
 
 // face sheet
+// things attempted:
+    // runtime exception in http://stackoverflow.com/questions/1267046/wpf-flowdocument-scale-to-fit-page (attempt commented out in previous commit)
+
 //http://stackoverflow.com/questions/910814/loading-xaml-at-runtime
 //https://blogs.msdn.microsoft.com/ashish/2007/08/14/dynamically-loading-xaml/
 
@@ -19,7 +22,28 @@ open System.Windows.Data
 open System.Windows.Input
 open System.Windows.Markup
 
-let getType x = x.GetType()
+[<AutoOpen>]
+module Helpers = 
+    let dumpt (t:string) x = x.Dump(t); x
+    let flip f y x = f x y
+    let getType x = x.GetType()
+    let regReplace (delimiter:string) (replacement:string) (text:string) = Regex.Replace(text,delimiter,replacement)
+    let regRemove x t = regReplace x String.Empty t
+    
+    let replace (delimiter:string) (replacement:string) (text:string) = text.Replace(delimiter,replacement)
+    let after (delimiter:string) (x:string) =  
+            match x.IndexOf delimiter with
+            | i when i < 0 -> failwithf "after called without matching substring in '%s'(%s)" x delimiter
+            | i -> x.Substring(i + delimiter.Length)
+    let before (delimiter:string) (x:string) = x.Substring(0, x.IndexOf delimiter)
+    let remove d (s:string) = s |> before d |> flip (+) (s|> after d)
+    let splitLines (x:string) = x.Split([| "\r\n";"\n"|], StringSplitOptions.None)
+    module Tuple2 = 
+        let fromCurry x y = (x,y)
+    
+    let getLine i s = s|> splitLines |> Seq.mapi Tuple2.fromCurry |> Seq.find(fun (lineIndex,l) -> lineIndex = i)
+    let getLines indexes s = s|> splitLines |> Seq.mapi Tuple2.fromCurry |> Seq.filter (fun (lineIndex,_) -> indexes |> Seq.contains lineIndex)
+    
 module Cereal = 
     open Newtonsoft.Json
     type private Deserializer<'t> =
@@ -33,49 +57,6 @@ module Xps =
     open System.Windows.Controls
     open System.Windows.Documents
     open System.Windows.Media
-//    
-//    type FittedDocumentPaginator (baseDp, scale) = //http://stackoverflow.com/questions/1267046/wpf-flowdocument-scale-to-fit-page
-//        inherit DocumentPaginator()
-//        let mutable pageSize = Size.Empty
-//        let sTransform = ScaleTransform(scale,scale)
-//        
-//        member x.Base:DocumentPaginator = baseDp
-//        member x.Scale:float = scale
-//        override x.GetPage pageNumber = 
-//            let page = base.GetPage pageNumber
-//            page.Visual :?> ContainerVisual
-//            |> fun cv -> cv.Transform <- sTransform
-//            page
-//        override __.IsPageCountValid = true
-//        override __.PageCount = 1
-//        override __.PageSize with get() = pageSize and set v = pageSize <-v
-//        override __.Source = baseDp.Source
-//        
-//        
-//    let printFittedPreview (flow:FlowDocument) title documentWidth doResetFlow =
-//        let pd = System.Windows.Controls.PrintDialog()
-//        
-//        
-//        if pd.ShowDialog().GetValueOrDefault() then
-//            let pageMargins = flow.PagePadding
-//            flow.PagePadding <- Thickness(15.)
-//            let scale = 
-//                match documentWidth / pd.PrintableAreaWidth with
-//                | _scale when _scale < 1. -> 1.
-//                | x -> x
-//            
-//            let invScale = 1. / scale
-//            flow.PageHeight <- pd.PrintableAreaHeight * scale
-//            flow.PageWidth <- pd.PrintableAreaWidth * scale
-//            let dp = flow :> IDocumentPaginatorSource |> fun idps -> idps.DocumentPaginator
-//            let fdp = FittedDocumentPaginator(dp,invScale)
-//            pd.PrintDocument(fdp, title)
-//            if doResetFlow then
-//                flow.PageHeight <- System.Double.NaN
-//                flow.PageWidth <- System.Double.NaN
-//                flow.PagePadding <- pageMargins
-//            ()
-//       
     
     // trying https://blogs.msdn.microsoft.com/fyuan/2007/03/10/convert-xaml-flow-document-to-xps-with-style-multiple-page-page-size-header-margin/
     type DocumentPaginatorWrapper(paginator:DocumentPaginator, pageSize:Size, margin:Size) =
@@ -120,61 +101,58 @@ module Xps =
         override __.PageCount = paginator.PageCount
         override __.PageSize with get() = paginator.PageSize and set v = paginator.PageSize <- v
         override __.Source = paginator.Source
-            
         
-module Behaviors = 
-    type CloseThisWindowCommand private () =
-        let canExecuteChanged = new Event<_, _>()
+    let ``wrapPaginator8x6x.5`` (dps:IDocumentPaginatorSource) = 
+        DocumentPaginatorWrapper(dps.DocumentPaginator, Size(768., 676.), Size(48.,48.))
     
-        member x.CanExecute (parameter:obj) =
-            match parameter with
-            | null -> 
-                printfn "CanExecute parameter was null"
-                false
-            | :? Window -> 
-                printfn "type of parameter is %s" (parameter.GetType().Name)
-                true
-            | :? DependencyObject as depObj ->
-                printfn "type of parameter is %s" (parameter.GetType().Name)
-                match LogicalTreeHelper.GetParent depObj with
-                | null -> 
-                    match System.Windows.Media.VisualTreeHelper.GetParent depObj with
-                    | null ->
-                        printfn "Unable to find parent of parameter"
-                        false
-                    | vParent -> 
-                        x.CanExecute vParent
-                | lParent ->
-                    x.CanExecute lParent
-    
-            | _ -> 
-                printfn "type of parameter is %s" (parameter.GetType().Name)
-                false
-        member x.Execute (parameter:obj) = 
-            if x.CanExecute parameter then
-                parameter :?> Window
-                |> fun w -> w.Close()
-    
-        interface ICommand with
-            member x.CanExecute(parameter) = x.CanExecute parameter
-            [<CLIEvent>]
-            member x.CanExecuteChanged = canExecuteChanged.Publish
-            member x.Execute(parameter) = x.Execute parameter
-    
-        static member Instance = new CloseThisWindowCommand()
+module Packaging = 
+    open System.IO.Packaging
+    open System.Windows.Documents
+    open System.Windows.Xps.Serialization
+    let saveAsXps fileNameWithoutExtension (dps:IDocumentPaginatorSource) = 
+        use container = Package.Open(fileNameWithoutExtension + ".xps", FileMode.Create)
+        use xpsDoc = new XpsDocument(container, CompressionOption.Maximum)
+        use xpsPp = new XpsPackagingPolicy(xpsDoc)
+        use rsm = new XpsSerializationManager(xpsPp, false)
+        rsm.SaveAsXaml dps
 
 let path = @"C:\TFS\PracticeManagement\dev\PracticeManagement\PracticeManagement\PatientDataGrid\PatientFaceSheet.xaml"
 
 let rootElement = 
     
-    let text = Regex.Replace(File.ReadAllText path, "x:Class=\".+\"", String.Empty)
-    XamlReader.Parse text
+    let text = 
+        File.ReadAllText path
+        |> regRemove "x:Class=\".+\"" 
+        // replace behaviors namespace,static resources
+        |> regRemove "xmlns:b=\".+\"" 
+        |> regRemove "<b:.+>" 
+        // replace converters namespace, static resources
+        |> regRemove "xmlns:converter=\".+\""
+        |> regRemove "<converter:.+>"
+        // remove converter calls
+        |> regRemove ",\s*Converter={StaticResource.*?}"
+        |> regRemove "Converter=\"{StaticResource.*?}\""
+        |> remove ", Converter={x:Static local:PatientFaceSheet.PhoneFormattingConverter}"
+    Util.OnDemand("raw xaml", fun () -> text).Dump() |> ignore
+    XDocument.Parse(text).DumpFormatted() |> ignore
+    try
+        XamlReader.Parse text
+    with ex ->
+        if ex.Message.Contains("Line number '") then
+            let lineNumber = ex.Message |> after "Line number '" |> before "'" |> int
+            text
+            |> getLines [lineNumber-1 .. lineNumber + 1]
+            |> dumpt (sprintf "errant line:%i" lineNumber)
+            |> ignore
+        reraise()
 
 let flow = rootElement :?> System.Windows.Documents.FlowDocument
 
 type DisplayStrategy = // consider adding each of these: https://wpf.2000things.com/2011/03/23/254-types-of-containers-for-hosting-flowdocument/
     | FlowGridDocScrollViewer
     | FlowDocScrollViewerRaw
+    | FlowDocReader
+    | SaveParse
     | FlowPrintDialog
     | ScaledFlowDocument
 //let inline toFormatString (f:string) (a:^a) = ( ^a : (member ToString:string -> string) (a,f))
@@ -192,6 +170,17 @@ let displayFlow vm ds=
         |FlowDocScrollViewerRaw ->
             let fdsv = FlowDocumentScrollViewer(Document = flow)
             Window(Content=fdsv)
+        |FlowDocReader ->
+            let fdr = FlowDocumentReader()
+            fdr.Document <- flow
+            Window(Content = fdr)
+        |SaveParse ->
+            flow
+            |> XamlWriter.Save
+            |> XamlReader.Parse
+            |> fun x -> x :?> Documents.FlowDocument
+            |> fun flow -> Window(Content = FlowDocumentScrollViewer(Document=flow))
+            
         |FlowPrintDialog ->
             //let fdsv = FlowDocumentScrollViewer(Document = flow)
             let pd = PrintDialog()
@@ -210,18 +199,21 @@ let displayFlow vm ds=
 //            let paginator = dps.DocumentPaginator
 //            pd.ShowDialog()
 //            Window(Content = pd)
-        |ScaledFlowDocument -> // trying http://stackoverflow.com/questions/7931961/wpf-printing-to-fit-page
+        |ScaledFlowDocument -> 
+            // trying https://blogs.msdn.microsoft.com/fyuan/2007/03/10/convert-xaml-flow-document-to-xps-with-style-multiple-page-page-size-header-margin/
+            // consider trying http://stackoverflow.com/questions/7931961/wpf-printing-to-fit-page
 //            flow.PageWidth <- 100.
 //            flow.PageHeight <- 1000.
 //            flow.PagePadding <- Thickness(0.5)
-//            Xps.printFittedPreview flow "Heavy flow" 800. false
-            
+            let fdr = FlowDocumentReader()
+            fdr.Document <- flow
+            Packaging.saveAsXps @"C:\Users\Brandon\Documents\XAML Documents\scaledFlow1" fdr.Document
             Window(Content = flow)
 
     window.DataContext <- vm
     window
 type FacilityInfo = {FacilityName:string; FacilityAddress1:string; FacilityAddress2:string; FacilityPhone:string;FacilityFax:string}
-type PatientInfo = {PatientID: int;FirstName:string;MiddleInitial:string;LastName:string;DOB:DateTime;Age:string; Address1:string; City:string; State:string; Zip:string; MaritalStatus:string; Gender:string;PrimaryPhone:string;SecondaryPhone:string;EmergencyContactLastName:string;EmergencyContactFirstName:string;EmergencyContactPhone:string; EmailAddress:string}
+type PatientInfo = {PatientID: int;FirstName:string;MiddleInitial:string;LastName:string;DOB:DateTime;Age:string; Address1:string; City:string; State:string; Zip:string; MaritalStatus:string; Gender:string;PrimaryPhone:string;SecondaryPhone:string;EmergencyContactLastName:string;EmergencyContactFirstName:string;EmergencyContactPhone:string; EmailAddress:string;LastAppointment: DateTime Nullable}
 type PatientSummary = {FirstName:string; LastName:string; MiddleInitial:string; DOB:DateTime; Age:string;} 
     with 
         static member fromPatientInfo (x:PatientInfo):PatientSummary = 
@@ -239,7 +231,7 @@ let vm =
     // make any updates/property additions here
     // ....
     // 
-    let vm = {deserialized with Gender= deserialized.Patient.Gender}
+    let vm = {deserialized with Patient = {deserialized.Patient with LastAppointment = Option.toNullable deserialized.LastVisit}}
     let reserialized = Cereal.serialize true vm
     if rawText <> reserialized then
         printfn "Writing vm update to filesystem"
@@ -273,11 +265,16 @@ listenForBindingErrors() |> ignore
 
 flow.DataContext <- vm
 let displayForShow() = 
-    let window = displayFlow vm DisplayStrategy.FlowGridDocScrollViewer
-    
-    window.KeyDown.Add(fun k -> 
-        if k.Key = Key.Escape then
-            window.Close())
+    let window = displayFlow vm DisplayStrategy.FlowDocScrollViewerRaw
+    let closeOnEscape (w:Window) = 
+        w.KeyDown.Add (fun e -> 
+            if e.Key = Key.Escape then
+                w.Close()
+        )
+    closeOnEscape window
+//    window.KeyDown.Add(fun k -> 
+//        if k.Key = Key.Escape then
+//            window.Close())
     
     //// show to query via code, then hide and show dialog to interact and view
     //window.Show()

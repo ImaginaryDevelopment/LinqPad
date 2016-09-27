@@ -204,7 +204,7 @@ GO
         }
     }
 
-    public static ColumnInfo  CreateFKeyedColumn<T>(string name, FKeyInfo fkey)
+    public static ColumnInfo CreateFKeyedColumn<T>(string name, FKeyInfo fkey)
     {
         return CreateFKeyedColumn<T>(name,fkey, false);
     }
@@ -216,12 +216,12 @@ GO
 
     public static ColumnInfo CreateFKeyedColumn<T>(string name, FKeyInfo fkey, bool allowNull, string comment)
     {
-                return new ColumnInfo{
+        return new ColumnInfo{
             Name=name, Type = typeof(T),
-                AllowNull=allowNull,
-                FKey=fkey,
-                Comments = comment != null? new[]{ comment} : null
-                };
+            AllowNull=allowNull,
+            FKey=fkey,
+            Comments = comment != null? new[]{ comment} : null
+        };
     }
 
     public static ColumnInfo CreatePatientIdColumn(string prefix, bool allowNull, string comment)

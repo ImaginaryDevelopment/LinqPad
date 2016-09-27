@@ -2,14 +2,12 @@
 <#@ assembly name="EnvDTE80"#>
 <#@ assembly name="System.Core"#>
 <#@ import namespace="EnvDTE" #>
-<#@ import namespace="System.Collections.Generic" #>
-<#
+<#@ import namespace="System.Collections.Generic" #><#
 var hostServiceProvider = (IServiceProvider)Host;
 Dte = (EnvDTE.DTE)hostServiceProvider.GetService(typeof(EnvDTE.DTE));
 if(Dte == null) {
             throw new Exception("T4Generator can only execute through the Visual Studio host");
-}#>
-<#+
+}#><#+
 Project GetProjectContainingT4File(DTE dte,bool keepDirty) {
 
     // Find the .tt file's ProjectItem
