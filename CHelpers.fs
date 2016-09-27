@@ -32,7 +32,7 @@ module CHelpers =
     let DisposeIfNotNullAndDisposable (o:obj) = 
         match o with
         | null -> ()
-        | :? IDisposable as d -> d.Dispose();
+        | :? IDisposable as d -> d.Dispose()
         | _ -> ()
 
     [<Extension>]
