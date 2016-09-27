@@ -81,6 +81,16 @@ open System.Windows.Media
 module Reflection = 
     open System.Reflection
     open Microsoft.FSharp.Reflection
+    let rec typeMatch t (g:Type) = 
+        if t = typeof<obj> then 
+            None
+        elif g.IsInterface then
+            let ints = if t.IsInterface then [| t |] else t.GetInterfaces()
+            ints |> Seq.tryPick (fun t -> if t.GetGenericTypeDefinition() = g then Some(t.GetGenericArguments()) else None)
+        elif t.IsGenericType && t.GetGenericTypeDefinition() = g then
+            t.GetGenericArguments() |> Some
+        else typeMatch (t.BaseType) g
+
         // some parts of this may be a translation of BMore.linq
 //    let (|TypeDefOf|_|) (_:'a) t = 
 //        if t = typedefof<'a> then Some() else None
@@ -88,7 +98,7 @@ module Reflection =
     /// for when you need to see if something matches and expected Generic Type Definition ( you don't know "'t" but don't care)
     /// Sample (tested good) usage:
     /// match list with
-    /// | TypeDefOf (isType:List<_>) typeArgs -> sprintf "Yay matched1 : %A" typeArgs
+    /// | TypeDefOf (isType:List<_>) typeArgs -> sprintf "Yay matched1 : %A" typeArgs \r\n
     /// | _ -> "boo"
     /// Also works for some types: 
     /// | TypeDefOf (null:List<_>) typeArgs -> sprintf "Yay matched: %A" typeArgs
@@ -98,11 +108,14 @@ module Reflection =
             None
         else
             let typ = value.GetType()
-            if typ.Name = "RuntimeType" then failwithf "Can not GetGenericTypeDefinition of System.Type"
+            if typ.Name = "RuntimeType" then failwithf "Invalid use of |TypeDef|"
 //            let gtd = if typ.IsGenericType then typ.GetGenericTypeDefinition() |> Some else None
             if typ.IsGenericType && typ.GetGenericTypeDefinition() = typeDef then 
                 Some(typ.GetGenericArguments())
-            else None
+            else 
+                let typeArgs = typeMatch typ typeDef
+                typeArgs
+
     // instead of null in TypeOf or TypeDef matches for types that don't allow null
     let isType<'a> = Unchecked.defaultof<'a>
 
@@ -129,23 +142,34 @@ type DragDropListBox() as self =
     let mutable removeAtF: Option< int -> unit > = None
 
     let listBoxPreviewMouseMove (* sender *) (e:MouseEventArgs) = 
-        let point = e.GetPosition(null)
-        let diff = defaultArg dragStartPointOpt (Point()) - point
-        if e.LeftButton = MouseButtonState.Pressed && Math.Abs diff.X > SystemParameters.MinimumHorizontalDragDistance ||
-            Math.Abs diff.Y > SystemParameters.MinimumVerticalDragDistance then
-            match WpfHelpers.findVisualParent<ListBoxItem>(e.OriginalSource :?> DependencyObject) with
-            | Some lbi -> 
-                let dde = DragDrop.DoDragDrop(lbi, lbi.DataContext, DragDropEffects.Move)
-                dde |> ignore
-                ()
-            | None -> ()
-            
+        match dragStartPointOpt with
+        | None ->
             ()
+        | Some dragStartPoint ->
+            let point = e.GetPosition(null)
+            let diff = dragStartPoint - point
+            let minHorizontal = SystemParameters.MinimumHorizontalDragDistance 
+            let minVert = SystemParameters.MinimumVerticalDragDistance
+            if e.LeftButton = MouseButtonState.Pressed && 
+                (Math.Abs diff.X > minHorizontal || Math.Abs diff.Y > minVert) then
+                match WpfHelpers.findVisualParent<ListBoxItem>(e.OriginalSource :?> DependencyObject) with
+                | Some lbi -> 
+                    let dde = DragDrop.DoDragDrop(lbi, lbi.DataContext, DragDropEffects.Move)
+                    dde |> ignore
+                    ()
+                | None -> ()
+                
+                ()
+        if e.Handled then
+            Debug.WriteLine (sprintf "previewMouseMove handled = %A" e.Handled)
 
     let listBoxPreviewMouseLeftButtonDown _ (e:MouseButtonEventArgs) =
         dragStartPointOpt <- Some <| e.GetPosition(null)
+    let listBoxPreviewMouseLeftButtonUp _ =
+        dragStartPointOpt <- None
 
-    let listBoxItemDrop (x:obj) (sender:obj) (e:DragEventArgs) =
+    let listBoxItemDrop (sender:obj) (e:DragEventArgs) =
+        Debug.WriteLine ("Dropping method called")
         match sender with
         | :? ListBoxItem as lbi ->
             let source = e.Data.GetFormats() |> Seq.head |> e.Data.GetData
@@ -166,14 +190,16 @@ type DragDropListBox() as self =
             ()
         | _ -> ()
         ()
-
     do
-        self.PreviewMouseLeftButtonDown.Add listBoxPreviewMouseMove //.AddHandler (MouseButtonEventHandler previewMouseMove)
+        self.PreviewMouseLeftButtonUp.Add listBoxPreviewMouseLeftButtonUp
+        //self.PreviewMouseLeftButtonDown.Add listBoxPreviewMouseMove //.AddHandler (MouseButtonEventHandler previewMouseMove)
+        self.PreviewMouseMove.Add listBoxPreviewMouseMove
         let style =
             let s = Style(typeof<ListBoxItem>)
             s.Setters.Add (Setter(ListBoxItem.AllowDropProperty, true))
             s.Setters.Add (EventSetter(ListBoxItem.PreviewMouseLeftButtonDownEvent, MouseButtonEventHandler listBoxPreviewMouseLeftButtonDown))
-            s.Setters.Add (EventSetter(ListBoxItem.DropEvent, DragEventHandler (listBoxItemDrop self)))
+            s.Setters.Add (EventSetter(ListBoxItem.DropEvent, DragEventHandler listBoxItemDrop))
+            
             s
         self.ItemContainerStyle <- style
 
@@ -186,11 +212,11 @@ type DragDropListBox() as self =
         
         match newValue with
         | null -> t <- None
-        | TypeDef (isType:List<_>) typeArgs ->
-            let targetType = typedefof<List<_>>.MakeGenericType(typeArgs)
+        | TypeDef (isType:IList<_>) typeArgs ->
+            let targetType = typedefof<IList<_>>.MakeGenericType(typeArgs)
             let insertMethod = targetType.GetMethod("Insert") //.MakeGenericMethod(typeArgs)
             let removeAtMethod = targetType.GetMethod("RemoveAt") //.MakeGenericMethod(typeArgs)
-            
+
             insertF <- Some (fun (i,o) -> insertMethod.Invoke(x.ItemsSource, [| box i; o|]) |> ignore<obj>)
             removeAtF <- Some (fun i -> removeAtMethod.Invoke(x.ItemsSource, [| box i |] ) |> ignore<obj>)
             ()
@@ -212,7 +238,7 @@ type DragDropListBox() as self =
         let errors, exitCode = scs.Compile [| "fsc.exe"; "-o"; dll; "-a";src; "-d"; "DEBUG"; "-r"; "WindowsBase"; "-r" ;"PresentationCore"; "-r"; "PresentationFramework" |]
         let mapError (er:Microsoft.FSharp.Compiler.FSharpErrorInfo) = 
             let lines = srcCode |> splitLines 
-            lines |> Seq.skip (er.StartLine - 1) |> Seq.take 3 |> delimit "\r\n", er.Message, er.Subcategory
+            lines |> Seq.skip (er.StartLineAlternate - 1) |> Seq.take 3 |> delimit "\r\n", er.Message, er.Subcategory
         
         errors |> Seq.map mapError |> Dump |> ignore
         match exitCode with
