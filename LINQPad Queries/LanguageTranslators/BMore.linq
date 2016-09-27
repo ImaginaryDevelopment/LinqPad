@@ -8,7 +8,7 @@
 </Query>
 
 let dc = new TypedDataContext()
-// obsolected by MacroRunner: CodeGeneration.GenerateFromTypes
+// obsoleted by MacroRunner: CodeGeneration.GenerateFromTypes
 let (|TypeDefOf|_|) (_:'a) t = 
     if t = typedefof<'a> then Some() else None
 let (|TypeOf|_|) (_:'a) t  = 
