@@ -453,7 +453,18 @@ public class TableInfo
     public string Table {get;set;}
     public bool GenerateFull {get;set;}
 }
-
+public class TableSpecifier 
+{
+    deprecations
+    public TableSpecifier(string tableSpecifier)
+    {
+        this.TableSpecifier = tableSpecifier;
+    }
+    public string TableSpecifier {get;}
+    // column/field/property comments to add in addition to the auto-generated ones
+    public IDictionary<string,string> ExtraComments {get;set;}
+    public IDictionary<string,string> Deprecations {get;set;}
+}
 public class ColumnDescription
 {
     public string ColumnName {get;set;}
@@ -463,6 +474,7 @@ public class ColumnDescription
     public bool Nullable {get;set;}
     public bool IsPrimaryKey {get;set;}
     public bool IsIdentity {get;set;}
+    public string ExtraComments{get;set;}
 }
 
 public static IEnumerable<TableInfo> GetTables(string dbPath)

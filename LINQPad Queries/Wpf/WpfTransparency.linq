@@ -1,0 +1,98 @@
+<Query Kind="FSharpProgram">
+  <Reference>&lt;RuntimeDirectory&gt;\WPF\PresentationCore.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\WPF\PresentationFramework.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\WPF\WindowsBase.dll</Reference>
+  <Namespace>Microsoft.Win32.SafeHandles</Namespace>
+  <Namespace>System.Drawing</Namespace>
+  <Namespace>System.Runtime.InteropServices</Namespace>
+  <Namespace>System.Windows</Namespace>
+  <Namespace>System.Windows.Controls</Namespace>
+  <Namespace>System.Windows.Media</Namespace>
+</Query>
+
+// measure screen distances
+// perhaps also get colors? Complexity: peek through transparency layer possible?
+module PInvoke = 
+        [<DllImport("user32.dll")>]
+        extern bool private GetCursorPos(Point& lpPoint);
+
+        [<DllImport("gdi32.dll", CharSet = CharSet.Auto, SetLastError = true, ExactSpelling = true)>]
+        extern int private BitBlt(IntPtr hDC, int x, int y, int nWidth, int nHeight, IntPtr hSrcDC, int xSrc, int ySrc, int dwRop);
+        // get color of a screen pixel ->
+        // http://stackoverflow.com/questions/1483928/how-to-read-the-color-of-a-screen-pixel
+        let getPixelColor () = 
+            let mutable cursor = Point()
+            GetCursorPos( &cursor )
+            cursor
+            
+let window = 
+    
+    let transparency = SolidColorBrush(Media.Color.FromArgb(90uy,100uy,100uy, 100uy))
+    let window = 
+        Window(
+            AllowsTransparency= true,
+            WindowStyle= WindowStyle.None,
+            Background= transparency,
+            WindowState= WindowState.Maximized
+        )
+    //window.WindowStartupLocation <- WindowStartupLocation....
+    
+    
+    window
+
+//window.
+let captured = window.CaptureMouse()
+captured.Dump("Captured?")
+let sp = //,labelX,labelY = 
+    let sp = StackPanel(Height=80., VerticalAlignment= VerticalAlignment.Top, Orientation=Orientation.Horizontal)
+    sp.Background<- SolidColorBrush(Media.Color.FromRgb(255uy,255uy, 255uy))
+    
+//    let labelX = Label(Content = "Click1X:")
+//    sp.Children.Add(labelX) |> Dump
+//    let labelY = Label(Content = "Click1Y:")
+//    sp.Children.Add(labelY) |> Dump
+//    let labelWidth = Label(Content = "Width:")
+//    sp,labelX,labelY
+    sp
+let addLabel (fContent: 't option -> string) = 
+    let label = Label(Content = fContent None)
+    sp.Children.Add(label)
+    (fun x -> label.Content <- fContent x)
+let valueStringOrEmpty = function |None -> null | Some x -> box x
+let fLabelPos1 = addLabel (valueStringOrEmpty >> sprintf "Click1:%A")
+let fLabelPos2 = addLabel (fun o -> sprintf "Click2:%A" o)
+let fDistanceX = addLabel (fun o -> sprintf "DistanceX:%A" o)
+let fDistanceY = addLabel (fun o -> sprintf "DistanceY:%A" o)
+
+window.Content <- sp
+let mutable change1,pos1,pos2,(distanceX: Point option),(distanceY: Point option) = true, None, None, None, None
+window.MouseLeftButtonUp.Add (fun e -> 
+    let position = e.GetPosition(window)
+    let getWpfControlPixelColor () = 
+        let targetBitmap = Imaging.RenderTargetBitmap(int window.ActualWidth, int window.ActualHeight, 96., 96., PixelFormats.Default)
+        targetBitmap.Render(window)
+        if position.X <= float targetBitmap.PixelWidth && position.Y <= float targetBitmap.PixelHeight then
+            //crop
+            let cropped = Imaging.CroppedBitmap(targetBitmap, Int32Rect(int position.X, int position.Y,1,1))
+            let pixels = Array.create 4 0uy
+            cropped.CopyPixels(pixels, 4, 0)
+            let color = Color.FromArgb(255uy, pixels.[0], pixels.[1], pixels.[2])
+            (pixels,color).Dump("Color!")
+            ()
+    
+    if change1 then
+        pos1 <- Some position
+        fLabelPos1 pos1
+        change1 <- false
+    else
+        pos2 <- Some position
+        fLabelPos2 pos2
+        change1 <- true
+    match pos1,pos2 with
+    | Some p1, Some p2 -> 
+        Math.Max(p1.X, p2.X) - Math.Min(p1.X, p2.X) |> Some |> fDistanceX
+        Math.Max(p1.Y, p2.Y) - Math.Min(p1.Y, p2.Y) |> Some |> fDistanceY
+    | _ -> fDistanceX None
+    )
+window.ShowDialog()
+

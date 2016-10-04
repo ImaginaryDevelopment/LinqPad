@@ -88,8 +88,8 @@ type System.Func<'tResult> with
 //type System.Action<'t> with
 //    static member invoke (x:Action<'t>) (y:'t) = y |> x.Invoke
 
-module Array =
-    let ofOne x = [| x |]
+//module Array =
+//    let ofOne x = [| x |]
 module Seq =
     let takeLimit limit =
         let mutable count = 0 // Seq.take throws if there are no items
@@ -388,10 +388,26 @@ module Diagnostics =
                         logS (Some scopeName) [] (sprintf "<%s/>" scopeName)
         }
 
-open System.Linq.Expressions
-open System.Reflection
-open Microsoft.FSharp.Quotations.Patterns
-module QuotationHelpers = 
+module Reflection = 
+    open System.Reflection
+    // primarily for use hand-in-hand with the above active pattern
+    /// for boxed objects that may be 'Valueable`
+    let rec getReflectionValueOpt (genTypeOpt:Type option) (typeOpt:Type option)  (o:obj) = 
+        match o,genTypeOpt, typeOpt with
+        | null, _, _ -> None
+        | _ , Some gt ,_  -> 
+            // based on http://stackoverflow.com/a/13367848/57883
+            match gt.GetProperty "Value" with
+            | null -> None
+            | prop ->
+                let v = prop.GetValue(o,null)
+                Some v
+        | _, _,Some t -> 
+            match t.IsGenericType with
+            | true -> getReflectionValueOpt typeOpt (t.GetGenericTypeDefinition() |> Some) o
+            | false -> Some o
+        | _, _, None ->
+            getReflectionValueOpt None (o.GetType() |> Some) o
     //method taken from http://stackoverflow.com/q/4604139/57883
     let methodSourceName (mi:MemberInfo) =
         mi.GetCustomAttributes(true)
@@ -400,6 +416,66 @@ module QuotationHelpers =
                     | :? CompilationSourceNameAttribute as csna -> Some(csna)
                     | _ -> None)
         |> (function | Some(csna) -> csna.SourceName | None -> mi.Name)
+    module Assemblies =
+        // http://stackoverflow.com/a/28319367/57883
+        let getAssemblyFullPath (assembly:Assembly) = 
+            let codeBaseFailedAssert () = Debug.Assert(false, "CodeBase evaluation failed! - Using Location as fallback.")
+            let fullPath = 
+                match assembly.CodeBase with
+                | null -> codeBaseFailedAssert () ;assembly.Location
+                | codeBasePseudoUrl ->
+                    let filePrefix3 = @"file:///"
+                    if codeBasePseudoUrl.StartsWith filePrefix3 then
+                        let sPath = codeBasePseudoUrl.Substring filePrefix3.Length
+                        let bsPath = sPath.Replace('/', '\\')
+                        bsPath
+                    else codeBaseFailedAssert () ;assembly.Location
+            fullPath
+
+open System.Linq.Expressions
+open Microsoft.FSharp.Quotations.Patterns
+module QuotationHelpers = 
+    open Reflection
+    // not set up to handle unions of more than 1 argument (is a tuple 2 arguments, or 1?)
+
+    let rec getAllDUCases fNonUnion t : obj list =
+        // with help from http://stackoverflow.com/a/4470670/57883
+        let cases = FSharpType.GetUnionCases t //typeof<PaymentItemType>)
+        let makeUnion c p = FSharpValue.MakeUnion(c,Array.singleton p)
+        cases
+        |> Seq.map (fun c -> 
+            let args = 
+                c.GetFields() 
+                |> Seq.map (fun x -> 
+                    if FSharpType.IsUnion x.PropertyType then
+                        getAllDUCases fNonUnion x.PropertyType
+                        |> Seq.map (makeUnion c) //(fun uc -> FSharpValue.MakeUnion(c, [| uc |] ))
+                        |> List.ofSeq
+                    else 
+                        let du = 
+                            fNonUnion x.PropertyType
+                            |> makeUnion c
+                        du
+                        |> List.singleton //fun x -> FSharpValue.MakeUnion(c, Array.ofOne x)
+                    )
+            
+            match c.GetFields() |> List.ofSeq with
+            | [x] -> 
+                if FSharpType.IsUnion x.PropertyType then
+                    getAllDUCases fNonUnion x.PropertyType
+                    |> Seq.map (fun uc -> FSharpValue.MakeUnion(c, [| uc |] ))
+                    |> List.ofSeq
+                else 
+                    fNonUnion x.PropertyType
+                    |> fun v -> [ FSharpValue.MakeUnion(c, Array.singleton v)]
+//                elif x.PropertyType = typeof<bool> then 
+//                    [FSharpValue.MakeUnion(c, [| box false |])]
+//                else
+//                    [FSharpValue.MakeUnion(c, Array.empty)]
+            | _ -> [ FSharpValue.MakeUnion(c, Array.empty)]
+            //FSharpValue.MakeUnion(c, [| |]) 
+            )
+        |> Array.ofSeq
 
     let rec getQuoteMemberName expr = 
         match expr with
@@ -448,39 +524,7 @@ let (|Nullish|NullableObj|SomeObj|GenericObj|NonNullObj|) (o:obj) =
                 SomeObj genericType
             else GenericObj genericType
 
-// primarily for use hand-in-hand with the above active pattern
-/// for boxed objects that may be 'Valueable`
-let rec getReflectionValueOpt (genTypeOpt:Type option) (typeOpt:Type option)  (o:obj) = 
-    match o,genTypeOpt, typeOpt with
-    | null, _, _ -> None
-    | _ , Some gt ,_  -> 
-        // based on http://stackoverflow.com/a/13367848/57883
-        match gt.GetProperty "Value" with
-        | null -> None
-        | prop ->
-            let v = prop.GetValue(o,null)
-            Some v
-    | _, _,Some t -> 
-        match t.IsGenericType with
-        | true -> getReflectionValueOpt typeOpt (t.GetGenericTypeDefinition() |> Some) o
-        | false -> Some o
-    | _, _, None ->
-        getReflectionValueOpt None (o.GetType() |> Some) o
-module Assemblies =
-    // http://stackoverflow.com/a/28319367/57883
-    let getAssemblyFullPath (assembly:System.Reflection.Assembly) = 
-        let codeBaseFailedAssert () = System.Diagnostics.Debug.Assert(false, "CodeBase evaluation failed! - Using Location as fallback.")
-        let fullPath = 
-            match assembly.CodeBase with
-            | null -> codeBaseFailedAssert () ;assembly.Location
-            | codeBasePseudoUrl ->
-                let filePrefix3 = @"file:///"
-                if codeBasePseudoUrl.StartsWith filePrefix3 then
-                    let sPath = codeBasePseudoUrl.Substring filePrefix3.Length
-                    let bsPath = sPath.Replace('/', '\\')
-                    bsPath
-                else codeBaseFailedAssert () ;assembly.Location
-        fullPath
+
 
 module Option =
 //    [<AutoOpen>]
@@ -582,6 +626,7 @@ module Nullable = //http://bugsquash.blogspot.com/2010/09/nullable-in-f.html als
 
 
 module ExpressionHelpers = 
+    open System.Reflection
     let maybeUnary (exp:Expression<_>) = 
         match exp.Body with
         | :? UnaryExpression as uExpr -> uExpr.Operand
