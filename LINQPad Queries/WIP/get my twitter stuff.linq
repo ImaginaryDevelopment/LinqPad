@@ -4,6 +4,7 @@
 </Query>
 
 // connect to twitter, save all my liked/favorited tweets in case the owner deletes their account or the tweet.
+// unimplmented: save 
 // desired feature: unshorten any urls found
 open System.Globalization
 open System.Net
@@ -26,6 +27,7 @@ if consumerSecret.StartsWith(" ") then
     failwith "Copy paste failed on consumer secret"
 let dumpt (t:string) x = x.Dump(t); x
 let getType x = x.GetType()
+let getGtProp (gtOpt:Type option) = gtOpt |> Option.map (fun gt -> gt.GetProperty "Value")
 let rec getValueOpt (genTypeOpt:Type option) (typeOpt:Type option)  (o:obj) = 
     match o,genTypeOpt, typeOpt with
     | null, _, _ -> None
@@ -41,12 +43,12 @@ let rec getValueOpt (genTypeOpt:Type option) (typeOpt:Type option)  (o:obj) =
         | true -> getValueOpt typeOpt (t.GetGenericTypeDefinition() |> Some) o
         | false -> Some o
     | _, _, None ->
-        getValueOpt None (o.GetType() |> Some) o
+        getValueOpt None (o |> getType |> Some) o
         
 let (|NullableValue|NullableNull|) (nv: _ Nullable) = match nv.HasValue with | true -> NullableValue nv.Value | false -> NullableNull
 
 // Nullish covers actual null, NullableNull, and None
-let (|Nullish|NullableObj|SomeObj|GenericObj|NonNullObj|) (o:obj) = 
+let (|Nullish|NullableObj|SomeObj|GenericObj|NonNullObj|) (o:obj) =
     // consider including empty string in nullish?
     Debug.Assert(Nullable<int>() |> box |> isNull)
     Debug.Assert(None |> box |> isNull)
@@ -135,7 +137,7 @@ module Bearer =
             let bearerData = response.Content.ReadAsStringAsync().Result
             bearerData.Dump("raw response")
             bearerData
-        let bearerData = if useCache then Util.Cache(Func<_>(getRawText),"bearerData") else getRawText()
+        let bearerData = if useCache then Util.Cache(Func<_>(getRawText)) else getRawText()
         let bearerData = 
             JsonConvert.DeserializeObject<BearerTokenResponse>(bearerData)
             //|> dumpt "response"
@@ -181,7 +183,17 @@ type User = { name:string; profile_image_url:string;id:Int64 Nullable; screen_na
 type Media = { Id:Int64 Nullable; Media_Url:string;Expanded_Url:string; Type:string; Display_Url:string}
 type Url = {Url:string; Expanded_url:string; Display_url:string}
 type Entity = { Media: Media[]; Urls: Url[]}
-type FavoriteResult = {Coordinates:string; Id:Int64 Nullable; Truncated:bool Nullable ; Favorited:bool Nullable; Created_at:string; Id_str:string; In_reply_to_user_id_str:Int64 Nullable; Text:string; User:User; Entities:Entity}
+type FavoriteResult = {
+    Coordinates:string 
+    Id:Int64 Nullable 
+    Truncated:bool Nullable
+    Favorited:bool Nullable
+    Created_at:string
+    Id_str:string
+    In_reply_to_user_id_str:Int64 Nullable
+    Text:string
+    User:User
+    Entities:Entity}
 
 let getFavorites useCache userIdOpt screenNameOpt countOpt since_idOpt max_idOpt _include_entities =
     let getFavoritesRaw () = 
@@ -257,4 +269,3 @@ module Unshortening =
                 
 let cacheResult = true
 getFavorites cacheResult None (Some "maslowjax") (Some 2) None None false
-
