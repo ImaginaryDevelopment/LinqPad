@@ -15,7 +15,7 @@ type TransactionNumber = string
 type Money = decimal
 type Check = Check of CheckNumber
 
-type PatientPayment= |Cash |Lockbox |Check of Check | CreditCard
+type PatientPayment= |Cash |Fsa of Check |Lockbox |Check of Check | CreditCard
 type ThirdPartyPayment = | PatientPayment of PatientPayment | Ach
 
 type EraPaymentMethod = 
@@ -34,22 +34,25 @@ type PaymentTier =
     
 type EraStatus = |New | Complete |Partial
 type PaymentType = 
-    |Patient of PatientIdentifier * PatientPayment 
+    |Patient of PatientPayment 
     |ThirdParty of PayerIdentifier * ThirdPartyPayment 
     |Era of PayerIdentifier * EraPaymentMethod
 
 type Payment= { // branched from payments for legacy data and migration
     //PayerId: PayerIdentifier (included in PaymentType)
     PaymentTypeId: PaymentType // 3 columns in db
+    PatientId: PatientIdentifier
     Created:DateTime
-    Recv'd:DateTime
+    Recv'd:DateTime // null for era
     UserId:UserIdentifier
-    TotalAmount: Money // must be >= 0
+    TotalAmount: Money // must be >= 0 (update after paymentItems are saved, or require paymentItem for all payments)
     PaymentMethodId: int // db only (In model PaymentType encapsulates this)
     PaymentStatusId: EraStatus
     IsElectronic:bool
     Comments:string
-    CCItemID:int
+    CCItemID:int option
+    PaymentTier: PaymentTier
+    
     //apptId removed
     //isReconciled (wasn't in use)
     // chargereconciled (wasn't being used)
@@ -97,12 +100,12 @@ type PaymentItemStatus =
 type PaymentItem =
     {
     PaymentID:EraItemIdentifier
+    PatientID: int
     PaymentItemTypeId :PaymentItemType 
     Created:DateTime
     Amount: Money
     //PtRespType: PtRespType option
     ChargeId: ChargeIdentifier option // provider level adjustments are the only case where the option would be empty
-    PaymentTier: PaymentTier
     RemarkCode:string
     AdjustmentReasonCode:string
     PaymentItemStatus : PaymentItemStatus
@@ -114,7 +117,7 @@ type Charge = {
     ApptId:AppointmentIdentifier option
     //CodeUnique -> Modifier1
     // ModCodeId -> remove
-    // CodeId -> ProcedureCode CPT codes
+    // CodeId -> ProcedureCodeID CPT codes
     //Charge -> not nullable
     // Adjusted -> remove
     // Allowed -> remove
