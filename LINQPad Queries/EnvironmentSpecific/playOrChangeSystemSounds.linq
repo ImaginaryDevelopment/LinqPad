@@ -1,6 +1,7 @@
 <Query Kind="FSharpProgram" />
 
 // WIP: play/change system sounds
+// great source of sounds to use for system sounds: http://www.jahozafat.com/
 open System.Runtime.InteropServices
 
 let playSimpleSystemSound() =
