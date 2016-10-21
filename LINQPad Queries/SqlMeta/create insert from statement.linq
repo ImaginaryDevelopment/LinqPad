@@ -13,7 +13,7 @@
 </Query>
 
 // map inserts of one table/type to another
-
+// like charges -> charge
 #if INTERACTIVE
 let dump x = printfn "%A" x
 open System

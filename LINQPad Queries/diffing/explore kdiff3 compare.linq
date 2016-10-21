@@ -17,11 +17,12 @@ void Main()
 {
 	var local = Environment.ExpandEnvironmentVariables("%devroot%").Dump();
 	if(Directory.Exists(local)==false){
-		local.Dump("did not exist");
+		local.Dump(nameof(local) + "did not exist");
 	}
 	var trunk = @"C:\tfs\XpressCharts\Source";
 	if(Directory.Exists(trunk)==false){
-		trunk.Dump("did not exist");
+		trunk.Dump(nameof(trunk) + "did not exist");
+        return;
 	}
 	
 	string target = null;
@@ -46,11 +47,13 @@ void Main()
 		
 		target= dlg.SafeFileName == folderSelection ? Path.GetDirectoryName(dlg.FileName) : dlg.FileName;
 	}
+    
 	if(target.StartsWith(local)==false)
 	{
 		new{local,trunk,target}.Dump("this script will only compare a file in local to the mirror in trunk");
 		return;
-	}
+    }
+
 	target.Dump("target acquired");
 	
 	var diff = Task.Run( ()=> 
@@ -69,7 +72,8 @@ void Main()
 		.SelectMany(d=> System.IO.Directory.EnumerateFiles(d,"tf.exe", SearchOption.AllDirectories))
 		.Dump();
 	var tfsExe = tfsExes.First();
-	Util.Cmd(tfsExe,"vc status "+);
+    // what was this feature going to be? check if the file is checked out?
+	Util.Cmd(tfsExe,"vc status ");
 	GetHelp(tfsExe,TfsHelp.vc);
 	diff.Result.Dump();
 }

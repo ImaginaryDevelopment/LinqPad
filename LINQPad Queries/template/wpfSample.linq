@@ -18,7 +18,7 @@ let x = Window2()
 let sp = StackPanel()
 let label = Label()
 
-// does this button live on the visual or logical tree of it's parent?
+// does this button live on the visual or logical tree of its parent?
 let bCancel = System.Windows.Controls.Button()
 
 bCancel.Content <- "Cancel"

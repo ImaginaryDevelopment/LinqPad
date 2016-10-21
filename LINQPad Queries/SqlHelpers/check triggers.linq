@@ -8,5 +8,5 @@
 
 select * from sys.triggers
 
-select * from sys.syscomments
-where id='1941230316'
+--select * from sys.syscomments
+--where id='1941230316'
