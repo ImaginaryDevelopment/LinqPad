@@ -16,6 +16,8 @@ module CHelpers =
     [<Extension>]
     let Before s delimiter = s|> before delimiter
     [<Extension>]
+    let EqualsI s1 s2 = s1 |> String.equalsI s2
+    [<Extension>]
     let BeforeOrSelf s delimiter = if containsI delimiter s then s |> before delimiter else s
     [<Extension>]
     let Delimit (source:IEnumerable<string>) delimiter = source |> delimit delimiter // String.Join(delimiter,source |> Array.ofSeq)
@@ -26,6 +28,12 @@ module CHelpers =
         match x with
             | Some x -> x
             | None -> Unchecked.defaultof<_>
+    [<Extension>]
+    let DisposeIfNotNullAndDisposable (o:obj) = 
+        match o with
+        | null -> ()
+        | :? IDisposable as d -> d.Dispose()
+        | _ -> ()
 
     [<Extension>]
     let ToOptionFromClass = function | null -> None | x -> Some x

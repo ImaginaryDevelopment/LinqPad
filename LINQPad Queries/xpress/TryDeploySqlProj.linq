@@ -500,3 +500,24 @@ DateTime.Now.Dump("finishing deploy")
 //runDeploy dbProjectOutputName RunSmo
 
 //Util.Cmd(cmdLine).Dump()
+
+
+(* dbdeploy cmd lines
+from peter
+
+"C:\VSDBCMD\vsdbcmd.exe" /a:Deploy /cs:"Server=.;Integrated Security=true" /dsp:Sql /dd+ /manifest:"C:\VSDBCMD\deployment\ApplicationDatabase.deploymanifest" /p:AlwaysCreateNewdatabase=False /p:PerformDatabaseBackup=False /p:IgnoreColumnCollation=True
+if "%1" NEQ "nopause" pause
+
+
+"C:\Program Files (x86)\Microsoft Visual Studio 14.0\Common7\IDE\Extensions\Microsoft\SQLDB\DAC\130\sqlpackage.exe" ^
+/Action:Publish ^
+/SourceFile:"ProjectName.dacpac" ^
+/TargetDatabaseName:EEE ^
+/TargetServerName:${bamboo.DbServer} ^
+/p:DropObjectsNotInSource=true ^
+/p:GenerateSmartDefaults=true ^
+/p:BlockOnPossibleDataLoss=${bamboo.BlockOnPossibleDataLoss} ^
+/p:ExcludeObjectTypes=Certificates;Credentials;DatabaseRoles;Filegroups;FileTables;LinkedServerLogins;LinkedServers;Logins;ServerAuditSpecifications;ServerRoleMembership;ServerRoles;ServerTriggers;Users ^
+/p:DoNotDropObjectTypes=ApplicationRoles;Certificates;Credentials;DatabaseRoles;Filegroups;FileTables;LinkedServerLogins;LinkedServers;Logins;Permissions;ServerAuditSpecifications;ServerRoleMembership;ServerRoles;ServerTriggers;Users ^
+/Variables:Environment=${bamboo.EnvironmentName}
+*)
