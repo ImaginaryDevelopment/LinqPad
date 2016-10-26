@@ -1,7 +1,7 @@
 <Query Kind="FSharpProgram" />
 
 // translate sql generator to F#
-                    
+let dumpt (t:string) x = x.Dump(t) |> ignore; x                    
 module Seq = 
     let isIn (x: _ seq) item = 
         x |> Seq.contains item
@@ -12,17 +12,22 @@ module Seq =
 [<AutoOpen>]
 module Helpers = 
     let trimc (c:char) (s:string) = s.Trim(c)
+    let surround o c t = sprintf "%s%s%s" o t c
     let regex (p:string) opts (input:string) = match opts with | None -> Regex.Match(input,p) | Some o -> Regex.Match(input,p, o)
     let regexMany (p:string) opts (input:string) = match opts with | None -> Regex.Matches(input,p) | Some o -> Regex.Matches(input,p, o)
 //    let split (d:string) (text:string) = text.Split([| d |], StringSplitOptions.RemoveEmptyEntries)
 //    let before (delimiter:string) (x:string) = x.Substring(0, x.IndexOf delimiter)
-    let wrap (d:string) s = sprintf "\"%s\"" s  
+    let wrap (d:string) s : string = sprintf "%s%s%s" d s d
     let wordify (s:string) = s.Split([| ' ' |], StringSplitOptions.RemoveEmptyEntries) |> List.ofSeq
     let containsAnyOf (items:string seq) (s:string) = items |> Seq.exists (fun x -> s.IndexOf x >= 0)
     let (|Matched|_|) (m:Match) = 
         if m.Success then
             Some m
         else None
+    let (|RegexMatch|_|) (p:string) o (s:string) = 
+        match regex p o s with
+        | Matched m -> Some m
+        | _ -> None
 //    let after (delimiter:string) (x:string) =  
 //        match x.IndexOf delimiter with
 //        | i when i < 0 -> failwithf "after called without matching substring in '%s'(%s)" x delimiter
@@ -44,7 +49,7 @@ let outerPairs (items: _ seq) =
         yield! Seq.pairwise items |> Seq.map (fun (a,b) -> a, Some b)
         yield Seq.last items |> fun i -> i, None
     ]
-let getColumnText (text:string) (i, endI:int option) = 
+let getSubstring (text:string) (i, endI:int option) = 
     
     match endI with
     | None -> tryF (sprintf "getting text after index %i in string of length %i text = '%s'" i text.Length text) (fun () -> text.Substring(i))
@@ -106,15 +111,62 @@ let getColumns (text:string) =
         | "true" -> "AllowNull"
         | "false" -> "NotNull"
         | _ -> failwithf "unexpected b: %s" b
+    let (|SimpleString|TypeOf|SimpleBool|SimpleInt|Other|) (s:string) = 
+        match s with
+        | RegexMatch @"^\s*""(\w+)""\s*.*(//.*)?.*$" None m ->
+            SimpleString m.Groups.[1].Value
+        | RegexMatch @"^\s*(\d+)\s*.*(//.*)?.*$" None m ->
+            let simpleIntOutput = (m.Groups.[1].Value, m.Groups.[2].Value)
+            simpleIntOutput
+            |> dumpt "simpleIntOutput"
+            |> ignore
+            SimpleInt simpleIntOutput
+        | RegexMatch @"^\s*typeof\(([^)]+)\)" None m ->
+            TypeOf m.Groups.[1].Value
+        | RegexMatch @"^\s*(true|false)" None m ->
+            SimpleBool m.Groups.[1].Value
+        | s -> Other s
+            
+
     let text = text |> after "Columns" 
     text
     |> regexMany columnStarters None
     |> Seq.cast<Match> 
     |> Seq.map (fun m -> m.Index) 
     |> outerPairs 
-    |> Seq.map (getColumnText text)
+    |> Seq.map (getSubstring text)
     |> Seq.map (function 
-        |CreateColumn s -> ColumnCreateTypes.CreateColumn s 
+        |CreateColumn s -> 
+            //s.Dump("creating column!")
+            columnInputPropNames 
+            |> Seq.map (wrap "\\b")
+            |> delimit "|"
+            |> surround @"(" @")"
+            |> (flip (+) "\s*=\s*")
+            //|> dumpt "column regex"
+            |> fun p -> regexMany p None s
+            |> Seq.cast<Match> 
+            |> Seq.map (fun m -> m.Index) 
+            |> outerPairs 
+            //|> dumpt "create columns?"
+            |> Seq.map (getSubstring s)
+            //|> dumpt "create columns?"
+            |> Seq.map (fun s -> s |> before "=", s |> after "=")
+            //|> dumpt "kvps"
+            |> Seq.map (fun (k,v) ->
+                //let (|SimpleString|TypeOf|SimpleBool|SimpleInt|Other|) (s:string) = 
+                let x = 
+                    match v with
+                    | SimpleString s -> s
+                    | TypeOf s -> s
+                    | SimpleBool s -> s
+                    | SimpleInt (s,c) -> sprintf "%s%s" s (if String.IsNullOrEmpty c then String.Empty else sprintf "(* %s *)" c)
+                    | Other s -> s
+                k, x, v
+            )
+            |> dumpt "columns transformed"
+            |> ignore
+            ColumnCreateTypes.CreateColumn s 
         |CreateFKeyed (t,s) -> 
             let s = s.Trim(',')
             
@@ -138,15 +190,6 @@ let getColumns (text:string) =
             | SimpleFCreate -> ColumnCreateTypes.Translated (simpleCreateText,s)
             | SimpleNCreate b -> sprintf "{ %s with AllowNull = Nullability.%s}" simpleCreateText (mapBoolToNullability b) |> fun x ->  ColumnCreateTypes.Translated(x,s)
             | CreateNWithComment (b,c) -> sprintf "{ %s with AllowNull = Nullability.%s;Comment=[%s]}" simpleCreateText (mapBoolToNullability b) c |> fun x ->  ColumnCreateTypes.Translated(x,s)
-//                
-//            match s |> after "}" |> wordify |> Seq.containsAnyOF columnInputPropNames || s |> after "}" |> containsAnyOf ["true";"false";","] with
-//            | false ->
-//            
-//            // <int>("ChargeID", new FKeyInfo{Schema="dbo",Table="Charge"},true),
-//            // ->
-//            //ColumnInput.createFKeyedNColumn<int> "PayerID" { Schema="dbo"; Table="Payers"; Column = null } 
-//                
-//            | true -> ColumnCreateTypes.CreateFKeyed (t,s)
             
         |MakeNullable50 s -> sprintf "ColumnInput.makeNullable50 \"%s\"" s |> (fun x -> ColumnCreateTypes.Translated(x,s))
         |CreateUserIdColumn (args,columnText) -> 
@@ -160,8 +203,9 @@ let getColumns (text:string) =
             //CreatePatientIdColumn(null, true,null),
             // ->
             //
-            sprintf "ColumnInput.createPatientIdColumn %s Nullability.%s %s" args.[0]
-            ColumnCreateTypes.CreatePatientIdColumn args
+            sprintf "ColumnInput.createPatientIdColumn %s Nullability.%s %s" args.[0] (args.[1] |> trim |> mapBoolToNullability) args.[2]
+            |> fun x -> ColumnCreateTypes.Translated(x,columnText)
+            //ColumnCreateTypes.CreatePatientIdColumn args
         )
     |> List.ofSeq
         
@@ -320,5 +364,3 @@ text
 |> Dump
 |> ignore
 //|> Seq.map (fun (name, schema, columnMatches, text) -> name,schema, columnMatches |> Seq.cast<Match> |> List.ofSeq |> outerPairs)
-
-
