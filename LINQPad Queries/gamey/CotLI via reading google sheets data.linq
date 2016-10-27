@@ -9,22 +9,27 @@
 
 // use google apis to pull in data from the google sheet
 // https://developers.google.com/sheets/quickstart/dotnet
+
+let useCache = true
+
 let dumpt (title:string) x = x.Dump(title) |> ignore; x
 let dumpC title items = items |> List.length |> dumpt title |> ignore; items
 let scopes = [SheetsService.Scope.SpreadsheetsReadonly]
 let applicationName = "CotLI reader"
 let getCredential () = 
-    use stream = FileStream(Util.GetPassword("client_secret_Path"), FileMode.Open, FileAccess.Read)
+    let path = Util.GetPassword("client_secret_Path").Trim('"')
+    use stream = new FileStream(path, FileMode.Open, FileAccess.Read)
     let credPath = 
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal), ".credentials/sheets.googleapis.com-dotnet-quickstart.json")
     
-    let credential = GoogleWebAuthorizationBroker.AuthorizeAsync(
-        GoogleClientSecrets.Load(stream).Secrets,scopes,"user", CancellationToken.None, FileDataStore(credPath, true)).Result
+    let credential = 
+        GoogleWebAuthorizationBroker.AuthorizeAsync(
+            GoogleClientSecrets.Load(stream).Secrets,scopes,"user", CancellationToken.None, FileDataStore(credPath, true)).Result
     printfn "Credential file saved to: %s" credPath
     credential
 
 let credential = getCredential()
-let service = SheetsService(BaseClientService.Initializer(HttpClientInitializer=credential, ApplicationName=applicationName))
+let service = new SheetsService(BaseClientService.Initializer(HttpClientInitializer=credential, ApplicationName=applicationName))
 let getData ssId range = 
     let request = service.Spreadsheets.Values.Get(ssId,range)
     let response = request.Execute()
@@ -34,8 +39,8 @@ let spreadSheetId = "1n6odBi-lmp-FgozzGl9AXsY9RjxwmVijdvFXMX0q37A" // CotLI - Us
 let crusaderRange = "Gear!A1:E90" // expecting some rows or at least row 90 to be empty as a check for we aren't missing any crusaders in the query
 let gearRange= "Gear!C91:G1189" //expecting row 1189 to be completely empty unless new gear has been added
 
-
 type Crusader = { Name:String; Slot:string; SlotOrder: string (* 0-4? null - d? *); Items:string list; EnchantmentPoints:int; Tags: string list}
+
 type Quality = 
     | Empty
     | Common
@@ -48,13 +53,19 @@ type Gear = {Name:string; Value:string; Quality:Quality; Owned:bool}
 type GearRow = 
     |Name of string
     |Category of string
-    |GearRow of Gear
+    |GearItem of Gear
     
 let crusaders = 
     let sheetData = 
-        getData spreadSheetId crusaderRange 
-        |> List.ofSeq
-        |> dumpC "Rows returned"
+        let getSheetData () = 
+            getData spreadSheetId crusaderRange 
+            |> Seq.map (Seq.map (fun d -> d |> string) >> List.ofSeq)
+            |> List.ofSeq
+            |> dumpC "Rows returned"
+        if useCache then
+            Util.Cache(getSheetData,"CrusaderSheetData")
+        else
+            getSheetData()
     
     sheetData
     |> Seq.skip 1
@@ -75,6 +86,8 @@ let crusaders =
     |> List.ofSeq
     
 let crusaderNames = crusaders |> Seq.map(fun c -> c.Name) |> Set.ofSeq
+//let pickTrueFalse = Util.ReadLine<bool>("is true?")
+//let pickedCrusader = Util.ReadLine("select crusader?", null, crusaderNames)
 //    let getGear (xs: IList<obj> seq) =
 //        // plan:
 //        // throw out rows until we find a name row
@@ -88,9 +101,15 @@ let crusaderNames = crusaders |> Seq.map(fun c -> c.Name) |> Set.ofSeq
 
 let getGear () = 
     let sheetData = 
-        getData spreadSheetId gearRange 
-        |> List.ofSeq
-        |> dumpC "Gear Rows returned"
+        let getSheetData() = 
+            getData spreadSheetId gearRange 
+            |> List.ofSeq
+            |> dumpC "Gear Rows returned (not cached)"
+        if useCache then
+            let key = "GearSheetData"
+            printfn "attempting to use Cache for %s" key
+            Util.Cache(getSheetData,key)
+        else getSheetData()
     
     let (|GearCruNameRow|CategoryRow|GearRow|Other|) (data:IList<obj>) = 
         try
@@ -102,7 +121,6 @@ let getGear () =
         with ex ->
             data.Dump("is failing")
             reraise()
-        
     
     let mapRow (data:IList<obj>) = 
         let mapGearList (gear:string list) = 
@@ -119,7 +137,7 @@ let getGear () =
                 with ex ->
                     gear.Dump("is failing gear")
                     reraise()
-            GearRow {Name=gear.[0];Value=gear.[1];Quality=quality; Owned= gear.[3] = "1"}
+            GearItem {Name=gear.[0];Value=gear.[1];Quality=quality; Owned= gear.[3] = "1"}
         [
             match data with
             | GearCruNameRow name -> yield name |> Name |> Some
@@ -157,9 +175,45 @@ let getGear () =
         // eliminate the rowIndex (unless debug is needed)
         |> Seq.map snd
         |> List.ofSeq
+        
+    // based loosely on http://www.fssnip.net/es
+    let chunkByRowsAfterHead f (xs: 'T list) =
+        let len = xs.Length
+        let rec loop (xs: 'T list) = 
+            [
+                let chunk = 
+                    let headDelimiter = xs.[0]
+                    let tail = xs |> Seq.skip 1 |> Seq.takeWhile f |> List.ofSeq
+                    headDelimiter::tail
+                yield chunk
+                let remainder = xs |> Seq.skip chunk.Length |> List.ofSeq
+                if Seq.any remainder then
+                    yield! loop remainder
+            ]
+        loop xs
+        
+    let promoteHead (xs: 'T list) = 
+        xs |> function | h::r -> h,r | x -> failwithf "unexpected %A" x
+        
+    let toChunkNames (xs: _ list) =
+        xs
+        |> chunkByRowsAfterHead (function | Name _ -> false | _ -> true)
+        |> List.map (promoteHead >> (function | Name n,r -> n,r | x -> failwithf "unexpected %A" x))
+    let toChunkCategories (xs: _ list) =
+        xs
+        |> chunkByRowsAfterHead (function |Category _ -> false | Name n -> failwithf "Name in category/gear rows %A" n | _ -> true ) 
+        |> List.map (promoteHead >> (function | Category c, r -> c,r | x -> failwithf "unexpected %A" x))
+    let toGearItems (xs: GearRow list) =
+        xs
+        |> List.map (function | GearItem g -> g | x -> failwithf "Unexepected in gearRows %A" x)
     gearData
+    |> toChunkNames
+    |> List.map (fun (n,r) -> n, r |> toChunkCategories |> List.map (fun (c, gs) -> c, gs |> toGearItems) |> dict)
+    |> dict
+
 let gear = getGear()
-(crusaders, gear)
+
+(gear, crusaders)
 |> Dump
 |> ignore
 
