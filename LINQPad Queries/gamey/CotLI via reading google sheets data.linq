@@ -38,8 +38,40 @@ let getData ssId range =
 let spreadSheetId = "1n6odBi-lmp-FgozzGl9AXsY9RjxwmVijdvFXMX0q37A" // CotLI - Useful Tools
 let crusaderRange = "Gear!A1:E90" // expecting some rows or at least row 90 to be empty as a check for we aren't missing any crusaders in the query
 let gearRange= "Gear!C91:G1189" //expecting row 1189 to be completely empty unless new gear has been added
+let tagRange= "Tags!A3:Z67"
 
-type Crusader = { Name:String; Slot:string; SlotOrder: string (* 0-4? null - d? *); Items:string list; EnchantmentPoints:int; Tags: string list}
+type Tag =
+    |Female
+    |Male
+    |Human
+    |Animal
+    |Robot
+    |GoldFinder
+    |Royal
+    |Event
+    |Dps
+    |Support
+    |Clicker // M
+    |Supernatural // N
+    |Magic // O
+    |Healer // P
+    |Tank
+    |Alien
+    |Angel
+    |T // Demon?
+    |U // ?
+    |V // ?
+    |W // Vampire?
+    // X
+    |Leprechaun 
+    /// Orc
+    |Orc 
+    with
+        override x.ToString() = sprintf "%A" x
+type Crusader = { Name:String; Slot:string; SlotOrder: string (* 0-4? null - d? *); Items:string list; EnchantmentPoints:int; Tags: Tag list} with
+    override x.ToString() = 
+        
+        sprintf "%A" x
 
 type Quality = 
     | Empty
@@ -98,6 +130,7 @@ let crusaderNames = crusaders |> Seq.map(fun c -> c.Name) |> Set.ofSeq
 //                xs
 //                |> Seq.skipWhile
 //        
+
 
 let getGear () = 
     let sheetData = 
@@ -212,8 +245,48 @@ let getGear () =
     |> dict
 
 let gear = getGear()
+// populate tags so we can do things like filter/sort by isDps
+let getTags() =
+    let sheetData = 
+        let getSheetData() = 
+            getData spreadSheetId tagRange
+            |> List.ofSeq
+            |> dumpC "Tags rows returned (not cached)"
+            //|> dumpt "Tags rows"
+        if useCache then
+            let key = "TagsSheetData"
+            printfn "attempting to use cache for %s" key
+            Util.Cache(getSheetData, key)
+        else 
+            getSheetData()
+    sheetData
+    |> Seq.map( Seq.map string  >> List.ofSeq >>
+        function
+            slot::name::r ->
+                if r.Length < 23 then
+                    r.Dump("insufficient items:" + name)
+                let tags = 
+                    match r |> Seq.take 23 |> Seq.map ((=) "1") |> List.ofSeq  with
+                    |isFemale::isMale::isAnimal::isRobot::r ->
+                        [
+                            if isFemale then 
+                                yield Tag.Female
+                            if isMale then
+                                yield Tag.Male
+                            if isAnimal then
+                                yield Tag.Animal
+                            if isRobot then
+                                yield isRobot
+                    ]
+                slot,name,tags
+                
+    )
+    |> List.ofSeq
 
-(gear, crusaders)
+//let dpsCruByEp =
+//    crusaders
+//    |> Seq.sort(fun c -> c.)
+(getTags()|> List.map string,gear, crusaders )
 |> Dump
 |> ignore
 
