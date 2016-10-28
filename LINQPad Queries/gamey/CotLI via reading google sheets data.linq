@@ -260,25 +260,36 @@ let getTags() =
         else 
             getSheetData()
     sheetData
-    |> Seq.map( Seq.map string  >> List.ofSeq >>
-        function
-            slot::name::r ->
-                if r.Length < 23 then
-                    r.Dump("insufficient items:" + name)
-                let tags = 
-                    match r |> Seq.take 23 |> Seq.map ((=) "1") |> List.ofSeq  with
-                    |isFemale::isMale::isAnimal::isRobot::r ->
-                        [
-                            if isFemale then 
-                                yield Tag.Female
-                            if isMale then
-                                yield Tag.Male
-                            if isAnimal then
-                                yield Tag.Animal
-                            if isRobot then
-                                yield isRobot
-                    ]
-                slot,name,tags
+    |> Seq.map( 
+        Seq.map string  >> List.ofSeq >>
+                        function
+                            slot::name::r ->
+                                if r.Length < 23 then
+                                    r.Dump("insufficient items:" + name)
+                                let tags = 
+                                    match r |> Seq.take 23 |> Seq.map ((=) "1") |> List.ofSeq  with
+                                    |isFemale::isMale::isAnimal::isRobot::isGoldFinder::isRoyal::isEventObtained::isDps::isSupport::isClicker::r ->
+                                        [
+                                            if isFemale then 
+                                                yield Tag.Female
+                                            if isMale then
+                                                yield Tag.Male
+                                            if isAnimal then
+                                                yield Tag.Animal
+                                            if isRobot then
+                                                yield Tag.Robot
+                                            if isGoldFinder then
+                                                yield Tag.GoldFinder
+                                            if isRoyal then
+                                                yield Tag.Royal
+                                            if isEventObtained then
+                                                yield Tag.Event
+                                            if isDps then
+                                                yield Tag.Dps
+                                            if isSupport then 
+                                                yield Tag.Support
+                                    ]
+                                slot,name,tags
                 
     )
     |> List.ofSeq
