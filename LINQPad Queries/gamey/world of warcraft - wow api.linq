@@ -8,6 +8,7 @@
 let showImages = true
 
 let doLaters = ResizeArray<_>()
+let dumpt (t:string) x = x.Dump(t); x
 let dumpBlacklist blacklist t x = x.Dump(description=t,exclude=blacklist)
 let prettifyJsonObj o = JsonConvert.SerializeObject(o, Formatting.Indented)
 let prettifyJson s = s |> JsonConvert.DeserializeObject |> prettifyJsonObj
@@ -75,12 +76,24 @@ module Warcraft =
     module JsonWowDeserialization = 
         type PetStats = {Level:int; PetQualityId:int; Power:int; Speed:int;}
         type PetInfo = {Name:string; Stats:PetStats; IsFavorite:bool; CreatureName:string; CanBattle:bool; QualityId:int; IsFirstAbilitySlotSelected:bool; IsSecondAbilitySlotSelected:bool; IsThirdAbilitySlotSelected:bool  }
-        type PetSummary= { NumCollected:int; NotCollected:int; Collected: PetInfo list}
+        type PetSummary= { NumCollected:int; NotCollected:int}
         //thumbnails: worked: http://render-api-us.worldofwarcraft.com/static-render/us/rexxar/188/39460796-avatar.jpg
         let getThumbnailUrl thumbnailFromJson =
             sprintf "http://render-api-us.worldofwarcraft.com/static-render/us/%s" thumbnailFromJson //rexxar/188/39460796-avatar.jpg
         type CharacterRequestInfo = { LastModified: System.Int64; Name:string; Realm:string; Battlegroup:string; Class:int; Race:int; Gender:bool; Level:int; AchievementPoints:int; Thumbnail:string; CalcClass:string; Faction:int; Pets: PetSummary}
-        let mapCharacterRequestInfo raw (x:CharacterRequestInfo) = 
+        let mapCharacterRequestInfo (raw:string) = //(x:CharacterRequestInfo) = 
+            let petsRaw = 
+                raw 
+                |> deserializePartial "pets" 
+                |> string 
+                |> deserializePartial "collected" (* |> fun x -> x.Children() *) 
+                |> Seq.map (fun ptToken -> 
+                    ptToken |> string, ptToken |> string |> deserialize<PetInfo>
+                ) 
+                |> List.ofSeq
+
+            let x = raw |> deserialize<CharacterRequestInfo>
+            //petsRaw.Dump()
             let mapQuality = 
                 function
                 | 0 -> Poor
@@ -92,8 +105,8 @@ module Warcraft =
                 >> sprintf "%A" 
                 
             let petDisplays = 
-                x.Pets.Collected 
-                |> List.map (fun pi -> 
+                petsRaw
+                |> List.map (fun (raw,pi) -> 
                                     if pi.QualityId <> pi.Stats.PetQualityId then
                                         doLaters.Add(fun () ->
                                             pi.Dump("quality <> Stats.PetQualityId")
@@ -124,8 +137,9 @@ module Warcraft =
             }, thumbnail, petDisplays
         
         let deserializeCri s = 
-            JsonConvert.DeserializeObject<CharacterRequestInfo>(s) 
-            |> mapCharacterRequestInfo s
+            //JsonConvert.DeserializeObject<CharacterRequestInfo>(s) 
+            //|> 
+            mapCharacterRequestInfo s
             
     open BattleNet
     
