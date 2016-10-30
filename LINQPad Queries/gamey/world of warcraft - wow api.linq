@@ -5,9 +5,14 @@
 </Query>
 
 //following https://dev.battle.net/io-docs
+let showImages = true
+
 let doLaters = ResizeArray<_>()
+let dumpBlacklist blacklist t x = x.Dump(description=t,exclude=blacklist)
 let prettifyJsonObj o = JsonConvert.SerializeObject(o, Formatting.Indented)
 let prettifyJson s = s |> JsonConvert.DeserializeObject |> prettifyJsonObj
+let deserialize<'t> s = JsonConvert.DeserializeObject<'t>(s) 
+let deserializePartial propName s = Newtonsoft.Json.Linq.JObject.Parse(s).[propName]
 module HttpClient = 
     let tryGetUrl headers (url:string) = 
         use hc = new System.Net.Http.HttpClient()
@@ -35,9 +40,7 @@ module BattleNet =
     *)
 
 module Warcraft =
-    
-    
-    type PetDisplay = {Name:String; Level:int; PetQuality:string; Power:int; Speed:int; IsFavorite:bool; Creature:string; CanBattle:bool}
+    open Newtonsoft.Json
     type Quality = 
         |Poor
         |Common
@@ -45,14 +48,39 @@ module Warcraft =
         |Rare
         |Legendary
         
-    type CharacterInfo = {LastModified: System.Int64; Name:string; Realm:string; Battlegroup:string; Class:int; Race:int; Gender:bool; Level:int; AchievementPoints:int; PetsCollected:int; PetsNotCollected:int}
+    type RaceRaw = {Id:int; Mask:int; Side:string; Name:string}
+    type PetTypeRaw = {Id:int; Key:string; Name:string; TypeAbilityId: int; StrongAgainstId:int; WeakAgainstId: int}
+    
+    module RaceData = 
+        type RaceSummary = { Races: RaceRaw list}
+        let races = 
+            sprintf "%swow/data/character/races?locale=en_US&apikey=%s" BattleNet.url (BattleNet.getSavedApiKey())
+            |> HttpClient.tryGetUrl List.empty 
+            |> Option.map (deserialize<RaceSummary> >> fun x -> x.Races)
+            |> Option.get
+    module PetTypeData =
+        type PetTypeSummary = {PetTypes:PetTypeRaw list}
+        
+        let petTypes = 
+            sprintf "%swow/data/pet/types?local=en_US&apikey=%s" BattleNet.url (BattleNet.getSavedApiKey())
+            |> HttpClient.tryGetUrl List.empty
+            |> Option.map (deserialize<PetTypeSummary> >> fun x -> x.PetTypes)
+            |> Option.get
+            
+    PetTypeData.petTypes.Dump()
+    type PetDisplay = {Name:String; Level:int; PetQuality:string; Power:int; Speed:int; IsFavorite:bool; Creature:string; CanBattle:bool; Raw:obj }
+    
+        
+    type CharacterInfo = {LastModified: System.Int64; Name:string; Realm:string; Battlegroup:string; Class:int; Race:int; Gender:string; Level:int; AchievementPoints:int; PetsCollected:int; PetsNotCollected:int}
     module JsonWowDeserialization = 
-        open Newtonsoft.Json
         type PetStats = {Level:int; PetQualityId:int; Power:int; Speed:int;}
-        type PetInfo = {Name:string; Stats:PetStats; IsFavorite:bool; CreatureName:string; CanBattle:bool; QualityId:int }
+        type PetInfo = {Name:string; Stats:PetStats; IsFavorite:bool; CreatureName:string; CanBattle:bool; QualityId:int; IsFirstAbilitySlotSelected:bool; IsSecondAbilitySlotSelected:bool; IsThirdAbilitySlotSelected:bool  }
         type PetSummary= { NumCollected:int; NotCollected:int; Collected: PetInfo list}
-        type CharacterRequestInfo = { LastModified: System.Int64; Name:string; Realm:string; Battlegroup:string; Class:int; Race:int; Gender:bool; Level:int; AchievementPoints:int; Pets: PetSummary}
-        let mapCharacterRequestInfo (x:CharacterRequestInfo) = 
+        //thumbnails: worked: http://render-api-us.worldofwarcraft.com/static-render/us/rexxar/188/39460796-avatar.jpg
+        let getThumbnailUrl thumbnailFromJson =
+            sprintf "http://render-api-us.worldofwarcraft.com/static-render/us/%s" thumbnailFromJson //rexxar/188/39460796-avatar.jpg
+        type CharacterRequestInfo = { LastModified: System.Int64; Name:string; Realm:string; Battlegroup:string; Class:int; Race:int; Gender:bool; Level:int; AchievementPoints:int; Thumbnail:string; CalcClass:string; Faction:int; Pets: PetSummary}
+        let mapCharacterRequestInfo raw (x:CharacterRequestInfo) = 
             let mapQuality = 
                 function
                 | 0 -> Poor
@@ -78,7 +106,9 @@ module Warcraft =
                                         Level=pi.Stats.Level
                                         PetQuality=mapQuality pi.Stats.PetQualityId
                                         Power=pi.Stats.Power
-                                        Speed=pi.Stats.Speed})
+                                        Speed=pi.Stats.Speed; Raw= Util.OnDemand("Raw",fun () -> raw) })
+            let thumbnailUrl = getThumbnailUrl x.Thumbnail
+            let thumbnail:obj = if showImages then Util.RawHtml(sprintf "<img src=\"%s\" />" thumbnailUrl) else thumbnailUrl |> box
             {
                 CharacterInfo.LastModified = x.LastModified
                 Name= x.Name
@@ -86,19 +116,18 @@ module Warcraft =
                 Battlegroup= x.Battlegroup
                 Class= x.Class
                 Race = x.Race
-                Gender=x.Gender
+                Gender=if x.Gender then "F" else "M"
                 Level = x.Level
                 AchievementPoints= x.AchievementPoints
-                PetsCollected = x.Pets.NumCollected;
-                PetsNotCollected = x.Pets.NotCollected;
-            }, petDisplays
+                PetsCollected = x.Pets.NumCollected
+                PetsNotCollected = x.Pets.NotCollected
+            }, thumbnail, petDisplays
         
         let deserializeCri s = 
             JsonConvert.DeserializeObject<CharacterRequestInfo>(s) 
-            |> mapCharacterRequestInfo
+            |> mapCharacterRequestInfo s
             
     open BattleNet
-    
     
     let getPets (key:string) (realm:string) (characterName:string) (fields:string) (locale:string) (jsonp:string) =
         let url = sprintf "%swow/character/%s/%s?fields=pets&locale=%s&apikey=%s" BattleNet.url realm characterName locale key
@@ -108,12 +137,13 @@ open BattleNet
 open Warcraft
 
     
-let rawData = Util.Cache(Func<_>(fun _ -> Warcraft.getPets (getSavedApiKey()) "rexxar" "mmsheep" "pets" "en-US" null))
-rawData
+let rawPetData = Util.Cache(Func<_>(fun _ -> Warcraft.getPets (getSavedApiKey()) "rexxar" "mmsheep" "pets" "en-US" null))
+
+rawPetData
 |> Option.map JsonWowDeserialization.deserializeCri
 |> Option.iter (Dump >> ignore)
 
-rawData
+rawPetData
 |> Option.map prettifyJson
 |> Dump
 |> ignore
