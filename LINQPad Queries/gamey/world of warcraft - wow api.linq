@@ -68,7 +68,7 @@ module WowHead =
         let path = Util.CurrentQueryPath |> Path.GetDirectoryName |> fun x -> Path.Combine(x,"PetSpecies.json")
         File.ReadAllText path
         |> deserialize<PetSpeciesInfo list>
-    getBattleTameablePets().Dump()
+    //getBattleTameablePets().Dump()
 
 module BattleNet =
     let url = "https://us.api.battle.net/"
@@ -108,7 +108,7 @@ module Warcraft =
             |> Option.map (deserialize<PetTypeSummary> >> fun x -> x.PetTypes)
             |> Option.get
             
-    PetTypeData.petTypes.Dump()
+    //PetTypeData.petTypes.Dump()
     type PetDisplay = {Name:String; Level:int; PetQuality:string; Power:int; Speed:int; IsFavorite:bool; Creature:string; CanBattle:bool; Raw:obj }
     
         
@@ -194,8 +194,31 @@ open Warcraft
     
 let rawPetData = Util.Cache(Func<_>(fun _ -> Warcraft.getPets (getSavedApiKey()) "rexxar" "mmsheep" "pets" "en-US" null))
 
-rawPetData
-|> Option.map JsonWowDeserialization.deserializeCri
+let petData = 
+    rawPetData
+    |> Option.map JsonWowDeserialization.deserializeCri
+    |> Option.map (fun (c,i,pets) ->  
+        let petWowheadData = WowHead.getBattleTameablePets()
+        let uncaptured =
+            petWowheadData
+            |> Seq.filter(fun wowheadPet -> pets |> Seq.map (fun p -> p.Name) |> Seq.contains wowheadPet.Name |> not)
+            //|> dumpt "toFind?"
+        let zoneCounts = 
+            uncaptured 
+            |> Seq.filter(fun u -> not <| isNull (box u.Location)) 
+            |> Seq.map (fun u -> 
+                u.Location 
+                |> Seq.map (fun l -> u.Name,l)
+            ) 
+            |> Seq.collect id
+            |> Seq.groupBy snd
+            |> Seq.sortBy(snd >> Seq.length>> (*) -1)
+            |> Seq.map (fun (k, items) -> Hyperlinq(sprintf "http://www.wowhead.com/zone=%i" k,sprintf "Wowhead Zone %i" k), items |> Seq.map fst |> List.ofSeq)
+            |> List.ofSeq
+        zoneCounts.Dump("by best zone desc")
+        c,i,pets
+    )
+petData
 |> Option.iter (Dump >> ignore)
 
 rawPetData
