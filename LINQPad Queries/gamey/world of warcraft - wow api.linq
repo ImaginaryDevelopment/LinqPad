@@ -1,19 +1,41 @@
 <Query Kind="FSharpProgram">
+  <NuGetReference>HtmlAgilityPack</NuGetReference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
+  <Namespace>HtmlAgilityPack</Namespace>
   <Namespace>Microsoft.FSharp</Namespace>
   <Namespace>Newtonsoft.Json</Namespace>
 </Query>
 
 //following https://dev.battle.net/io-docs
+// pull drop data from http://www.wowhead.com/battle-pets?filter=9:5;2:5;0:0
 let showImages = true
 
-let doLaters = ResizeArray<_>()
-let dumpt (t:string) x = x.Dump(t); x
-let dumpBlacklist blacklist t x = x.Dump(description=t,exclude=blacklist)
-let prettifyJsonObj o = JsonConvert.SerializeObject(o, Formatting.Indented)
-let prettifyJson s = s |> JsonConvert.DeserializeObject |> prettifyJsonObj
-let deserialize<'t> s = JsonConvert.DeserializeObject<'t>(s) 
-let deserializePartial propName s = Newtonsoft.Json.Linq.JObject.Parse(s).[propName]
+let doLaters = ResizeArray<unit -> unit>()
+[<AutoOpen>]
+module Helpers =
+    let dumpt (t:string) x = x.Dump(t); x
+    let dumpBlacklist blacklist t x = x.Dump(description=t,exclude=blacklist)
+    let after (delimiter:string) (text:string) = text.Substring(text.IndexOf(delimiter) + delimiter.Length)
+    let before (delimiter:string) (text:string) = text.Substring(0,text.IndexOf(delimiter))
+    let prettifyJsonObj o = JsonConvert.SerializeObject(o, Formatting.Indented)
+    let prettifyJson s = s |> JsonConvert.DeserializeObject |> prettifyJsonObj
+    let deserialize<'t> s = JsonConvert.DeserializeObject<'t>(s) 
+    // case sensitive
+    let deserializePartial propName s = Newtonsoft.Json.Linq.JObject.Parse(s).[propName]
+    
+module Option = 
+    let ofObj x = 
+        if isNull <| box x then 
+            None
+        else Some x
+module HtmlElement = 
+    let getElement name (x:HtmlNode) = 
+        x.Element name
+        |> Option.ofObj
+    let getElements name (x:HtmlNode) = 
+        x.Elements name
+        |> Option.ofObj
+    
 module HttpClient = 
     let tryGetUrl headers (url:string) = 
         use hc = new System.Net.Http.HttpClient()
@@ -26,10 +48,28 @@ module HttpClient =
             url.Dump()
             ex.Dump()
             None
-            
+    let tryGetHtml header (url:string) = 
+        use hc = new System.Net.Http.HttpClient()
+        try
+            hc.GetStringAsync(url).Result
+            |> Some
+        with ex ->
+            url.Dump()
+            ex.Dump()
+            None
+        
     let getToken key secret =
         tryGetUrl ["client_id",key; "client_secret", secret; "grant_type", "client_credentials"] 
-    
+module WowHead = 
+    open HtmlElement
+    open HtmlAgilityPack
+    type PetSpeciesInfo = { Health:decimal; Location: int list; Power:decimal; Speed: decimal; Type:int; Name:string;}
+    let getBattleTameablePets () = // depends on "parseWowHead BattlePets.linq"
+        let path = Util.CurrentQueryPath |> Path.GetDirectoryName |> fun x -> Path.Combine(x,"PetSpecies.json")
+        File.ReadAllText path
+        |> deserialize<PetSpeciesInfo list>
+    getBattleTameablePets().Dump()
+
 module BattleNet =
     let url = "https://us.api.battle.net/"
     let getSavedApiKey() = Util.GetPassword("Diablo3ApiKey")
@@ -90,6 +130,7 @@ module Warcraft =
                 |> Seq.map (fun ptToken -> 
                     ptToken |> string, ptToken |> string |> deserialize<PetInfo>
                 ) 
+                |> Seq.sortBy(fun (_, pi) -> not pi.IsFavorite,  pi.Stats.Level * -1, pi.QualityId * -1)
                 |> List.ofSeq
 
             let x = raw |> deserialize<CharacterRequestInfo>
