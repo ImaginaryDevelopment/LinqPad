@@ -27,9 +27,12 @@ open System
 open System.Collections.Generic
 open System.Diagnostics
 open Microsoft.VisualStudio.TextTemplating
+
 open CodeGeneration
 open CodeGeneration.DataModelToF
 open CodeGeneration.SqlMeta
+open CodeGeneration.GenerateAllTheThings
+
 open MacroRunner
 open MacroRunner.DteWrap
 open MacroRunner.MultipleOutputHelper.Managers
@@ -39,6 +42,7 @@ let failing s =
         Debugger.Log(1,"failing", s)
         Debugger.Break()
     failwith s
+    
 let groupedEnum  (en: IEnumerator) =
    
     Seq.unfold(fun _ -> 
@@ -54,6 +58,7 @@ let dte =
     |> Seq.find(fun wn -> wn.Contains("PracticeManagement"))
     |> Macros.VsMacros.getDteByWindowName
     //System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE") :?> EnvDTE.DTE
+    
 printfn "Got dte for solution %s" dte.Solution.FileName
 let cString = 
     dte.Solution.FindProjectItem("BuildTime.fs").FileNames 0s
@@ -71,10 +76,11 @@ let targetCodeProjectName = "Pm.Schema"
 let targetInsertRelativePath = @"Scripts\Post-Deployment\TableInserts\Accounting1.5\AccountingInserts.sql"
 let refData : ReferenceData list = [
             //type ReferenceData = {Schema:string; Table:string; Column:string; ValuesWithComments: IDictionary<string,string>}
-            {ReferenceData.Schema="dbo";Table="GuarantorTypes";Column="GuarantorTypeId"; ValuesWithComments= dict[
-                                                                                                                "SELF",null
-                                                                                                                "THIRD PARTY", null
-                                                                                                                "Insurance & Self", null ]
+            {ReferenceData.Schema="dbo";Table="GuarantorTypes";Column="GuarantorTypeId"; 
+                ValuesWithComments= dict[
+                                        "SELF",null
+                                        "THIRD PARTY", null
+                                        "Insurance & Self", null ]
             }
 ]
 
@@ -98,38 +104,6 @@ let measureBlacklist =
     [
         "PatientIdentificationID"
     ]
-
-type ColumnInput = {
-        Name:string
-        Type:Type
-        Length: int option
-        Precision:int option
-        Scale: int option
-        UseMax: bool
-        AllowNull: Nullability
-        Attributes:string list
-        FKey:FKeyInfo option
-        Comments: string list
-        GenerateReferenceTable: bool
-        ReferenceValuesWithComment: IDictionary<string,string>
-        IsUnique: bool
-    } with 
-        static member create name columnType = 
-            {Name=name; Type=columnType; Length= None; Precision=None;Scale=None;UseMax=false; AllowNull=Nullability.NotNull; Attributes=List.empty; FKey= None; Comments = List.empty; GenerateReferenceTable=false; ReferenceValuesWithComment = null; IsUnique=false}
-        static member createFKeyedColumn<'T> name fkeyInfo = 
-            ColumnInput.create name typeof<'T>
-            |> fun x -> {x with FKey = Some fkeyInfo }
-        static member createFKeyedNColumn<'T> name fkeyInfo =
-            ColumnInput.createFKeyedColumn<'T> name fkeyInfo
-            |> fun x -> { x with AllowNull = Nullability.AllowNull}
-        static member createPatientIdColumn prefix allowNull comments = 
-            ColumnInput.createFKeyedColumn<int> (prefix + "PatientID") {Schema="dbo"; Table="Patients"; Column ="PatientID"}
-            |> fun x -> {x with Comments = comments; AllowNull = allowNull}
-        static member createUserIdColumn prefix allowNull comment = 
-            ColumnInput.createFKeyedColumn<int> (prefix + "UserID") {Schema="dbo"; Table="Users";Column="UserID" }
-            |> fun x -> {x with Comments = comment; AllowNull= allowNull}
-        static member makeNullable50 name = 
-            {Name=name; Type=typeof<string>; Length=Some 50; Precision=None; Scale=None; UseMax=false; AllowNull = Nullability.AllowNull; Attributes=List.empty; FKey = None;Comments = List.empty; GenerateReferenceTable=false; ReferenceValuesWithComment=null; IsUnique=false }
 
 type TableInput() = 
      member val Name:string = Unchecked.defaultof<_> with get,set
@@ -185,63 +159,8 @@ let manager =
         printfn "ProjectItem= %A" (templateProjectItem.FileNames(0s))
     let dteWrapper = VsManager.WrapDte dte
     MultipleOutputHelper.Managers.VsManager(tHost, dteWrapper, sb, templateProjectItem)
-
-let runFullGeneration scriptFullPath generatePartials (toGen:TableInput list) addlCodeTables = 
-    let projects = snd <| Macros.VsMacros.getSP dte // RecurseSolutionProjects(Dte)
-    sb 
-    |> appendLine ("Projects:")
-    |> ignore
-
-    projects
-    |> Seq.iter (fun proj -> sb.AppendLine (sprintf "    %s" proj.Name) |> ignore)
-
-    let targetSqlProject = 
-        projects 
-        |> Seq.tryFind (fun p -> p.Name = targetSqlProjectName) 
-        |> function 
-            | Some p -> p 
-            | None -> failwithf "did not find project, names were %A" (projects |> Seq.map (fun p -> p.Name) |> List.ofSeq)
-
-    let targetSqlProjectFolder = Path.GetDirectoryName targetSqlProject.FullName
-    printfn "Going to generate into project %s via folder %s" targetSqlProject.Name targetSqlProjectFolder
     
-    let genMapped : TableInfo list = 
-        let toColumnType tn cn t l p s u = SqlMeta.toColumnType t (Option.toNullable l) (Option.toNullable p) (Option.toNullable s) u
-        toGen
-        |> Seq.map (fun tg ->
-            {   TableInfo.Name=tg.Name
-                Schema=tg.Schema
-                Columns=
-                    tg.Columns 
-                    |> Seq.map (fun ci ->
-                        try 
-                            {   ColumnInfo.Name= ci.Name
-                                Type= toColumnType tg.Name ci.Name ci.Type ci.Length ci.Precision ci.Scale ci.UseMax 
-                                AllowNull= ci.AllowNull
-                                Attributes = ci.Attributes
-                                FKey= ci.FKey //if isNull ci.FKey then None else {FKeyInfo.Schema = ci.FKey.Schema; Table= ci.FKey.Table; Column = ci.FKey.Column} |> Some
-                                Comments = ci.Comments
-                                GenerateReferenceTable = ci.GenerateReferenceTable
-                                ReferenceValuesWithComment = ci.ReferenceValuesWithComment
-                            }
-                        with _ -> 
-                            printfn "Failed to map %A for table %A" ci tg
-                            reraise()
-                    )
-                    |> List.ofSeq
-            }
-        )
-        |> List.ofSeq
-    printfn "%i tables to generate" genMapped.Length
-
-    let codeGenAsm= typeof<CodeGeneration.SqlScriptGeneration.SqlObj>.Assembly
-    let info = BReusable.Assemblies.getAssemblyFullPath(codeGenAsm)
-    let fileInfo = new System.IO.FileInfo(info)
-    sb |> appendLine (sprintf "Using CodeGeneration.dll from %O" fileInfo.LastWriteTime) |> ignore
-    SqlMeta.generateTablesAndReferenceTables(manager, sb, Some targetSqlProjectFolder, genMapped)
-    // TODO: convert SqlGeneration.ttinclude -> GenerateAccountingInserts
-
-    let csgm = 
+let csgm = 
         {
             TargetProjectName= targetCodeProjectName
             TargetNamespace= "Pm.Schema.DataModels"
@@ -253,33 +172,6 @@ let runFullGeneration scriptFullPath generatePartials (toGen:TableInput list) ad
             IncludeNonDboSchemaInNamespace= true
             GenerateValueRecords= false
         }
-    let mappedTables =
-        //make it so it only even looks for the proj if the data is not present in the incoming mapped/generated sql data (or the input used to gen it?) output
-        // this is the input to the sql generator:
-        let tables = 
-            toGen
-            |> Seq.map (fun t -> if String.IsNullOrEmpty t.Schema || t.Schema = "dbo" then t.Name else sprintf "%s.%s" t.Schema t.Name)
-        tables.Dump("generating code models for these tables")
-        let currentDir = Path.GetDirectoryName scriptFullPath
-        let dbPath = Path.GetFullPath(Path.Combine(currentDir, "..","PracticeManagement","Db"));
-        let allTables = 
-            SqlProj.getTableInfoFromSqlProj 
-                (fun s -> appendLine s |> ignore) 
-                (fun s -> sb.AppendLine s |> ignore) 
-                SqlProj.DbPathOption.FallbackToNone 
-                dbPath 
-                tables 
-                codeTableBlacklist 
-                generatePartials
-
-        let mappedTables = allTables |> Seq.map (SqlProj.toTableGenerationInfo) |> List.ofSeq
-        mappedTables
-
-    let pluralizer = Macros.VsMacros.createPluralizer()
-    Util.ClearResults()
-    csgm.Dump("csgm")
-    DataModelToF.generate pluralizer.Pluralize pluralizer.Singularize csgm (manager, sb, mappedTables)
-    manager.Process(doMultiFile)
 
 let toGen : TableInput list = 
     [
@@ -403,7 +295,7 @@ let toGen : TableInput list =
                 ColumnInput.createFKeyedNColumn<int> "ChargeID" { Schema="dbo"; Table="Charge"; Column = null}
                 ColumnInput.makeNullable50 "RemarkCode"
                 ColumnInput.makeNullable50 "AdjustmentCode"
-                {ColumnInput.createFKeyedNColumn<string> "PaymentItemStatusId" 
+                {ColumnInput.createFKeyedColumn<string> "PaymentItemStatusId" 
                             {Schema="Accounts"; Table="PaymentItemStatus";Column=null} 
                             with 
                                 Length = Some 50
@@ -419,111 +311,45 @@ let toGen : TableInput list =
 
         )
     ]
-
-// StringBuilder ge = GenerationEnvironment;
+    
 
 sb
 |> appendLine "Main File Output"
 |> appendLine (sprintf "Started at %O" DateTime.Now)
 |> ignore
 
-//let manager = 
-//    let tHost = 
-//        {
-//        new ITextTemplatingEngineHost with
-//            member __.GetHostOption(optionName: string): obj = failing "GetHostOption(%s):Not implemented yet" optionName
-//            member __.LoadIncludeText(requestFileName: string, content: byref<string>, location: byref<string>): bool = 
-//                failing "LoadIncludeText(%s, %s, %s):Not implemented yet" requestFileName (content) (location)
-//            member __.LogErrors(errors: System.CodeDom.Compiler.CompilerErrorCollection): unit = 
-//                failing "LogErrors(%A):Not implemented yet" errors
-//            member __.ProvideTemplatingAppDomain(content: string): System.AppDomain = 
-//                failing "ProvideTemplatingAppDomain(%s): Not implemented yet" content
-//            member __.ResolveAssemblyReference(assemblyReference: string): string = 
-//                failing "ResolveAssemblyReference(%s): Not implemented yet" assemblyReference
-//            member __.ResolveDirectiveProcessor(processorName: string): System.Type = 
-//                failing "ResolveDirectiveProcessor(%s): Not implemented yet" processorName
-//            member __.ResolveParameterValue(directiveId: string, processorName: string, parameterName: string): string = 
-//                failing "ResolveParameterValue(%s, %s, %s): Not implemented yet" directiveId processorName parameterName
-//            member __.ResolvePath(path: string): string = 
-//                failing "ResolvePath(%s): Not implemented yet" path
-//            member __.SetFileExtension(extension: string): unit = 
-//                failing "SetFileExtension(%s): Not implemented yet" extension
-//            member __.SetOutputEncoding(encoding: System.Text.Encoding, fromOutputDirective: bool): unit = 
-//                failing "SetOutputEncoding(%A, %A): Not implemented yet" encoding fromOutputDirective
-//            member __.StandardAssemblyReferences: System.Collections.Generic.IList<string> = 
-//                failwith "StandardAssemblyReferences: Not implemented yet"
-//            member __.StandardImports: System.Collections.Generic.IList<string> = 
-//                failwith "StandardImports: Not implemented yet"
-//            member __.TemplateFile: string = "HelloTesting.fake.tt"
-//        }
-//
-//    // if this script is in the solution it is modifying, we need the EnvDTE.ProjectItem representing it, otherwise where does the main (non sub-file) output go?
-//    let scriptFullPath = Path.Combine(__SOURCE_DIRECTORY__,__SOURCE_FILE__)
-//    let templateProjectItem:EnvDTE.ProjectItem = dte.Solution.FindProjectItem(scriptFullPath)
-//    printfn "Script is at %s" scriptFullPath
-//    if not <| isNull templateProjectItem then
-//        printfn "ProjectItem= %A" (templateProjectItem.FileNames(0s))
-//    let dteWrapper = VsManager.WrapDte dte
-//    MultipleOutputHelper.Managers.VsManager(tHost, dteWrapper, sb, templateProjectItem)
-
-let runSqlGeneration() = 
-    let projects = snd <| Macros.VsMacros.getSP dte // RecurseSolutionProjects(Dte)
-    sb 
-    |> appendLine ("Projects:")
-    |> ignore
-
-    projects
-    |> Seq.iter (fun proj -> sb.AppendLine (sprintf "    %s" proj.Name) |> ignore)
-
-    let targetSqlProject = 
-        projects 
-        |> Seq.tryFind (fun p -> p.Name = targetSqlProjectName) 
-        |> function 
-            | Some p -> p 
-            | None -> failwithf "did not find project, names were %A" (projects |> Seq.map (fun p -> p.Name) |> List.ofSeq)
-
-    let targetProjectFolder = Path.GetDirectoryName targetSqlProject.FullName
-    printfn "Going to generate into project %s via folder %s" targetSqlProject.Name targetProjectFolder
-    let genMapped : TableInfo list = 
-        let toColumnType t l p s u = SqlMeta.toColumnType t (Option.toNullable l) (Option.toNullable p) (Option.toNullable s) u
-        toGen
-        |> Seq.map (fun tg ->
-            {   TableInfo.Name=tg.Name
-                Schema=tg.Schema
-                Columns=
-                    tg.Columns 
-                    |> Seq.map (fun ci ->
-                        try 
-                            {   ColumnInfo.Name= ci.Name
-                                Type= toColumnType ci.Type ci.Length ci.Precision ci.Scale ci.UseMax 
-                                AllowNull= ci.AllowNull
-                                Attributes = ci.Attributes
-                                FKey= ci.FKey //if isNull ci.FKey then None else {FKeyInfo.Schema = ci.FKey.Schema; Table= ci.FKey.Table; Column = ci.FKey.Column} |> Some
-                                Comments = ci.Comments
-                                GenerateReferenceTable = ci.GenerateReferenceTable
-                                ReferenceValuesWithComment = ci.ReferenceValuesWithComment
-                            }
-                        with _ -> 
-                            printfn "Failed to map %A for table %A" ci tg
-                            reraise()
-                    )
-                    |> List.ofSeq
-            }
-        )
-        |> List.ofSeq
-    printfn "%i tables to generate" genMapped.Length
-
-    let codeGenAsm= typeof<CodeGeneration.SqlScriptGeneration.SqlObj>.Assembly
-    let info = BReusable.Assemblies.getAssemblyFullPath(codeGenAsm)
-    let fileInfo = new System.IO.FileInfo(info)
-    sb |> appendLine (sprintf "Using CodeGeneration.dll from %O" fileInfo.LastWriteTime) |> ignore
-    SqlMeta.generateTablesAndReferenceTables(manager, sb, Some targetProjectFolder, genMapped)
-    // TODO: convert SqlGeneration.ttinclude -> GenerateAccountingInserts
-    manager.Process(doMultiFile)
-
+let cgsm = 
+    {
+        TargetProjectName= targetCodeProjectName
+        TargetNamespace= "Pm.Schema.DataModels"
+        CString = cString
+        UseOptionTypes= false
+        ColumnBlacklist= columnBlacklist
+        Measures= measureList
+        MeasuresBlacklist= measureBlacklist
+        IncludeNonDboSchemaInNamespace= true
+        GenerateValueRecords= false
+    }
 let generatePartials = false
-let results = runFullGeneration scriptFullPath generatePartials toGen |> Map.ofDictionary
+let addlCodeTables = Seq.empty
+match toGen |> Seq.tryFind(fun g -> g.Columns |> Seq.exists(fun c -> c.Type = typeof<obj>)) with
+    | Some g ->
+        g.Dump()
+        failwithf "abort"
+    | _ -> ()
+let toGen2 = 
+    toGen
+    |> List.map (fun g ->
+        GenerateAllTheThings.TableInput(Schema=g.Schema,Name=g.Name, Columns= g.Columns)
+    )
+let results = 
+    //runFullGeneration scriptFullPath generatePartials toGen addlCodeTables |> Map.ofDictionary
+    GenerateAllTheThings.runGeneration sb dte manager targetSqlProjectName cgsm toGen2 List.empty 
+    let r = manager.Process doMultiFile
+    r
+
 results
+|> Map.ofDictionary
 |> Map.toSeq
 |> Seq.map snd
 |> Seq.map snd
