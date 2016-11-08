@@ -1,6 +1,4 @@
 
-let dc = new TypedDataContext()
-
 // this thing works fine via linqpad (translating reference paths only)
 // TODO: check if the other runGeneration() method has anything needed or useful
 //TODO: check if the other manager creation code has anything needed or useful
@@ -34,7 +32,16 @@ let failing s =
         Debugger.Log(1,"failing", s)
         Debugger.Break()
     failwith s
-
+let groupedEnum  (en: IEnumerator) =
+   
+    Seq.unfold(fun _ -> 
+        if en.MoveNext() then 
+            Some(en.Current, ())
+        else 
+           match en with
+           | :? IDisposable as d -> d.Dispose()
+           | _ -> ()
+           None) ()
 let dte = 
     Macros.VsMacros.getWindowNames()
     |> Seq.find(fun wn -> wn.Contains("PracticeManagement"))
@@ -48,8 +55,8 @@ let cString =
     |> Seq.head
     |> after "\""
     |> before "\""
-let activeDocumentFullName = dte.ActiveDocument.FullName
-printfn "activeDocument is %s" activeDocumentFullName
+let activeDocumentFullNameOpt = if not <| isNull dte.ActiveDocument then Some dte.ActiveDocument.FullName else None
+printfn "activeDocument is %A" activeDocumentFullNameOpt
 printfn "Got dte for solution %s" dte.Solution.FileName
 let doMultiFile = true
 let targetSqlProjectName = "ApplicationDatabase"
@@ -172,7 +179,7 @@ let manager =
     let dteWrapper = VsManager.WrapDte dte
     MultipleOutputHelper.Managers.VsManager(tHost, dteWrapper, sb, templateProjectItem)
 
-let runFullGeneration scriptFullPath generatePartials (toGen:TableInput list) = 
+let runFullGeneration scriptFullPath generatePartials (toGen:TableInput list) addlCodeTables = 
     let projects = snd <| Macros.VsMacros.getSP dte // RecurseSolutionProjects(Dte)
     sb 
     |> appendLine ("Projects:")
@@ -226,25 +233,17 @@ let runFullGeneration scriptFullPath generatePartials (toGen:TableInput list) =
     sb |> appendLine (sprintf "Using CodeGeneration.dll from %O" fileInfo.LastWriteTime) |> ignore
     SqlMeta.generateTablesAndReferenceTables(manager, sb, Some targetSqlProjectFolder, genMapped)
     // TODO: convert SqlGeneration.ttinclude -> GenerateAccountingInserts
-//        TargetProjectName:string
-//        TargetNamespace: string
-//        CString:string
-//        UseOptionTypes:bool
-//        ColumnBlacklist:Map<string, string list>
-//        Measures: string list
-//        MeasuresBlacklist: string list
-//        IncludeNonDboSchemaInNamespace:bool
-//        GenerateValueRecords:bool
+
     let csgm = 
         {
             TargetProjectName= targetCodeProjectName
             TargetNamespace= "Pm.Schema.DataModels"
             CString = cString
-            UseOptionTypes= true
+            UseOptionTypes= false
             ColumnBlacklist= columnBlacklist
             Measures= measureList
             MeasuresBlacklist= measureBlacklist
-            IncludeNonDboSchemaInNamespace= false
+            IncludeNonDboSchemaInNamespace= true
             GenerateValueRecords= false
         }
     let mappedTables =
@@ -253,6 +252,7 @@ let runFullGeneration scriptFullPath generatePartials (toGen:TableInput list) =
         let tables = 
             toGen
             |> Seq.map (fun t -> if String.IsNullOrEmpty t.Schema || t.Schema = "dbo" then t.Name else sprintf "%s.%s" t.Schema t.Name)
+        tables.Dump("generating code models for these tables")
         let currentDir = Path.GetDirectoryName scriptFullPath
         let dbPath = Path.GetFullPath(Path.Combine(currentDir, "..","PracticeManagement","Db"));
         let allTables = 
@@ -269,6 +269,8 @@ let runFullGeneration scriptFullPath generatePartials (toGen:TableInput list) =
         mappedTables
 
     let pluralizer = Macros.VsMacros.createPluralizer()
+    Util.ClearResults()
+    csgm.Dump("csgm")
     DataModelToF.generate pluralizer.Pluralize pluralizer.Singularize csgm (manager, sb, mappedTables)
     manager.Process(doMultiFile)
 
@@ -519,8 +521,8 @@ results
 |> Seq.map snd
 |> Seq.map snd
 |> Seq.iter (fun fullPath ->
-    // use dtemacros.closeDocument when it is ready
-    dte.Documents
+    dte.Documents.GetEnumerator()
+    |> groupedEnum
     |> Seq.cast<EnvDTE.Document>
     |> Seq.tryFind(fun d-> d.FullName = fullPath)
     |> Option.iter (fun d -> d.Close())
@@ -530,8 +532,11 @@ results
 
 // below works, but with the documents created all getting closed, we don't need it anymore
 let reactivateLastWindow() = 
-    activeDocumentFullName.Dump("was active")
-    for d in dte.Documents do
-        if d.FullName = activeDocumentFullName then
-            activeDocumentFullName.Dump("activating!")
-            d.Activate()
+    activeDocumentFullNameOpt
+    |> Option.iter(fun fullName ->
+        fullName.Dump("was active")
+        for d in dte.Documents do
+            if d.FullName = fullName then
+                fullName.Dump("activating!")
+                d.Activate()
+    )
