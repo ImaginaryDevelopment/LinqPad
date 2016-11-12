@@ -5,26 +5,64 @@
 
 // connect to twitter, save all my liked/favorited tweets in case the owner deletes their account or the tweet.
 // desired feature: unshorten any urls found
+// JSON.net note: if deserializing into T casing is ignored, if deserializing by property name it is not
 open System.Globalization
 open System.Net
 open System.Net.Http
 open Newtonsoft.Json
 
+
 // for OAuth isntead of this app only thing see: https://dev.twitter.com/oauth/reference/post/oauth2/token
 
 let isDebug = false
+
+let cacheBearer = true
 let consumerKey = Util.GetPassword "TwitterApiKey"
 let consumerSecret = 
     //Util.SetPassword("TwitterSecret",null); 
     Util.GetPassword "TwitterSecret"
+let getLine i (s:string) = s.Split (["\r\n";"\n"] |> Array.ofList,StringSplitOptions.None) |> fun items -> items.[i - 1]
+let getNear i (s:string) = 
+    let start = Math.Max(i - 20, 0)
+    let e = Math.Min(s.Length, i + 20) - start
+    try
+        s |> String.subString2 start e
+    with ex ->
+        s.Dump(sprintf "Length=%i. String.subString2(start=%i;e=%i)" s.Length start e)
+        reraise()
 
+
+let toDo = ResizeArray<unit -> unit>()
 if consumerKey.StartsWith(" ") then 
     if isDebug then printfn "Key %s" consumerKey
     failwith "Copy paste failed on consumer key"
 if consumerSecret.StartsWith(" ") then 
     if isDebug then printfn "Secret %s" consumerSecret
     failwith "Copy paste failed on consumer secret"
+
+let (|Matched|_|) (m:Match)= if m.Success then Some m else None
+let flip f x y = f y x
+
+let containsIAnyOf (delimiters:string seq) (x:string) = delimiters |> Seq.exists(flip containsI x)
+
 let dumpt (t:string) x = x.Dump(t); x
+let dumpBlack (t:string) blacklist x = 
+    let blacklist = blacklist |> delimit ", "
+    x.Dump(description=t,exclude=blacklist)
+let dumpc (t:string) (x : _ list) = x.Length.Dump(t); x
+let dumpLaterOrDebug (t:string) onDemand x = 
+    match isDebug,onDemand with
+    | true,true -> Util.OnDemand(t, fun () -> x).Dump()
+    | false,true -> toDo.Add(fun () -> Util.OnDemand(t,fun () -> x |> dumpt t |> ignore).Dump() |> ignore)
+    | true,false
+    | false,false -> toDo.Add(fun () -> x |> dumpt t |> ignore)
+    
+    x
+    
+let containsI (delimiter:string) (x:string) = if isNull x then false elif isNull delimiter || delimiter = "" then failwithf "bad contains call" else x.IndexOf(delimiter, String.defaultComparison) >= 0
+
+let stringEqualsI s1 (toMatch:string)= not <| isNull toMatch && toMatch.Equals(s1, StringComparison.InvariantCultureIgnoreCase)
+                
 let getType x = x.GetType()
 let rec getValueOpt (genTypeOpt:Type option) (typeOpt:Type option)  (o:obj) = 
     match o,genTypeOpt, typeOpt with
@@ -79,6 +117,25 @@ module StringHelpers =
     let prettifyJson s = s |> JsonConvert.DeserializeObject |> prettifyJsonObj
     let delimit delimiter (values:#seq<string>) = String.Join(delimiter, Array.ofSeq values)
     
+let deserializePartial propName s = Newtonsoft.Json.Linq.JObject.Parse(s).[propName]    
+let deserializeT<'T> x = JsonConvert.DeserializeObject<'T> x
+let tryDeserializeT<'T> x = 
+    try
+        deserializeT<'T> x
+    with ex ->
+        match Regex.Match(ex.Message, "line (\d+), position (\d+)") with
+        | Matched m ->
+            x
+            |> getLine (int m.Groups.[1].Value)
+            |> getNear (int m.Groups.[2].Value)
+            |> dumpt "context"
+            |> ignore
+        | _ -> ()
+        prettifyJson x
+        |> dumpt "Failed to deserialize"
+        |> ignore
+        reraise()    
+        
 module Array =
     let ofOne x = [| x |]
 module Seq = 
@@ -148,13 +205,10 @@ module Bearer =
 //    ()
 open Bearer    
 
-let cacheBearer = true
-
 let bearer = 
     match getBearer cacheBearer with
     | Bearer.Token t -> t
     | Bearer.Error errors -> errors.Dump("bearer errors"); failwith "bearer errors"
-
 
 let getApi apiPath = 
     printfn "Getting %s" apiPath
@@ -175,39 +229,50 @@ let getAppRateLimitStatus() =
     |> dumpt "Raw app rate limit status"
     |> prettifyJson 
     |> dumpt "rate limit status"
-    
-// https://dev.twitter.com/rest/reference/get/favorites/list
-type User = { name:string; profile_image_url:string;id:Int64 Nullable; screen_name:string; location:string; description:string; url:string;}
+
+
+
+type User = { Name:string; profile_image_url:string;Id:Int64 Nullable; screen_name:string; location:string; description:string; url:string;}
 type Media = { Id:Int64 Nullable; Media_Url:string;Expanded_Url:string; Type:string; Display_Url:string}
 type Url = {Url:string; Expanded_url:string; Display_url:string}
 type Entity = { Media: Media[]; Urls: Url[]}
-type FavoriteResult = {Coordinates:string; Id:Int64 Nullable; Truncated:bool Nullable ; Favorited:bool Nullable; Created_at:string; Id_str:string; In_reply_to_user_id_str:Int64 Nullable; Text:string; User:User; Entities:Entity}
+type Tweet = {(* Coordinates:obj; *) Id:Int64 Nullable; Truncated:bool Nullable ; Favorited:bool Nullable; Created_at:string; Id_str:string; In_reply_to_user_id_str:Int64 Nullable; Text:string; User:User; Entities:Entity}
+    with static member getText (x:Tweet) = x.Text
+type SearchMetadata = {Query:string;RefreshUrl:string}
+type SearchResult = {Statuses:Tweet list; search_metadata:SearchMetadata}
+type UserIdentifier = |UserId of int |ScreenName of string
+let getIntParamOpt name (vOpt:int option) = match vOpt with | Some i -> sprintf "%s=%i" name i |> Some | None -> None
+let getStrParamOpt name (vOpt:string option) = match vOpt with | Some v -> sprintf "%s=%s" name v |> Some | None -> None
+let getBoolParamOpt name vOpt = 
+    vOpt
+    |> Option.map (function |true -> "true" | false -> "false")
+    |> Option.map (sprintf "%s=%s" name)
 
-let getFavorites useCache userIdOpt screenNameOpt countOpt since_idOpt max_idOpt _include_entities =
-    let getFavoritesRaw () = 
-        let url = "1.1/favorites/list.json"
-        
-        let getIntParamOpt name (vOpt:int option) = match vOpt with | Some i -> sprintf "%s=%i" name i |> Some | None -> None
-        let getStrParamOpt name (vOpt:string option) = match vOpt with | Some v -> sprintf "%s=%s" name v |> Some | None -> None
-        let paramsToAdd = 
-            [
-                getIntParamOpt "user_id" userIdOpt
-                getStrParamOpt "screen_name" screenNameOpt
-                getIntParamOpt "count" countOpt
-                getIntParamOpt "since_id" since_idOpt
-                getIntParamOpt "max_id" max_idOpt
-            ]
-            |> Seq.choose id
-            |> List.ofSeq
-        let rawOutput = 
-            if Seq.any paramsToAdd then
-                paramsToAdd |> delimit "&" |> sprintf "%s?%s" url
-            else url
-            |> getApi 
+let getApiFromParams useCache title uri p =
+    let p = p |> Seq.choose id |> List.ofSeq
+    let getRaw() =
+        let rawOutput =
+            if Seq.any p then
+                p |> delimit "&" |> sprintf "%s?%s" uri
+            else uri
+            |> getApi
         rawOutput
+    if useCache then Util.Cache(getRaw, title) else getRaw()
+        
+// https://dev.twitter.com/rest/reference/get/favorites/list
+let getFavorites useCache userIdOpt screenNameOpt countOpt since_idOpt max_idOpt _include_entities =
+    let url = "1.1/favorites/list.json"
     let rawOutput = 
-        if useCache then Util.Cache(Func<_>(getFavoritesRaw),"favoritesRaw") else getFavoritesRaw()
+        [
+            getIntParamOpt "user_id" userIdOpt
+            getStrParamOpt "screen_name" screenNameOpt
+            getIntParamOpt "count" countOpt
+            getIntParamOpt "since_id" since_idOpt
+            getIntParamOpt "max_id" max_idOpt
+        ]    
+        |> getApiFromParams useCache "favoritesRaw" url
         //|> dumpt "Raw favorites output"
+        
     let items =
         rawOutput
         |> fun t -> JsonConvert.DeserializeObject<obj[]>(t)
@@ -215,19 +280,72 @@ let getFavorites useCache userIdOpt screenNameOpt countOpt since_idOpt max_idOpt
         items
         |> Seq.head 
         |> prettifyJsonObj
-        |> dumpt "first favorite"
+        |> dumpLaterOrDebug "first favorite" true
         |> ignore
     if isDebug then // turning this on while I work out the format of a single favorite object
         prettyPrintHead()
     let favoriteResults = 
         items
         |> Seq.map JsonConvert.SerializeObject
-        |> Seq.map (fun t -> JsonConvert.DeserializeObject<FavoriteResult>(t))
+        |> Seq.map (tryDeserializeT<Tweet>)
         |> List.ofSeq
-        |> dumpt "Deserialized"
+        |> dumpLaterOrDebug "Deserialized" true
     prettyPrintHead()
     favoriteResults
-
+    
+//https://dev.twitter.com/rest/reference/get/users/show
+let getUsersShow useCache userIdentifierOpt includeEntities =
+    let url = "1.1/users/show.json"
+    [
+                match userIdentifierOpt with
+                | UserId uId -> 
+                    yield getIntParamOpt "user_id" (Some uId)
+                | ScreenName sn ->
+                    yield getStrParamOpt "screen_name" (Some sn)
+                yield getBoolParamOpt "include_entities" includeEntities
+    ]
+    |> getApiFromParams useCache "usersShowRaw" url
+    |> fun x -> JsonConvert.DeserializeObject<User> x
+    //|> JsonConvert.DeserializeObject<obj[]>
+    
+let searchUserTweets useCache userId countOpt =  
+// appears to require more than a bearer token
+    let url = 
+        sprintf "from:%s" userId
+        |> Uri.EscapeDataString
+        // currently leaving result_type off results in no results
+        |> sprintf "1.1/search/tweets.json?q=%s&result_type=mixed"
+    [
+        getIntParamOpt "count" countOpt
+    ]
+    |> getApiFromParams useCache "searchTweets" url
+    //|> dumpt "searchTweetsRaw"
+    |>  fun raw -> // for data exploring/debug to look at the fields not in the tweets section
+        let o = JsonConvert.DeserializeObject(raw) :?> Newtonsoft.Json.Linq.JObject
+        o.Property("statuses").Remove()
+        o |> string |> dumpt "without statuses" |> ignore
+        raw
+    |> tryDeserializeT<SearchResult>
+    |> fun sr -> sr.Statuses
+    
+module NeedMoreAuth =
+    // requires more than just a bearer token    
+    let getMyRetweets useCache countOpt trimUser : Tweet list =
+        // this was for getting retweets of a tweet, not a users' retweets 
+        //let url = sprintf "1.1/statuses/retweets/%s.json" (userId |> string)
+        //this was for searching for tweets
+        //let url = sprintf "1.1/search/tweets.json?q=from:%s" userId
+        // https://dev.twitter.com/rest/reference/get/statuses/home_timeline
+        let url = sprintf "1.1/statuses/home_timeline.json"
+        [
+            //getStrParamOpt "user_id" (Some userId)
+            getIntParamOpt "count" countOpt
+            getBoolParamOpt "trim_user" trimUser
+        ]
+        |> getApiFromParams useCache "retweetsRaw" url
+        |> tryDeserializeT<obj[]>
+        |> Seq.map (string >> tryDeserializeT<Tweet>)
+        |> List.ofSeq
 
 module Unshortening =
     type unshortenResult = 
@@ -256,5 +374,23 @@ module Unshortening =
                 FailureStatus e.Status
                 
 let cacheResult = true
-getFavorites cacheResult None (Some "maslowjax") (Some 2) None None false
-
+let countOpt = Some 200 // Some 2
+let userId = "maslowjax"
+try
+    let userInfo = 
+        getUsersShow cacheResult (UserIdentifier.ScreenName userId) None
+//    |> dumpt "getUsersShow"
+//    |> ignore
+    let myTweets = 
+        searchUserTweets cacheResult userId countOpt
+        |> dumpc "search tweets"
+        //|> dumpt "search tweets results"
+    getFavorites cacheResult None (Some userId) countOpt None None false
+    |> dumpc "favorites results"
+    |> Seq.append myTweets
+    |> Seq.filter(Tweet.getText >> containsIAnyOf ["parenthesis"; "semicolon" ; "java";"finally"] )
+    |> dumpBlack "main results" ["Id_str";"Id";"id"]
+    |> ignore
+finally
+    toDo
+    |> Seq.iter(fun f -> f())
