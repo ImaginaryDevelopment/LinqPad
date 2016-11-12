@@ -4,7 +4,7 @@
 </Query>
 
 // fparsec practice
-
+// not working in linqpad see FsInteractive MacroRunner FParsecTry2.fsx
 let target = // change this to use %devroot% or create %practicemanagement% ?
     @"D:\Projects\PracticeManagement\Source-dev-rewrite\PracticeManagement\Db\Schema Objects\Schemas\dbo\Tables\Payment.table.sql"
 let test p str = 

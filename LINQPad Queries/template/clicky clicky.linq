@@ -10,18 +10,45 @@
   <Namespace>System.Windows.Forms</Namespace>
 </Query>
 
+// click browser stuffs
+
+//desired feature activate/make sure is active, a specific chrome window or tab
+
+
 // desired feature: allow opting for send message in case the app supports that without actually using the mouse (which switches OS focus)
+// sendMessage sample at http://stackoverflow.com/questions/10355286/programmatically-mouse-click-in-another-window
 // was done on resolution 1680x1050 would need adjusting for others, I bet
 let point x y = System.Drawing.Point(x,y)
 let toTuple x y = (x,y)
 type MyPoint ={ X:int; Y:int;}
 let curry f (x,y) = f x y
 let sleep (x:int) = System.Threading.Thread.Sleep x
+type RelativePoints={Absolute:System.Drawing.Point; Relative:System.Drawing.Point}
+
+//
+//module PInvoke = 
+//    // https://docs.microsoft.com/en-us/dotnet/articles/fsharp/language-reference/delegates
+//    type delegateEnumWindowsProc = delegate of hWnd:IntPtr*lParam:IntPtr -> bool
+//    //public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+//    [<DllImport("user32.dll")>]
+//    extern bool private SetForegroundWindow(IntPtr hWnd)
+//    [<DllImport("user32.dll")>]
+//    extern bool private EnumWindows(delegateEnumWindowsProc enumProc, IntPtr lParam)
+//    
+//    let setForegroundWindow hWnd = 
+//        SetForegroundWindow hWnd
+//    let enumWindows () = 
+//        let windows = ResizeArray()
+//        let f = new delegateEnumWindowsProc(fun (hWnd,lParam) -> windows.Add hWnd )
+//        EnumWindows(f, IntPtr.Zero)
+//PInvoke.enumWindows().Dump()
+let mapAbsPoint (relativity:System.Drawing.Point) abs = 
+    {Absolute = abs; Relative=point (abs.X - relativity.X) (abs.Y - relativity.Y) }
 module WinForm =
     let getMousePosition() = 
         Cursor.Position
     let setMousePosition x y = 
-        printfn "Changing mouse to %i,%i" x y
+        //printfn "Changing mouse to %i,%i" x y
         Cursor.Position <- System.Drawing.Point(x,y)    
         
 module Simulator =
@@ -38,11 +65,37 @@ module Simulator =
         //is.Mouse.MoveMouseTo(2687. , 504. )
         WinForm.setMousePosition 2687 504 
         is.Mouse.LeftButtonClick()
-    
-    let keepClicking() =
+    let moveMouseToCenterRightOfRightScreen() =
+        WinForm.setMousePosition 3124 504
+    let keepFing f = 
         while not <| is.InputDeviceState.IsKeyDown WindowsInput.Native.VirtualKeyCode.CONTROL do
-            clickCenterOfRightScreen() |> ignore
+            f()
             sleep 800
+            
+    let keepClicking() =
+        keepFing ( clickCenterOfRightScreen >> ignore)
+    // keep clicking center, but move mouse around some to pick things up?
+    let run relativity (funs: (unit -> unit) list) =
+        let toDo = 
+            let mutable i = 0
+            let fillDc = 
+                let dc = DumpContainer()
+                let fillDc() = 
+                    dc.Content <- 
+                        WinForm.getMousePosition() 
+                        |> mapAbsPoint relativity
+                        |> box
+                fillDc()
+                //dc.Dump
+                fillDc
+
+            let options = funs
+            (fun () ->
+                fillDc()
+                options.[i]()
+                i <- (i + 1) % options.Length
+            )
+        keepFing toDo
         
 module CotLi = 
     let topLeftCorner = point 1990 125
@@ -54,7 +107,8 @@ module CotLi =
         
         Simulator.click() |> ignore
         ()
-        
+    let sweepPickupArea() = ()
+        //WinForm.setMousePosition 
     // 1    2   3
     // 4    5   6
     let ClickLevelUp currentViewSlot =
@@ -75,21 +129,26 @@ module CotLi =
         | 6 -> calcPos 2 1 |> Some
         | _ -> None
         |> Option.iter (curry setMouseRelative)
-        
-//        match currentViewSlot with
-//        | 1 -> Some (x1, y1)
-//        | 2 -> toTuple (x1 + centerToCenterX) y1 |> Some
-//        | 3 -> toTuple (x1 + centerToCenterX * 2) y1 |> Some
-//        | 4 -> toTuple x1 (y1 + centerToCenterY) |> Some
-//        | 5 -> toTuple (x1 + centerToCenterX) (y1 + centerToCenterY) |> Some
-//        | _ -> None
-//        |> Option.iter (curry setMouseRelative)
+
         ()
-type StartSample={Absolute:System.Drawing.Point; Relative:System.Drawing.Point}
+
 WinForm.getMousePosition()
-|> fun x -> {Absolute=x; Relative=point (x.X - CotLi.topLeftCorner.X) (x.Y - CotLi.topLeftCorner.Y)}
+|> mapAbsPoint CotLi.topLeftCorner
 |> Dump
 |> ignore
-CotLi.ClickLevelUp 3
-//keepClicking()
+//CotLi.ClickLevelUp 3
+////Process.GetProcesses()
+////|> Seq.filter(fun p -> p.ProcessName = "chrome")
+//Process.GetProcessesByName "chrome"
+//|> Seq.map (fun p -> 
+//    p.MainWindowHandle,p.MainWindowTitle)
+//|> Dump
+//|> ignore
+let funs = 
+    [
+        //fun() -> ()
+        fun () -> Simulator.clickCenterOfRightScreen() |> ignore
+        //fun () -> moveMouseToCenterRightOfRightScreen()
+    ]
+Simulator.run CotLi.topLeftCorner funs
 //CotLi.clickCrusadersTab()
