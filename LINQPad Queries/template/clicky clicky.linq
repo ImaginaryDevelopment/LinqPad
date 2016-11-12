@@ -67,15 +67,15 @@ module Simulator =
         is.Mouse.LeftButtonClick()
     let moveMouseToCenterRightOfRightScreen() =
         WinForm.setMousePosition 3124 504
-    let keepFing f = 
+    let keepFing delay f = 
         while not <| is.InputDeviceState.IsKeyDown WindowsInput.Native.VirtualKeyCode.CONTROL do
             f()
-            sleep 800
+            sleep delay
             
-    let keepClicking() =
-        keepFing ( clickCenterOfRightScreen >> ignore)
+    let keepClicking delay =
+        keepFing delay ( clickCenterOfRightScreen >> ignore)
     // keep clicking center, but move mouse around some to pick things up?
-    let run relativity (funs: (unit -> unit) list) =
+    let run watchPosition delay relativity (funs: (unit -> unit) list) =
         let toDo = 
             let mutable i = 0
             let fillDc = 
@@ -91,11 +91,12 @@ module Simulator =
 
             let options = funs
             (fun () ->
-                fillDc()
+                if watchPosition then
+                    fillDc()
                 options.[i]()
                 i <- (i + 1) % options.Length
             )
-        keepFing toDo
+        keepFing delay toDo
         
 module CotLi = 
     let topLeftCorner = point 1990 125
@@ -148,7 +149,10 @@ let funs =
     [
         //fun() -> ()
         fun () -> Simulator.clickCenterOfRightScreen() |> ignore
+        fun () -> Simulator.is.Mouse.LeftButtonClick() |> ignore
         //fun () -> moveMouseToCenterRightOfRightScreen()
     ]
-Simulator.run CotLi.topLeftCorner funs
+let delay = 10
+let watchPosition = false
+Simulator.run watchPosition 500 CotLi.topLeftCorner funs
 //CotLi.clickCrusadersTab()
