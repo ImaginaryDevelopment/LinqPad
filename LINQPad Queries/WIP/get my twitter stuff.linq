@@ -18,13 +18,13 @@ let savePathOpt =
     |> Seq.exists ((=) Environment.MachineName)
     |> function 
         | false -> None
-        | true -> Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+        | true -> Environment.GetFolderPath Environment.SpecialFolder.MyDocuments |> Some
     |> Option.map (fun myDocs ->
         if not <| Directory.Exists myDocs then
             failwithf "My Documents did not exist"
         let targetPath = Path.Combine(myDocs, "Twitter exports")
         if not <| Directory.Exists targetPath then
-            Directory.CreateDirectory targetPath
+            Directory.CreateDirectory targetPath |> ignore
         targetPath
     )    
             
@@ -307,11 +307,19 @@ type User = { Name:string; profile_image_url:string;Id:Int64 Nullable; screen_na
 type Media = { Id:Int64 Nullable; Media_Url:string;Expanded_Url:string; Type:string; Display_Url:string}
 type Url = {Url:string; Expanded_url:string; Display_url:string}
 type Entity = { Media: Media[]; Urls: Url[]}
+// did not compile
+//type TweetT<'T> = {(* Coordinates:obj; *) Id:'T<Int64>; Truncated:'T<bool>; Favorited:'T<bool>; Created_at:string; Id_str:string; In_reply_to_user_id_str:Int64 Nullable; Text:string; User:User; Entities:Entity}
 type Tweet = {(* Coordinates:obj; *) Id:Int64 Nullable; Truncated:bool Nullable ; Favorited:bool Nullable; Created_at:string; Id_str:string; In_reply_to_user_id_str:Int64 Nullable; Text:string; User:User; Entities:Entity}
     with static member getText (x:Tweet) = x.Text
+
 type SearchMetadata = {Query:string;RefreshUrl:string}
 type SearchResult = {Statuses:Tweet list; search_metadata:SearchMetadata}
 type UserIdentifier = |UserId of int |ScreenName of string
+//type Tweet = {(* Coordinates:obj; *) Id:Int64 option; Truncated:bool option; Favorited:bool option; Created_at:string; (* Id_str:string; *) In_reply_to_user_id_str:Int64 option; Text:string; User:User; Entities:Entity}
+//    with 
+//        static member getText (x:Tweet) = x.Text
+//        static member FromRaw (x:RawTweet) = {Id=x.
+    
 let getIntParamOpt name (vOpt:int option) = match vOpt with | Some i -> sprintf "%s=%i" name i |> Some | None -> None
 let getStrParamOpt name (vOpt:string option) = match vOpt with | Some v -> sprintf "%s=%s" name v |> Some | None -> None
 let getBoolParamOpt name vOpt = 
@@ -426,8 +434,21 @@ let saveAppendish savePathOpt key (data:Tweet list) =
     match savePathOpt with
     | None -> ()
     | Some savePath ->
-        let oldData = if File.exists savePath then File.ReadAllText savePath |> deserializeT<Tweet list> else List.empty
-        // replace ones that match in case the read algorithm has improved/changed?
+        let oldData = if File.Exists savePath then File.ReadAllText savePath |> deserializeT<Tweet list> else List.empty
+        // replace ones that match in case the read algorithm has improved/changed? what if part of the tweet or a child of it has since been deleted?
+        // store in chronological order, or reversed?
+        
+        // use this to find duplicates, but not to write out (b/c ordering may be lost)
+        let mapped = 
+            oldData 
+            |> Seq.groupBy(fun t -> t.Id |> Option.fromNullable)
+            // eliminate full duplicates
+            |> Seq.map (fun (idOpt,versions) -> idOpt, versions |> Seq.distinct)
+            |> fun x -> x
+        
+        ()
+    data
+        
 try
     let userInfo = 
         getUsersShow cacheResult (UserIdentifier.ScreenName userId) None

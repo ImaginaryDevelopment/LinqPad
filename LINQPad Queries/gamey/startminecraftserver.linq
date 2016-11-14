@@ -11,6 +11,7 @@ let versions =
     //|> Seq.map (fun f -> f, Path.GetFileName f)
     
     |> Array.ofSeq
+versions.Dump()
 let selectedFile = Util.ReadLine("VersionFile?", null,versions)
 Path.Combine(dir,selectedFile)
 |> function
