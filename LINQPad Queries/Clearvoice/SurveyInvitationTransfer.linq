@@ -1,9 +1,5 @@
 <Query Kind="FSharpProgram">
-  <Connection>
-    <ID>282ab884-278b-4d31-a865-51e85288681f</ID>
-    <Persist>true</Persist>
-    <IncludeSystemObjects>true</IncludeSystemObjects>
-  </Connection>
+  
   <Reference>&lt;RuntimeDirectory&gt;\System.Configuration.dll</Reference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
 </Query>

@@ -1,7 +1,5 @@
 <Query Kind="Program">
-  <Connection>
-    <IncludeSystemObjects>true</IncludeSystemObjects>
-  </Connection>
+  
 </Query>
 
 #if CMD

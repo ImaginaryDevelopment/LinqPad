@@ -1,9 +1,5 @@
 <Query Kind="Program">
-  <Connection>
-    <ID>396ccfd9-66a7-4aa0-8385-105b0435cb18</ID>
-    <Server>svrrbidevdb03</Server>
-    <Database>Tfs_DefaultCollection</Database>
-  </Connection>
+  
 </Query>
 
 void Main()

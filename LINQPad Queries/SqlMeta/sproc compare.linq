@@ -1,9 +1,5 @@
 <Query Kind="Statements">
-  <Connection>
-    <ID>55a5055d-fa01-41fc-a146-32cd08598235</ID>
-    <Persist>true</Persist>
-    <IncludeSystemObjects>true</IncludeSystemObjects>
-  </Connection>
+  
 </Query>
 
 var kdiffLocation = @"C:\Program Files (x86)\KDiff3\kdiff3.exe";

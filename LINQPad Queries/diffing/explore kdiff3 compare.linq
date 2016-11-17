@@ -1,12 +1,5 @@
 <Query Kind="Program">
-  <Connection>
-    <ID>4e94eacc-a31d-4687-947b-e4c9804c895a</ID>
-    <Persist>true</Persist>
-    <Server>(local)</Server>
-    <IncludeSystemObjects>true</IncludeSystemObjects>
-    <Database>XPEncounter</Database>
-    <ShowServer>true</ShowServer>
-  </Connection>
+  
   <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.dll</Reference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
   <Namespace>System.Threading.Tasks</Namespace>

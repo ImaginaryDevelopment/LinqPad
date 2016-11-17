@@ -1,8 +1,5 @@
 <Query Kind="FSharpProgram">
-  <Connection>
-    <ID>55a5055d-fa01-41fc-a146-32cd08598235</ID>
-    <Persist>true</Persist>
-  </Connection>
+  
 </Query>
 
 open System

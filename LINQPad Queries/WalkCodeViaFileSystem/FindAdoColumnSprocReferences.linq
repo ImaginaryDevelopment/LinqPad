@@ -1,11 +1,5 @@
 <Query Kind="Program">
-  <Connection>
-    <ID>282ab884-278b-4d31-a865-51e85288681f</ID>
-    <Persist>true</Persist>
-    <Server>192.168.0.187</Server>
-    <SqlSecurity>true</SqlSecurity>
-    <IncludeSystemObjects>true</IncludeSystemObjects>
-  </Connection>
+  
 </Query>
 
 void Main()

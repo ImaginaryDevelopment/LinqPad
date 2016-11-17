@@ -1,12 +1,5 @@
 <Query Kind="SQL">
-  <Connection>
-    <ID>4e94eacc-a31d-4687-947b-e4c9804c895a</ID>
-    <Persist>true</Persist>
-    <Server>(local)</Server>
-    <IncludeSystemObjects>true</IncludeSystemObjects>
-    <Database>XPEncounter</Database>
-    <ShowServer>true</ShowServer>
-  </Connection>
+  
 </Query>
 
 --DCFollowUps.Select(d=> d.AuthorXML.ToString().ToCharArray()).Take (100)

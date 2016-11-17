@@ -1,10 +1,5 @@
 <Query Kind="Program">
-  <Connection>
-    <ID>fb350082-78c9-46e1-8522-f699e96540f1</ID>
-    <Server>localhost</Server>
-    <Database>PaySpanConfig</Database>
-    <ShowServer>true</ShowServer>
-  </Connection>
+  
   <Reference>C:\Projects\psh\mine\PayspanConfigurationManager\Domain\bin\Debug\Domain.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.Web.Extensions.dll</Reference>
   <NuGetReference>Rx-Main</NuGetReference>

@@ -1,7 +1,5 @@
 <Query Kind="Statements">
-  <Connection>
-    <IncludeSystemObjects>true</IncludeSystemObjects>
-  </Connection>
+  
   <Namespace>System.Data.Linq.Mapping</Namespace>
 </Query>
 
