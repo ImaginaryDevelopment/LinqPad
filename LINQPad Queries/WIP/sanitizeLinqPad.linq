@@ -24,7 +24,10 @@ let _myQueriesPath () =
 
 type Rail<'TSuccess> =
     | Success of 'TSuccess
+    // for items that aren't an error, but also don't need anything done
+    | NoOp
     | Failure of string
+    with override x.ToString() = sprintf "%A" x
     
 let _getQueries() = Directory.GetFiles( _myQueriesPath () , "*.linq", SearchOption.AllDirectories)
 
@@ -67,21 +70,29 @@ let sanitize (q:ObjectModel.Query) =
         
         
         Success target
-let desanitize _ =()        
-match Util.ReadLine<_>("Sanitize?") with
-| true ->
-    
+        
+let desanitize (q:ObjectModel.Query) =
+    let target = getUnsanitizedPath
+    if File.Exists target then
+        File.Copy(target, q.FilePath)
+    ()        
+// sanitize, pause for commits, unsanitize immediately
+try
     Util.GetMyQueries()
     |> Seq.map sanitize
     |> Dump
     |> ignore
-| false ->
-    Util.GetMyQueries()
-    |> Seq.map desanitize
-    |> Dump
-    |> ignore
+with ex -> 
+    ex.Dump()
     
-()
+Util.ReadLine<string>("Do your Commits now, then we'll desanitize") |> ignore
+
+
+Util.GetMyQueries()
+|> Seq.map desanitize
+|> Dump
+|> ignore
+    
 
 
     
