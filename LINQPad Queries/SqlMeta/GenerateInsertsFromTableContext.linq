@@ -1,4 +1,5 @@
 <Query Kind="FSharpProgram">
+  
 </Query>
 
 // read a table and generate inserts from it

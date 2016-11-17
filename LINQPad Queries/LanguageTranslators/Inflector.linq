@@ -7,4 +7,3 @@
 	//.Humanize()
 	.Underscore()
 	.Pascalize()
-	
