@@ -72,22 +72,13 @@ module D3LeaderboardsApi =
         let url = sprintf "http://us.battle.net/d3/en/rankings/season/%i/rift-%O" era dclass
         HttpClient.tryGetUrl ["Accept", "application/json"] url
         
-module Warcraft =
-    open BattleNet
-    let getPets (key:string) (realm:string) (characterName:string) (fields:string) (locale:string) (jsonp:string) =
-        let url = sprintf "%swow/character/%s/%s?fields=pets&locale=%s&apikey=%s" BattleNet.url realm characterName locale key
-        url
-        |> HttpClient.tryGetUrl List.empty
-open BattleNet        
-Warcraft.getPets (getSavedApiKey()) "rexxar" "mmsheep" "pets" "en-US" null
+    //getSoloList DemonHunter 7
+//D3BattleNetApi.getSampleSeasonData()
 //|> Dump
-//    //getSoloList DemonHunter 7
-////D3BattleNetApi.getSampleSeasonData()
-////|> Dump
-//open D3Api
-//getSampleDataTest()
-//
-//
-//// fails unauthorized
-//getSeasonInfo()
-//|> Dump
+open D3Api
+getSampleDataTest()
+
+
+// fails unauthorized
+getSeasonInfo()
+|> Dump
