@@ -28,8 +28,20 @@ let samples = [
 
     """<LinearGradientBrush StartPoint="0.5,0" EndPoint="0.5,1" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"><LinearGradientBrush.GradientStops><GradientStop Color="#FFFFFFFF" />
 <GradientStop Color="#FFD4D4D4" Offset="1" /></LinearGradientBrush.GradientStops></LinearGradientBrush>"""
-    """<LinearGradientBrush StartPoint="0.5,0" EndPoint="0.5,1" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"><LinearGradientBrush.GradientStops><GradientStop Color="#FF5B5B5B" Offset="1" />
-<GradientStop Color="#FF868686" /><GradientStop Color="#FF4F4F4F" Offset="0.42" /><GradientStop Color="#FF0E0E0E" Offset="0.43" /></LinearGradientBrush.GradientStops></LinearGradientBrush>"""
+
+    """<LinearGradientBrush StartPoint="0.5,0" EndPoint="0.5,1" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+    <LinearGradientBrush.GradientStops>
+    <GradientStop Color="#FF5B5B5B" Offset="1" />
+    <GradientStop Color="#FF868686" />
+    <GradientStop Color="#FF4F4F4F" Offset="0.42" />
+    <GradientStop Color="#FF0E0E0E" Offset="0.43" />
+    </LinearGradientBrush.GradientStops>
+    </LinearGradientBrush>"""
+    """    <LinearGradientBrush StartPoint="0.5,0" EndPoint="0.5,1" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"><LinearGradientBrush.GradientStops><GradientStop Color="#FFFFD74E" Offset="0.996" /><GradientStop Color="#FFFFDCAB" Offset="0.17" /><GradientStop Color="#FFFFB062" Offset="0.57" /><GradientStop Color="#FFFFD18F" Offset="0.56" /><GradientStop Color="#FFFFBA74" /></LinearGradientBrush.GradientStops></LinearGradientBrush>"""
+    
+    """<LinearGradientBrush StartPoint="0.5,0" EndPoint="0.5,1" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"><LinearGradientBrush.GradientStops><GradientStop Color="#FFB69A78" /><GradientStop Color="#FFFFE17A" Offset="0.126" /></LinearGradientBrush.GradientStops></LinearGradientBrush>"""
+    """<LinearGradientBrush StartPoint="0.5,0" EndPoint="0.5,1" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"><LinearGradientBrush.GradientStops><GradientStop Color="#FFFCE79F" Offset="1" /><GradientStop Color="#FFFDD3A8" /></LinearGradientBrush.GradientStops></LinearGradientBrush>"""
+    """<LinearGradientBrush StartPoint="0.5,0" EndPoint="0.5,1" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"><LinearGradientBrush.GradientStops><GradientStop Color="#FFFFFBA3" Offset="1" /><GradientStop Color="#FFFFFBDA" Offset="0" /></LinearGradientBrush.GradientStops></LinearGradientBrush>"""
 ]
 
 let test p str = 
@@ -61,18 +73,19 @@ let parseBrush =
         between (pstring "\"") (pstring"\"") (stringsSepBy normalCharSnippet escapedChar)
 
     let attr = localName .>>. (pstring "=" >>. strLiteral .>> spaces)
+    let trailingNewOrSpaces = optional (newline .>> spaces)
     let lgbTag = 
         // assuming for now that startpoint and endpoint are always in the same order
-        pstring "<LinearGradientBrush" >>. opt (spaces >>. point) .>>. opt (spaces >>. point) .>> spaces .>> skipMany attr .>> (pstring ">") .>> optional (newline .>> spaces)
+        opt spaces >>. pstring "<LinearGradientBrush" >>. opt (spaces >>. point) .>>. opt (spaces >>. point) .>> spaces .>> skipMany attr .>> (pstring ">") .>> optional trailingNewOrSpaces
         |>> fun (startp,endp) -> {StartPoint = startp; EndPoint=endp;Stops = list.Empty}
-    let selfcloser p = p .>> spaces .>> (pstring "/>")
+    let selfcloser p = p .>> spaces .>> (pstring "/>") .>> optional trailingNewOrSpaces
     let color = 
         let colorStarter = fun c -> isAsciiLetter c || isDigit c
         let colorCont = colorStarter
         optional (pstring "#") >>. (identifier (IdentifierOptions(isAsciiIdStart=colorStarter, isAsciiIdContinue= colorCont)))
     // attrNamed "Color" color .>>. (spaces >>. attrNamed "Offset" pfloat
     let gradientStop = 
-        pstringCI "<GradientStop" >>. spaces >>. many attr .>> spaces .>> (skipString "/>") 
+        pstringCI "<GradientStop" >>. spaces >>. many attr .>> spaces .>> (skipString "/>") .>> optional trailingNewOrSpaces 
         |>> (fun attrs ->
             //attrs.Dump()
             // WIP: for now, need to figure out attrs first
@@ -85,7 +98,7 @@ let parseBrush =
             {Color=attrs.["Color"]; Offset=  offset}
             )
     let lgbWithStops =
-        lgbTag .>>. (pstringCI "<LinearGradientBrush.GradientStops>" >>. many gradientStop)
+        lgbTag .>>. (pstringCI "<LinearGradientBrush.GradientStops>" .>>. optional trailingNewOrSpaces >>. many gradientStop .>> pstringCI "</LinearGradientBrush.GradientStops>" .>> optional trailingNewOrSpaces)
     lgbWithStops
 
 // test (pstring "<") sampleText
@@ -94,18 +107,22 @@ samples
 
 //test parseBrush sampleText
 "finished test run,starting addl code".Dump()
-let sampleText = samples.[samples.Length - 1]
+
 let tryParseBrush text = 
     match run parseBrush text with
     | Success (result, _, _) ->
         match result with
         |(lgb, stops) -> {lgb with Stops= stops} |> Some
     |Failure(errorMsg, _, _) ->printfn "Failure: %s" errorMsg; None
+    
+let sampleText = samples.[samples.Length - 1]
+sampleText.Dump("primary focus")
 
-match run parseBrush sampleText with
+let runBrushParser = run parseBrush
+match runBrushParser sampleText with
 |Success (result, _, _) ->
     match result with
-    | (lgb,stops) -> {lgb with Stops = stops} |> printfn "yay deconstructed! %A"
+    | (lgb,stops) -> ({lgb with Stops = stops}.Dump("sampleText parsed successfully")) // |> printfn "yay deconstructed! %A"
 |Failure (errorMsg, _, _) -> printfn "Failure: %s" errorMsg
 
 module Transformers =
@@ -123,12 +140,13 @@ module Transformers =
                 let getOffset (x: GStop) = defaultArg (x.Offset |> Option.map (sprintf ",%f")) String.Empty
                 if Seq.any x.Stops then
                     yield "["
-                    yield! x.Stops |> Seq.map(fun gStop -> sprintf "    GradientStop(argbFromHex \"#%s\",%f)" gStop.Color gStop.Offset) // doesn't account for proper F# formatting of a list
+                    yield! x.Stops |> Seq.map(fun gStop -> sprintf "    GradientStop(argbFromHex \"%s\"%s)" gStop.Color (getOffset gStop)) // doesn't account for proper F# formatting of a list
                     yield "]"
                     yield sprintf "|> Seq.iter gb.GradientStops.Add"
                 }
             |> Seq.iter (sb.AppendLine >> ignore)
             sb.ToString ()
+            
         member x.ToCss() = // https://developer.mozilla.org/en-US/docs/Web/CSS/linear-gradient
             //x.Dump("toCssing")
             let sb = System.Text.StringBuilder()
@@ -137,7 +155,7 @@ module Transformers =
                 yield "{"
                 let toTopOrToBottom = if x.Stops.Length < 2 || (x.Stops.[0].Offset.IsSome && x.Stops.[1].Offset.IsSome && x.Stops.[0].Offset.Value < x.Stops.[0].Offset.Value) then "top" else "bottom"
                 x.Stops.Dump() |> ignore
-                let stops = x.Stops |> Seq.map(fun stop -> sprintf "#%s %s%%" (stop.Color.Substring(3)) (if stop.Offset.IsSome then stop.Offset.Value * 100. |> Convert.ToInt16 |> string else String.Empty) ) |> delimit ", "
+                let stops = x.Stops |> Seq.sortBy(fun s -> s.Offset) |> Seq.map(fun stop -> sprintf "#%s%s" (stop.Color.Substring(3)) (if stop.Offset.IsSome then stop.Offset.Value * 100. |> Convert.ToInt16 |> sprintf " %i%%" else String.Empty) ) |> delimit ", "
                 yield sprintf "    background-image: linear-gradient(to %s, %s);" toTopOrToBottom stops
                 yield "}"
             }
@@ -155,6 +173,11 @@ let transformerToCssExpectations = [
 open Transformers
 
 transformerToCssExpectations
-|> Seq.map (fun (x,y) -> y,  tryParseBrush x |> Option.map (fun x -> x.ToCss()))
-|> fun x -> x.Dump("final result")
+|> Seq.map (fun (x,y) -> x,y,  tryParseBrush x |> Option.map (fun x -> x.ToCss(), x.ToFSharp()))
+|> fun x -> x.Dump("transformer result")
+|> ignore
+
+tryParseBrush sampleText
+|> Option.map(fun x -> x.ToCss())
+|> Dump
 |> ignore
