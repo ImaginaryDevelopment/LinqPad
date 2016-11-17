@@ -5,7 +5,6 @@
   <Namespace>System.Runtime.CompilerServices</Namespace>
 </Query>
 
-
 let makePi name kind fileNames fcm = 
     let name = ref name
     let isDirty =ref  false
@@ -47,49 +46,46 @@ let makePi name kind fileNames fcm =
 
 let WriteLine (s:string)= Console.WriteLine(s)
 let makeCodeFile fullPath =
-	let name = Path.GetFileName(fullPath)
-	makePi name "{6BB5F8EE-4483-11D3-8BCF-00C04F8EC28C}" [| fullPath |] null
+    let name = Path.GetFileName(fullPath)
+    makePi name "{6BB5F8EE-4483-11D3-8BCF-00C04F8EC28C}" [| fullPath |] null
 let projectItems ()= //leave this as a sequence, don't eager load the whole directory of cs files into memory
-	Directory.GetFiles(@"C:\TFS\XC-SourceDev\Source-development","*.cs", SearchOption.AllDirectories)
-	//|> fun files -> files.Dump("Files"); files
-	|> Seq.map (fun s-> makeCodeFile s )
-	//|> Seq.map ( fun s-> s.FileNames(0s).Dump("filename"); s)
-	|> Array.ofSeq
+    let x = Path.Combine(Environment.ExpandEnvironmentVariables("%devroot%"),"XC-SourceDev\Source-development")
+    Directory.GetFiles(x,"*.cs", SearchOption.AllDirectories)
+    //|> fun files -> files.Dump("Files"); files
+    |> Seq.map (fun s-> makeCodeFile s )
+    //|> Seq.map ( fun s-> s.FileNames(0s).Dump("filename"); s)
+    |> Array.ofSeq
 let codeModelItems = 
-	projectItems().Where(fun pi -> (* pi.FileCodeModel <> null  && *) File.Exists(pi.FileNames(0s)))
-	|> Array.ofSeq
+    projectItems().Where(fun pi -> (* pi.FileCodeModel <> null  && *) File.Exists(pi.FileNames(0s)))
+    |> Array.ofSeq
 WriteLine(sprintf "found %A code models" (codeModelItems.Count()))
 let sprocCallFastRegex = Regex(@"^.*""usp.*$",RegexOptions.Compiled ||| RegexOptions.Multiline)
 let sprocCallRegex = Regex(@"^(?!\s*//).*""usp.*$",RegexOptions.Compiled ||| RegexOptions.Multiline)
 let getSprocCalls (s:string) =
-	
-	seq{
-		
-		let fastMatches = sprocCallFastRegex.Matches(s).Cast<Match>()
-		yield! (fastMatches |> Seq.filter (fun fm -> sprocCallRegex.IsMatch(fm.Value)))
-	}
-	|> Array.ofSeq
-	
+    
+    seq{
+        
+        let fastMatches = sprocCallFastRegex.Matches(s).Cast<Match>()
+        yield! (fastMatches |> Seq.filter (fun fm -> sprocCallRegex.IsMatch(fm.Value)))
+    }
+    |> Array.ofSeq
+    
 type CodeModelFileWithText = { PI:ProjectItem; Text:string; Filename: string}
 let codeModelFilesWithText = codeModelItems.Select(fun pi -> {PI= pi; Filename=pi.FileNames(0s); Text = File.ReadAllText(pi.FileNames(0s))}).ToArray();
 
 let sprocCodeFiles = 
-	codeModelFilesWithText
-	|> Seq.map (fun cmf -> cmf,getSprocCalls cmf.Text)
-	|> Seq.filter(fun (cmf,sprocCalls) -> sprocCalls.Any())
-	|> Seq.map (fun (cmf,sprocCalls) -> (cmf, sprocCalls |> Seq.map (fun sc -> sc.Value) ))
-	|> Array.ofSeq
-	
+    codeModelFilesWithText
+    |> Seq.map (fun cmf -> cmf,getSprocCalls cmf.Text)
+    |> Seq.filter(fun (cmf,sprocCalls) -> sprocCalls.Any())
+    |> Seq.map (fun (cmf,sprocCalls) -> (cmf, sprocCalls |> Seq.map (fun sc -> sc.Value) ))
+    |> Array.ofSeq
+    
 WriteLine (sprintf "found %A sproc calling code models" sprocCodeFiles.Length)
 
 sprocCodeFiles
 |> Seq.iter 
-	(
-		fun (c,s) -> 
-			let cText = sprintf "%s" c.Filename
-			WriteLine( cText + "\t"+ String.Join(",",s))
-	)
-
-
-
-
+    (
+        fun (c,s) -> 
+            let cText = sprintf "%s" c.Filename
+            WriteLine( cText + "\t"+ String.Join(",",s))
+    )

@@ -376,7 +376,7 @@ let getProperties (root:CompilationUnitSyntax) =
 
 type FileInfoB = {File:Code; Class':string; Bases: string list;Fields:FieldDeclarationSyntax list; Properties: PropertyInfoB list} with
     member x.getMemberNames() = 
-        [x.Fields |> Seq.map (fun f -> f.ident)]
+        [x.Fields |> Seq.map (fun f -> f.Ident)]
 type TranslateOptions = {GetNextDebugState:DebugDelegate -> DebugVote -> DebugOpt * DebugDelegate; IsDebugNode: SyntaxNode -> DebugVote; Spacing:string; SelfIdentifier:string;IsDebugNodeResult:string -> DebugVote; IsDebugPropPred:string -> DebugVote}
 
 let getFileInfoFromSource (source:(_*_*Dictionary<string,string list>) option seq) = 

@@ -23,74 +23,81 @@
 
 void Main()
 {
-	//http://docs.aws.amazon.com/AWSECommerceService/latest/DG/rest-signature.html
-	var accessKey=Util.GetPassword("AmazonAccessKeyId");
-	var secretKey=Util.GetPassword("AmazonSecretKey");
-	
-	//needs signing
-	var requestUri="http://webservices.amazon.com/onca/xml";
-	var request=requestUri+"?Service=AWSECommerceService&AWSAccessKeyId="+accessKey+
-		"&Operation=ItemLookup&ItemId=0679722769&ResponseGroup=ItemAttributes,Offers,Images,Reviews&Version=2009-01-06";
-	var timeStamp=GetEC2Date();//"2009-01-01T12:00:00Z";
-	
-	var requestWithTime= request+"&Timestamp="+timeStamp;
-	//2.
-	var encoded=requestWithTime.Replace(",",Uri.HexEscape(',')).Replace(":",Uri.HexEscape(':')).Dump("step 2 done");
-	//3.
-	var split= encoded.After("?").Split('&')//.Select(s=>s+"\n")
-		.Dump("step 3 done");
-	//4.
-	var sorted= split.OrderBy(a=>a.Before("="),new CanonicalizedDictCompare()).Dump("step 4 done");
-	//5.
-	var rejoined= sorted.Delimit("&").Dump("step 5 done");
-	//6.
-	var method="GET";
-	var uri=new Uri(request);
-	var host= uri.Host;
-	var path =uri.AbsolutePath;
-	var canonicalParts= new []{
-		method,host,path,rejoined
-	};
-	var canonical= canonicalParts.Delimit("\n").Dump("step 6-7 done");
-	
-	//8.
-	var auth=GetAWS3_SHA256AuthorizationValue(accessKey,secretKey,canonical).Dump("step 8 done");
-	//9.
-	var encAuth=Uri.EscapeDataString(auth).Dump("step 9 done");
-	//10.
-	var signedRequestUri= requestUri+"?"+rejoined+"&Signature="+encAuth;
-	signedRequestUri.Dump("step 10 done");
+    //http://docs.aws.amazon.com/AWSECommerceService/latest/DG/rest-signature.html
+    var accessKey = Util.GetPassword("AmazonAccessKeyId");
+    var secretKey = Util.GetPassword("AmazonSecretKey");
+    if (string.IsNullOrEmpty(accessKey) || string.IsNullOrEmpty(secretKey))
+        return;
+    //needs signing
+    var requestUri = "http://webservices.amazon.com/onca/xml";
+    var request = requestUri + "?Service=AWSECommerceService&AWSAccessKeyId=" + accessKey +
+        "&Operation=ItemLookup&ItemId=0679722769&ResponseGroup=ItemAttributes,Offers,Images,Reviews&Version=2009-01-06";
+    var timeStamp = GetEC2Date();//"2009-01-01T12:00:00Z";
+
+    var requestWithTime = request + "&Timestamp=" + timeStamp;
+    //2.
+    var encoded = requestWithTime.Replace(",", Uri.HexEscape(',')).Replace(":", Uri.HexEscape(':')).Dump("step 2 done");
+    //3.
+    var split = encoded.After("?").Split('&')//.Select(s=>s+"\n")
+        .Dump("step 3 done");
+    //4.
+    var sorted = split.OrderBy(a => a.Before("="), new CanonicalizedDictCompare()).Dump("step 4 done");
+    //5.
+    var rejoined = sorted.Delimit("&").Dump("step 5 done");
+    //6.
+    var method = "GET";
+    var uri = new Uri(request);
+    var host = uri.Host;
+    var path = uri.AbsolutePath;
+    var canonicalParts = new[]{
+        method,host,path,rejoined
+    };
+    var canonical = canonicalParts.Delimit("\n").Dump("step 6-7 done");
+
+    //8.
+    var auth = GetAWS3_SHA256AuthorizationValue(accessKey, secretKey, canonical).Dump("step 8 done");
+    //9.
+    var encAuth = Uri.EscapeDataString(auth).Dump("step 9 done");
+    //10.
+    var signedRequestUri = requestUri + "?" + rejoined + "&Signature=" + encAuth;
+    signedRequestUri.Dump("step 10 done");
 }
 
-static public string GetEC2Date() 
-{ 
+static public string GetEC2Date()
+{
     //string httpDate = DateTime.UtcNow.ToString("s") + "Z"; 
-    string httpDate = DateTime.UtcNow.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'Z'", 
-                      DateTimeFormatInfo.InvariantInfo); 
-    return httpDate; 
+    string httpDate = DateTime.UtcNow.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'Z'",
+                      DateTimeFormatInfo.InvariantInfo);
+    return httpDate;
 }
 
-public static string GetAWS3_SHA256AuthorizationValue(string accessKeyId, 
-              string secretAccessKey, string input) 
-{ 
-    var  signer = new System.Security.Cryptography.HMACSHA256(System.Text.Encoding.UTF8.GetBytes(secretAccessKey)); 
+public static string GetAWS3_SHA256AuthorizationValue(string accessKeyId,
+              string secretAccessKey, string input)
+{
+    var signer = new System.Security.Cryptography.HMACSHA256(System.Text.Encoding.UTF8.GetBytes(secretAccessKey));
 
-    var  signatureValue = Convert.ToBase64String(
-           signer.ComputeHash(System.Text.Encoding.UTF8.GetBytes(input))); 
- 
-    return signatureValue; 
+    var signatureValue = Convert.ToBase64String(
+           signer.ComputeHash(System.Text.Encoding.UTF8.GetBytes(input)));
+
+    return signatureValue;
 }
 
-
+public static class Extensions
+{
+    public static string Delimit(this IEnumerable<string> items, string delimiter)
+    {
+        return string.Join(delimiter, items);
+    }
+}
 // Define other methods and classes here
- internal class CanonicalizedDictCompare : IComparer<string>
-  {
+internal class CanonicalizedDictCompare : IComparer<string>
+{
     #region IComparer<string> Members
 
     public int Compare(string x, string y)
     {
-      return string.CompareOrdinal(x, y);
+        return string.CompareOrdinal(x, y);
     }
 
     #endregion
-  }
+}
