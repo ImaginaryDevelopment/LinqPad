@@ -1,8 +1,5 @@
 <Query Kind="FSharpProgram">
-  <Connection>
-    <Persist>true</Persist>
-    <SqlSecurity>true</SqlSecurity>
-  </Connection>
+  
   <NuGetReference>Newtonsoft.Json</NuGetReference>
   <Namespace>Newtonsoft.Json</Namespace>
 </Query>

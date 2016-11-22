@@ -1,12 +1,5 @@
 <Query Kind="Statements">
-  <Connection>
-    <ID>4e94eacc-a31d-4687-947b-e4c9804c895a</ID>
-    <Persist>true</Persist>
-    <Server>(local)</Server>
-    <IncludeSystemObjects>true</IncludeSystemObjects>
-    <Database>XPEncounter</Database>
-    <ShowServer>true</ShowServer>
-  </Connection>
+  
   <Reference>C:\TFS\XpressCharts\dev\bin\ReactiveUI.dll</Reference>
   <Reference>C:\TFS\XpressCharts\dev\bin\Xpress.EDIS.Documents.dll</Reference>
   <Reference>C:\TFS\XpressCharts\dev\bin\Xpress.Foundation.dll</Reference>

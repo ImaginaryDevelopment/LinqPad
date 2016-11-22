@@ -19,7 +19,21 @@ open Suave.Authentication
 //needs: serve files, serve pages
 
 module ServerSamples = 
-    let logger = Suave.Logging.Loggers.ConsoleWindowLogger Suave.Logging.LogLevel.Debug
+    
+    
+        
+    let logger = // https://github.com/SuaveIO/suave/blob/releases/v1.x/src/Suave/Logging/LogLine.fs ?
+//        let l = Suave.Logging.Loggers.OutputWindowLogger(Suave.Logging.LogLevel.Debug)
+//        Suave.Logging.Loggers.ConsoleWindowLogger Suave.Logging.LogLevel.Debug
+//        l
+        { new Suave.Logging.Logger with
+            member __.Log _lvl f = 
+                let toLog = f()
+                match toLog.``exception``, toLog.message.EndsWith("404 0") with
+                | None, true -> printfn "%A" toLog
+                | None, false -> ()
+                | Some x, _ -> printfn "Exception: %A" x
+        }
     
     let xpressAuth () = 
         /// https://github.com/h5bp/html5-boilerplate/blob/master/src/index.html
@@ -47,7 +61,11 @@ module ServerSamples =
 
         <!-- Add your site or application content here -->
         <p>Hello world! This is HTML5 Boilerplate.</p>
-
+        <h2> Requires auth</h2>
+        <ul>
+            <li><a href="/whereami">who am i</a></li>
+            <li><a href="/dirHome">dirHome</a></li>
+        </ul>
         <script src="https://code.jquery.com/jquery-{{JQUERY_VERSION}}.min.js"></script>
         <script>window.jQuery || document.write('<script src="js/vendor/jquery-{{JQUERY_VERSION}}.min.js"><\/script>')</script>
         <script src="js/plugins.js"></script>
@@ -84,14 +102,16 @@ module ServerSamples =
                   // access to handlers after this one will require authentication
                   Authentication.authenticateBasic authenticate <|
                     choose [
-                            GET >=> path "/whereami" >=> OK (sprintf "Hello authenticated person ")
-                            GET >=> path "/" >=> dirHome
+                            GET >=> path "/whereami" >=> OK (sprintf "Hello authenticated person")
+                            GET >=> pathStarts "/dirHome" >=> dirHome
                             GET >=> browseHome //serves file if exists                       
                     ]
                 ] >=> log logger logFormat
-        
+        let rootPath = Path.Combine(Environment.ExpandEnvironmentVariables "%devroot%", @"PracticeManagement\dev\PracticeManagement\Pm.Web\")
+        printfn "rootPath is %s" rootPath
+        printfn "directories under root: %A" (Directory.GetDirectories rootPath)
         requiresAuthentication()
-        |> startWebServer { defaultConfig with homeFolder = Some @"C:\TFS\PracticeManagement\dev\PracticeManagement\Pm.Web\"}
+        |> startWebServer { defaultConfig with homeFolder = Some rootPath}
             
 LINQPad.Hyperlinq("http://localhost:8083").Dump()
 LINQPad.Hyperlinq("http://localhost:8083/public").Dump()

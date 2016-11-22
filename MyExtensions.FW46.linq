@@ -1,11 +1,24 @@
 <Query Kind="Program">
-  <Namespace>System.Collections.ObjectModel</Namespace>
+  <Reference>C:\projects\FsInteractive\BReusable.dll</Reference>
+  <Reference>C:\projects\FsInteractive\ComMacros.dll</Reference>
+  <Reference>C:\projects\FsInteractive\DteMacros.dll</Reference>
+  <Reference>C:\projects\FsInteractive\LambdaOps.dll</Reference>
+  <Reference>C:\projects\FsInteractive\LdapMacros.dll</Reference>
+  <Reference>C:\projects\FsInteractive\PathMacros.dll</Reference>
+  <Reference>C:\projects\FsInteractive\ProcessMacros.dll</Reference>
+  <Reference>C:\projects\FsInteractive\SqlMacros.dll</Reference>
+  <Reference>C:\projects\FsInteractive\TfsMacros.dll</Reference>
+  <Reference>C:\projects\FsInteractive\WinFormsMacros.dll</Reference>
+  <Reference>C:\projects\FsInteractive\WmiMacros.dll</Reference>
+  <Reference>C:\projects\FsInteractive\WpfMacros.dll</Reference>
   <Namespace>Microsoft.Win32.SafeHandles</Namespace>
+  <Namespace>System.Collections.ObjectModel</Namespace>
   <Namespace>System.Runtime.InteropServices</Namespace>
 </Query>
 
 #define LinqPad
 //http://higherlogics.blogspot.com/2013/03/sasastrings-general-string-extensions.html
+// see also: http://www.linqpad.net/CustomizingDump.aspx
 void Main()
 {
     // Write code to test your extensions here. Press F5 to compile and run.

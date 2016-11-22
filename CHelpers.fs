@@ -261,7 +261,7 @@ type private SimpleMonitor() =
 //            if monitor.Busy then
 //                let _inotif = x :> INotifyCollectionChanged
 //
-//                // TODO block reentrancy
+//                // desired: block reentrancy
 //                //let _x = inotif :> System.MulticastDelegate
 //                //let multicast = inotif.CollectionChanged :> System.MulticastDelegate
 //                //if not <| isNull inotif.CollectionChanged. && collectionChanged.GetInvocationList().Length > 1 then

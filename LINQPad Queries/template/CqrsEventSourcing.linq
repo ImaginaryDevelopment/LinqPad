@@ -270,6 +270,7 @@ open MyEventStore
 let store = EventStore()
 
 let wreckItAggregate = Guid.NewGuid()
+wreckItAggregate.Dump("key")
 [Events.Event.InventoryItemCreated { Events.InventoryItemCreated.Id=Guid.NewGuid(); Name="I'm Gonna Wreck It underpants"}]
 |> store.SaveEvents (wreckItAggregate) -1 
 store.Dump()

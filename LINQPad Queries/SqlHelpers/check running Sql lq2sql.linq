@@ -1,10 +1,8 @@
-<Query Kind="Expression">
-  <Connection>
-    <ID>282ab884-278b-4d31-a865-51e85288681f</ID>
-    <Persist>true</Persist>
-    <IncludeSystemObjects>true</IncludeSystemObjects>
-  </Connection>
-</Query>
+<Query Kind="Expression" />
+
+// status reverted to WIP:
+// where did the s.Database_id column go?
+
 
 //SELECT s.login_name,d.name as dbName, 
 //req.command,
@@ -30,7 +28,7 @@
 	from s in sLeft.DefaultIfEmpty()
 	join dl in sys.Databases on s.Database_id equals dl.Database_id into dLeft
 	from d in dLeft.DefaultIfEmpty()
-	where d==null || d.Name=="CVS"
+	where d==null || d.Name==this.Connection.Database
 	
 	select new {s.Login_name,s.Original_login_name,s.Program_name,
 		Kill=req.Command=="KILLED/ROLLBACK" || req.Session_id<=50?null: new LINQPad.Hyperlinq( QueryLanguage.SQL, "kill "+req.Session_id,"kill"),

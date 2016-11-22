@@ -1,12 +1,5 @@
 <Query Kind="FSharpProgram">
-  <Connection>
-    <ID>72171515-6e2a-402c-a611-31c6bf30e48e</ID>
-    <Persist>true</Persist>
-    <Server>.</Server>
-    <IncludeSystemObjects>true</IncludeSystemObjects>
-    <Database>master</Database>
-    <ShowServer>true</ShowServer>
-  </Connection>
+  
 </Query>
 
 // reset db, verify schema expectations

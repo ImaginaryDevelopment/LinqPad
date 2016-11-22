@@ -1,4 +1,5 @@
 <Query Kind="FSharpProgram">
+  
   <NuGetReference>Newtonsoft.Json</NuGetReference>
 </Query>
 

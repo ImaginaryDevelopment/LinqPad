@@ -1,19 +1,9 @@
 <Query Kind="FSharpProgram">
-  <Connection>
-    <ID>3da1b433-c8cb-407a-9c25-1d4f2ea04d64</ID>
-    <Persist>true</Persist>
-    <Server>192.168.0.187</Server>
-    <SqlSecurity>true</SqlSecurity>
-    <UserName>xpu10</UserName>
-    <Password>AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAAfs+fvOIuHkq5uisIQafUpAAAAAACAAAAAAAQZgAAAAEAACAAAACQAkUvjSn5aeB96QXgdsjjFqXPvptKHgnaCGMhNRDMSgAAAAAOgAAAAAIAACAAAABbiFmT0lVrhHmtBPdMe3xyU1OjyKeaaH7eR33/SwSecRAAAAABJ/MPPwEPOgIlPCyxKQuIQAAAAIT7pUPnPxbVciisX+r/MmPla5oOVfqYvr9sRtZbeRrH/OKX3Rc7PSVpRIZFGC/3DIrOyo2W19KDU8GleIkcCIM=</Password>
-    <IncludeSystemObjects>true</IncludeSystemObjects>
-    <Database>ApplicationDatabase</Database>
-    <ShowServer>true</ShowServer>
-  </Connection>
+  
 </Query>
 
 // map inserts of one table/type to another
-
+// like charges -> charge
 #if INTERACTIVE
 let dump x = printfn "%A" x
 open System

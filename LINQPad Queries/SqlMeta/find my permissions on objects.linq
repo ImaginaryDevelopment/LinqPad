@@ -1,6 +1,5 @@
 <Query Kind="Expression">
-  <Connection>
-  </Connection>
+  
 </Query>
 
 //select sh.name as [Schema],o.name,p.type,p.state, p.state_desc AS permission_state_desc,

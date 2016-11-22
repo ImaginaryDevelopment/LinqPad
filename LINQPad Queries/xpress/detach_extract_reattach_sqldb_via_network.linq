@@ -1,4 +1,5 @@
 <Query Kind="FSharpProgram">
+  
   <Reference>&lt;RuntimeDirectory&gt;\System.IO.Compression.FileSystem.dll</Reference>
 </Query>
 

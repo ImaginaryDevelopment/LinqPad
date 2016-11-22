@@ -1,12 +1,5 @@
 <Query Kind="FSharpProgram">
-  <Connection>
-    <ID>4e94eacc-a31d-4687-947b-e4c9804c895a</ID>
-    <Persist>true</Persist>
-    <Server>(local)</Server>
-    <IncludeSystemObjects>true</IncludeSystemObjects>
-    <Database>PmRewriteApplicationDatabase</Database>
-    <ShowServer>true</ShowServer>
-  </Connection>
+  
   <Reference>C:\TFS\Pm-Rewrite\Source-dev-rewrite\PracticeManagement\Pm.Dal\bin\Debug\Pm.Dal.dll</Reference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
 </Query>

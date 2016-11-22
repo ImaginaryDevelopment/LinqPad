@@ -1,6 +1,5 @@
 <Query Kind="Expression">
-  <Connection>
-  </Connection>
+  
 </Query>
 
 from p in Projects.Where(p=>p.Is_enabled && ! p.Is_deleted && p.Project_status_code=='O' && p.Survey_integration_url.Contains("##ver"))

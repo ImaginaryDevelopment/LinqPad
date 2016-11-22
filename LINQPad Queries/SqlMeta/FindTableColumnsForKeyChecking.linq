@@ -1,12 +1,5 @@
 <Query Kind="Expression">
-  <Connection>
-    <ID>4e94eacc-a31d-4687-947b-e4c9804c895a</ID>
-    <Persist>true</Persist>
-    <Server>(local)</Server>
-    <Database>XPEncounter</Database>
-    <ShowServer>true</ShowServer>
-    <IncludeSystemObjects>true</IncludeSystemObjects>
-  </Connection>
+  
 </Query>
 
 from c in sys.Columns

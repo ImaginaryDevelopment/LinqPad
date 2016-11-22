@@ -1,6 +1,5 @@
 <Query Kind="FSharpExpression">
-  <Connection>
-  </Connection>
+  
 </Query>
 //this.SubmitChanges()
 

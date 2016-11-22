@@ -247,6 +247,8 @@ type Listener(created:DateTime) =
 // sometimes this works, sometimes it doesn't
 let listenForBindingErrors() = 
     let getTypeName x = x.GetType().Name
+    // when debugger isn't attached this has to be manually called to enable listening
+    PresentationTraceSources.Refresh()
     let alreadyAdded = PresentationTraceSources.DataBindingSource.Listeners |> Seq.cast<TraceListener> |> Seq.exists (getTypeName >> (=) typeof<Listener>.Name)
     if not alreadyAdded then
         new Listener(DateTime.Now)

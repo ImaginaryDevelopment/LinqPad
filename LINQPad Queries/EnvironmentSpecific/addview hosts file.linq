@@ -64,9 +64,7 @@ while not <| String.IsNullOrWhiteSpace targetIp do
         let uri = Util.ReadLine("uri?")
         let uri = Uri(uri)
         
-        newLines <- List.append lines [ sprintf "%s %s" targetIp uri.Host ]
+        newLines <- List.append lines [ sprintf "%s %s" targetIp uri.Host ] |> Seq.distinct |> List.ofSeq
         newLines.Dump()
     
     targetIp <- promptCommand()
-
-    
