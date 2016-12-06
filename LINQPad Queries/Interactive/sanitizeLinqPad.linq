@@ -13,6 +13,7 @@ let _myQueriesPath () =
     // faulty: assumes there are entries in the root linqpad queries directory
     LINQPad.Util.GetMyQueries()
     |> Seq.map (fun q -> q.FilePath)
+    |> Seq.filter(fun q -> q.FilePath != Util.CurrentQueryPath)
     |> Seq.fold(fun (shortestFilePath:string option) (nextFilePath:string) -> 
                                     match shortestFilePath |> Option.map (fun fp -> fp.Length < nextFilePath.Length) |> Option.getOrDefault false with
                                     | true ->  shortestFilePath
