@@ -1,8 +1,5 @@
 <Query Kind="Expression">
-  <Connection>
-    <ID>282ab884-278b-4d31-a865-51e85288681f</ID>
-    <Persist>true</Persist>
-  </Connection>
+  
 </Query>
 from m in Member_members.Where(m=>m.Verified_bit_field>0 && m.Is_active && m.Is_doi && !m.Is_fraud)
 where m.Member_id>0
