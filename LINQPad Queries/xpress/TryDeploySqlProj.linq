@@ -14,6 +14,8 @@
 // build and deploy a .sqlproj -> .dacpac
 // getting this into CI http://stackoverflow.com/questions/15556339/how-to-build-sqlproj-projects-on-a-build-server?rq=1
 
+let (|StartsWithI|_|) s1 (toMatch:string) = if toMatch <> null && toMatch.StartsWith(s1, StringComparison.InvariantCultureIgnoreCase) then Some () else None
+
 let dumpt (t:string) x = x.Dump(t); x
 
 type TypedDataContext with
@@ -283,21 +285,19 @@ type DeployBehavior =
 
 open SqlHelpers
 open Railways
-let outFolder = @"C:\TFS\PracticeManagement\dev\PracticeManagement\bin\sql"
-    
-outFolder.Dump("dacpac folder")
-let getSqlPackageCommandLine dbProjectOutputName includeTransactionalScripts = 
+
+let getSqlPackageCommandLine outFolder dbProjectOutputName includeTransactionalScripts = 
     let cmd,args = 
             let targetDacPac = System.IO.Path.Combine(outFolder, dbProjectOutputName)
             let targetBehavior = TargetBehavior.ConnectionString cs
             cmdLine targetDacPac DoNotDropObjectsNotInSource true Environment.MachineName targetBehavior includeTransactionalScripts
     cmd,args
-    
-let runDeploy dbName deployBehavior = 
+
+let runDeploy (outFolder,projFolder) dbName deployBehavior = 
     "running deploy".Dump()
     
     // sql output folder and app output folder are now one and the same
-    let projFolder = @"C:\TFS\PracticeManagement\dev\PracticeManagement\Db"
+    
     
     let runSqlPackageExe includeTransactionalScripts = 
         let cmd,args = 
@@ -444,7 +444,7 @@ let runDeploy dbName deployBehavior =
         printfn "PreCompare finished"
         useSqlPackageExe ()
     | GetSqlPackageCommandLine ->
-        getSqlPackageCommandLine dbName useTransactionalScripts 
+        getSqlPackageCommandLine outFolder dbName useTransactionalScripts 
         |> printfn "CommandLine: %A"
         
 //    | RunSmo ->
@@ -491,11 +491,13 @@ let runDeploy dbName deployBehavior =
 //getLargestPayment()
 // **********************************************************************
 
-
+let outFolder = @"C:\TFS\PracticeManagement\dev\PracticeManagement\bin\sql"
+outFolder.Dump("dacpac folder")
+let projFolder = @"C:\TFS\PracticeManagement\dev\PracticeManagement\Db"
 let dbProjectOutputName = "PmMigration" // project outputs a PmMigration.dacpac
 DateTime.Now.Dump("starting deploy")
-//runDeploy dbProjectOutputName BuildThenUseSqlPackageExeWithPreCompare
-runDeploy dbProjectOutputName GetSqlPackageCommandLine
+runDeploy (outFolder, projFolder) dbProjectOutputName GetSqlPackageCommandLine
+//runDeploy dbProjectOutputName GetSqlPackageCommandLine
 //runDeploy dbProjectOutputName UseSqlPackageExeWithPreCompare
 DateTime.Now.Dump("finishing deploy")
 //runDeploy dbProjectOutputName RunSmo
