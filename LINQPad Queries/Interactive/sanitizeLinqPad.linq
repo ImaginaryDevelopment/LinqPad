@@ -51,7 +51,18 @@ let sanitize (q:ObjectModel.Query) =
         // what all stuff do we clean?
         //<UserName>...</UserName>
         //<Password>...</Password>
-        // or entire ")
+        // or entire <Connection> section?
+        
+        let text = File.ReadAllText q.FilePath
+
+        let shouldSanitize =
+            // clean absolute reference paths ?
+            text.Contains("<Connection>")
+        if shouldSanitize then
+            File.Copy(q.FilePath, target)
+            try
+                
+                (text |> before "<Connection>") + (text |> after "</Connection>")
                 |> fun c -> File.WriteAllText(q.FilePath, c)
             with ex ->
                 // delete backup on failure
