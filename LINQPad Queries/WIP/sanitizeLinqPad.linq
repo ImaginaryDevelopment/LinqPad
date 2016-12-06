@@ -33,14 +33,16 @@ let _getQueries() = Directory.GetFiles( _myQueriesPath () , "*.linq", SearchOpti
 
 let unsanitizedExtension = ".pri"
 
-let getUnsanizitedPath queryPath = 
+let getUnsanitizedPath queryPath = 
     let dir = Path.GetDirectoryName queryPath
     let name = Path.GetFileNameWithoutExtension queryPath
     Path.Combine(dir,name + unsanitizedExtension)
     
 let sanitize (q:ObjectModel.Query) = 
     // for safety don't allow overwriting if there is a sanitization already present.
-    let target = getUnsanizitedPath q.FilePath
+    let target = getUnsanitizedPath q.FilePath
+    if File.Exists target && (File.ReadAllText target) = (File.ReadAllText q.FilePath) then
+        File.Delete target
     if File.Exists target then
         sprintf "File Exists %s" target |> Failure
     else
@@ -49,18 +51,7 @@ let sanitize (q:ObjectModel.Query) =
         // what all stuff do we clean?
         //<UserName>...</UserName>
         //<Password>...</Password>
-        // or entire <Connection> section?
-        
-        let text = File.ReadAllText q.FilePath
-
-        let shouldSanitize =
-            // clean absolute reference paths ?
-            text.Contains("<Connection>")
-        if shouldSanitize then
-            File.Copy(q.FilePath, target)
-            try
-                
-                (text |> before "<Connection>") + (text |> after "</Connection>")
+        // or entire ")
                 |> fun c -> File.WriteAllText(q.FilePath, c)
             with ex ->
                 // delete backup on failure
@@ -72,9 +63,9 @@ let sanitize (q:ObjectModel.Query) =
         Success target
         
 let desanitize (q:ObjectModel.Query) =
-    let target = getUnsanitizedPath
+    let target = getUnsanitizedPath q.FilePath
     if File.Exists target then
-        File.Copy(target, q.FilePath)
+        File.Copy(target, q.FilePath, overwrite=true)
     ()        
 // sanitize, pause for commits, unsanitize immediately
 try
@@ -92,7 +83,3 @@ Util.GetMyQueries()
 |> Seq.map desanitize
 |> Dump
 |> ignore
-    
-
-
-    
