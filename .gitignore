@@ -5,3 +5,4 @@ Fsx/paket.dependencies
 Fsx/paket.exe
 Fsx/paket.lock
 LINQPad Queries/**/*.pri
+Fsx/.paket/
