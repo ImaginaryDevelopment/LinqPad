@@ -168,8 +168,9 @@ module Fable =
 let clean() = 
     Setup.Npm.nukeIt()
     
+let scriptPath = @"C:\projects\javascript\Fable\HelloFable.fsx"    
 let build() = 
-    let scriptPath = @"C:\projects\javascript\Fable\HelloFable.fsx"
+    
     let targetDirectory = Path.GetDirectoryName scriptPath
     Environment.CurrentDirectory <- targetDirectory
     
