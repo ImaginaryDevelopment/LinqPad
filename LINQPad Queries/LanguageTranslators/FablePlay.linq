@@ -6,6 +6,7 @@
 let uncurry f (x,y) = f x y
 let delimit d items = String.Join(d,value=(items |> Array.ofSeq))
 let dumpt (t:string) x = x.Dump(t); x
+let combine y x = Path.Combine(x,y)
 module Setup = 
     module Directory = 
         let rec recurseDirectory fIncludeDir fIncludeFileOpt fWithEx basePath = 
@@ -161,7 +162,6 @@ module Fable =
         |> Util.Cmd
     // assumes the outDir was not modified
     let locateOutput scriptPath = 
-        let combine y x = Path.Combine(x,y)
         let filename = Path.GetFileNameWithoutExtension scriptPath + ".js"
         let siblingPath = 
             scriptPath
@@ -169,18 +169,19 @@ module Fable =
             |> combine filename
         if File.Exists siblingPath then
             siblingPath
-        else scriptPath |> Path.GetDirectoryName |> combine "out" |> combine filename
-
+        else 
+            scriptPath 
+            |> Path.GetDirectoryName 
+            |> combine "out" 
+            |> combine filename
 
 let clean() = 
     Setup.Npm.nukeIt()
     
 let scriptPath = @"C:\projects\javascript\Fable\HelloFable.fsx"    
 let build() = 
-    
     let targetDirectory = Path.GetDirectoryName scriptPath
     Environment.CurrentDirectory <- targetDirectory
-    
     Environment.CurrentDirectory.Dump("cwd")
     Setup.Proc.findCmd "npm"
     Setup.Npm.install None false None |> dumpt "npm installer" |> ignore
@@ -190,8 +191,6 @@ let outputFilePath = Fable.locateOutput scriptPath
 
 if File.Exists outputFilePath then
     LINQPad.Hyperlinq(Action(fun () -> Setup.Proc.showInExplorer outputFilePath |> ignore<Process>), sprintf "explorer:%s" outputFilePath).Dump()
-
-
 
 //Environment.CurrentDirectory.Dump()
 //Util.Cmd "dir"
