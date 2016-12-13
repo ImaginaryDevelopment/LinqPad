@@ -157,12 +157,19 @@ module Fable =
         | Some outDir -> sprintf "-o \"%s\"" outDir 
         | None -> String.Empty
         |> fableCall 
+        |> dumpt "fable cmd line"
         |> Util.Cmd
     // assumes the outDir was not modified
     let locateOutput scriptPath = 
-        scriptPath
-        |> Path.GetDirectoryName 
-        |> fun x -> Path.Combine(x, Path.GetFileNameWithoutExtension scriptPath + ".js")
+        let combine y x = Path.Combine(x,y)
+        let filename = Path.GetFileNameWithoutExtension scriptPath + ".js"
+        let siblingPath = 
+            scriptPath
+            |> Path.GetDirectoryName 
+            |> combine filename
+        if File.Exists siblingPath then
+            siblingPath
+        else scriptPath |> Path.GetDirectoryName |> combine "out" |> combine filename
 
 
 let clean() = 
