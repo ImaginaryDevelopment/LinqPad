@@ -178,7 +178,9 @@ let build() =
     Setup.Proc.findCmd "npm"
     Setup.Npm.install None false None |> dumpt "npm installer" |> ignore
     Fable.compile None scriptPath |> ignore
+build()    
 let outputFilePath = Fable.locateOutput scriptPath
+
 if File.Exists outputFilePath then
     LINQPad.Hyperlinq(Action(fun () -> Setup.Proc.showInExplorer outputFilePath |> ignore<Process>), sprintf "explorer:%s" outputFilePath).Dump()
 
