@@ -84,7 +84,7 @@ let matchPattern textPattern (fi:FileInfo) =
     // set up the function to use with "fold"
     let folder results lineNo lineText =
         if regex.IsMatch lineText then
-            let result = sprintf "%40s:%-5i   %s" fi.Name lineNo lineText
+            let result = fi.Name,lineNo, fi.FullName, lineText //sprintf "%40s:%-5i   %s" fi.Name lineNo lineText
             result :: results
         else
             // pass through
@@ -139,13 +139,30 @@ module IOFileSystem_Tree =
 
     let rec fromDir (dirInfo:DirectoryInfo) = 
         let subItems = seq{
-            yield! dirInfo.EnumerateFiles() |> Seq.map fromFile
-            yield! dirInfo.EnumerateDirectories() |> Seq.map fromDir
+            let files = 
+                try
+                    dirInfo.EnumerateFiles() 
+                    |> Seq.map fromFile
+                with
+                    ex -> 
+                    ex.Dump()
+                    Seq.empty
+            yield! files
+            let folders =
+                try
+                    dirInfo.EnumerateDirectories() 
+                    |> Seq.map fromDir
+                with ex -> 
+                    ex.Dump()
+                    Seq.empty
+            yield! folders
             }
         InternalNode (dirInfo,subItems)
 open IOFileSystem_Tree        
-let currentDir = fromDir (DirectoryInfo("."))    
+let currentDir = fromDir (DirectoryInfo("."))  
+
 currentDir
-|> grep "fsx" "LinkedList" 
+|> grep @"(?<!\\obj\\)\.cs\s*$" "AddParameter"  // AddParameter ? // DatabaseConfig
 |> Async.RunSynchronously    
 |> Dump
+|> ignore
