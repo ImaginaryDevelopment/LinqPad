@@ -119,20 +119,30 @@ module Parsing =
 module Html = 
     open FSharp.Data
     //type GistProvider = HtmlProvider<"
+    type GetFilesResult = 
+        |Single of string
+        |Multiple of (string*string) list
     let getFiles text = 
         let doc = 
             sprintf "<html><head></head><body>%s</body></html>" text
             |> HtmlDocument.Parse
         let wrapFile = sprintf "<div class=\"gist\">%s</div>"
         let files = doc.CssSelect ".gist-file"
-        files.Length.Dump("files")
-        files |> dumpReverse |> ignore
+        let getName (hn:HtmlNode) = 
+            hn.CssSelect ".gist-meta"
+            |> Seq.head
+            |> fun x -> x.CssSelect "a"
+            |> fun x -> HtmlNode.innerText x.[1]
+        //files.Length.Dump("files")
+        //files |> dumpReverse |> ignore
         match files with
-        | [] -> [text]
-        | [_] -> [text]
+        | []
+        | [_] -> Single text
         | _::_ -> 
             "in files branch!".Dump()
-            files |> List.map (string>>wrapFile) // split this after testing
+            files 
+            |> List.map (fun f -> getName f, f |> string |> wrapFile)
+            |> Multiple
         
 let getGist() = 
     let getGist() : string = 
@@ -166,9 +176,13 @@ gist
         match result with
         | [css; html] -> 
             dumpReverse css |> ignore
-            Util.OnDemand("full html block", fun () -> html) |> dumpReverse |> ignore
-            splitGistFiles html
-            |> dumpReverse
-            |> ignore
+            //
+            Util.OnDemand("full html block", fun () -> html) |> dumpReverse |> ignore  
+            match splitGistFiles html with
+            | Html.GetFilesResult.Single html -> ()
+                //Util.OnDemand("full html block", fun () -> html) |> dumpReverse |> ignore  
+            | Html.GetFilesResult.Multiple files -> 
+                files |> Seq.map (fun (filename, text) -> filename, Util.OnDemand(filename, fun () -> text)) |> dumpReverse |> ignore    
+            
         | _ -> result.Dump()
     | Failure (x,_,_) -> x |> dumpFailureText //.Dump("gist parse failure")
