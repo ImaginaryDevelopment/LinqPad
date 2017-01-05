@@ -2,16 +2,25 @@
   <Reference>&lt;ProgramFilesX86&gt;\Reference Assemblies\Microsoft\FSharp\.NETFramework\v4.0\4.3.0.0\FSharp.Core.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.Net.Http.dll</Reference>
   <NuGetReference>FParsec</NuGetReference>
+  <NuGetReference>FSharp.Data</NuGetReference>
   <Namespace>FParsec</Namespace>
 </Query>
 
 // pull out gist embed html for usage without .js requirement
 // instead of <!-- <script src="https://gist.github.com/ImaginaryDevelopment/4a735576a7f7349b4bdf7ba345e5bbb7.js"></script> --></div>
 // or <script src="https://raw.github.com/moski/gist-Blogger/master/public/gistLoader.js" type="text/javascript"></script>
-"document.write('<div id=\"gist43513509\"".Substring(20,6).Dump()
-"                         ^".Length.Dump()
 module Seq =
     let contains x items = items |> Seq.exists(fun item -> item = x)
+    
+let dumpReverse :  (obj) -> unit =
+    let dc = DumpContainer()
+    dc.Dump() |> ignore
+    (fun o -> 
+        match dc.Content with
+        | :? (obj list) as items -> List.Cons(o,items)
+        | _ -> [ o ]
+        |> fun content -> dc.Content <- content
+    )    
 let replace delimiter (replacement:string) (text:string) = 
     text.Replace(delimiter,replacement)
 let escapeHtml text = 
@@ -36,7 +45,8 @@ let dumpFailureText f =
         | x -> x.Dump("failed to parse failure text")
 let url = "https://gist.github.com/ImaginaryDevelopment/4a735576a7f7349b4bdf7ba345e5bbb7.js"
 let useCache = true
-let splitLines (s:string) = s.Split([ "\r\n"; "\n" ] |> Array.ofList, StringSplitOptions.None);
+let split (delimiters:string seq) (s:string) = s.Split(delimiters |> Array.ofSeq, StringSplitOptions.None)
+let splitLines (s:string) = s |> split [ "\r\n"; "\n" ]
 let dumpLine i text = 
     splitLines text |> Seq.skip (i - 1) |> Seq.take 1 |> Dump |> ignore
     text
@@ -106,7 +116,24 @@ module Parsing =
             )
 //    test parseWrite "document.write(a)"
 //    |> Dump
-    
+module Html = 
+    open FSharp.Data
+    //type GistProvider = HtmlProvider<"
+    let getFiles text = 
+        let doc = 
+            sprintf "<html><head></head><body>%s</body></html>" text
+            |> HtmlDocument.Parse
+        let wrapFile = sprintf "<div class=\"gist\">%s</div>"
+        let files = doc.CssSelect ".gist-file"
+        files.Length.Dump("files")
+        files |> dumpReverse |> ignore
+        match files with
+        | [] -> [text]
+        | [_] -> [text]
+        | _::_ -> 
+            "in files branch!".Dump()
+            files |> List.map (string>>wrapFile) // split this after testing
+        
 let getGist() = 
     let getGist() : string = 
         use client = new System.Net.Http.HttpClient()
@@ -118,7 +145,9 @@ let getGist() =
         result
     else 
         getGist()
-    
+let splitGistFiles (text:string) = 
+    Html.getFiles text
+
 open Parsing    
 
 testf pwriteText "'<hello'"
@@ -133,5 +162,13 @@ gist
 //|> test parseWrite
 |> run parseWrite
 |> function 
-    | Success (result,y,z) -> result.Dump()
+    | Success (result,y,z) -> 
+        match result with
+        | [css; html] -> 
+            dumpReverse css |> ignore
+            Util.OnDemand("full html block", fun () -> html) |> dumpReverse |> ignore
+            splitGistFiles html
+            |> dumpReverse
+            |> ignore
+        | _ -> result.Dump()
     | Failure (x,_,_) -> x |> dumpFailureText //.Dump("gist parse failure")
