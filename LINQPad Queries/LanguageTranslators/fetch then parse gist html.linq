@@ -12,6 +12,18 @@ let flip f y x = f x y
 module Seq =
     let contains x = Seq.exists(fun item -> item = x)
 
+let replace delimiter (replacement:string) (text:string) = 
+    text.Replace(delimiter,replacement)
+let split (delimiters:string seq) (s:string) = s.Split(delimiters |> Array.ofSeq, StringSplitOptions.None)
+let splitLines = split [ "\r\n"; "\n" ]
+
+let escapeHtml = 
+    replace "<" "&lt;"
+    >> replace ">" "&gt;"
+
+let url = "https://gist.github.com/ImaginaryDevelopment/4a735576a7f7349b4bdf7ba345e5bbb7.js"
+let useCache = true
+
 let dumpReverse :  (obj) -> unit =
     let dc = DumpContainer()
     dc.Dump() |> ignore
@@ -22,11 +34,6 @@ let dumpReverse :  (obj) -> unit =
         |> fun content -> dc.Content <- content
     )
 
-let replace delimiter (replacement:string) (text:string) = 
-    text.Replace(delimiter,replacement)
-let escapeHtml = 
-    replace "<" "&lt;"
-    >> replace ">" "&gt;"
 let dumpFailureText = 
     string
     >> splitLines
@@ -42,13 +49,7 @@ let dumpFailureText =
             |> ignore
             rest.Dump()
         | x -> x.Dump("Achievement unlocked: Alanis Morissette Inception. Failed to parse failure text")
-        
-let url = "https://gist.github.com/ImaginaryDevelopment/4a735576a7f7349b4bdf7ba345e5bbb7.js"
-let useCache = true
-let split (delimiters:string seq) (s:string) = s.Split(delimiters |> Array.ofSeq, StringSplitOptions.None)
-let splitLines (s:string) = s |> split [ "\r\n"; "\n" ]
-
-    
+            
 let dumpFailure = 
     function 
     | Failure (x,_,_) -> 
@@ -95,11 +96,13 @@ module Parsing =
             '/', fun () -> "/"
             ]
     let parseWrite = 
-        between (pstring "document.write(") (pstring ")") pwriteText .>> trailingNewOrSpaces
+        between (pstring "document.write(") (pstring ")") pwriteText 
+        .>> trailingNewOrSpaces
         |> many1 
 
 module Html = 
     open FSharp.Data
+    
     type HtmlNode with
         static member cssSelect selector (hn:HtmlNode) = hn.CssSelect selector
     type FSharp.Collections.List<'T> with
@@ -107,18 +110,19 @@ module Html =
     type GetFilesResult = 
         |Single of string
         |Multiple of (string*string) list
+        
     let getFiles text = 
         let doc = 
             sprintf "<html><head></head><body>%s</body></html>" text
             |> HtmlDocument.Parse
         let wrapFile = sprintf "<div class=\"gist\">%s</div>"
         let files = doc.CssSelect ".gist-file"
-        let getName (hn:HtmlNode) = 
-            hn.CssSelect ".gist-meta"
-            |> Seq.head
-            |> HtmlNode.cssSelect "a"
-            |> List.getItem 1
-            |> HtmlNode.innerText
+        let getName = 
+            HtmlNode.cssSelect ".gist-meta"
+            >> Seq.head
+            >> HtmlNode.cssSelect "a"
+            >> List.getItem 1
+            >> HtmlNode.innerText
             
         match files with
         | []
@@ -127,7 +131,7 @@ module Html =
             files 
             |> List.map (fun f -> getName f, f |> string |> wrapFile)
             |> Multiple
-        
+
 let getGist () = 
     let getGist() : string = 
         use client = new System.Net.Http.HttpClient()
@@ -146,10 +150,10 @@ open Parsing
 testf pwriteText "'<hello'"
 testf parseWrite "document.write('<a')"
 testf parseWrite "document.write('<div id=\"gist43513509\" class=\"gist\">\n    <div class=\"gist')"
+
 let gist = getGist()
+
 gist
-|> splitLines
-|> delimit "\r\n"
 //|> test parseWrite
 |> run parseWrite
 |> function 
@@ -157,13 +161,10 @@ gist
         match result with
         | [css; html] -> 
             dumpReverse css |> ignore
-            //
             Util.OnDemand("full html block", fun () -> html) |> dumpReverse |> ignore  
             match Html.getFiles html with
             | Html.GetFilesResult.Single html -> ()
-                //Util.OnDemand("full html block", fun () -> html) |> dumpReverse |> ignore  
             | Html.GetFilesResult.Multiple files -> 
                 files |> Seq.map (fun (filename, text) -> filename, Util.OnDemand(filename, fun () -> text)) |> dumpReverse |> ignore    
-            
         | _ -> result.Dump()
-    | Failure (x,_,_) -> x |> dumpFailureText //.Dump("gist parse failure")
+    | Failure (x,_,_) -> x |> dumpFailureText 
