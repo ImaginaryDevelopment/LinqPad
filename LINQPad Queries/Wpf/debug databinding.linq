@@ -8,7 +8,9 @@
   <Reference>&lt;RuntimeDirectory&gt;\WPF\WindowsBase.dll</Reference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
   <Namespace>Newtonsoft.Json</Namespace>
+  <Namespace>Pm.UI</Namespace>
   <Namespace>System.Collections.ObjectModel</Namespace>
+  <Namespace>System.Windows.Media</Namespace>
 </Query>
 
 // face sheet
@@ -82,12 +84,15 @@ let usersPopupSpecificReplacements =
         remove " DataContext=\"{Binding ElementName=UsersPopupRoot}\""
         // command binding
         replace "{Binding UnlockCommand,ElementName=UsersPopupRoot}" "{Binding Path='Data.UnlockCommand', Source={StaticResource dgProxy}}"
-        // commandParameterBinding
+//        // commandParameterBinding (diagnostics)
+//        replace "CommandParameter=\"{Binding Path='Data.DataContext.Items/', Source={StaticResource dgProxy}, diag:PresentationTraceSources.TraceLevel=High}\"" 
+//            "CommandParameter=\"{Binding RelativeSource={RelativeSource Self}}\""
+        // attempt
         replace "CommandParameter=\"{Binding Path='Data.DataContext.Items/', Source={StaticResource dgProxy}, diag:PresentationTraceSources.TraceLevel=High}\"" 
-            "CommandParameter=\"{Binding Source={RelativeSource Self}}\""
+            "CommandParameter=\"{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type ContentPresenter}}}\""
     ]
 let rootElement = 
-    let specificReplacements =  usersPopupSpecificReplacements
+    let specificReplacements = usersPopupSpecificReplacements
     let text = 
         File.ReadAllText path
         |> fun x -> specificReplacements |> Seq.fold (fun t f -> f t) x
@@ -144,16 +149,48 @@ type ViewModel = {
 let withDispatcher f = 
     System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(Func<_>(f))
     
+let (|DataContext|_|) (o:DependencyObject) =
+    match o with
+        | :? FrameworkElement as vp -> Some vp.DataContext
+        | :? FrameworkContentElement as cp -> Some cp.DataContext
+        | _ -> None
+        
+let tryFindAncestorDataContext child =  
+    child
+    |> Pm.UI.WpfHelpers.walkUp true
+    |> Option.map (Seq.mapi(fun i o -> o,i))
+    |> Option.bind (Seq.tryPick(fun (o,i) -> 
+        match o with
+        | DataContext dc -> if not <| isNull dc then Some (o,dc,i) else None
+        | _ -> None
+    ))
+    
 let unlockCommand : ICommand = 
     let canExecute (obj:obj) = 
         withDispatcher (fun _ ->
             //MessageBox.Show("in can excecute!") |> ignore
-            obj.Dump("can execute")
-            isNull obj
+            try
+                match obj with
+                | null -> "canExecute null again".Dump()
+                | :? Button as b -> 
+                    b.DataContext.Dump("can execute: datacontext")
+                    match tryFindAncestorDataContext b with 
+                    | Some (ancestor, ancestorDc, ancestorLevel) -> (ancestor.GetType().Name, ancestorDc, ancestorLevel).Dump()
+                    | None -> ()
+    //                    "yay got button".Dump()
+    //                    let exp = button.GetBindingExpression(Button.CommandParameterProperty)
+    //                    button.CommandParameter.GetType().Dump()
+                    exp.Dump("expression")
+                | :? User as u -> u.Dump("partial success!")
+                | x -> x.GetType().Dump("can execute param type")
+                
+                isNull obj
+            with ex -> ex.Dump("failed to canExecute"); true
         )
     let execute (obj:obj) = 
         withDispatcher (fun _ ->
-            obj.Dump("executed")
+            //obj.Dump("executed")
+            ()
         )
     upcast Pm.UI.ViewModels.Command.Create( 
         (Func<_,_>(canExecute)), 
@@ -235,6 +272,9 @@ let displayForShow() =
             if e.Key = Key.Escape then
                 w.Close()
         )
+    "aboutToInvalidate".Dump()
+    CommandManager.InvalidateRequerySuggested()
+    "finished invalidate".Dump()
     closeOnEscape window
 //    window.KeyDown.Add(fun k -> 
 //        if k.Key = Key.Escape then
