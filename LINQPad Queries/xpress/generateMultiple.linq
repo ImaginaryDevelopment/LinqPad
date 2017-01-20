@@ -7,8 +7,11 @@
 </Query>
 
 // this thing works fine via linqpad (translating reference paths only)
-// TODO: check if the other runGeneration() method has anything needed or useful
+// this doesn't appear to generate things that the SQL generator doesn't do, or is there a take limit somewhere in here?
+
+// TODO: check if the other () method has anything needed or useful
 //TODO: check if the other manager creation code has anything needed or useful
+
 #if INTERACTIVE
 #r "System.Core"
 #r "System.Data.Entity.Design"
@@ -306,7 +309,6 @@ let toGen : TableInput list =
                                     |> dict}
                 {ColumnInput.create "Comments" typeof<string> with UseMax=true; AllowNull= Nullability.AllowNull}
 
-
             ]
 
         )
@@ -344,7 +346,11 @@ let toGen2 =
     )
 let results = 
     //runFullGeneration scriptFullPath generatePartials toGen addlCodeTables |> Map.ofDictionary
-    GenerateAllTheThings.runGeneration sb dte manager targetSqlProjectName cgsm toGen2 List.empty 
+    //    type TableGenerationInfo = {Schema:string; Name:string; GenerateFull:bool}
+    let dataModelsToGen =[
+        {Schema=null; Name="Appointments"; GenerateFull = false}
+    ]
+    GenerateAllTheThings.runGeneration sb dte manager targetSqlProjectName cgsm toGen2 dataModelsToGen
     let r = manager.Process doMultiFile
     r
 // not important, just nice to have, clean up of opened documents in VS
@@ -375,4 +381,4 @@ try
                     d.Activate()
         )
     ()
-with ex -> ex.Dump("not important, but nice to have")    
+with ex -> ex.Dump("not important, but nice to have")
