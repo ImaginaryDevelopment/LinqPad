@@ -347,29 +347,32 @@ let results =
     GenerateAllTheThings.runGeneration sb dte manager targetSqlProjectName cgsm toGen2 List.empty 
     let r = manager.Process doMultiFile
     r
-
-results
-|> Map.ofDictionary
-|> Map.toSeq
-|> Seq.map snd
-|> Seq.map snd
-|> Seq.iter (fun fullPath ->
-    dte.Documents.GetEnumerator()
-    |> groupedEnum
-    |> Seq.cast<EnvDTE.Document>
-    |> Seq.tryFind(fun d-> d.FullName = fullPath)
-    |> Option.iter (fun d -> d.Close())
-)
-
-//|> dumpt "results"
-
-// below works, but with the documents created all getting closed, we don't need it anymore
-let reactivateLastWindow() = 
-    activeDocumentFullNameOpt
-    |> Option.iter(fun fullName ->
-        fullName.Dump("was active")
-        for d in dte.Documents do
-            if d.FullName = fullName then
-                fullName.Dump("activating!")
-                d.Activate()
+// not important, just nice to have, clean up of opened documents in VS
+try
+    results
+    |> Map.ofDictionary
+    |> Map.toSeq
+    |> Seq.map snd
+    |> Seq.map snd
+    |> Seq.iter (fun fullPath ->
+        dte.Documents.GetEnumerator()
+        |> groupedEnum
+        |> Seq.cast<EnvDTE.Document>
+        |> Seq.tryFind(fun d-> d.FullName = fullPath)
+        |> Option.iter (fun d -> d.Close())
     )
+    
+    //|> dumpt "results"
+    
+    // below works, but with the documents created all getting closed, we don't need it anymore
+    let reactivateLastWindow() = 
+        activeDocumentFullNameOpt
+        |> Option.iter(fun fullName ->
+            fullName.Dump("was active")
+            for d in dte.Documents do
+                if d.FullName = fullName then
+                    fullName.Dump("activating!")
+                    d.Activate()
+        )
+    ()
+with ex -> ex.Dump("not important, but nice to have")    
