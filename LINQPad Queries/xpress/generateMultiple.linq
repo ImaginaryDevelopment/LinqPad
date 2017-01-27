@@ -45,6 +45,17 @@ let failing s =
         Debugger.Log(1,"failing", s)
         Debugger.Break()
     failwith s
+let dumpt t x=
+    x.Dump(description=t)
+    x
+let dumpft t f x= 
+    f x |> dumpt |> ignore
+    x
+    
+let dataModelsToGen = [
+        {Schema="dbo"; Name="Appointments"; GenerateFull = false}
+        //{Schema="dbo"; Name="ReferralSources"; GenerateFull = false}
+    ]
     
 let groupedEnum  (en: IEnumerator) =
    
@@ -59,7 +70,9 @@ let groupedEnum  (en: IEnumerator) =
 let dte = 
     Macros.VsMacros.getWindowNames()
     |> Seq.find(fun wn -> wn.Contains("PracticeManagement"))
+    |> dumpt "VisualStudioWindowName"
     |> Macros.VsMacros.getDteByWindowName
+    |> dumpft "VisualStudioProcInfo" (fun p -> p.Name)
     //System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE") :?> EnvDTE.DTE
     
 printfn "Got dte for solution %s" dte.Solution.FileName
@@ -109,9 +122,9 @@ let measureBlacklist =
     ]
 
 type TableInput() = 
-     member val Name:string = Unchecked.defaultof<_> with get,set
-     member val Schema:string = Unchecked.defaultof<_> with get,set
-     member val Columns:ColumnInput seq = Unchecked.defaultof<_> with get,set
+     member val Name:string = null with get,set
+     member val Schema:string = null with get,set
+     member val Columns:ColumnInput seq = Seq.empty with get,set
 
 // StringBuilder ge = GenerationEnvironment;
 let sb = System.Text.StringBuilder()
@@ -126,42 +139,13 @@ sb
 let scriptFullPath = Path.Combine(__SOURCE_DIRECTORY__,__SOURCE_FILE__)
 
 let manager = 
-    let tHost = 
-        {
-        new ITextTemplatingEngineHost with
-            member __.GetHostOption(optionName: string): obj = failing "GetHostOption(%s):Not implemented yet" optionName
-            member __.LoadIncludeText(requestFileName: string, content: byref<string>, location: byref<string>): bool = 
-                failing "LoadIncludeText(%s, %s, %s):Not implemented yet" requestFileName (content) (location)
-            member __.LogErrors(errors: System.CodeDom.Compiler.CompilerErrorCollection): unit = 
-                failing "LogErrors(%A):Not implemented yet" errors
-            member __.ProvideTemplatingAppDomain(content: string): System.AppDomain = 
-                failing "ProvideTemplatingAppDomain(%s): Not implemented yet" content
-            member __.ResolveAssemblyReference(assemblyReference: string): string = 
-                failing "ResolveAssemblyReference(%s): Not implemented yet" assemblyReference
-            member __.ResolveDirectiveProcessor(processorName: string): System.Type = 
-                failing "ResolveDirectiveProcessor(%s): Not implemented yet" processorName
-            member __.ResolveParameterValue(directiveId: string, processorName: string, parameterName: string): string = 
-                failing "ResolveParameterValue(%s, %s, %s): Not implemented yet" directiveId processorName parameterName
-            member __.ResolvePath(path: string): string = 
-                failing "ResolvePath(%s): Not implemented yet" path
-            member __.SetFileExtension(extension: string): unit = 
-                failing "SetFileExtension(%s): Not implemented yet" extension
-            member __.SetOutputEncoding(encoding: System.Text.Encoding, fromOutputDirective: bool): unit = 
-                failing "SetOutputEncoding(%A, %A): Not implemented yet" encoding fromOutputDirective
-            member __.StandardAssemblyReferences: System.Collections.Generic.IList<string> = 
-                failwith "StandardAssemblyReferences: Not implemented yet"
-            member __.StandardImports: System.Collections.Generic.IList<string> = 
-                failwith "StandardImports: Not implemented yet"
-            member __.TemplateFile: string = "HelloTesting.fake.tt"
-        }
-
     // if this script is in the solution it is modifying, we need the EnvDTE.ProjectItem representing it, otherwise where does the main (non sub-file) output go?
     let templateProjectItem:EnvDTE.ProjectItem = dte.Solution.FindProjectItem(scriptFullPath)
     printfn "Script is at %s" scriptFullPath
     if not <| isNull templateProjectItem then
         printfn "ProjectItem= %A" (templateProjectItem.FileNames(0s))
     let dteWrapper = VsManager.WrapDte dte
-    MultipleOutputHelper.Managers.VsManager(tHost, dteWrapper, sb, templateProjectItem)
+    MultipleOutputHelper.Managers.VsManager(None, dteWrapper, sb, templateProjectItem)
     
 let csgm = 
         {
@@ -347,10 +331,8 @@ let toGen2 =
 let results = 
     //runFullGeneration scriptFullPath generatePartials toGen addlCodeTables |> Map.ofDictionary
     //    type TableGenerationInfo = {Schema:string; Name:string; GenerateFull:bool}
-    let dataModelsToGen =[
-        {Schema=null; Name="Appointments"; GenerateFull = false}
-    ]
-    GenerateAllTheThings.runGeneration sb dte manager targetSqlProjectName cgsm toGen2 dataModelsToGen
+    
+    GenerateAllTheThings.runGeneration (sprintf "%s.linq" Util.CurrentQuery.Name) sb dte manager targetSqlProjectName cgsm toGen2 dataModelsToGen
     let r = manager.Process doMultiFile
     r
 // not important, just nice to have, clean up of opened documents in VS
