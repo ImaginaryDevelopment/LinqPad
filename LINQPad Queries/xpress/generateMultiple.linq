@@ -7,10 +7,7 @@
 </Query>
 
 // this thing works fine via linqpad (translating reference paths only)
-// this doesn't appear to generate things that the SQL generator doesn't do, or is there a take limit somewhere in here?
 
-// TODO: check if the other () method has anything needed or useful
-//TODO: check if the other manager creation code has anything needed or useful
 
 #if INTERACTIVE
 #r "System.Core"
@@ -52,21 +49,12 @@ let dumpft t f x=
     f x |> dumpt |> ignore
     x
     
+// items that we aren't generating the SQL for, but need datamodels generated from the sql db schema    
 let dataModelsToGen = [
         {Schema="dbo"; Name="Appointments"; GenerateFull = false}
         //{Schema="dbo"; Name="ReferralSources"; GenerateFull = false}
     ]
     
-let groupedEnum  (en: IEnumerator) =
-   
-    Seq.unfold(fun _ -> 
-        if en.MoveNext() then 
-            Some(en.Current, ())
-        else 
-           match en with
-           | :? IDisposable as d -> d.Dispose()
-           | _ -> ()
-           None) ()
 let dte = 
     Macros.VsMacros.getWindowNames()
     |> Seq.find(fun wn -> wn.Contains("PracticeManagement"))
@@ -90,6 +78,7 @@ let doMultiFile = true
 let targetSqlProjectName = "ApplicationDatabase"
 let targetCodeProjectName = "Pm.Schema"
 let targetInsertRelativePath = @"Scripts\Post-Deployment\TableInserts\Accounting1.5\AccountingInserts.sql"
+
 let refData : ReferenceData list = [
             //type ReferenceData = {Schema:string; Table:string; Column:string; ValuesWithComments: IDictionary<string,string>}
             {ReferenceData.Schema="dbo";Table="GuarantorTypes";Column="GuarantorTypeId"; 
@@ -110,10 +99,16 @@ let columnBlacklist =
     |> Map.ofSeq
 let measureList = 
     [
+        "AccountId"
         "AppointmentId"
-        "PatientId"
+        "ChargeId"
         "AdmitFacilityId"
         "FacilityId"
+        "PatientId"
+        "PatientInfoId"
+        "PayerId"
+        "PaymentId"
+        
         "UserId"
     ]
 let measureBlacklist =
@@ -159,7 +154,7 @@ let csgm =
             IncludeNonDboSchemaInNamespace= true
             GenerateValueRecords= false
         }
-
+// these are the items we will generate into a sql project
 let toGen : TableInput list = 
     [
         TableInput(
@@ -297,7 +292,58 @@ let toGen : TableInput list =
 
         )
     ]
-    
+
+let toGenAccounting = 
+    [
+        TableInput(Schema="Accounts", Name="Account",
+            Columns = [
+                {ColumnInput.create "AccountID" typeof<int> with Attributes=["identity";"primary key"]}
+                {ColumnInput.createFKeyedColumn<string> "AccountTypeId" 
+                            {Schema="Accounts"; Table="AccountType";Column=null} 
+                            with 
+                                Length = Some 50
+                                GenerateReferenceTable=true
+                                ReferenceValuesWithComment =
+                                    ["Patient"; "Payer"; "System"; "ThirdParty"]
+                                    |> Seq.map (fun x -> x,null)
+                                    |> dict}
+                {ColumnInput.create "Name" typeof<string> with 
+                    IsUnique= true
+                    Length = Some 150
+                    
+                }
+                ColumnInput.createFKeyedNColumn<int> "PayerID" {Schema="dbo"; Table="Payers"; Column=null}
+                
+                
+            ]
+        )
+        TableInput(Schema="Accounts", Name="JournalEntry",
+            Columns=[
+                {ColumnInput.create "JournalEntryID" typeof<int> with Attributes=["identity";"primary key"]}
+                ColumnInput.createFKeyedColumn<int> "CreditAccountID" 
+                            {Schema="Accounts"; Table="Account";Column="AccountID"}
+                ColumnInput.createFKeyedColumn<int> "DebitAccountID" 
+                            {Schema="Accounts"; Table="Account";Column="AccountID"}
+                {ColumnInput.create "Amount" typeof<decimal> 
+                    with 
+                        Precision=Some 12
+                        Scale=Some 2
+                }
+                ColumnInput.createFKeyedNColumn<int> "ChargeID" {Schema="dbo";Table="Charge"; Column=null}
+                ColumnInput.createFKeyedNColumn<int> "PaymentID" {Schema="dbo";Table="Payment"; Column=null}
+                ColumnInput.createFKeyedNColumn<int> "PaymentItemID" {Schema="Accounts"; Table="PaymentItem"; Column=null}
+                ColumnInput.createFKeyedNColumn<int> "PatientID" {Schema="dbo"; Table="Patients"; Column=null}
+                ColumnInput.createFKeyedNColumn<int> "AppointmentID" {Schema="dbo"; Table="Appointments"; Column=null}
+                ColumnInput.createUserIdColumn null Nullability.AllowNull ["null to allow system inserts/adjustments that aren't done by a user"]
+                ColumnInput.create "Entered" typeof<DateTime>
+                {ColumnInput.create "Comments" typeof<string> with UseMax=true; AllowNull=Nullability.AllowNull}
+            ]
+        )
+    ] 
+    |> List.map (fun g ->
+            GenerateAllTheThings.TableInput(Schema=g.Schema,Name=g.Name, Columns= g.Columns)
+        )
+    |> fun items -> {SqlGenerationConfig.SqlItems= items;TargetSqlProjectName = targetSqlProjectName; InsertionConfig = Some {InsertsGenerationConfig.InsertTitling="Accounting"; TargetInsertRelativePath= @"Scripts\Post-Deployment\TableInserts\Accounting1.5\AccountingGeneratorInserts.sql";AdditionalReferenceData = List.empty}}
 
 sb
 |> appendLine "Main File Output"
@@ -317,22 +363,26 @@ let cgsm =
         GenerateValueRecords= false
     }
 let generatePartials = false
-let addlCodeTables = Seq.empty
+
 match toGen |> Seq.tryFind(fun g -> g.Columns |> Seq.exists(fun c -> c.Type = typeof<obj>)) with
     | Some g ->
         g.Dump()
         failwithf "abort"
     | _ -> ()
 let toGen2 = 
-    toGen
-    |> List.map (fun g ->
-        GenerateAllTheThings.TableInput(Schema=g.Schema,Name=g.Name, Columns= g.Columns)
-    )
+    [
+        toGen
+        |> List.map (fun g ->
+            GenerateAllTheThings.TableInput(Schema=g.Schema,Name=g.Name, Columns= g.Columns)
+        )
+        |> fun items -> { SqlGenerationConfig.SqlItems = items; TargetSqlProjectName= targetSqlProjectName; InsertionConfig = Some {InsertsGenerationConfig.InsertTitling = "SqlGenerator"; TargetInsertRelativePath= @"Scripts\Post-Deployment\TableInserts\Accounting1.5\AccountingInserts.sql"; AdditionalReferenceData= refData}}
+        toGenAccounting
+    ]
 let results = 
     //runFullGeneration scriptFullPath generatePartials toGen addlCodeTables |> Map.ofDictionary
     //    type TableGenerationInfo = {Schema:string; Name:string; GenerateFull:bool}
-    
-    GenerateAllTheThings.runGeneration (sprintf "%s.linq" Util.CurrentQuery.Name) sb dte manager targetSqlProjectName cgsm toGen2 dataModelsToGen
+    GenerateAllTheThings.runGeneration  
+        (sprintf "%s.linq" Util.CurrentQuery.Name) sb dte manager cgsm toGen2 dataModelsToGen
     let r = manager.Process doMultiFile
     r
 // not important, just nice to have, clean up of opened documents in VS
@@ -344,7 +394,7 @@ try
     |> Seq.map snd
     |> Seq.iter (fun fullPath ->
         dte.Documents.GetEnumerator()
-        |> groupedEnum
+        |> Seq.ofIEnumerator
         |> Seq.cast<EnvDTE.Document>
         |> Seq.tryFind(fun d-> d.FullName = fullPath)
         |> Option.iter (fun d -> d.Close())
