@@ -6,7 +6,10 @@
 
 // issue: it adds namespaces to the entire output
 // in this use case the new row definition (new row 6) was created, the rowdefinition comments were added/updated, but none of the row items in a grid were moved down yet.
-
+let is<'T> x = match box x with | :? 'T -> true | _ -> false
+module Seq = 
+    let ofType<'T> (items: _ seq) : 'T seq = items |> Seq.cast<obj> |> Seq.filter is<'T> |> Seq.cast<_>
+    //let mapForType<'T,'TItem when 'T :> 'TItem > (f: 'T -> _) (items: 'TItem seq) : 'TItem seq = items |> Seq.cast<obj> |> Seq.map (function | :? 'T as t ->  f t :> obj | x -> x) |> Seq.cast<'TItem>
 module ReverseDumper2 = 
     // reverse dumper with raw html support
     // linqpad helper (for when you can't .Dump(description), but still want the html)
@@ -40,6 +43,10 @@ module ReverseDumper2 =
         )
     let Dump = tee (DumpObj >> dumpReverse)
     let dumpt t x = x |> tee (fun x -> titleize t x |> Raw |> dumpReverse)
+    type System.Object with
+        member x.Dump() =  x |> Dump |> ignore
+        member x.Dump description = x |> dumpt description |> ignore
+        
 open ReverseDumper2
 
 
@@ -68,7 +75,7 @@ module Tuple2 = // idea and most code taken from https://gist.github.com/ploeh/6
     let mapBoth f (x,y) = f x, f y
 
 let path = @"C:\TFS\PracticeManagement\dev\PracticeManagement\PracticeManagement\Dialogs\AppointmentAddEditTelerik.xaml"
-let doc = XDocument.Load path
+let doc = XDocument.Load( path, LoadOptions.PreserveWhitespace ||| LoadOptions.SetLineInfo)
 let ns = doc.Root.Name.Namespace
 [<AutoOpen>]
 module XmlHelper =
@@ -108,29 +115,8 @@ module XmlHelper =
         |> (=) value
 
 // when you |> string an XElement, normally it writes appends the namespace as an attribute, but this is normally covered by the root element
-let rec stripNamespaces (e:XNode):XNode=
-    // if the node is not XElement, pass through
-    match e with
-    | :? XElement as x -> 
-        let contents = 
-            x.Attributes() 
-            // strips default namespace, but not other declared namespaces
-            |> Seq.filter(fun xa -> xa.Name.LocalName <> "xmlns")
-            |> Seq.cast<obj> 
-            |> List.ofSeq 
-            |> (@) (
-                x.Nodes() 
-                |> Seq.map stripNamespaces 
-                |> Seq.cast<obj> 
-                |> List.ofSeq
-            )
-        XElement(nsNone + x.Name.LocalName, contents |> Array.ofList) :> XNode
-    | x -> x
+let namespaces = doc.Root.Elements() |> Seq.head |> fun xe -> xe.CreateNavigator().GetNamespacesInScope(XmlNamespaceScope.ExcludeXml) |> Seq.map (|KeyValue|) |> Map.ofSeq
 
-
-//let toFile fn text = 
-//    File.WriteAllText(fn, text)
-    
 let moveRowsDown startIndex =
     doc.Root
     |> getElement "Style"
@@ -169,14 +155,13 @@ let moveRowsDown startIndex =
     //|> dict
     |> List.map (fun (i, rd, items) -> 
         let formatRowComment index = sprintf " Add/edit Appointment dialog row %i " index
+        let lastComment : XComment option Lazy = lazy( items |> Seq.last |> fun x -> x.NodesAfterSelf() |> Seq.ofType<XComment> |> Seq.tryHead)
         if i > startIndex then 
             items |> Seq.iter (i |> string |> setAttribVal "Grid.Row" )
         //update the comment node after the last rowItem here
         if i = startIndex - 1 then
-            items
-            |> Seq.last
-            |> fun x -> x.NextNode
-            |> fun x -> x:?> XComment
+            lastComment.Value
+            |> Option.get
             |> fun xc -> xc.AddAfterSelf (XComment(formatRowComment 7))
         // not implemented, add comment before any items
         elif startIndex = 0 then
@@ -185,40 +170,44 @@ let moveRowsDown startIndex =
             match items with
             | [] -> ()
             | items -> 
-                items
-                |> Seq.last 
-                |> fun x -> x.NextNode 
-                |> Option.ofNull 
-                |> Option.map (fun x -> x :?> XComment)
+                lastComment.Value 
                 |> Option.iter (fun xc -> 
                     xc.Value <- i + 1 |> formatRowComment 
                 )
         i,rd,items        
     
     )
-
-moveRowsDown 6
+// starting with rowItems Grid.Row = ?
+let ``Grid.Row=`` = 8
+moveRowsDown ``Grid.Row=``
 |> Seq.head
-|> tee (fun (_,rd,rows) -> 
+|> tee (Dump >> ignore)
+|> fun (_,rd,rows) -> 
+    
+    let allRows = 
+        rows 
+        |> Seq.head 
+        |> fun row -> 
+            let tail = row.NodesAfterSelf() |> List.ofSeq
+            (row :> XNode) ::tail
         
-        let allRows = 
-            rows 
-            |> Seq.head 
-            |> fun row -> 
-                let tail = row.NodesAfterSelf() |> List.ofSeq
-                (row :> XNode) ::tail
-            
+    let parent = allRows  |> Seq.ofType<XElement> |> Seq.head |> fun xe -> xe.Parent
+    // add declarations
+    namespaces
+    |> Map.toSeq
+    |> Seq.filter (fst >> String.IsNullOrEmpty>> not)
+    |> Seq.iter(fun (k,v) -> 
+            parent.Add(XAttribute(XNamespace.Xmlns + k, v))
+    )
+    try
+        allRows |> Seq.map(fun r -> r.GetType().Name) |> Seq.distinct |> dumpt "node types" |> ignore
         allRows 
-        //|> tee (Seq.map string >> delimit "\r\n" >> toFile @"C:\Users\Brandon\AppData\Local\Temp\sample.xml")
-        |> Seq.map stripNamespaces 
-        |> Seq.map string 
-        |> delimit "\r\n" 
-        |> fun x -> x.Dump("final result stripped?") 
+        |> Seq.filter (function | :? XText -> false | _ -> true) 
+        |> dumpt "allRows without whitespaces" 
         |> ignore
-        
-        allRows |> Dump |> ignore
-        rd.Parent.Dump()
-)
-
-|> Dump
-|> ignore
+        rd.Parent.Dump("abc123")
+    with _ -> ()
+    parent.ToString(SaveOptions.OmitDuplicateNamespaces)
+    |> string 
+    |> fun x -> x.Dump("final result stripped?") 
+    |> ignore
