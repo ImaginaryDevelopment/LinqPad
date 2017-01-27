@@ -496,11 +496,12 @@ outFolder.Dump("dacpac folder")
 let projFolder = @"C:\TFS\PracticeManagement\dev\PracticeManagement\Db"
 let dbProjectOutputName = "PmMigration" // project outputs a PmMigration.dacpac
 DateTime.Now.Dump("starting deploy")
-runDeploy (outFolder, projFolder) dbProjectOutputName GetSqlPackageCommandLine
-//runDeploy dbProjectOutputName GetSqlPackageCommandLine
-//runDeploy dbProjectOutputName UseSqlPackageExeWithPreCompare
-DateTime.Now.Dump("finishing deploy")
+//runDeploy (outFolder, projFolder) dbProjectOutputName GetSqlPackageCommandLine
+runDeploy (outFolder, projFolder) dbProjectOutputName DeployBehavior.BuildThenUseSqlPackageExeWithPreCompare
 //runDeploy dbProjectOutputName RunSmo
+
+DateTime.Now.Dump("finishing deploy")
+
 
 //Util.Cmd(cmdLine).Dump()
 
