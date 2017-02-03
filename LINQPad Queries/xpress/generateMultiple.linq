@@ -9,6 +9,11 @@
 // this thing works fine via linqpad (translating reference paths only)
 
 
+// TODO: Convert/import from SqlGenerator : inputs for GenerateAccountingInserts
+// TODO: check if the other manager creation code has anything needed or useful
+// TODO: Convert input data from AccountingGenerator
+
+
 #if INTERACTIVE
 #r "System.Core"
 #r "System.Data.Entity.Design"
@@ -36,6 +41,8 @@ open CodeGeneration.GenerateAllTheThings
 open MacroRunner
 open MacroRunner.DteWrap
 open MacroRunner.MultipleOutputHelper.Managers
+open Macros.SqlMacros
+
 
 let failing s = 
     if Debugger.IsAttached then
@@ -51,7 +58,7 @@ let dumpft t f x=
     
 // items that we aren't generating the SQL for, but need datamodels generated from the sql db schema    
 let dataModelsToGen = [
-        {Schema="dbo"; Name="Appointments"; GenerateFull = false}
+        {TableIdentifier.Schema="dbo"; Name="Appointments"}
         //{Schema="dbo"; Name="ReferralSources"; GenerateFull = false}
     ]
     
@@ -81,8 +88,9 @@ let targetInsertRelativePath = @"Scripts\Post-Deployment\TableInserts\Accounting
 
 let refData : ReferenceData list = [
             //type ReferenceData = {Schema:string; Table:string; Column:string; ValuesWithComments: IDictionary<string,string>}
-            {ReferenceData.Schema="dbo";Table="GuarantorTypes";Column="GuarantorTypeId"; 
-                ValuesWithComments= dict[
+            {   ReferenceData.FKeyId= {Table={Schema="dbo";Name="GuarantorTypes"};Column="GuarantorTypeId"}
+                GenerateReferenceTable=false
+                ValuesWithComment= dict[
                                         "SELF",null
                                         "THIRD PARTY", null
                                         "Insurance & Self", null ]
@@ -139,10 +147,10 @@ let manager =
     printfn "Script is at %s" scriptFullPath
     if not <| isNull templateProjectItem then
         printfn "ProjectItem= %A" (templateProjectItem.FileNames(0s))
-    let dteWrapper = VsManager.WrapDte dte
+    let dteWrapper = wrapDte dte
     MultipleOutputHelper.Managers.VsManager(None, dteWrapper, sb, templateProjectItem)
     
-let csgm = 
+let cgsm = 
         {
             TargetProjectName= targetCodeProjectName
             TargetNamespace= "Pm.Schema.DataModels"
@@ -153,6 +161,10 @@ let csgm =
             MeasuresBlacklist= measureBlacklist
             IncludeNonDboSchemaInNamespace= true
             GenerateValueRecords= false
+            GenerateSprocInputRecords= false
+            UseCliMutable= false
+            GetMeasureNamepace= Some (fun _ -> "Pm.Schema")
+            AdditionalNamespaces= ["Pm.Schema.BReusable"]
         }
 // these are the items we will generate into a sql project
 let toGen : TableInput list = 
@@ -163,49 +175,55 @@ let toGen : TableInput list =
             Columns=
                 [
                     { ColumnInput.create "PaymentID" typeof<int> with Attributes = ["identity";"primary key"]}
-                    ColumnInput.createFKeyedNColumn<int> "AppointmentId" {Schema="dbo";Table="Appointments";Column="AppointmentId"} 
+                    ColumnInput.createFKeyedNColumn<int> "AppointmentId" (FKeyIdentifier {Table={Schema="dbo";Name="Appointments"};Column="AppointmentId"})
                     { ColumnInput.createFKeyedColumn<string> 
                         "PaymentTypeId" 
-                        { Schema="Accounts"; Table="PaymentType"; Column="PaymentTypeId"} 
-                            with 
-                                Length=Some 50
+                        (FKeyWithReference 
+                            {   FKeyId={Table={Schema="Accounts";Name="PaymentType"};Column="PaymentTypeId"} 
                                 GenerateReferenceTable = true
-                                ReferenceValuesWithComment= dict[ "Patient",null;"ThirdParty",null;"Era",null]
-                                Comments= [
+                                ValuesWithComment= dict[ "Patient",null;"ThirdParty",null;"Era",null]
+                                }) 
+                        with 
+                            Length=Some 50
+                            Comments= [
                                             "|Patient of PatientIdentifier * PatientPayment |ThirdParty of PayerIdentifier * ThirdPartyPayment |Era of PayerIdentifier * EraPaymentMethod"
                                         ]
                     }
-                    {   ColumnInput.createFKeyedColumn<string> 
+                    { ColumnInput.createFKeyedColumn<string> 
                             "PaymentMethodId"
-                            { Schema="Accounts"; Table="PaymentMethod"; Column = null}
+                            (FKeyWithReference 
+                                {   FKeyId={Table={ Schema="Accounts"; Name="PaymentMethod"}; Column= null}
+                                    GenerateReferenceTable = true
+                                    ValuesWithComment = 
+                                        dict[ 
+                                            "Cash",null;"CC",null;"Check",null;"Ach",null;"Fsa",null;"Other","for when Era amount is 0 or a catch-all"
+                                        ]})
                             with
                                 Length = Some 50
-                                GenerateReferenceTable = true
-                                ReferenceValuesWithComment = 
-                                    dict[ 
-                                        "Cash",null;"CC",null;"Check",null;"Ach",null;"Fsa",null;"Other","for when Era amount is 0 or a catch-all"
-                                    ]
+                            
                     }
                     { ColumnInput.createFKeyedColumn<string>
                                 "PaymentStatusId"
-                                { Schema="Accounts"; Table="PaymentStatus"; Column = null}
+                                (FKeyWithReference 
+                                    {   FKeyId={Table={Schema="Accounts"; Name="PaymentStatus"}; Column= null}
+                                        GenerateReferenceTable = true
+                                        ValuesWithComment = (["New"; "Partial"; "Complete"] |> Seq.map (fun s-> s,null) |> dict)}
+                                )
                                 with
                                     Length = Some 50
-                                    GenerateReferenceTable = true
-                                    ReferenceValuesWithComment = (["New"; "Partial"; "Complete"] |> Seq.map (fun s-> s,null) |> dict)
                     }
                     { ColumnInput.create "TotalAmount" typeof<decimal> with
                                 Precision=Some 12;Scale=Some 2 // see: http://stackoverflow.com/questions/2377174/how-do-i-interpret-precision-and-scale-of-a-number-in-a-database
                                 Comments = [ "was Amount (18,2)"]
                     }
                     ColumnInput.createUserIdColumn null Nullability.AllowNull ["null to allow system inserts/adjustments that aren't done by a user"]
-                    ColumnInput.createFKeyedNColumn<int> "PayerID" { Schema="dbo"; Table="Payers"; Column = null } 
+                    ColumnInput.createFKeyedNColumn<int> "PayerID" (FKeyIdentifier {Table={ Schema="dbo"; Name="Payers"}; Column= null }) 
                     ColumnInput.createPatientIdColumn null Nullability.AllowNull List.empty
                     { ColumnInput.create "Created" typeof<DateTime> with AllowNull = Nullability.AllowNull; Comments = ["was timestamp"]}
                     {ColumnInput.create "TransactionNumber" typeof<string> with AllowNull=Nullability.AllowNull; Length=Some 30; Comments = ["was checkNumber now will store check number or ACH number (when applicable)"]}
                     {ColumnInput.create "Rcd" typeof<DateTime> with AllowNull = Nullability.AllowNull; Comments=["Payment Recvd"]}
                     ColumnInput.create "IsElectronic" typeof<bool>
-                    ColumnInput.createFKeyedNColumn<int> "CCItemID" { Schema="Accounts" ; Table="CCItem";Column=null}
+                    ColumnInput.createFKeyedNColumn<int> "CCItemID" (FKeyIdentifier {Table={ Schema="Accounts" ; Name="CCItem"}; Column=null})
                     {ColumnInput.create "Comments" typeof<string> with UseMax = true; AllowNull = Nullability.AllowNull}
 
                             ])
@@ -233,7 +251,7 @@ let toGen : TableInput list =
             Schema="Accounts", Name="PaymentItem",
             Columns = [
                 { ColumnInput.create "PaymentItemID" typeof<int> with Attributes=["identity";"primary key"]}
-                ColumnInput.createFKeyedColumn<int> "PaymentID" {FKeyInfo.Schema="dbo";Table="Payment"; Column=null}
+                ColumnInput.createFKeyedColumn<int> "PaymentID" (FKeyIdentifier {Table={Schema="dbo";Name="Payment"};Column=null})
                 {ColumnInput.AllowNull = Nullability.AllowNull
                  Name = "PaymentItemTypeId"
                  Type = typeof<string>
@@ -242,50 +260,61 @@ let toGen : TableInput list =
                  Scale = None
                  UseMax = false
                  Attributes = List.empty
-                 FKey = Some {FKeyInfo.Schema="Accounts"; Table="PaymentItemType"; Column="PaymentItemTypeId"}
+                 FKey = Some (FKeyWithReference {
+                                FKeyId={Table={Schema="Accounts"; Name="PaymentItemType"}; Column="PaymentItemTypeId"}
+                                GenerateReferenceTable = true
+                                ValuesWithComment = 
+                                    ["EraPayment"; "EraAdjustment"; "PtRespDeductible"; "PtRespCoPay";"PtRespCoIns";"Other"] 
+                                    |> Seq.map (fun x -> x,null) 
+                                    |> dict 
+                            })
                  Comments = List.empty
-                 GenerateReferenceTable = true
-                 ReferenceValuesWithComment = 
-                    ["EraPayment"; "EraAdjustment"; "PtRespDeductible"; "PtRespCoPay";"PtRespCoIns";"Other"] 
-                    |> Seq.map (fun x -> x,null) 
-                    |> dict
                  IsUnique = false}
                 { ColumnInput.createFKeyedNColumn<string> 
                             "PaymentTierId"
-                            { Schema="Accounts"; Table="PaymentTier"; Column = null}
-                            with
-                                Length = Some 50
+                            (FKeyWithReference {
+                                FKeyId={Table={ Schema="Accounts"; Name="PaymentTier"}; Column= null}
                                 GenerateReferenceTable = true
-                                ReferenceValuesWithComment = 
+                                ValuesWithComment = 
                                     [ "Primary"; "Secondary"; "Tertiary"; "Worker'sComp"]
                                     |> Seq.map (fun x -> x,null)
                                     |> dict
-                }
-                { ColumnInput.createFKeyedNColumn<string> "PtRespTypeId" 
-                            { Schema="Accounts"; Table="PtRespType"; Column = null}
+                            })
                             with
                                 Length = Some 50
-                                GenerateReferenceTable = true
-                                ReferenceValuesWithComment =
+                }
+                { ColumnInput.createFKeyedNColumn<string> "PtRespTypeId" 
+                    (FKeyWithReference {
+                        FKeyId={Table={ Schema="Accounts"; Name="PtRespType"}; Column= null}
+                        GenerateReferenceTable = true
+                        ValuesWithComment =
                                     ["Deductible"; "CoIns"; "CoPay"]
                                     |> Seq.map (fun x -> x,null)
                                     |> dict
+                        })
+                            with
+                                Length = Some 50
+                                
+                                
                 }
                 ColumnInput.create "Created" typeof<DateTime> 
                 {ColumnInput.create "Amount" typeof<Decimal> with Precision= Some 8; Scale=Some 2}
                 {ColumnInput.create "PatientResponsiblityAmt" typeof<Decimal> with Precision= Some 8; Scale=Some 2}
-                ColumnInput.createFKeyedNColumn<int> "ChargeID" { Schema="dbo"; Table="Charge"; Column = null}
+                ColumnInput.createFKeyedNColumn<int> "ChargeID" (FKeyIdentifier {Table={ Schema="dbo"; Name="Charge"}; Column= null})
                 ColumnInput.makeNullable50 "RemarkCode"
                 ColumnInput.makeNullable50 "AdjustmentCode"
                 {ColumnInput.createFKeyedColumn<string> "PaymentItemStatusId" 
-                            {Schema="Accounts"; Table="PaymentItemStatus";Column=null} 
-                            with 
-                                Length = Some 50
+                            (FKeyWithReference {
+                                FKeyId={Table={ Schema="Accounts"; Name="PaymentItemStatus"}; Column=null}
                                 GenerateReferenceTable=true
-                                ReferenceValuesWithComment =
+                                ValuesWithComment =
                                     ["Posted"; "Unposted"]
                                     |> Seq.map (fun x -> x,null)
-                                    |> dict}
+                                    |> dict
+                            })
+                            with 
+                                Length = Some 50
+                                }
                 {ColumnInput.create "Comments" typeof<string> with UseMax=true; AllowNull= Nullability.AllowNull}
 
             ]
@@ -299,41 +328,43 @@ let toGenAccounting =
             Columns = [
                 {ColumnInput.create "AccountID" typeof<int> with Attributes=["identity";"primary key"]}
                 {ColumnInput.createFKeyedColumn<string> "AccountTypeId" 
-                            {Schema="Accounts"; Table="AccountType";Column=null} 
-                            with 
-                                Length = Some 50
+                            (FKeyWithReference {
+                                FKeyId={Table={Schema="Accounts"; Name="AccountType"}; Column=null}
                                 GenerateReferenceTable=true
-                                ReferenceValuesWithComment =
+                                ValuesWithComment =
                                     ["Patient"; "Payer"; "System"; "ThirdParty"]
                                     |> Seq.map (fun x -> x,null)
-                                    |> dict}
+                                    |> dict
+                            })
+                            with 
+                                Length = Some 50
+                                
+                                }
                 {ColumnInput.create "Name" typeof<string> with 
                     IsUnique= true
                     Length = Some 150
-                    
                 }
-                ColumnInput.createFKeyedNColumn<int> "PayerID" {Schema="dbo"; Table="Payers"; Column=null}
-                
+                ColumnInput.createFKeyedNColumn<int> "PayerID" (FKeyIdentifier {Table={Schema="dbo"; Name="Payers"}; Column=null})
                 
             ]
         )
         TableInput(Schema="Accounts", Name="JournalEntry",
             Columns=[
                 {ColumnInput.create "JournalEntryID" typeof<int> with Attributes=["identity";"primary key"]}
-                ColumnInput.createFKeyedColumn<int> "CreditAccountID" 
-                            {Schema="Accounts"; Table="Account";Column="AccountID"}
-                ColumnInput.createFKeyedColumn<int> "DebitAccountID" 
-                            {Schema="Accounts"; Table="Account";Column="AccountID"}
+                ColumnInput.createFKeyedColumn<int> "CreditAccountID" (FKeyIdentifier
+                            {Table={Schema="Accounts";Name="Account"};Column="AccountID"})
+                ColumnInput.createFKeyedColumn<int> "DebitAccountID" (FKeyIdentifier
+                            {Table={Schema="Accounts";Name="Account"};Column="AccountID"})
                 {ColumnInput.create "Amount" typeof<decimal> 
                     with 
                         Precision=Some 12
                         Scale=Some 2
                 }
-                ColumnInput.createFKeyedNColumn<int> "ChargeID" {Schema="dbo";Table="Charge"; Column=null}
-                ColumnInput.createFKeyedNColumn<int> "PaymentID" {Schema="dbo";Table="Payment"; Column=null}
-                ColumnInput.createFKeyedNColumn<int> "PaymentItemID" {Schema="Accounts"; Table="PaymentItem"; Column=null}
-                ColumnInput.createFKeyedNColumn<int> "PatientID" {Schema="dbo"; Table="Patients"; Column=null}
-                ColumnInput.createFKeyedNColumn<int> "AppointmentID" {Schema="dbo"; Table="Appointments"; Column=null}
+                ColumnInput.createFKeyedNColumn<int> "ChargeID" (FKeyIdentifier{Table={Schema="dbo"; Name="Charge"}; Column=null})
+                ColumnInput.createFKeyedNColumn<int> "PaymentID"        (FKeyIdentifier{Table={Schema="dbo"; Name="Payment"}; Column=null})
+                ColumnInput.createFKeyedNColumn<int> "PaymentItemID"    (FKeyIdentifier{Table={Schema="Accounts"; Name="PaymentItem"}; Column=null})
+                ColumnInput.createFKeyedNColumn<int> "PatientID"        (FKeyIdentifier{Table={Schema="dbo"; Name="Patients"}; Column=null})
+                ColumnInput.createFKeyedNColumn<int> "AppointmentID"    (FKeyIdentifier{Table={Schema="dbo"; Name="Appointments"}; Column=null})
                 ColumnInput.createUserIdColumn null Nullability.AllowNull ["null to allow system inserts/adjustments that aren't done by a user"]
                 ColumnInput.create "Entered" typeof<DateTime>
                 {ColumnInput.create "Comments" typeof<string> with UseMax=true; AllowNull=Nullability.AllowNull}
@@ -350,18 +381,6 @@ sb
 |> appendLine (sprintf "Started at %O" DateTime.Now)
 |> ignore
 
-let cgsm = 
-    {
-        TargetProjectName= targetCodeProjectName
-        TargetNamespace= "Pm.Schema.DataModels"
-        CString = cString
-        UseOptionTypes= false
-        ColumnBlacklist= columnBlacklist
-        Measures= measureList
-        MeasuresBlacklist= measureBlacklist
-        IncludeNonDboSchemaInNamespace= true
-        GenerateValueRecords= false
-    }
 let generatePartials = false
 
 match toGen |> Seq.tryFind(fun g -> g.Columns |> Seq.exists(fun c -> c.Type = typeof<obj>)) with
