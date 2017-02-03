@@ -1,4 +1,4 @@
-<Query Kind="Program">
+<Query Kind="FSharpProgram">
   <GACReference>EnvDTE, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
   <NuGetReference>Rx-Main</NuGetReference>
   <Namespace>EnvDTE</Namespace>
@@ -6,56 +6,48 @@
   <Namespace>System.Security.Principal</Namespace>
 </Query>
 
-void Main()
-{
-	//Visual studio must be running
-	//System.Diagnostics.Process.GetProcesses().Select(p=> p.ProcessName).Dump();
-	var devEnvs = System.Diagnostics.Process.GetProcessesByName("devenv"); //.Dump();
-	if(!IsAdministrator() && devEnvs.All(de => de.MainWindowTitle.EndsWith("(Administrator)"))){
+//Visual studio must be running
+//System.Diagnostics.Process.GetProcesses().Select(p=> p.ProcessName).Dump();
+let devEnvs = System.Diagnostics.Process.GetProcessesByName "devenv"
+let dumpt t x = x.Dump(description=t); x
+let isAdministrator () = 
+    WindowsIdentity.GetCurrent()
+    |> WindowsPrincipal
+    |> fun p -> p.IsInRole WindowsBuiltInRole.Administrator
+
+if not <| isAdministrator() && devEnvs.All(fun de -> de.MainWindowTitle.EndsWith "(Administrator)") then
 		devEnvs
-			.Select(de =>new{de.Id, de.MainWindowTitle})
-			//.Select(de=> de.StartInfo)
-			.Dump("Likely will fail, VS appears to be administrator, LinqPad is not");
-		//return;
-	}
+        |> Seq.map (fun de -> (de.Id, de.MainWindowTitle))
+        |> dumpt "Likely will fail, VS appears to be administrator, LinqPad is not"
+        |> ignore
 	
-	var dte = (EnvDTE.DTE)System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE.14.0");
-	//var typeDte = Type.GetTypeFromProgID("VisualStudio.DTE.12.0");
 	
-	//typeDte.Dump();
+let dte = System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE.14.0") :?> EnvDTE.DTE
 	
 	// commands to remember
-	(new [] {
+[
+
 		"File.SaveAll",
 		"ProjectandSolutionContextMenus.Item.MoveDown",
 		"ProjectandSolutionContextMenus.Item.MoveUp",
 		"ReSharper_Suspend",
 		"ReSharper_ToggleSuspended"
-	}).Dump("commands of previous interest");
+	].Dump("commands of previous interest")
 	
-	dte.FileName.Dump();
-	dte.Solution.FullName.Dump();
-	var commands=dte.Commands.Cast<Command>().Select (c =>new{c.LocalizedName,c.ID,Bindings=((object[]) c.Bindings).Cast<string>().ToArray()} );
-	var toDisplayCommands=commands;
-	var commandFilter = Util.ReadLine("search term?","resharper",new []{"resharper","build","save"});
-	if(String.IsNullOrEmpty(commandFilter)==false)
-		toDisplayCommands=commands.Where(c=>c.LocalizedName.IndexOf(commandFilter,StringComparison.CurrentCultureIgnoreCase)>=0);
-		
-	//var saveCommand = commands.Where(c=>c.LocalizedName.IndexOf("save",StringComparison.CurrentCultureIgnoreCase)>=0).Dump("save commands");
-	//var buildCommands=commands.Where (c => c.LocalizedName.IndexOf("build",StringComparison.CurrentCultureIgnoreCase) >=0).Dump("Build commands");
-	//var resharper= commands.Where (c => c.LocalizedName.IndexOf("resharper", StringComparison.CurrentCultureIgnoreCase) >=0 //&&  c.Bindings.Any()
-	//).Dump("resharper bindings");
-	toDisplayCommands.Dump(commandFilter ??"all");
-	var toRun=Util.ReadLine("Run Command?",null,commands.Select(c=>c.LocalizedName));
-	if(String.IsNullOrEmpty(toRun)==false)
-		dte.ExecuteCommand(toRun);
-	
-	
-}
+dte.FileName.Dump()
+dte.Solution.FullName.Dump()
+type CommandDisplay = {LocalizedName:string;Id:int;Bindings: obj[]}
+let commands=dte.Commands.Cast<Command>().Select (fun c -> {LocalizedName=c.LocalizedName;Id=c.ID;Bindings= c.Bindings :?> obj[]} )
 
- public static bool IsAdministrator()
-    {
-        var identity = WindowsIdentity.GetCurrent();
-        var principal = new WindowsPrincipal(identity);
-        return principal.IsInRole(WindowsBuiltInRole.Administrator);
-    }
+let commandFilter = Util.ReadLine("search term?",null,["resharper";"build";"save"] |> Array.ofList)
+let toDisplayCommands=
+    if String.IsNullOrEmpty commandFilter then
+        commands
+    else
+	    commands.Where(fun c -> c.LocalizedName.IndexOf(commandFilter,StringComparison.CurrentCultureIgnoreCase) >= 0)
+    //|> Seq.filter(fun c -> c.Bindings.Length > 0)		
+	
+toDisplayCommands.Dump(if not <| isNull commandFilter then commandFilter else "all")
+let toRun=Util.ReadLine("Run Command?",null, commands.Select(fun c -> c.LocalizedName))
+if String.IsNullOrEmpty(toRun)=false then
+	dte.ExecuteCommand(toRun);
