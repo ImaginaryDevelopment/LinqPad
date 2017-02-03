@@ -47,10 +47,13 @@ module ReverseDumper2 =
             | _ -> [ o ]
             |> fun content -> dc.Content <- content
         )
+    let dumptRev t x = 
+        titleize t x |> DumpObj |> dumpReverse
+        x
     // override/overwrite existing dump methods, no direct dumpReverse calls required
     type System.Object with
-        member x.Dump() = printfn "override hit!";  x |> Dump |> ignore
-        member x.Dump description = printfn "override2 hit! %s" description; x |> dumpt description |> ignore
+        member x.Dump() = printfn "override hit!";  x |> DumpObj |> dumpReverse |> ignore
+        member x.Dump description = printfn "override2 hit! %s" description; x |> titleize description |> DumpObj |> dumpReverse |> ignore
         
         
 
@@ -61,7 +64,20 @@ let dc = DumpContainer()
 
 dc.Dump();
 
+let makeDiv t = sprintf "<div>%s</div>" t
+
 // works
-dc.Content<- Util.RawHtml("<div>Hello world</div>")
+dc.Content<- Util.RawHtml( makeDiv "Hello world")
 // also works
 dc.Content <- [ Util.RawHtml("<div>Hello world</div>"); Util.RawHtml("<div>Hello world</div>")]
+
+let makeXEl t = XElement(XNamespace.None + t)
+
+open ReverseDumper2
+dumpReverse (Raw "<div>Hello world</div>")
+dumpReverse (DumpObj (XElement(XNamespace.None + "HelloXml")))
+dumptRev "Hello tRev" (makeXEl "trev") |> ignore
+makeDiv "yay html!" |> dumptRev "hello actual html" |> ignore
+dumptRev "Hello list" [ makeXEl "listitem1"; makeXEl "listitem2"] |> ignore
+dumpReverse (Raw "<div>Hello world2</div>")
+
