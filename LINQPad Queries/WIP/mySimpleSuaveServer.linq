@@ -68,14 +68,18 @@ module Mef =
     catalog.Catalogs.Add(directoryCatalog)
     container.ComposeParts(jar)
     jar.Effects |> Seq.map (fun e -> e.Name) |> List.ofSeq |> dumpt "effects!" |> ignore
-let landingPage = """<html>
+let landingPage = 
+    Mef.jar.Effects |> Seq.map(fun e -> sprintf "<a title=\"%s\" href=\"effects/%s\">%s</a>" e.Description e.Name e.Name) 
+    |> delimit "\r\n\t"
+    |> sprintf """<html>
 <head></head>
 <body>
 <h2>You just got served</h2>
-<a href="volumedown">Volume Down</a>
+<a href="/helloworld">Hello World</a>
+%s
 </body>
 </html>
-"""
+""" 
 let lift f x =
     f()
     x
@@ -88,11 +92,19 @@ let app =
     choose 
         [ GET >=> choose
                 [   path "/" >=> OK landingPage
+                    pathStarts "/effects/" >=> request (fun req-> 
+                        req.url.PathAndQuery 
+                        |> after "/effects/" 
+                        |> fun name -> 
+                            name |> dumpt "looking for effect" |> ignore
+                            Mef.jar.Effects |> Seq.find(fun e -> e.Name= name) |> fun e -> e.Execution()
+                            OK (sprintf "Executed %s" name)
+                        )
                     path "/sideeffect" >=> request (sideeffect testSideEffect (fun _req -> OK "Side Effected"))
                     //path "/sideeffect2" >=> request (fun x -> testSideEffect(); x) >=> OK "Side effected"
                     path "/sideeffect2"  >=> request (fun x -> testSideEffect(); OK "Side Effected")
                     path "/sideeffect3" >=> (lift testSideEffect >> OK "Side Effected 3")
-                    path "/volumedown" 
+                    path "/helloworld" 
                         >=> request volumeDown //|> sideeffect (fun x -> volumeDown()) |> OK "Volume turning down"
 
                     ] ]
