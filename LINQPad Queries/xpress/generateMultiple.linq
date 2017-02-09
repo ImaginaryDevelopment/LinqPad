@@ -161,7 +161,15 @@ let cgsm =
             MeasuresBlacklist= measureBlacklist
             IncludeNonDboSchemaInNamespace= true
             GenerateValueRecords= false
-            GenerateSprocInputRecords= false
+            SprocSettingMap= Some {
+                SprocBlacklist=[    "sp_alterdiagram"
+                                    "sp_creatediagram"
+                                    "sp_dropdiagram"
+                                    "sp_helpdiagramdefinition"
+                                    "sp_helpdiagrams"
+                                    "sp_renamediagram"
+                                    "sp_upgraddiagrams"]; GenerateSprocInputRecords=true}
+
             UseCliMutable= false
             GetMeasureNamepace= Some (fun _ -> "Pm.Schema")
             AdditionalNamespaces= ["Pm.Schema.BReusable"]
