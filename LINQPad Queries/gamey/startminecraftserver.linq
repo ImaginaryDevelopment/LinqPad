@@ -3,6 +3,7 @@
 //Environment.SetEnvironmentVariable("MinecraftServerDir", @"F:\minecraft\server", EnvironmentVariableTarget.Machine);
 
 let dir = Environment.GetEnvironmentVariable("MinecraftServerDir")
+dir.Dump("serverDir")
 Environment.CurrentDirectory <- dir
 let versions = 
     Directory.GetFiles dir

@@ -8,6 +8,7 @@
 
 let statsUrl = "http://steamcommunity.com/id/maslow/stats/appid/250900/achievements"
 let achievesUrl = "http://bindingofisaacrebirth.gamepedia.com/Achievements"
+let dumpt t x = x.Dump(description=t); x
 let useCache = true
 let cache title f = 
     if useCache then
@@ -52,7 +53,8 @@ let statsRows =
             Img = if getIntermediaryImages then imgUrl |> Option.map Util.Image |> Option.toNull |> box else null
         }
     )
-type AchieveRow = {Img:obj; Title:string; Subtitle:string; Req:string; Category:string; ImgUrl:string} with
+
+type AchieveRow = {Img:obj; Title:string; Subtitle:string; Req:string; Category:string; ImgUrl:string;} with
     member x.WithImg (f:unit -> obj) :AchieveRow = {x with Img = f()}
 let achieveRowsRaw =
     achievesHtml.CssSelect "table[data-description]" 
@@ -100,25 +102,66 @@ let areMates (ar:AchieveRow) (sr:StatRow) =
     || [ 
         "Book of Revelations", "The Book of Revelations"
         "Everything is Terrible!!!", "Everything is Terrible!!!"
+        "Cube of Meat", "A Cube of Meat"
     ] |> Seq.exists(fun (arTitle,srTitle) -> equalsI ar.Title arTitle && equalsI srTitle sr.Title)
 achieveRows
 |> Seq.map(fun ar -> ar, statsRows |> Seq.tryFind(areMates ar))
-|> Seq.filter(snd >> Option.isNone)
+|> Seq.filter(snd >> function | None -> true | Some sr -> String.IsNullOrEmpty sr.UnlockTime)
 |> Seq.map fst
 |> Seq.takeUpTo 50
 //|> dump
 //|> Seq.map (fun x -> {x with Img = x.ImgUrl |> Option.ofNull |> Option.map Util.Image |> Option.toNull})
 |> Seq.map fillImg
+|> dumpt "unachieved"
+
+type UnlockStatus = 
+    | Unlocked of DateTime option
+    | Locked
+    | Unchecked
+    
+let tryMate ar = 
+    statsRows 
+    |> Seq.tryFind (areMates ar) 
+    |> function 
+        | Some sr-> if String.IsNullOrEmpty sr.UnlockTime then 
+                        Locked 
+                    else 
+                        sr.UnlockTime 
+                        |> DateTime.TryParse 
+                        |> function 
+                            | true, dt -> Some dt 
+                            | false, _ -> None
+                            |>  Unlocked
+                    |> Some
+        | None -> None
+
+Util.ReadLine("Search achievements for?",null, achieveRows |> Seq.map(fun ar -> ar.Title))
+|> fun searchTerm -> 
+    achieveRows |> Seq.tryFind(fun ar -> ar.Title = searchTerm) 
+    |> function 
+        |Some achievement -> (fillImg achievement, tryMate achievement) |> Dump |> ignore
+        |None -> 
+            // fuzzier searches
+            let fuzzier = 
+            
+                achieveRows 
+                |> Seq.filter(fun ar -> ar.Title |> containsI searchTerm || ar.Req |> containsI searchTerm)
+                |> Seq.map (fun ar -> ar |> fillImg, tryMate ar |> sprintf "%A")
+                |> List.ofSeq
+            match fuzzier with
+            | [] -> statsRows |> Seq.tryFind(fun sr -> sr.Title = searchTerm) |> Dump |> ignore
+            | x -> x |> Dump |> ignore
+
+Util.OnDemand("Raw sample stats rows from steam", 
+    (fun () -> 
+        statsRowsRaw
+        |> Seq.takeUpTo 5
+        |> Seq.map string))
 |> Dump
 
-
-statsRowsRaw
-|> Seq.takeUpTo 5
-|> Seq.map string
-|> Dump
-
-
-achieveRowsRaw
-|> Seq.takeUpTo 5
-|> Seq.map string
+Util.OnDemand("Raw sample achievement rows from wiki", 
+    (fun () -> 
+        achieveRowsRaw
+        |> Seq.takeUpTo 5
+        |> Seq.map string))
 |> Dump

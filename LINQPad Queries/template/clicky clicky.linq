@@ -117,7 +117,7 @@ module CotLi =
         let centerToCenterY = 120
         let x1 = 380
         let y1 = 690
-        clickCrusadersTab ()
+        
         sleep 400
         let calcPos slotX slotY = 
             (x1 + centerToCenterX * slotX), (y1 + centerToCenterY * slotY)
@@ -130,7 +130,7 @@ module CotLi =
         | 6 -> calcPos 2 1 |> Some
         | _ -> None
         |> Option.iter (curry setMouseRelative)
-
+        Simulator.is.Mouse.LeftButtonClick() |> ignore
         ()
 
 WinForm.getMousePosition()
@@ -146,10 +146,12 @@ WinForm.getMousePosition()
 //|> Dump
 //|> ignore
 let funs = 
+    CotLi.clickCrusadersTab ()
     [
         //fun() -> ()
         fun () -> Simulator.clickCenterOfRightScreen() |> ignore
         fun () -> Simulator.is.Mouse.LeftButtonClick() |> ignore
+        fun () -> CotLi.ClickLevelUp 3
         //fun () -> moveMouseToCenterRightOfRightScreen()
     ]
 let delay = 10
