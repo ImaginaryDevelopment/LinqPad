@@ -60,9 +60,9 @@ type Tag =
     |Tank
     |Alien
     |Angel
-    |T // Demon?
-    |U // ?
-    |V // ?
+    |Demon // Demon?
+    |Dwarf // ?
+    |Dragon // ?
     |W // Vampire?
     // X
     |Leprechaun 
