@@ -1,5 +1,15 @@
 <Query Kind="FSharpProgram">
-  
+  <Connection>
+    <ID>3da1b433-c8cb-407a-9c25-1d4f2ea04d64</ID>
+    <Persist>true</Persist>
+    <Server>192.168.0.187</Server>
+    <SqlSecurity>true</SqlSecurity>
+    <UserName>xpu10</UserName>
+    <Password>AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAAfs+fvOIuHkq5uisIQafUpAAAAAACAAAAAAAQZgAAAAEAACAAAACQAkUvjSn5aeB96QXgdsjjFqXPvptKHgnaCGMhNRDMSgAAAAAOgAAAAAIAACAAAABbiFmT0lVrhHmtBPdMe3xyU1OjyKeaaH7eR33/SwSecRAAAAABJ/MPPwEPOgIlPCyxKQuIQAAAAIT7pUPnPxbVciisX+r/MmPla5oOVfqYvr9sRtZbeRrH/OKX3Rc7PSVpRIZFGC/3DIrOyo2W19KDU8GleIkcCIM=</Password>
+    <IncludeSystemObjects>true</IncludeSystemObjects>
+    <Database>ApplicationDatabase</Database>
+    <ShowServer>true</ShowServer>
+  </Connection>
   <Reference Relative="..\..\..\..\FsInteractive\BReusable.dll">C:\projects\FsInteractive\BReusable.dll</Reference>
   <Reference>&lt;ProgramFilesX64&gt;\Microsoft SQL Server\120\SDK\Assemblies\Microsoft.SqlServer.ConnectionInfo.dll</Reference>
   <Reference>&lt;ProgramFilesX64&gt;\Microsoft SQL Server\120\SDK\Assemblies\Microsoft.SqlServer.Smo.dll</Reference>
@@ -279,6 +289,7 @@ type DeployBehavior =
     | BuildThenUseSqlPackageExe
     | BuildThenUseSqlPackageExeWithPreCompare
     | UseSqlPackageExeWithPreCompare
+    | BuildThenGetCommandLine
     | GetSqlPackageCommandLine
     //| RunSmo 
 
@@ -417,6 +428,10 @@ let runDeploy (outFolder,projFolder) dbName deployBehavior =
             //useSqlPackageWithSprocRetry()
             useSqlPackageExe useTransactionalScripts 
     match deployBehavior with
+    | BuildThenGetCommandLine ->
+        buildBehavior()
+        getSqlPackageCommandLine outFolder dbName useTransactionalScripts 
+        |> printfn "CommandLine: %A"
     | BuildThenUseSqlPackageExeWithPreCompare ->
         buildBehavior()
         
@@ -439,7 +454,7 @@ let runDeploy (outFolder,projFolder) dbName deployBehavior =
             |> dumpt "precompare files found" 
             |> Seq.tryFind (fun fPath -> fPath.EndsWith("PreCompareScript.sql") )
         match preCompareOpt with
-        | Some preCompare ->SqlMgmt.migrate preCompare dbName
+        | Some preCompare -> SqlMgmt.migrate preCompare dbName
         | None -> failwithf "PreCompareScript not found"
         printfn "PreCompare finished"
         useSqlPackageExe ()
@@ -496,8 +511,8 @@ outFolder.Dump("dacpac folder")
 let projFolder = @"C:\TFS\PracticeManagement\dev\PracticeManagement\Db"
 let dbProjectOutputName = "PmMigration" // project outputs a PmMigration.dacpac
 DateTime.Now.Dump("starting deploy")
-//runDeploy (outFolder, projFolder) dbProjectOutputName GetSqlPackageCommandLine
-runDeploy (outFolder, projFolder) dbProjectOutputName DeployBehavior.BuildThenUseSqlPackageExeWithPreCompare
+runDeploy (outFolder, projFolder) dbProjectOutputName DeployBehavior.BuildThenGetCommandLine
+//runDeploy (outFolder, projFolder) dbProjectOutputName DeployBehavior.BuildThenUseSqlPackageExeWithPreCompare
 //runDeploy dbProjectOutputName RunSmo
 
 DateTime.Now.Dump("finishing deploy")
