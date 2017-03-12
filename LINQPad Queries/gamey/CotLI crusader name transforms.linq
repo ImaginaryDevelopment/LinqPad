@@ -6,7 +6,8 @@
 
 let text = """01	The Bush Whacker
 01a	RoboRabbit
-01b	Warwick The Warlock
+01b Graham the Driver
+01c	Warwick The Warlock
 02	Jim the Lumberjack
 02a	Pilot Pam
 02b	Veronica, the Android Archer
@@ -48,6 +49,7 @@ let text = """01	The Bush Whacker
 12c	The Dark Helper
 13	Sarah, the Collector
 13a	The Metal Soldierette
+13b Snickette the Sneaky
 14	Gold Panda
 14a	RoboSanta
 14b	Leerion, the Royal Dwarf
@@ -62,6 +64,7 @@ let text = """01	The Bush Whacker
 17	King Reginald IV
 17a	Queen Siri
 17b	Mr. Boggins, the Substitute
+17c Squiggles the Clown
 18	Thalia, the Thunder King
 18a	Frosty the Snowman
 18b	Littlefoot
@@ -99,9 +102,9 @@ let (|IsInt|_|) (x:string) = match Int32.TryParse x with | true, x -> Some x |_ 
 let slotMap= 
     function
     |IsInt x when x < 21 -> x
-    | "01b" -> 38
-    | "01c" -> 66
-    | "01d" -> 75
+    | "01a" -> 38
+    | "01b" -> 66
+    | "01c" -> 75
     |"02a" -> 29
     | "02b" -> 51
     // Sally
@@ -139,7 +142,7 @@ let slotMap=
     |"12b" -> 45
     |"12c" -> 69
     |"13a" -> 40 // The Metal Soldierette
-    |"13b" -> 77
+    |"13b" -> 77 // Snickette
     |"14a" -> 27 // RoboSanta
     |"14b" -> 43 // Leerion
     |"14c" -> 76 // Katie
