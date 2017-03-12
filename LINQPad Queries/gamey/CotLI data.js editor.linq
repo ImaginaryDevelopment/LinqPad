@@ -20,8 +20,8 @@ let path = @"D:\Projects\CotLICheatSheet\js\data.js"
 let flip f y x = f x y
 let dumpt (t:string) x = x.Dump(t,exclude="Raw"); x
 let dumpRemoval (items:string seq) x = 
-    let x = Util.ToExpando x   
-    let dic = x :?> IDictionary<string,obj>
+    let x = Util.ToExpando x
+    let dic = (box x) :?> IDictionary<string,obj>
     items
     |> Seq.iter(dic.Remove >> ignore<bool>)
     x.Dump("duplicateDump")
@@ -48,31 +48,32 @@ let mapCrusader (jo:JObject) =
 let (|StartsWithI|_|) (d:string) (s:string) = 
     if s.StartsWith(d, StringComparison.InvariantCultureIgnoreCase) then Some () else None
 let mutable hasChanges = false
-let setEmptyLinks (x:CrusaderData) =    
-    let cleanInput =
-        function
-        | null -> null
-        | "" -> null
-        | (StartsWithI x.Wikibase) as l -> l |> after x.Wikibase
-        | l -> l
-    let crusaders = 
-        let mutable abort = false
-        x.Crusaders
-        |> List.map (fun cru -> 
-                    if String.IsNullOrWhiteSpace cru.Link && not abort then 
-                        let link = Util.ReadLine(sprintf "link for %s?" cru.DisplayName)
-                        if String.IsNullOrWhiteSpace link then
-                            abort <- true
-                            cru
-                        else
-                            let link = link |> cleanInput
-                            cru.Raw |> setProperty "link" link
-                            hasChanges <- true
-                            {cru with Link = link } 
-                    else cru
-        )
-    
-    {x with Crusaders=crusaders}
+module MappedChanges = 
+    let setEmptyLinks (x:CrusaderData) =    
+        let cleanInput =
+            function
+            | null -> null
+            | "" -> null
+            | (StartsWithI x.Wikibase) as l -> l |> after x.Wikibase
+            | l -> l
+        let crusaders = 
+            let mutable abort = false
+            x.Crusaders
+            |> List.map (fun cru -> 
+                        if String.IsNullOrWhiteSpace cru.Link && not abort then 
+                            let link = Util.ReadLine(sprintf "link for %s?" cru.DisplayName)
+                            if String.IsNullOrWhiteSpace link then
+                                abort <- true
+                                cru
+                            else
+                                let link = link |> cleanInput
+                                cru.Raw |> setProperty "link" link
+                                hasChanges <- true
+                                {cru with Link = link } 
+                        else cru
+            )
+        
+        {x with Crusaders=crusaders}
 let starter,text,trailer = 
     let text = File.ReadAllText(path)
     text |> before "=", text |> after "=" |> before ";", text |> after ";"
@@ -95,7 +96,9 @@ text
                     |> Seq.map mapCrusader
                     |> List.ofSeq
                 Raw = x}
-|> setEmptyLinks
+// what change operation?
+//|> setEmptyLinks
+
 |> hoist dumpReverse
 |> fun x -> Newtonsoft.Json.JsonConvert.SerializeObject(x.Raw, Newtonsoft.Json.Formatting.Indented)
 |> fun x -> sprintf "%s%s%s" starter x trailer
