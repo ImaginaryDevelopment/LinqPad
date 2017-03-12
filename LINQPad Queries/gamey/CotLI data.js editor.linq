@@ -29,25 +29,49 @@ let dumpRemoval (items:string seq) x =
 let dumpRemoveRaw x = 
     x |> dumpRemoval ["Raw"]
 let getStr (name:string) (jo:JObject) = jo.[name] |> string
+let getPropertyNames (jo:JObject) = jo.Properties() |> Seq.map (fun p -> p.Name) |> List.ofSeq
 let hasProperty (name:string) (jo:JObject) = jo.Property(name) |> isNull |> not
 let setProperty (name:string) (value:obj) jo = 
+    let t = JToken.FromObject value
     if jo |> hasProperty name then 
-        jo.Property(name).Value <- JToken.FromObject(value) 
+        // would be nice if this took objects and camelcased them
+        jo.Property(name).Value <- t
     else
         printfn "adding new property %s" name
-        jo.Add(name,JToken.FromObject value)
+        jo.Add(name,t)
 type MissionTag={Id:string; DisplayName:string; Image:string; Raw:JObject} with member x.ToDump() = x |> dumpRemoveRaw
-        
-type Crusader= { Id:string;Link:string;DisplayName:string; HeroId:string; Raw:JObject} with member x.ToDump() = x |> dumpRemoveRaw
+
+type CrusaderLoot = {LootId:int; Name:string; Rarity:int; Slot:int option}        
+type Crusader= { Id:string;Link:string;DisplayName:string; HeroId:string; Loot: CrusaderLoot list; Raw:JObject} with member x.ToDump() = x |> dumpRemoveRaw
 
 type CrusaderData = {Wikibase: string; MissionTags: MissionTag list; Crusaders: Crusader list; Raw:JObject} with member x.ToDump() = x |> dumpRemoveRaw
         
 let mapMissionTag (jo:JObject) = 
     {Id = jo.["id"] |> string; DisplayName= jo.["displayName"] |> string; Image= jo.["image"] |> string; Raw=jo}
+let mutable succeededOnce = false    
 let mapCrusader (jo:JObject) = 
     {   Id = jo.["id"] |> string
         DisplayName= jo.["displayName"] |> string
         Link = getStr "link" jo
+        Loot = 
+//            let ja = jo.["loot"] :?> JArray |> Option.ofObj |> Option.map Seq.cast<JObject> |> Option.getOrDefault Seq.empty |> List.ofSeq
+//            
+//            if not<| List.isEmpty ja then
+//                ja |> List.map (fun jo -> 
+//                    try
+//                        let lootId = jo.Property("id").Value |> Dump |> int
+//                        printfn "finished id prop"
+//                        let result ={LootId= lootId; Name=jo.Property("Name").Value |> string; Rarity= jo.Property("Rarity").Value |> int}
+//                        succeededOnce <- true
+//                        result
+//                    with ex ->
+//                        (getPropertyNames jo,jo,succeededOnce).Dump("failed to map loot")
+//                        reraise()
+//                    )
+//                
+////                (ja.Properties() |> Seq.map (fun jp -> jp.Name) |> List.ofSeq,ja).Dump("found items, but didn't read them in")
+//            else []
+            []
         Raw = jo
         HeroId= jo.["heroId"] |> string
         }
@@ -133,7 +157,59 @@ module MappedChanges =
         | x -> 
             printfn "found nothing for slotMap %A" x
             0
-        
+    type LootItem = {Id:int; HeroId:int; Rarity:int; Name:string}
+    let addLootItems (x:CrusaderData) = 
+        let lootItems = 
+            File.ReadAllLines @"D:\Projects\CotLICheatSheet\js\lootdata.json" 
+            |> Seq.filter(fun s -> not <| isNull s && s.Contains ";")
+            |> Seq.map (fun s-> s.Split(Array.singleton ';'))
+            |> Seq.map (function
+                | [| lootId;heroId;rarityId;name |] ->
+                    {Id=int lootId; HeroId=int heroId; Rarity=int rarityId; Name=name}
+                | x -> 
+                    x.Dump("failing, unexpected loot array")
+                    raise <| InvalidOperationException()
+            )
+            |> List.ofSeq
+        x.Crusaders
+        |> List.map (fun cru ->
+            match cru.Loot with
+            // overwrite always, while we work on this stuff
+            | _ ->
+                let loot = 
+                    lootItems 
+                    |> Seq.filter(fun li -> li.HeroId = int cru.HeroId) 
+                    |> Seq.mapi (fun i li -> {  LootId=li.Id; 
+                                                Rarity=li.Rarity; Name=li.Name; 
+                                                // can't map slots greater than 9 (without count of greater epics that exist)
+                                                Slot= if i < 10 && li.Rarity < 5 then i % 3 |> Some else None}) 
+                    |> Seq.sortBy (fun li -> li.Rarity, li.LootId)
+                    |> List.ofSeq
+                let lootRaw = 
+                    loot
+                    |> Seq.map (fun x ->
+                        let result = JObject()
+                        result |> setProperty "lootId" x.LootId
+                        result |> setProperty "rarity" x.Rarity
+                        match x.Slot with
+                        | Some slot -> 
+                            result |> setProperty "slot" slot
+                        | None -> ()
+                        // can't do this without slot information
+                        result |> setProperty "isGreater" (loot |> Seq.exists (fun l -> l.LootId < x.LootId && l.Slot = x.Slot && l.Rarity = l.Rarity ))
+                        result |> setProperty "name" x.Name
+                        result
+                    )
+                    |> List.ofSeq
+                cru.Raw |> setProperty "loot" lootRaw
+                hasChanges <- true
+                (cru.DisplayName,loot).Dump()
+                {cru with Loot = loot}
+                
+            //| _ -> cru
+            cru
+        )
+        |> fun y -> {x with Crusaders = y}
     let addOrSetHeroIds (x:CrusaderData) =
         let mutable abort = false
         x.Crusaders
@@ -181,6 +257,7 @@ module MappedChanges =
 let starter,text,trailer = 
     let text = File.ReadAllText(path)
     text |> before "=", text |> after "=" |> before ";", text |> after ";"
+(starter,trailer).Dump("starter,trailer")    
 text
 |> trim
 |> fun x -> Regex.Replace(x,"\"(\w+)\"\s*:","$1: ")
@@ -201,10 +278,11 @@ text
                     |> List.ofSeq
                 Raw = x}
 // what change operation?
-//|> setEmptyLinks
-|> MappedChanges.addOrSetHeroIds
+//|> MappedChanges.setEmptyLinks
+//|> MappedChanges.addOrSetHeroIds
+|> MappedChanges.addLootItems
 |> hoist dumpReverse
 |> fun x -> Newtonsoft.Json.JsonConvert.SerializeObject(x.Raw, Newtonsoft.Json.Formatting.Indented)
-|> fun x -> sprintf "%s%s%s" starter x trailer
+|> fun x -> sprintf "%s=\r\n%s%s;" starter x trailer
 |> fun x -> File.WriteAllText(path, x)
 //|> dumpReverse
