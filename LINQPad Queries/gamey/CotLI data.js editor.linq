@@ -179,11 +179,18 @@ module MappedChanges =
                 let loot = 
                     lootItems 
                     |> Seq.filter(fun li -> li.HeroId = int cru.HeroId) 
-                    |> Seq.mapi (fun i li -> {  LootId=li.Id; 
+                    |> Seq.map (fun li -> {  LootId=li.Id; 
                                                 Rarity=li.Rarity; Name=li.Name; 
-                                                // can't map slots greater than 9 (without count of greater epics that exist)
-                                                Slot= if i < 10 && li.Rarity < 5 then i % 3 |> Some else None}) 
+                                                Slot= None})
+                                                
+                                                
+                    // if we could keep track of the previous item, we'd be better off reading a lot until the rarity value went back down. as they are already sorted by slot in the input
                     |> Seq.sortBy (fun li -> li.Rarity, li.LootId)
+                    |> Seq.mapi(fun i li -> // can't map slots greater than 8 (without count of greater epics that exist)
+                        if i < 9 && li.Rarity < 5 then 
+                            {li with Slot = Some <| i % 3} 
+                        else li
+                    )
                     |> List.ofSeq
                 let lootRaw = 
                     loot
@@ -196,7 +203,8 @@ module MappedChanges =
                             result |> setProperty "slot" slot
                         | None -> ()
                         // can't do this without slot information
-                        result |> setProperty "isGreater" (loot |> Seq.exists (fun l -> l.LootId < x.LootId && l.Slot = x.Slot && l.Rarity = l.Rarity ))
+                        if loot |> Seq.exists (fun l -> l.LootId < x.LootId && l.Slot = x.Slot && x.Rarity = l.Rarity ) then
+                            result |> setProperty "isGreater" true
                         result |> setProperty "name" x.Name
                         result
                     )
