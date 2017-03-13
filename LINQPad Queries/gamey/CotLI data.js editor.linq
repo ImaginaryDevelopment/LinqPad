@@ -30,6 +30,9 @@ let dumpRemoveRaw x =
     x |> dumpRemoval ["Raw"]
 let getStr (name:string) (jo:JObject) = jo.[name] |> string
 let getPropertyNames (jo:JObject) = jo.Properties() |> Seq.map (fun p -> p.Name) |> List.ofSeq
+let getProperty (name:string) (jo:JObject) : JProperty option = jo.Property name |> Option.ofObj
+let getPropertyValue name jo = getProperty name jo |> Option.map (fun jp -> jp.Value) |> Option.bind Option.ofObj
+let deserializeJO x = Newtonsoft.Json.JsonConvert.DeserializeObject<JObject>(x)
 let hasProperty (name:string) (jo:JObject) = jo.Property(name) |> isNull |> not
 let setProperty (name:string) (value:obj) jo = 
     let t = JToken.FromObject value
@@ -41,14 +44,14 @@ let setProperty (name:string) (value:obj) jo =
         jo.Add(name,t)
 type MissionTag={Id:string; DisplayName:string; Image:string; Raw:JObject} with member x.ToDump() = x |> dumpRemoveRaw
 
-type CrusaderLoot = {LootId:int; Name:string; Rarity:int; Slot:int option}        
-type Crusader= { Id:string;Link:string;DisplayName:string; HeroId:string; Loot: CrusaderLoot list; Raw:JObject} with member x.ToDump() = x |> dumpRemoveRaw
+type CrusaderLoot = {Slot:int; Rarity:int; IsGolden:bool; Name:string; LootId:int}
+type Crusader= { Id:string;Link:string;DisplayName:string; HeroId:int; Loot: CrusaderLoot list; Raw:JObject} with member x.ToDump() = x |> dumpRemoveRaw
 
 type CrusaderData = {Wikibase: string; MissionTags: MissionTag list; Crusaders: Crusader list; Raw:JObject} with member x.ToDump() = x |> dumpRemoveRaw
         
 let mapMissionTag (jo:JObject) = 
     {Id = jo.["id"] |> string; DisplayName= jo.["displayName"] |> string; Image= jo.["image"] |> string; Raw=jo}
-let mutable succeededOnce = false    
+//let mutable succeededOnce = false    
 let mapCrusader (jo:JObject) = 
     {   Id = jo.["id"] |> string
         DisplayName= jo.["displayName"] |> string
@@ -73,7 +76,7 @@ let mapCrusader (jo:JObject) =
 //            else []
             []
         Raw = jo
-        HeroId= jo.["heroId"] |> string
+        HeroId= jo.["heroId"] |> string |> int
         }
 let (|StartsWithI|_|) (d:string) (s:string) = 
     if s.StartsWith(d, StringComparison.InvariantCultureIgnoreCase) then Some () else None
@@ -157,99 +160,69 @@ module MappedChanges =
         | x -> 
             printfn "found nothing for slotMap %A" x
             0
-    type LootItem = {Id:int; HeroId:int; Rarity:int; Name:string}
-    let addLootItems (x:CrusaderData) = 
+    // type CrusaderLoot = {LootId:int; Name:string; Rarity:int; Slot:int option; Golden:bool}
+    type LootItem = {HeroId:int; CL:CrusaderLoot}
+    let addLootItemsFromGameData (x:CrusaderData) = 
         let lootItems = 
-            File.ReadAllLines @"D:\Projects\CotLICheatSheet\js\lootdata.json" 
-            |> Seq.filter(fun s -> not <| isNull s && s.Contains ";")
-            |> Seq.map (fun s-> s.Split(Array.singleton ';'))
-            |> Seq.map (function
-                | [| lootId;heroId;rarityId;name |] ->
-                    {Id=int lootId; HeroId=int heroId; Rarity=int rarityId; Name=name}
-                | x -> 
-                    x.Dump("failing, unexpected loot array")
-                    raise <| InvalidOperationException()
+            let x = 
+                File.ReadAllText @"D:\Projects\CotLICheatSheet\js\gamedata.json"
+                |> deserializeJO
+            let patchVersion = x |> getProperty "patch_version"
+            patchVersion.Dump("patch_version")
+            let getInt name (jo:JObject) = 
+                jo |> getPropertyValue name |> Option.get |> string |> int
+            x 
+            |> getPropertyValue "loot_defines"
+            |> Option.get
+            |> fun x -> x :?> JArray
+            |> Seq.cast<JObject>
+            |> Seq.map (fun raw ->
+                {   HeroId= raw |> getInt  "hero_id"
+                    CL ={   LootId=raw |> getInt "id"
+                            Rarity=raw |> getInt "rarity"
+                            Name= raw |> getPropertyValue "name" |> Option.get |> string
+                            Slot= raw |> getInt "slot_id"
+                            IsGolden= 
+                                raw 
+                                |> getPropertyValue "golden" 
+                                |> Option.get 
+                                |> string 
+                                |> function 
+                                    |"0" -> false 
+                                    |"1" -> true 
+                                    | x -> 
+                                        x.Dump("Invalid option for field golden")
+                                        raise <| InvalidOperationException(message="Invalid option for field golden")
+                    }
+                }
             )
-            |> List.ofSeq
-        x.Crusaders
-        |> List.map (fun cru ->
-            let runDiag = cru.Id = "01" || int cru.HeroId = 1
-            match cru.Loot with
-            // overwrite always, while we work on this stuff
-            | _ ->
-                let lootItems = 
-                    lootItems 
-                    |> Seq.filter(fun li -> li.HeroId = int cru.HeroId) 
-                    |> List.ofSeq
-                let loot = 
-                    lootItems 
-                    |> Seq.filter(fun li -> li.HeroId = int cru.HeroId) 
-//                    |> Seq.map (fun li -> {  LootId=li.Id; 
-//                                                Rarity=li.Rarity; Name=li.Name; 
-//                                                Slot= None})
-                    |> Seq.fold (fun (previous:CrusaderLoot list) (li:LootItem) ->
-                        let cli = { LootId=li.Id; 
-                                    Rarity=li.Rarity; Name=li.Name; 
-                                    Slot= None}
-                        let previousItem = previous |> List.rev |> Seq.tryHead
-                        let prevSlot = previousItem |> Option.bind (fun pi -> pi.Slot) |> Option.getOrDefault 0
-                        let prevRarity = previousItem |> Option.map (fun pi -> pi.Rarity) |> Option.getOrDefault 0
-                        let slotUnadjusted = 
-                            if prevRarity < cli.Rarity then
-                                prevSlot
-                            else
-                                prevSlot |> (+) 1 |> flip (%) 3
-                        let alreadyInSlotCount = previous |> Seq.filter (fun p -> Option.isSome p.Slot && p.Slot.Value = slotUnadjusted) |> Seq.length
-                        if cli.Name = "Unnecessarily Bisected Bush-Destroying Sword of Criticals" then
-                            (cli,alreadyInSlotCount,prevSlot,prevRarity, slotUnadjusted).Dump("ge?")
-                        match previousItem, alreadyInSlotCount, cli.Rarity with
-                        // no way of knowing which slot this is for
-                        | Some _, 4, 4
-                        | Some _, _, 5 ->
-                            cli
-                        | None, _, _ ->
-                            {cli with Slot = Some 0}
-                        | Some prev, _, _ ->
-                            let result = {cli with Slot = slotUnadjusted |> Some}
-                            if runDiag && Some slotUnadjusted <> prev.Slot then
-                                (prev,result).Dump("slot increment?")
-                            result
-                        |> fun newItem -> previous@[ newItem ]
-                    ) List.empty             
-                    // if we could keep track of the previous item, we'd be better off reading a lot until the rarity value went back down. as they are already sorted by slot in the input
-                    //|> Seq.sortBy (fun li -> li.Slot, li.Rarity, li.LootId)
-                    |> List.ofSeq
-
-                let lootRaw = 
-                    loot
-                    |> Seq.map (fun x ->
-                        let result = JObject()
-                        result |> setProperty "lootId" x.LootId
-                        result |> setProperty "rarity" x.Rarity
-                        match x.Slot with
-                        | Some slot -> 
-                            result |> setProperty "slot" slot
-                        | None -> ()
-                        // can't do this without slot information
-//                        if loot |> Seq.exists (fun l -> l.LootId < x.LootId && l.Slot = x.Slot && l.Rarity > 3 && x.Rarity = l.Rarity ) then
-//                            result |> setProperty "isGreater" true
-                        result |> setProperty "name" x.Name
-                        result
-                    )
-                    |> List.ofSeq
-                cru.Raw |> setProperty "loot" lootRaw
+            
+//#warning take 20            
+            |> Seq.filter(fun li -> li.HeroId > 0)
+            |> Seq.groupBy(fun li -> li.HeroId)
+            |> Seq.map (fun (heroId,items) -> 
                 hasChanges <- true
-                if runDiag then
-                    (cru.DisplayName,lootItems |> Seq.zip loot |> List.ofSeq).Dump("diag")
-                {cru with Loot = loot}
+                (heroId, 
+                    items
+                    |> Seq.map(fun li -> li.CL) 
+                    |> Seq.sortBy(fun cl -> cl.Slot, cl.Rarity, cl.LootId) 
+                    |> List.ofSeq
+                )
+            )
+            |> Map.ofSeq
 
+        x.Crusaders
+        |> Seq.map (fun c ->
+            {c with Loot =lootItems.[int c.HeroId]}
         )
+        |> List.ofSeq
         |> fun y -> {x with Crusaders = y}
+
     let addOrSetHeroIds (x:CrusaderData) =
         let mutable abort = false
         x.Crusaders
         |> List.map (fun cru ->
-            if not abort && String.IsNullOrWhiteSpace cru.HeroId then
+            if not abort && cru.HeroId < 1 then
                 cru.Id 
                 |> slotMap
                 |> fun i -> if i < 1 then None else Some i
@@ -257,7 +230,7 @@ module MappedChanges =
                     | Some heroId -> 
                         cru.Raw |> setProperty "heroId" heroId
                         hasChanges <- true
-                        {cru with HeroId=heroId |> string}
+                        {cru with HeroId=heroId |> string |> int}
                     | None -> cru
             else
                 cru
@@ -295,9 +268,9 @@ let starter,text,trailer =
 text
 |> trim
 |> fun x -> Regex.Replace(x,"\"(\w+)\"\s*:","$1: ")
-|> hoist dumpReverse
+//|> hoist dumpReverse
 |> fun x -> Newtonsoft.Json.JsonConvert.DeserializeObject<JObject> x
-|> hoist dumpReverse
+//|> hoist dumpReverse
 |> fun x -> {
                 Wikibase = x.["wikibase"] |> string
                 MissionTags= 
@@ -314,9 +287,9 @@ text
 // what change operation?
 //|> MappedChanges.setEmptyLinks
 //|> MappedChanges.addOrSetHeroIds
-|> MappedChanges.addLootItems
+|> MappedChanges.addLootItemsFromGameData
 |> hoist dumpReverse
 |> fun x -> Newtonsoft.Json.JsonConvert.SerializeObject(x.Raw, Newtonsoft.Json.Formatting.Indented)
 |> fun x -> sprintf "%s=\r\n%s%s;" starter x trailer
-|> fun x -> File.WriteAllText(path, x)
+|> fun x -> if hasChanges then File.WriteAllText(path, x) else ()
 //|> dumpReverse
