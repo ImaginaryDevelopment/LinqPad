@@ -37,7 +37,7 @@ let setProperty (name:string) (value:obj) jo =
         // would be nice if this took objects and camelcased them
         jo.Property(name).Value <- t
     else
-        printfn "adding new property %s" name
+        //printfn "adding new property %s" name
         jo.Add(name,t)
 type MissionTag={Id:string; DisplayName:string; Image:string; Raw:JObject} with member x.ToDump() = x |> dumpRemoveRaw
 
@@ -173,25 +173,53 @@ module MappedChanges =
             |> List.ofSeq
         x.Crusaders
         |> List.map (fun cru ->
+            let runDiag = cru.Id = "01" || int cru.HeroId = 1
             match cru.Loot with
             // overwrite always, while we work on this stuff
             | _ ->
+                let lootItems = 
+                    lootItems 
+                    |> Seq.filter(fun li -> li.HeroId = int cru.HeroId) 
+                    |> List.ofSeq
                 let loot = 
                     lootItems 
                     |> Seq.filter(fun li -> li.HeroId = int cru.HeroId) 
-                    |> Seq.map (fun li -> {  LootId=li.Id; 
-                                                Rarity=li.Rarity; Name=li.Name; 
-                                                Slot= None})
-                                                
-                                                
+//                    |> Seq.map (fun li -> {  LootId=li.Id; 
+//                                                Rarity=li.Rarity; Name=li.Name; 
+//                                                Slot= None})
+                    |> Seq.fold (fun (previous:CrusaderLoot list) (li:LootItem) ->
+                        let cli = { LootId=li.Id; 
+                                    Rarity=li.Rarity; Name=li.Name; 
+                                    Slot= None}
+                        let previousItem = previous |> List.rev |> Seq.tryHead
+                        let prevSlot = previousItem |> Option.bind (fun pi -> pi.Slot) |> Option.getOrDefault 0
+                        let prevRarity = previousItem |> Option.map (fun pi -> pi.Rarity) |> Option.getOrDefault 0
+                        let slotUnadjusted = 
+                            if prevRarity < cli.Rarity then
+                                prevSlot
+                            else
+                                prevSlot |> (+) 1 |> flip (%) 3
+                        let alreadyInSlotCount = previous |> Seq.filter (fun p -> Option.isSome p.Slot && p.Slot.Value = slotUnadjusted) |> Seq.length
+                        if cli.Name = "Unnecessarily Bisected Bush-Destroying Sword of Criticals" then
+                            (cli,alreadyInSlotCount,prevSlot,prevRarity, slotUnadjusted).Dump("ge?")
+                        match previousItem, alreadyInSlotCount, cli.Rarity with
+                        // no way of knowing which slot this is for
+                        | Some _, 4, 4
+                        | Some _, _, 5 ->
+                            cli
+                        | None, _, _ ->
+                            {cli with Slot = Some 0}
+                        | Some prev, _, _ ->
+                            let result = {cli with Slot = slotUnadjusted |> Some}
+                            if runDiag && Some slotUnadjusted <> prev.Slot then
+                                (prev,result).Dump("slot increment?")
+                            result
+                        |> fun newItem -> previous@[ newItem ]
+                    ) List.empty             
                     // if we could keep track of the previous item, we'd be better off reading a lot until the rarity value went back down. as they are already sorted by slot in the input
-                    |> Seq.sortBy (fun li -> li.Rarity, li.LootId)
-                    |> Seq.mapi(fun i li -> // can't map slots greater than 8 (without count of greater epics that exist)
-                        if i < 9 && li.Rarity < 5 then 
-                            {li with Slot = Some <| i % 3} 
-                        else li
-                    )
+                    //|> Seq.sortBy (fun li -> li.Slot, li.Rarity, li.LootId)
                     |> List.ofSeq
+
                 let lootRaw = 
                     loot
                     |> Seq.map (fun x ->
@@ -203,19 +231,18 @@ module MappedChanges =
                             result |> setProperty "slot" slot
                         | None -> ()
                         // can't do this without slot information
-                        if loot |> Seq.exists (fun l -> l.LootId < x.LootId && l.Slot = x.Slot && x.Rarity = l.Rarity ) then
-                            result |> setProperty "isGreater" true
+//                        if loot |> Seq.exists (fun l -> l.LootId < x.LootId && l.Slot = x.Slot && l.Rarity > 3 && x.Rarity = l.Rarity ) then
+//                            result |> setProperty "isGreater" true
                         result |> setProperty "name" x.Name
                         result
                     )
                     |> List.ofSeq
                 cru.Raw |> setProperty "loot" lootRaw
                 hasChanges <- true
-                (cru.DisplayName,loot).Dump()
+                if runDiag then
+                    (cru.DisplayName,lootItems |> Seq.zip loot |> List.ofSeq).Dump("diag")
                 {cru with Loot = loot}
-                
-            //| _ -> cru
-            cru
+
         )
         |> fun y -> {x with Crusaders = y}
     let addOrSetHeroIds (x:CrusaderData) =
@@ -265,7 +292,6 @@ module MappedChanges =
 let starter,text,trailer = 
     let text = File.ReadAllText(path)
     text |> before "=", text |> after "=" |> before ";", text |> after ";"
-(starter,trailer).Dump("starter,trailer")    
 text
 |> trim
 |> fun x -> Regex.Replace(x,"\"(\w+)\"\s*:","$1: ")
