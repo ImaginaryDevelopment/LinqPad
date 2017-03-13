@@ -279,6 +279,7 @@ type DeployBehavior =
     | BuildThenUseSqlPackageExe
     | BuildThenUseSqlPackageExeWithPreCompare
     | UseSqlPackageExeWithPreCompare
+    | BuildThenGetCommandLine
     | GetSqlPackageCommandLine
     //| RunSmo 
 
@@ -417,6 +418,10 @@ let runDeploy (outFolder,projFolder) dbName deployBehavior =
             //useSqlPackageWithSprocRetry()
             useSqlPackageExe useTransactionalScripts 
     match deployBehavior with
+    | BuildThenGetCommandLine ->
+        buildBehavior()
+        getSqlPackageCommandLine outFolder dbName useTransactionalScripts 
+        |> printfn "CommandLine: %A"
     | BuildThenUseSqlPackageExeWithPreCompare ->
         buildBehavior()
         
@@ -439,7 +444,7 @@ let runDeploy (outFolder,projFolder) dbName deployBehavior =
             |> dumpt "precompare files found" 
             |> Seq.tryFind (fun fPath -> fPath.EndsWith("PreCompareScript.sql") )
         match preCompareOpt with
-        | Some preCompare ->SqlMgmt.migrate preCompare dbName
+        | Some preCompare -> SqlMgmt.migrate preCompare dbName
         | None -> failwithf "PreCompareScript not found"
         printfn "PreCompare finished"
         useSqlPackageExe ()
@@ -496,8 +501,8 @@ outFolder.Dump("dacpac folder")
 let projFolder = @"C:\TFS\PracticeManagement\dev\PracticeManagement\Db"
 let dbProjectOutputName = "PmMigration" // project outputs a PmMigration.dacpac
 DateTime.Now.Dump("starting deploy")
-//runDeploy (outFolder, projFolder) dbProjectOutputName GetSqlPackageCommandLine
-runDeploy (outFolder, projFolder) dbProjectOutputName DeployBehavior.BuildThenUseSqlPackageExeWithPreCompare
+runDeploy (outFolder, projFolder) dbProjectOutputName DeployBehavior.BuildThenGetCommandLine
+//runDeploy (outFolder, projFolder) dbProjectOutputName DeployBehavior.BuildThenUseSqlPackageExeWithPreCompare
 //runDeploy dbProjectOutputName RunSmo
 
 DateTime.Now.Dump("finishing deploy")
