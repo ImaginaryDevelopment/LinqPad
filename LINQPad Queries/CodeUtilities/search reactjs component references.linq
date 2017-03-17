@@ -55,6 +55,10 @@ let text = """app.Inputs = props =>
         </table>
         );
 };"""
+
+// ----------------------------------------------------------------------------------------------------------------------
+
+
 let propTypesDeclaration = 
     """  onCritChanceChange: React.PropTypes.func.isRequired,
     critChance:React.PropTypes.number.isRequired,
