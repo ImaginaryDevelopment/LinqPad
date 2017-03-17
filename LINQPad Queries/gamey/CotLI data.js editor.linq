@@ -44,7 +44,14 @@ let setProperty (name:string) (value:obj) jo =
         jo.Add(name,t)
 type MissionTag={Id:string; DisplayName:string; Image:string; Raw:JObject} with member x.ToDump() = x |> dumpRemoveRaw
 
-type CrusaderLoot = {Slot:int; Rarity:int; IsGolden:bool; Name:string; LootId:int}
+type CrusaderLoot = {Slot:int; Rarity:int; IsGolden:bool; Name:string; LootId:int} with 
+    static member toJObject(x:CrusaderLoot) = 
+        
+        let result = JObject(JProperty("slot",x.Slot - 1),JProperty("rarity",x.Rarity), JProperty("name",x.Name), JProperty("lootId",x.LootId))
+        let jGolden = if x.IsGolden then JProperty("golden",true) else null
+        if x.IsGolden then
+            result.Add jGolden
+        result
 type Crusader= { Id:string;Link:string;DisplayName:string; HeroId:int; Loot: CrusaderLoot list; Raw:JObject} with member x.ToDump() = x |> dumpRemoveRaw
 
 type CrusaderData = {Wikibase: string; MissionTags: MissionTag list; Crusaders: Crusader list; Raw:JObject} with member x.ToDump() = x |> dumpRemoveRaw
@@ -201,7 +208,6 @@ module MappedChanges =
             |> Seq.filter(fun li -> li.HeroId > 0)
             |> Seq.groupBy(fun li -> li.HeroId)
             |> Seq.map (fun (heroId,items) -> 
-                hasChanges <- true
                 (heroId, 
                     items
                     |> Seq.map(fun li -> li.CL) 
@@ -213,6 +219,8 @@ module MappedChanges =
 
         x.Crusaders
         |> Seq.map (fun c ->
+            hasChanges <- true
+            c.Raw |> setProperty "loot" (lootItems.[int c.HeroId] |> Seq.sortBy (fun l -> l.Slot,l.Rarity,l.IsGolden) |> Seq.map CrusaderLoot.toJObject)
             {c with Loot =lootItems.[int c.HeroId]}
         )
         |> List.ofSeq
