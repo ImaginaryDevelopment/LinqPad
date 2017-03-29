@@ -41,11 +41,14 @@ let sanitize (q:ObjectModel.Query) =
         File.Delete target
     elif File.Exists target then
         let diffIt = 
-            let toRun () = Util.Cmd(sprintf "\"C:\Program Files\KDiff3\kdiff3.exe\" \"%s\" \"%s\"" q.FilePath target, true) |> ignore
+            let toRun () = 
+                try
+                    Util.Cmd(sprintf "\"C:\Program Files\KDiff3\kdiff3.exe\" \"%s\" \"%s\"" q.FilePath target, true) |> ignore
+                with ex -> ex.Dump()
             LINQPad.Hyperlinq(toRun,"diff")
         let deleteIt =
             let del () = File.Delete(target)
-            LINQPad.Hyperlinq(del,"delete")
+            LINQPad.Hyperlinq(del,sprintf "delete %s file" <| Path.GetExtension target)
         
         toDump.Add(q.FilePath,diffIt,deleteIt)
     if q.FilePath = Util.CurrentQueryPath then

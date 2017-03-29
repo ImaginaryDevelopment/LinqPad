@@ -7,6 +7,7 @@
 </Query>
 
 // this thing works fine via linqpad (translating reference paths only)
+// can't work in vs2017, as db projects don't open
 
 
 // TODO: Convert/import from SqlGenerator : inputs for GenerateAccountingInserts
@@ -57,9 +58,20 @@ let dumpft t f x=
     x
     
 // items that we aren't generating the SQL for, but need datamodels generated from the sql db schema    
-let dataModelsToGen = [
+let dataModelsToGen : TableIdentifier list = [
         {TableIdentifier.Schema="dbo"; Name="Appointments"}
-        //{Schema="dbo"; Name="ReferralSources"; GenerateFull = false}
+        {Schema="dbo"; Name="Payers"}
+        {Schema="dbo"; Name="Users"}
+        {Schema="dbo"; Name="ReferralSources"}
+        {Schema="dbo"; Name="AuditLog"}
+        {Schema="dbo"; Name="Intellidox"}
+        {Schema="dbo"; Name="HIPAAAuthorizations"}
+        {Schema="dbo"; Name="DocumentTypes"}
+        {Schema="dbo"; Name="PayerProfileInfo"}
+        // we need to have the GuarantorId field on this be mapped to measure PatientId
+        {Schema="dbo"; Name="PatientsInfo"}
+        {Schema="dbo"; Name="Patients"}
+        {Schema="dbo"; Name="Charge"}
     ]
     
 let dte = 
