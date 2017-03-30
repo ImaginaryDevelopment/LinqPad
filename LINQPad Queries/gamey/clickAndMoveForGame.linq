@@ -159,7 +159,7 @@ let funs =
         doRandomSweepClick
         dumpStatus
         fun () ->
-            moveClick p.CrusaderTabSelector
+            moveClick p.CrusaderTabSelector ()
             sleep 400
             WinForm.setMousePosition p.DpsLevelUpPos.X p.DpsLevelUpPos.Y
             Simulator.shiftClick () |> ignore
@@ -180,7 +180,7 @@ let funs =
                 sleep 400
                 moveClick p.StormButton ()
                 sleep 400
-                lastCast <- DateTime.Now ()
+                lastCast <- DateTime.Now
     ]
 let delay = 800
 let watchPosition = false
