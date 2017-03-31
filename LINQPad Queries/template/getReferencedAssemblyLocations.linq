@@ -9,7 +9,8 @@ let token = lazy (Util.GetPassword("SlackSmartF#ers-Random"))
 let localAppDataPath = lazy (Environment.GetFolderPath Environment.SpecialFolder.LocalApplicationData)
 let tokenPathParent = lazy(Path.Combine(localAppDataPath.Value, "slackApi"))
 let tokenPath = lazy(Path.Combine(tokenPathParent.Value, "token.txt"))
-
+tokenPath.Value
+|> Dump
 let setupTokenFileForTP () = 
     let token = token.Value
     
