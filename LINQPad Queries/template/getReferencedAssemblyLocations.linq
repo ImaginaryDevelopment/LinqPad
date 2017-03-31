@@ -5,15 +5,19 @@
 </Query>
 
 open SlackProvider
-let token = lazy (Util.GetPassword("SlackSmartF#ers-Random")) 
+let token = lazy (Util.GetPassword("SlackSmartF#ers-Random"))
+let localAppDataPath = lazy (Environment.GetFolderPath Environment.SpecialFolder.LocalApplicationData)
+let tokenPathParent = lazy(Path.Combine(localAppDataPath.Value, "slackApi"))
+let tokenPath = lazy(Path.Combine(tokenPathParent.Value, "token.txt"))
+
 let setupTokenFileForTP () = 
     let token = token.Value
-    let ud = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
-    if not <| Directory.Exists ud then
+    
+    if not <| Directory.Exists localAppDataPath.Value then
         failwithf "no local appdata folder found"
-    let parent = Path.Combine(ud, "slackApi")
-    if not <| Directory.Exists parent then
-        Directory.CreateDirectory(parent) |> ignore
+    
+    if not <| Directory.Exists tokenPathParent.Value then
+        Directory.CreateDirectory parent |> ignore
     let path = Path.Combine(parent,"token.txt")
     path.Dump()
     File.WriteAllText(path, token)
