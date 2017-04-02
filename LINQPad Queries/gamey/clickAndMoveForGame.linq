@@ -165,10 +165,10 @@ let funs =
             Simulator.shiftClick () |> ignore
         doRandomSweepClick
         doRandomSweepClick
-        moveClick p.FormationButton
+//        moveClick p.FormationButton
         doRandomSweepClick
         doRandomSweepClick
-        moveClick p.FormationButton
+//        moveClick p.FormationButton
         doRandomSweepClick
         // in case auto advance was turned off at some point, click where the advance arrow would be
         moveClick p.MoveClickTopRight
