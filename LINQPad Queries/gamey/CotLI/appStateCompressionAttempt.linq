@@ -42,8 +42,6 @@ module Cereal =
             raise <| Exception ("Unrecognized item type " + jt.GetType().Name + ":" + (string jt))
             
     type Simplicity =
-        // arrays with no values, objects with no properties
-        | Empty
         | Simple of JValue
         | Values of JValue list
         | Objects of JObject list
@@ -123,9 +121,18 @@ Util.Cache(fetch,"appStateText")
         |> delimit "-"
     | Object props -> 
         match name with 
-        |"crusaderGear" -> 
-            props |> dumpt name |> ignore
-            name
+        |"crusaderGear" ->                     
+            props |> Seq.map (fun (name, v) ->
+                let cruId = name
+                match v with
+                | Object props ->                
+                    sprintf "%s:%s" name (props |> Seq.map (fun (slotId,Simple lootId) -> sprintf "%s%A" slotId (lootId.Value |> string |> int)  |>  string) |> delimit "-")
+                | _ -> failwith "Bad crusader gear item"
+                
+            )
+            |> delimit ";"
+
+            
         | _ -> props |> Seq.map string |> delimit ","
     | Objects objects -> ""
     |> fun v -> name,v
