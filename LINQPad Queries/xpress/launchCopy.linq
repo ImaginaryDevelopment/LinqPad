@@ -13,6 +13,7 @@ let linq t f = Hyperlinq(Action(f),t)
 let dumpLength title items = 
     Seq.length items |> dumpt title |> ignore
     items
+
 module PInvoke = 
     type EnumThreadDelegate= delegate of (IntPtr * IntPtr) -> bool
     
@@ -92,12 +93,36 @@ let copy s d =
 let dumpThreadInfo (t:string) = 
     System.Threading.Thread.CurrentThread.ManagedThreadId.Dump(t)    
     System.Threading.Thread.CurrentThread.Dump(t)
+
+let updateLaunchedProcesses (p:Process) = 
+    let pId = p.Id
+    let key = "launchedProcesses"
+    let previouslyLaunched = 
+        match AppDomain.CurrentDomain.GetData key with 
+        | null -> List.Empty 
+        | x -> x :?> int list
+    let currentProcesses = 
+        Process.GetProcesses()
+        |> Seq.filter(fun p -> previouslyLaunched |> Seq.contains p.Id)
+        |> Seq.filter(fun p -> p.StartInfo.FileName.Contains("PracticeManagement"))
+        |> Seq.toList
+        |> List.map(fun p -> p.Id)
+    
+    let updatedP=
+        previouslyLaunched
+        |> List.filter(fun pId -> currentProcesses |> Seq.contains pId)
+        |> fun x -> pId::x
+    AppDomain.CurrentDomain.SetData(key, updatedP)
+    updatedP.Dump("Pm processes")
+    p
     
 let launch targetDir exe = 
     dumpThreadInfo "launching process on"
+    let fullPath = Path.Combine(targetDir,exe)
     let psi = 
-        Path.Combine(targetDir,exe)
+        fullPath
         |> ProcessStartInfo
+    fullPath.Dump()
     psi.RedirectStandardError <- true
     psi.RedirectStandardOutput <- true
     psi.UseShellExecute <- false
@@ -105,10 +130,11 @@ let launch targetDir exe =
     
     psi
     |> Process.Start
-    |> (fun p -> p.EnableRaisingEvents <- true; p)
+    |> fun p -> p.EnableRaisingEvents <- true; p
     |> (fun p -> p.ErrorDataReceived.Add (fun ed -> ed.Dump(); printfn "error: %A" ed.Data); p)
     |> (fun p -> p.OutputDataReceived.Add (fun ed -> ed.Dump(); printfn "output: %A" ed.Data); p)
     |> (fun p -> p.Exited.Add (fun _ -> "exited".Dump(); p.Dump()); p)
+    |> updateLaunchedProcesses
     
 
 let sourceDir = @"C:\TFS\PracticeManagement\dev\PracticeManagement\bin\"

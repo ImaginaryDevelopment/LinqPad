@@ -1,4 +1,5 @@
 <Query Kind="SQL">
+  
 </Query>
 
 -- another get schema table column info script

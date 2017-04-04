@@ -19,10 +19,8 @@ static bool debug = false;
 
 void Main()
 {
-	// does not seem to work so far =(
-	FileUtil.WhoIsLocking(@"C:\Development\Products\CVS\.sonar\.sonartmp\caches\.persistit").Dump("locking");
+	// seems to be working, for more info check out http://stackoverflow.com/questions/317071/how-do-i-find-out-which-process-is-locking-a-file-using-net
+	FileUtil.WhoIsLocking(@"C:\Users\Brandon\AppData\Local\Temp\LINQPad5\_lrdgwngc\extensions\BMeffers.dll").Dump("locking");
 		
 		
 } //main
-
-

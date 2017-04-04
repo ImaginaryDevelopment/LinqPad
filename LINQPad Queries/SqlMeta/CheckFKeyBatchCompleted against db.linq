@@ -1,4 +1,6 @@
-<Query Kind="FSharpExpression" />
+<Query Kind="FSharpExpression">
+  
+</Query>
 
 let batchText = """ALTER TABLE [dbo].[Appointments] WITH CHECK CHECK CONSTRAINT [FK_Appointments_ADMIT_ADMITFACILITY_AdmitFacilityID];
 

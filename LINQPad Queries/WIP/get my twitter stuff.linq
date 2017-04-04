@@ -6,6 +6,7 @@
 // connect to twitter, save all my liked/favorited tweets in case the owner deletes their account or the tweet.
 // desired feature: unshorten any urls found
 // JSON.net note: if deserializing into T casing is ignored, if deserializing by property name it is not
+
 open System.Globalization
 open System.Net
 open System.Net.Http
@@ -13,21 +14,34 @@ open Newtonsoft.Json
 
 let isDebug = false
 let savePathOpt = 
-    Util.GetPassword("saveMachineNamesCommaDelimited")
-    |> String.split [","]
-    |> Seq.exists ((=) Environment.MachineName)
-    |> function 
-        | false -> None
-        | true -> Environment.GetFolderPath Environment.SpecialFolder.MyDocuments |> Some
-    |> Option.map (fun myDocs ->
-        if not <| Directory.Exists myDocs then
-            failwithf "My Documents did not exist"
-        let targetPath = Path.Combine(myDocs, "Twitter exports")
-        if not <| Directory.Exists targetPath then
-            Directory.CreateDirectory targetPath |> ignore
-        targetPath
-    )    
+    let result = 
+        // intended to help decide if we should save out to the computer, or if we are just testing/developing this script
+        // perhaps guard against accidently saving my data to another machine
+//        let blockSaveGuard () =
+//            
+//            // Environment.MachineName |> Dump
+//            // Util.SetPassword( "saveMachineNamesCommaDelimited", null)
+//            //Util.GetPassword "saveMachineNamesCommaDelimited"
+//            // this functionality is disabled for now
+//            Util.ReadLine<bool> "save machine?"
+        
+        // blockSaveGuard
+        // false
+        
+        Environment.GetFolderPath Environment.SpecialFolder.MyDocuments
+        |> fun myDocs ->
+            printfn "yay? found myDocs folder"
+            if not <| Directory.Exists myDocs then
+                failwithf "My Documents did not exist"
+            let targetPath = Path.Combine(myDocs, "Twitter exports")
+            if not <| Directory.Exists targetPath then
+                Directory.CreateDirectory targetPath |> ignore
+            targetPath
+        // return None to skip saving, Some path to save the result to file
+        |> Some
             
+    result.Dump("hello?")
+    result            
 
 [<AutoOpen>]
 module Helpers =
@@ -123,7 +137,7 @@ module Helpers =
     let deserializePartial propName s = Newtonsoft.Json.Linq.JObject.Parse(s).[propName]    
     let deserializeT<'T> x = JsonConvert.DeserializeObject<'T> x
     // use prettifyJsonObj
-    //let serialize x = JsonConvert.SerializeObject(x, Formatting.PrettyPrint)
+    let serialize x = JsonConvert.SerializeObject(x, Newtonsoft.Json.Formatting.Indented)
     let tryDeserializeT<'T> x = 
         try
             deserializeT<'T> x
@@ -432,22 +446,62 @@ let userId = "maslowjax"
 // save to file, appending new unique results if one already exists
 let saveAppendish savePathOpt key (data:Tweet list) = 
     match savePathOpt with
-    | None -> ()
+    | None -> 
+        data
     | Some savePath ->
-        let oldData = if File.Exists savePath then File.ReadAllText savePath |> deserializeT<Tweet list> else List.empty
+        let oldData,lastUpdate = 
+            if File.Exists savePath then 
+                File.ReadAllText savePath |> deserializeT<Tweet list>, System.IO.FileInfo savePath |> fun x -> x.LastWriteTimeUtc |> Some
+            else 
+                List.empty, None
         // replace ones that match in case the read algorithm has improved/changed? what if part of the tweet or a child of it has since been deleted?
         // store in chronological order, or reversed?
-        
+
         // use this to find duplicates, but not to write out (b/c ordering may be lost)
-        let mapped = 
+        let mappedOld = 
             oldData 
-            |> Seq.groupBy(fun t -> t.Id |> Option.fromNullable)
+            |> Seq.groupBy(fun t -> t.Id |> Option.ofNullable)            
+            
             // eliminate full duplicates
-            |> Seq.map (fun (idOpt,versions) -> idOpt, versions |> Seq.distinct)
-            |> fun x -> x
-        
-        ()
-    data
+            // the ordering of versions needs to determine be maintained, somehow. does the id change if an edit is made? for now, just do it, and see how well this works
+//            |> Seq.map (fun (idOpt,versions) -> idOpt, (lastUpdate,versions |> Seq.distinct))
+            |> Seq.map (fun (idOpt,versions) -> idOpt, versions |> Seq.distinct |> List.ofSeq)
+            // going to order by tweetid, I guess? since this appears to be the thing holding up getting this working, deciding a save strategy that accounts for ordering, duplicates, and edits
+            |> Seq.sortBy fst
+            |> Map.ofSeq
+        let dataMap : Map<int64 option, Tweet list> = 
+            data
+            |> Seq.groupBy(fun t -> t.Id |> Option.ofNullable)
+            |> Seq.map (fun (tId, tweets) -> tId, List.ofSeq tweets)
+            |> Map.ofSeq
+//        let oldDataKeys = mappedOld |> Seq.map(fun t -> t.Id) |> Set.ofSeq
+        let orderedFullOuterKeys = 
+            oldData
+            |> Seq.map (fun t -> t.Id |> Option.ofNullable) 
+            |> Seq.append(data |> Seq.map (fun t -> t.Id |> Option.ofNullable))
+            |> Seq.sort
+            |> List.ofSeq
+        let q = 
+            [
+                for tId in orderedFullOuterKeys do
+                    match mappedOld.ContainsKey tId, dataMap.ContainsKey tId with
+                    | true,true ->
+                        // perform deduplication
+                        let deduped = mappedOld.[tId]@dataMap.[tId] |> Seq.distinct
+                        yield! deduped
+                    | true,false ->
+                        yield! mappedOld.[tId]
+                    | false, true ->
+                        yield! dataMap.[tId]
+                    | false,false ->
+                        raise <| InvalidOperationException "tweetId not found in either map, when the list of Ids was created by the two maps"
+            ]
+        q.Dump("joined old with new")
+        if q.Length <> oldData.Length then
+            File.WriteAllText(Path.Combine(savePath,"favorites.json"), q |> serialize)
+            printfn "went from %i saved favorites to %i" oldData.Length q.Length 
+           
+        q
         
 try
     let userInfo = 
@@ -468,3 +522,17 @@ try
 finally
     toDo
     |> Seq.iter(fun f -> f())
+    savePathOpt
+    |> Option.iter(fun savePath ->
+        let savePath = if savePath.EndsWith("\\") then savePath else sprintf "%s\\" savePath
+        let f() = 
+            let args = sprintf "\"%s\"" savePath
+            try            
+                Util.Cmd("explorer",args) |> Dump |> ignore
+            with | :? CommandExecutionException as cee ->
+                if cee.Message.StartsWith "The process returned an exit code " then
+                    (savePath,args,cee.Message).Dump() |> ignore
+                ()
+                
+        LINQPad.Hyperlinq(Action f, "Show save folder").Dump()
+    )
