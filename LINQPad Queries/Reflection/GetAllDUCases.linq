@@ -2,6 +2,25 @@
   <Namespace>Microsoft.FSharp.Reflection</Namespace>
 </Query>
 
+// reflect du cases, 3 different ways
+let dumpt t x = x.Dump(description=t); x
+module SimpleUnionCaseInfoReflection =
+    open Microsoft.FSharp.Reflection
+
+  // will crash if 'T contains members which aren't only tags
+    let Construct<'T> (caseInfo: UnionCaseInfo)                   = FSharpValue.MakeUnion(caseInfo, [||]) :?> 'T
+
+    let GetUnionCaseInfoAndInstance<'T> (caseInfo: UnionCaseInfo) = (caseInfo, Construct<'T> caseInfo)
+
+    let AllCases<'T> = 
+        FSharpType.GetUnionCases(typeof<'T>)
+        |> Seq.map GetUnionCaseInfoAndInstance<'T>
+    let GetAllCaseNames t =
+        FSharpType.GetUnionCases(t)
+        |> Seq.map (fun u -> u.Name, u.GetFields())
+    let GetAllCaseNamesT<'T> = 
+        GetAllCaseNames typeof<'T>
+        
 // didn't work in release mode, or on the build server for some reason
 let rec getAllDUCases fNonUnionArg t : obj list =
         let getAllDUCases = getAllDUCases fNonUnionArg
@@ -54,7 +73,22 @@ type PtRespType = |Deductible |CoPay |CoInsurance with override x.ToString() = m
 type PaymentItemType = |EraPayment |EraAdjustment of createJournalEntry:bool | PtResp of PtRespType | OtherPayment
 let f t = if t = typeof<bool> then box false else null
 let getAll t = 
-    getAllDUCases f t |> Dump
-
-[typeof<Hello>;typeof<PtRespType>;typeof<PtRespType>]
+    getAllDUCases f t |> dumpt ("getAllDUCases:" + t.Name)
+let testCases = [typeof<Hello>;typeof<PtRespType>;typeof<PtRespType>]
+testCases
 |> Seq.iter (getAll >> (fun x -> printfn "%A" x))
+open SimpleUnionCaseInfoReflection
+
+testCases
+|> Seq.map GetAllCaseNames
+|> dumpt "GetAllCaseNames t"
+|> ignore
+
+[
+    box SimpleUnionCaseInfoReflection.AllCases<Hello>
+    box SimpleUnionCaseInfoReflection.AllCases<PtRespType>
+    box SimpleUnionCaseInfoReflection.AllCases<PaymentItemType>
+]
+|> Dump
+|> ignore
+
