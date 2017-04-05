@@ -91,7 +91,7 @@ module Cereal =
 open Cereal        
 // csv or query value keys for top level stuff?
 //let mapCruGear (cruGear :JArray) = 
-
+let baseUrl = "https://imaginarydevelopment.github.io/CotLICheatSheet/?appGameState=true&"
 let fetch () = File.ReadAllText textPath
 Util.Cache(fetch,"appStateText")
 |> fun x -> x.Length.Dump(); x
@@ -105,6 +105,7 @@ Util.Cache(fetch,"appStateText")
     |> ignore 
     zombies
 |> Seq.map(fun (name, simp) ->
+    // unreserved: ALPHA / DIGIT / "-" / "." / "_" / "~"
     match simp with
     | Simple s -> (s.Value |> string)
     | Values values -> 
@@ -126,13 +127,25 @@ Util.Cache(fetch,"appStateText")
                 let cruId = name
                 match v with
                 | Object props ->                
-                    sprintf "%s:%s" name (props |> Seq.map (fun (slotId,Simple lootId) -> sprintf "%s%A" slotId (lootId.Value |> string |> int)  |>  string) |> delimit "-")
+                    sprintf "%s-%s" name (props |> Seq.map (fun (slotId,Simple lootId) -> sprintf "%s%A" slotId (lootId.Value |> string |> int)  |>  string) |> delimit "_")
                 | _ -> failwith "Bad crusader gear item"
                 
             )
-            |> delimit ";"
+            |> delimit "."
 
-            
+        |"enchantmentPoints" ->
+            props |> Seq.map (fun (name, v) ->
+                let cruId = name
+//                v.Dump()
+                match v with
+                | Simple v ->
+                    v.Value
+                    |> string
+                    |> System.Int32.Parse
+                    |> sprintf "%s-%i" cruId
+                
+            )
+            |> delimit "_"
         | _ -> props |> Seq.map string |> delimit ","
     | Objects objects -> ""
     |> fun v -> name,v
@@ -140,6 +153,9 @@ Util.Cache(fetch,"appStateText")
 |> Dump
 |> Seq.map (fun (n,v) -> sprintf "%s=%s" n (v |> Uri.EscapeDataString))
 |> delimit "&"
-|> fun x -> x.Length, x
+|> fun x -> 
+    let link = baseUrl + x
+    link.Dump()
+    x.Length, Hyperlinq(Action(fun () -> Process.Start(link) |> ignore),text="Link"), link.Length, x
 |> Dump
 |> ignore
