@@ -72,6 +72,16 @@ let dataModelsToGen : TableIdentifier list = [
         {Schema="dbo"; Name="PatientsInfo"}
         {Schema="dbo"; Name="Patients"}
         {Schema="dbo"; Name="Charge"}
+        {Schema="dbo"; Name="CodeChargeMappings"}
+        {Schema="dbo"; Name="Codes"}
+        
+        {Schema="dbo"; Name="PaperworkType"}
+        {Schema="dbo"; Name="Facilities"}
+        {Schema="dbo"; Name="Claims"}
+        {Schema="dbo"; Name="ClaimPaperworkItem"}
+        {Schema="dbo"; Name="ClaimFilingIndicator"}
+        {Schema="dbo"; Name="ChargeProfiles"}
+        {Schema="dbo"; Name="B2BEligibility"}
     ]
     
 let dte = 
@@ -128,7 +138,9 @@ let measureList =
         "PatientInfoId"
         "PayerId"
         "PaymentId"
-        
+        "PaymentItemId"
+        "PayerProfileId"
+        "PayerProfileInfoId"
         "UserId"
     ]
 let measureBlacklist =
@@ -174,6 +186,7 @@ let cgsm =
             IncludeNonDboSchemaInNamespace= true
             GenerateValueRecords= false
             SprocSettingMap= Some {
+                SprocInputMapBlacklist = List.empty
                 SprocBlacklist=[    "sp_alterdiagram"
                                     "sp_creatediagram"
                                     "sp_dropdiagram"
