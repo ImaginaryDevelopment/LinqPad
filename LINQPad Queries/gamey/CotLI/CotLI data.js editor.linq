@@ -1,4 +1,5 @@
 <Query Kind="FSharpProgram">
+  <NuGetReference>Newtonsoft.Json</NuGetReference>
   <Namespace>Newtonsoft.Json.Linq</Namespace>
 </Query>
 
@@ -16,7 +17,8 @@ let dumpReverse :  (obj) -> unit =
         | _ -> [ o ]
         |> fun content -> dc.Content <- content
     )
-let path = @"D:\Projects\CotLICheatSheet\js\data.js"
+let cotLIPath = if Directory.Exists(@"D:\projects\CotLICheatSheet\") then @"D:\projects\CotLICheatSheet\js" else @"C:\projects\CotLICheatSheet\js"
+let path = Path.Combine(cotLIPath,"data.js")
 let flip f y x = f x y
 let dumpt (t:string) x = x.Dump(t,exclude="Raw"); x
 let dumpRemoval (items:string seq) x = 
@@ -172,7 +174,8 @@ module MappedChanges =
     let addLootItemsFromGameData (x:CrusaderData) = 
         let lootItems = 
             let x = 
-                File.ReadAllText @"D:\Projects\CotLICheatSheet\js\gamedata.json"
+                Path.Combine(cotLIPath,"gamedata.json")
+                |> File.ReadAllText
                 |> deserializeJO
             let patchVersion = x |> getProperty "patch_version"
             patchVersion.Dump("patch_version")
