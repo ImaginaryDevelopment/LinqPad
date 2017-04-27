@@ -189,7 +189,11 @@ let cgsm =
             ]
             GenerateValueRecords= false
             SprocSettingMap= Some {
-                SprocInputMapBlacklist = Set [ "UspAppointmentInsWithClaimInput"]
+                SprocInputMapBlacklist = Set [  "uspAppointmentInsWithClaim"
+                                                "uspClaimsInsUpdInput"
+                                                "uspGuarantorProfileInfoInsUpd"
+                                                "uspPatientsInfoInsUpd"
+                ]
                 SprocBlacklist=Set ["sp_alterdiagram"
                                     "sp_creatediagram"
                                     "sp_dropdiagram"

@@ -89,6 +89,8 @@ type MetaData = {
     9,2
     19,2
     9,9
+    // samples taken from http://stackoverflow.com/a/15520685/57883
+    5,2
 ]
 |> Seq.map (fun (p,s) ->
     let maxValue = calcSqlMaxPrecision 9 2
