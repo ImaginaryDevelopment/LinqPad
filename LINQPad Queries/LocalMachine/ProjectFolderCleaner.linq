@@ -1,5 +1,7 @@
 <Query Kind="FSharpProgram" />
 
+//consider cleaning "C:\Program Files (x86)\Microsoft Visual Studio 12.0\Common7\IDE\ItemTemplatesCache" also? then run devenv.exe /setup
+// similar functionality at blow away artifacts.linq
 let lastDir = 
     match System.AppDomain.CurrentDomain.GetData("lastDir") with
     | :? string as x -> x
