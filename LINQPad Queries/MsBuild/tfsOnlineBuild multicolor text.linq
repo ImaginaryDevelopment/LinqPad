@@ -191,7 +191,21 @@ module Slicing =
 //                |> Seq.map (sliceCompilerArg "li")
 //                ), t |> beforeWithDelim "fsc.exe"
 //            | args -> failwithf "how did we get here in compiler args? %s" args
-
+    let tagEscape surround content = 
+        sprintf "<%s>%s</%s>" surround (escape content) surround
+        
+    let ul escapedItems = 
+        escapedItems
+        |> Seq.map (tagEscape "li")
+        |> delimit "\r\n    "
+        |> tagEscape "ul"
+        
+        
+    let (|ReferenceArg|_|) s = 
+        match s with
+        | StartsWithI "-r:" -> Some ()
+        | _ -> None
+        
     let sliceCompilation t =
         match t|> String.trim with
         | (ContainsIX "fsc.exe" c as x)
