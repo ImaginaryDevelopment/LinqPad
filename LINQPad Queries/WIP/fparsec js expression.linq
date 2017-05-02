@@ -75,11 +75,14 @@ module Parser =
     // Literals
     
     type Lit = NumberLiteralOptions
+    let punsignedint = 
+        numberLiteral Lit.None "punsignedint"
+        |>> fun nl ->
+            int nl.String
     let numberFormat = Lit.AllowMinusSign ||| Lit.AllowFraction ||| Lit.AllowExponent
     let pnumber : Parser<RLiteral, unit> =
         numberLiteral numberFormat "number"
         |>> fun nl ->
-            printfn "it is a number! %A %A" nl.Info nl.String
             if nl.IsInteger then RLiteral.Number(int nl.String)
             else RLiteral.Number(float nl.String)
                     
@@ -116,15 +119,16 @@ module Parser =
                          | 'r' -> '\r'
                          | 't' -> '\t'
                          | c   -> c
-//        let latin1 = 
-//            pstring "\\" >>. punsignedint
-//            |>> (fun x -> 
-//                if 0 <= x && x <=377 then
-//                    "
-//            )
-        
+        let latin1 = 
+            pstring "\\" >>. punsignedint
+            |>> (fun x -> 
+                if 0 <= x && x <=377 then
+                    sprintf "\\%i" x
+                else failwithf "bad latin number"
+            )
+        //where/how do we handle multi-char escapes?
         let escapedChar = pstring "\\" >>. (anyOf "\\nrt\"0bf" |>> unescape)
-        let stringLiteral escapee = (manyChars (normalChar escapee <|> escapedChar))
+        let stringLiteral escapee = (manyChars (normalChar escapee <|> escapedChar)) <|> latin1
         let stringLiteral2 escapee =
             let strL = pstring (string escapee)
             between strL strL (stringLiteral escapee)
@@ -266,6 +270,8 @@ let valueSamples =
         yield "hello(world)", Ast.MethodInvoke("hello",[Ast.Variable "world"])
     ] |> Seq.map (fun (x,exp) -> x,Equals {Expected= exp; ExpectedRaw=x;Input=x})
     // non generated quote cases
+    // '\0' should become \0
+    // "\0" should become \0
     yield "'\\0'", Equals {Expected= Ast.RLiteral.StringLiteral "\\0" |> rl; ExpectedRaw= "'\\0'"; Input="'\\0'"}
     yield "\"\\0\"", Equals {Expected= Ast.RLiteral.StringLiteral"\\0" |> rl; ExpectedRaw="\\\\\"\\0\\\\\""; Input= "\"\\0\""}
     yield "'\\0'", Equals {Expected= Ast.RLiteral.StringLiteral "\\0" |> rl; ExpectedRaw="'\\0'"; Input= "'\\0'"}
@@ -304,3 +310,4 @@ let ternSamples = [
 //|> Seq.iter (run (spaces >>. pexpr .>> spaces) >> fOut "tern as pexpr")
 ternSamples
 |> fSamples "pexpr:ternSamples" pexpr
+
