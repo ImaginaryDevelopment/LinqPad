@@ -89,16 +89,47 @@ module Parser =
         //<?> "true"
     let pfalse = str_ws "false" |>> fun _ -> RLiteral.Bool(false)
     let pbool = ptrue <|> pfalse
+    type EscapedChar = 
+        |Reescape of char
+        |Plain of char
     let pstringliteral =
-        let normalChar = satisfy (fun c -> c <> '\\' && c <> '"')
+        let normalChar enclosure = satisfy (fun c -> c <> '\\' && c <> enclosure)
+        // add back the backslash for n r t, leave it out for \\ and \"
+        let escapes = 
+            [
+                yield! [ 
+                    'n'
+                    'r'
+                    't'
+                    'b'
+                    'f'
+                    'v'
+                ] |> Seq.map Reescape
+                yield! [
+                    '\\'
+                    '\''
+                    '"'
+                ] |> Seq.map Plain
+            ]
         let unescape c = match c with
                          | 'n' -> '\n'
                          | 'r' -> '\r'
                          | 't' -> '\t'
                          | c   -> c
-        let escapedChar = pstring "\\" >>. (anyOf "\\nrt\"" |>> unescape)
-        between (pstring "\"") (pstring "\"")
-                (manyChars (normalChar <|> escapedChar))
+//        let latin1 = 
+//            pstring "\\" >>. punsignedint
+//            |>> (fun x -> 
+//                if 0 <= x && x <=377 then
+//                    "
+//            )
+        
+        let escapedChar = pstring "\\" >>. (anyOf "\\nrt\"0bf" |>> unescape)
+        let stringLiteral escapee = (manyChars (normalChar escapee <|> escapedChar))
+        let stringLiteral2 escapee =
+            let strL = pstring (string escapee)
+            between strL strL (stringLiteral escapee)
+        stringLiteral2 '"' 
+        <|> stringLiteral2 '\''
         |>> RLiteral.StringLiteral
     
     let pliteral = pnumber <|> pbool <|> pstringliteral
@@ -151,7 +182,7 @@ type Railway<'T> =
 let getUnionCaseName (x:'A) = 
     match FSharp.Reflection.FSharpValue.GetUnionFields(x, typeof<'A>) with
     | case, _ -> case.Name
-type ComparisonAssertion = { Expected: Ast.Expr}
+type ComparisonAssertion = { Expected: Ast.Expr; ExpectedRaw : string; Input:string}
 type Assertion = 
     |Equals of ComparisonAssertion
     |NotEquals of ComparisonAssertion
@@ -160,36 +191,86 @@ type Assertion =
 let fSamples title p items = 
     items
     |> Seq.map(fun (x,assertion) ->
-        let r = 
+        // temporarily return all everything on a failure
+        let er,input,r = // make it effectiveInput, (RailWay<Success,FailureMsg> option)
             match assertion, run p x with
-            |Equals {Expected= expected}, Success(result,_,_) when result = expected -> None
-            |NotEquals{Expected= expected}, Success(result,_,_) when result <> expected -> None
+            |Equals ca, Success(result,_,_) when result = ca.Expected -> 
+            
+                (ca.ExpectedRaw, ca.Input, None)
+            |NotEquals ca, Success(result,_,_) when result <> ca.Expected -> 
+                (ca.ExpectedRaw, ca.Input, None)
             |ShouldFail, Failure _ ->
-                None
-            |_, Failure(errorMsg, _,_) -> RFailure errorMsg |> Some
-            |_, Success(result,_,_) -> RSuccess result |> Some
+                null, null, None
+            |_, Failure(errorMsg, _,_) -> null,null, (RFailure errorMsg |> Some)
+            |ShouldFail, Success(result,_,_) -> null, null, RSuccess(result) |> Some
+            |Equals ca, Success(result,_,_)
+            |NotEquals ca, Success(result,_,_) ->
+                ca.ExpectedRaw, ca.Input, RSuccess result |> Some
         
-        sprintf "%A" x,getUnionCaseName assertion, r
+        x,er,getUnionCaseName assertion,input, r
     )
+    |> List.ofSeq
+    |> List.rev
     |> dumpt title
     |> ignore
     
 open Parser
-let valueSamples = [
+
+let valueSamples = 
+    let quote = sprintf "'%s'"
+    let quotes = sprintf "\"%s\""
+    let rl x = Ast.RegularLiteral x
+    [
     yield! [
-        yield! [0..13] |> Seq.map (fun x -> string x, Ast.Expr.RegularLiteral(Ast.RLiteral.Number(box x)))
-        yield "true", Ast.RegularLiteral (Ast.RLiteral.Bool true)
-        yield "false", Ast.RegularLiteral (Ast.RLiteral.Bool false)
-        // yield "'helloworld'", Ast.Value(
-        yield "\"helloworld\"", Ast.RegularLiteral (Ast.RLiteral.StringLiteral "helloworld")
-        // yield "' hello world'"
-        yield "\"hello world\"", Ast.RegularLiteral (Ast.RLiteral.StringLiteral "hello world")
-        yield "\" hello $%&^&* \"", Ast.RegularLiteral(Ast.RLiteral.StringLiteral " hello $%&^&* ")
+        yield! [0..13] |> Seq.map (fun x -> string x, None, (Ast.RLiteral.Number(box x)))
+        yield "true", None, (Ast.RLiteral.Bool true)
+        yield "false", None, (Ast.RLiteral.Bool false)
+        yield! 
+            [
+                yield "helloworld"
+                
+                yield " hello world"
+                yield "hello world"
+                yield " hello $%&^&* "
+                // Latin-1 encoding 0-377 are valid
+                yield "\\123"
+                yield "\\0"
+                // multi-line strings are allowed
+                yield "\"this string \\\r\nis broken"
+            ] 
+            |> Seq.map (fun x ->
+                [
+                    if x.Contains "'" then
+                        yield x |> replace "'" @"\'" |> quote
+                    else 
+                        yield x |> quote
+                    if x.Contains "\"" then
+                        yield x |> replace "\"" "\\\"" |> quotes
+                    else yield x |> quotes
+                ] |> Seq.map (fun quotedIdent -> x,quotedIdent)
+            )
+            |> Seq.concat
+            |> Seq.map (fun (x:string,expectedRaw:string) -> expectedRaw, Some x,  Ast.RLiteral.StringLiteral x)
+            
+        
+        yield "3.1415926", None, (Ast.RLiteral.Number 3.1415926)
+        yield "-.123456789", None, (Ast.RLiteral.Number -0.123456789)
+        yield "-3.1E+12", None, (Ast.RLiteral.Number -3.1E+12)
+        yield ".1e-23", None, (Ast.RLiteral.Number 0.1e-23)
+        
+    ] |> Seq.map (fun (x,erOpt, exp) -> 
+        x,Equals {  Expected= rl exp
+                    ExpectedRaw=(match erOpt with |Some er -> er | None -> x)
+                    Input=x})
+    yield! [
         yield "hello(world)", Ast.MethodInvoke("hello",[Ast.Variable "world"])
-    ] |> Seq.map (fun (x,exp) -> x,Equals {Expected= exp})
+    ] |> Seq.map (fun (x,exp) -> x,Equals {Expected= exp; ExpectedRaw=x;Input=x})
+    // non generated quote cases
+    yield "'\\0'", Equals {Expected= Ast.RLiteral.StringLiteral "\\0" |> rl; ExpectedRaw= "'\\0'"; Input="'\\0'"}
+    yield "\"\\0\"", Equals {Expected= Ast.RLiteral.StringLiteral"\\0" |> rl; ExpectedRaw="\\\\\"\\0\\\\\""; Input= "\"\\0\""}
+    yield "'\\0'", Equals {Expected= Ast.RLiteral.StringLiteral "\\0" |> rl; ExpectedRaw="'\\0'"; Input= "'\\0'"}
     yield! [
         yield "0e"
-        // should fail, but does not currently
         yield "0a"
         yield "1a"
         
@@ -216,7 +297,7 @@ let ternSamples = [
         "c?b:a", Ast.TernaryOp(exprVar "c", exprVar "b", exprVar "a")
         "condition ? true : false", Ast.TernaryOp(exprVar "condition", exprBool true, exprBool false)
         "hello(world) ? world : false", Ast.TernaryOp(Ast.MethodInvoke("hello",[exprVar "world"]), exprVar "world", exprBool false)
-    ] |> Seq.map (fun (x,exp) -> x,Equals {Expected= exp})
+    ] |> Seq.map (fun (x,exp) -> x,Equals {Expected= exp;ExpectedRaw=x;Input=x})
 ]
 
 //ternSamples
