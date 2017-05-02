@@ -1,5 +1,6 @@
 <Query Kind="FSharpProgram">
   <NuGetReference>FParsec</NuGetReference>
+  <NuGetReference>FSharp.Core</NuGetReference>
   <Namespace>FParsec</Namespace>
 </Query>
 
@@ -601,3 +602,6 @@ let text = """
 """
 open Parser
 run pnsscope text
+|> sprintf "%A"
+|> Dump
+|> ignore
