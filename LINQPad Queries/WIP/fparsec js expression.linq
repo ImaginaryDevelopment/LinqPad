@@ -92,7 +92,7 @@ module Parser =
     let pliteral = pnumber <|> pbool <|> pstringliteral
     
     // Expressions
-    
+    // should this be named pOperations? I'm not sure why it is based on a OperatorPrecedenceParser
     let pexpr, pexprimpl = createParserForwardedToRef ()
     
     let reserved = ["for";"do"; "while";"if";"switch";"case";"default";"break" (*;...*)]
@@ -117,17 +117,18 @@ module Parser =
     
     type Assoc = Associativity
     
-    let opp = OperatorPrecedenceParser<Expr,Expr,unit>()
-    pexprimpl := ((spaces >>. opp.ExpressionParser .>> spaces) <|> (spaces >>. (between (str_ws "(") (str_ws ")") opp.ExpressionParser) .>> spaces))
-    let term = pvalue .>> ws <|> between (str_ws "(") (str_ws ")") pexpr
+    let opp = OperatorPrecedenceParser()
+    // Operator Precedence Parser apparently handles trailing spaces, and surrounding something with () per http://www.quanttec.com/fparsec/reference/operatorprecedenceparser.html
+    pexprimpl := opp.ExpressionParser
+    let term = pvalue .>> ws <|> between (str_ws "(") (str_ws ")") pexpr // (pexpr <|> between (str_ws "(") (str_ws ")") pexpr) .>> ws
     opp.TermParser <- term
-    let pexprInParens = (between (str_ws "(") (str_ws ")") pexpr)
-    let pexprParenthesized = between (str_ws "(") (str_ws ")") pexpr
+
     // ternary is hard!
     // a non operator option : https://github.com/stephan-tolksdorf/fparsec/blob/master/Samples/FSharpParsingSample/FParsecVersion/parser.fs#L88-L93
     // a sample ternaryOperator option: https://github.com/stephan-tolksdorf/fparsec/blob/69dd75043a7d3f77b276b55f4830bb59947fcb97/Test/OperatorPrecedenceParserTests.fs#L267
-    let pexpr2 = spaces >>. (pexprParenthesized <|> pexpr) .>> spaces
-    let tern = TernaryOperator<Expr,Expr,unit>("?", pexpr2, ":", pexpr2,1, Associativity.Left, fun (condition:Expr) left right -> TernaryOp( condition, left, right))
+    // better sample? https://github.com/stephan-tolksdorf/fparsec/blob/69dd75043a7d3f77b276b55f4830bb59947fcb97/Test/OperatorPrecedenceParserTests.fs#L360
+    let posWS = getPosition .>> ws
+    let tern = TernaryOperator("?", posWS, ":", posWS,1, Associativity.Left, fun (condition:Expr) left right -> TernaryOp( condition, left, right))
     opp.AddOperator(tern)
     opp.MissingTernary2ndStringErrorFormatter <- fun (_, _, op, _) -> expected op.TernaryRightString
     // Statement blocks
@@ -172,6 +173,10 @@ let exprVar x = Ast.Variable x
 let ternSamples = [
     // not valid C# perhaps, but valid js!
     "5 ? 1 : 0", Ast.TernaryOp(exprNumber 5,exprNumber 1,exprNumber 0)
+    "5?1:0", Ast.TernaryOp(exprNumber 5,exprNumber 1,exprNumber 0)
+    "5 ?1:0", Ast.TernaryOp(exprNumber 5,exprNumber 1,exprNumber 0)
+    "5?1 :0", Ast.TernaryOp(exprNumber 5,exprNumber 1,exprNumber 0)
+    "5?1: 0", Ast.TernaryOp(exprNumber 5,exprNumber 1,exprNumber 0)
     //"1 + 2 == 5 ? 1 : 0", Ast.TernaryOp(Ast.Expr(Ast.MethodInvoke("+", [ Ast.Arg(Ast.Literal
     "false ? 0 : 1", Ast.TernaryOp(exprBool false, exprNumber 0, exprNumber 1)
     "false ? b : a", Ast.TernaryOp(exprBool false, exprVar "b", exprVar "a")
