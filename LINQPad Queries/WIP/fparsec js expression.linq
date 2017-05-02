@@ -5,7 +5,8 @@
 </Query>
 
 // fparsec javascript
-
+let dumpt t x = x.Dump(description=t)
+let hoist f x = f x |> ignore; x
 //let target = "C:\TFS\PracticeManagement\dev\PracticeManagement\Pm.Web\Scripts\extensions.js"
 
 
@@ -30,11 +31,11 @@ module Ast =
     type Value = obj
     type Literal = Literal of Value
     // Expressions
-    type ArgType = ValueArg | RefArg | OutArg
     type Expr = 
         | Value of Literal
         | Variable of VarName
-        | MethodInvoke of MemberName * Arg list
+        // arguments to methods can be expressions
+        | MethodInvoke of MemberName * Expr list
         | PropertyGet of MemberName
         | Cast of TypeName * Expr
         // example: a + b
@@ -45,78 +46,7 @@ module Ast =
         | PostfixOp of Expr * string
         // example: boolExpr ? Expr<'t> : Expr<'t>
         | TernaryOp of Expr * Expr * Expr
-    and Arg = Arg of ArgType * Expr
-    // Statements
-    type Define = Define of TypeName * VarName
-    type Init = 
-        | Assign of Name * (* =,+=, etc. *) Expr
-        | Construct of TypeName * Name * Expr
-    type Condition = Expr
-    type Iterator = Expr
-    type Statement =
-        | Definition of Define
-        | Assignment of Init
-        | PropertySet of MemberName * Expr
-        | Action of Expr
-        //| Block/Scope of Statement list
-        | If of Expr * Block
-        | IfElse of Expr * Block * Block
-        | Switch of Expr * Case list
-        | For of Init list * Condition * Iterator list * Block
-        | ForEach of Define * Expr * Block
-        | While of Expr * Block
-        | DoWhile of Block * Expr
-        | Throw of Expr
-        | Try of Block
-        | Catch of TypeName * Block
-        | Finally of Block
-        | Lock of Expr * Block    
-        | Using of Expr * Block
-        | Label of LabelName
-        | Goto of LabelName
-        | Break
-        | Continue
-        | Return of Expr
-        //| Directive of Name
-    and Case = 
-        | Case of Literal * Block
-        | Default of Block
-    and Block = Statement list
-    // Modifiers
-    type Access = Public | Private | Protected | Internal
-    type Modifier = Static | Sealed | Override | Virtual | Abstract
-    // Members
-    type ReturnType = TypeName
-    type MemberInfo = MemberInfo of Access * Modifier option * ReturnType * Name
-    type IsReadOnly = bool
-    type ParamType = ByValue | ByRef | Out | Params
-    type Param = Param of ParamType * TypeName * VarName
-    type PreConstruct = PreConstruct of Name * Param list
-    type Member =
-        | Field of Access * Modifier option * IsReadOnly * 
-                   ReturnType * Name * Expr option
-        | Property of MemberInfo * Block option * Block option
-        | Method of MemberInfo * Param list * Block
-        | Constructor of Access * Modifier option * Name * Param list * 
-                         PreConstruct option * Block
-    // Types
-    type Members = Member list
-    type Implements = Name list
-    type EnumValue = EnumValue of Name * Value
-    type CSharpType = 
-        | Class of Access * Modifier option * Name * Implements * Members
-        | Struct of Access * Name * Member list
-        | Interface of Access * Name * Implements * Member list
-        | Enum of Access * TypeName * EnumValue list
-        | Delegate of Access * Name * ReturnType * Param list    
-    // Namespace scopes
-    type Import = 
-        | Import of Name list
-        | Alias of Name * Name list
-    type NamespaceScope =
-        | Namespace of Import list * Name list * NamespaceScope list
-        | Types of Import list * CSharpType list
-        
+    
 module Parser =  
     open Ast
     let maxCount = System.Int32.MaxValue
@@ -141,7 +71,7 @@ module Parser =
     let ptrue = 
         str_ws "true" 
         |>> fun _ -> Literal(true)
-        <?> "true"
+        //<?> "true"
     let pfalse = str_ws "false" |>> fun _ -> Literal(false)
     let pbool = ptrue <|> pfalse
     let pstringliteral =
@@ -174,17 +104,11 @@ module Parser =
             else preturn s
     let pidentifier_ws = pidentifier .>> ws
     let pvar = pidentifier |>> fun x -> Variable(x)
-    
-    let pargref = str_ws1 "ref" |>> fun _ -> RefArg
-    let pargout = str_ws1 "out" |>> fun _ -> OutArg
-    let pargtype = (opt pargref <|> opt pargout) 
-                   |>> function Some x -> x | None -> ValueArg
-    let parg = pargtype .>>. pexpr |>> fun (by,e) -> Arg(by,e)
     let pinvoke =
         pidentifier_ws .>>.
-        between (str_ws "(") (str_ws ")") (many parg)
+        between (str_ws "(") (str_ws ")") (many pexpr)
         |>> fun (name,args) -> MethodInvoke(name,args)
-    
+    // should a method call really be included in 'pvalue' ?
     let pvalue = (pliteral |>> fun x -> Value(x)) <|> 
                  attempt pinvoke <|> attempt pvar
     
@@ -204,17 +128,54 @@ module Parser =
     opp.AddOperator(tern)
     opp.MissingTernary2ndStringErrorFormatter <- fun (_, _, op, _) -> expected op.TernaryRightString
     // Statement blocks
-    
+type Railway<'T> = 
+    |RSuccess of 'T
+    |RFailure of string
+let fSamples title p items = 
+    items
+    |> Seq.map(fun (x,expected) ->
+        let r = 
+            match run p x with
+            |Success(result,_,_) -> 
+                if result = expected then 
+                    None
+                else Some (RSuccess result)
+            |Failure(errorMsg, _,_) -> RFailure errorMsg |> Some
+        
+        sprintf "%A\r\n" x, r
+    )
+    |> dumpt title
+    |> ignore
     
 open Parser
-// start off slower with simple ternaries?
-let ternSamples = [
-    "1 + 2 == 5 ? 1 : 0"
-    "false ? 0 : 1"
-    "false ? b : a"
-    "c?b:a"
-    "condition ? true : false"
-    
+let valueSamples = [
+    yield! [0..13] |> Seq.map (fun x -> string x, Ast.Value(Ast.Literal(box x)))
+    yield "true", Ast.Value (Ast.Literal true)
+    yield "false", Ast.Value (Ast.Literal false)
+    // yield "'helloworld'", Ast.Value(
+    yield "\"helloworld\"", Ast.Value (Ast.Literal "helloworld")
+    // yield "' hello world'"
+    yield "\"hello world\"", Ast.Value (Ast.Literal "hello world")
+    yield "\" hello $%&^&* \"", Ast.Value(Ast.Literal " hello $%&^&* ")
+    yield "hello(world)", Ast.MethodInvoke("hello",[Ast.Variable "world"])
 ]
+valueSamples
+|> fSamples "valueSamples" pvalue
+//|> Seq.iter (run (spaces >>. pvalue .>> spaces) >> fOut "pvalue")
+// start off slower with simple ternaries?
+let exprLiteral (x:obj) = Ast.Value(Ast.Literal x)
+let exprVar (x:string) = Ast.Variable x
+let ternSamples = [
+    // not valid C# perhaps, but valid js!
+    "5 ? 1 : 0", Ast.TernaryOp(exprLiteral 5,exprLiteral 1,exprLiteral 0)
+    //"1 + 2 == 5 ? 1 : 0", Ast.TernaryOp(Ast.Expr(Ast.MethodInvoke("+", [ Ast.Arg(Ast.Literal
+    "false ? 0 : 1", Ast.TernaryOp(exprLiteral false, exprLiteral 0, exprLiteral 1)
+    "false ? b : a", Ast.TernaryOp(exprLiteral false, exprVar "b", exprVar "a")
+    "c?b:a", Ast.TernaryOp(exprVar "c", exprVar "b", exprVar "a")
+    "condition ? true : false", Ast.TernaryOp(exprVar "condition", exprLiteral true, exprLiteral false)
+]
+
+//ternSamples
+//|> Seq.iter (run (spaces >>. pexpr .>> spaces) >> fOut "tern as pexpr")
 ternSamples
-|> Seq.iter (run (spaces >>. pexpr .>> spaces) >> sprintf "%A\r\n\r\n" >> Dump >> ignore)
+|> fSamples "pexpr:ternSamples" pexpr
