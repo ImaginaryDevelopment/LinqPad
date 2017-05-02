@@ -8,6 +8,13 @@
 // just expressions right now
 // excluding es6, and '' strings for now
 
+// other reference materials: 
+(* 
+    https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Grammar_and_types#String_literals
+    https://github.com/stephan-tolksdorf/fparsec/blob/69dd75043a7d3f77b276b55f4830bb59947fcb97/Test/OperatorPrecedenceParserTests.fs#L360
+    https://github.com/stephan-tolksdorf/fparsec/search?utf8=%E2%9C%93&q=ternaryOperator&type=
+    
+*)
 let dumpt t x = x.Dump(description=t)
 let hoist f x = f x |> ignore; x
 
