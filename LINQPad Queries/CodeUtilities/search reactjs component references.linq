@@ -6,9 +6,7 @@ let findReferences x = x |> matches @"(?:this\.)?(?:props|state)\.(\w+)" |> Seq.
 let findPropTypes x = x |> matches @"(\w+)\s*:React.PropTypes" |> Seq.map(fun m -> sprintf "props.%s" m.Groups.[1].Value) |> Seq.distinct
 let findPassedProps x = x|> matches @"(\w+)\s*={" |> Seq.map (fun m -> sprintf "props.%s" m.Groups.[1].Value)
 
-let text = """app.Inputs = props =>
-{
-    var cooldown = (app.getCooldown(props.cooldownCommon, props.cooldownUncommon, props.cooldownRare, props.cooldownEpic) * 100);
+let text = """ var cooldown = (app.getCooldown(props.cooldownCommon, props.cooldownUncommon, props.cooldownRare, props.cooldownEpic) * 100);
     var dpsHero = props.crusaders.find(cru => cru.id === props.selectedHeroId);
     var effectiveEP = calcEffectiveEP(props.sharingIsCaringLevel, props.mainDpsEP, props.dpsSlotEP);
     console.log('Inputs mainDpsEP', props.mainDpsEP, typeof(props.mainDpsEP));
@@ -32,28 +30,37 @@ let text = """app.Inputs = props =>
                 <td title="speedRunner"><TextInputUnc value={props.speedRunner} onChange={props.onSpeedRunnerChange}/></td>
                 <td title="enduranceTraining"><TextInputUnc value={props.enduranceTraining} onChange={props.onEnduranceTrainingChange}/></td>
                 <td title="goldOSplosion"><TextInputUnc value={props.goldOSplosion} onChange={props.onGoldOSplosionChange}/></td>
-                <td title="sniper"><TextInputUnc value={props.sniper} onChange={props.onsniper}/></td>
+                <td title="sniper"><TextInputUnc value={props.sniper} onChange={props.onSniperChange}/></td>
             </tr>
-            <tr data-row="9"><th>Every Last Cent</th><th>Spend it all</th><th>Upgrade them all</th><th>Scavenger</th><th>Speed Looter</th><th>Efficient Crusading</th></tr>
+            <tr data-row="9"><th colSpan="4" /><th>Every Last Cent</th><th>Spend it all</th><th>Upgrade them all</th><th>Scavenger</th><th>Speed Looter</th><th>Efficient Crusading</th></tr>
             <tr data-row="10">
                 <th colSpan="4" />
-                <td title="everyLastCent"><TextInputUnc value={props.everyLastCent} onChange={props.onEveryLastCent}/></td>
-                <td title="spendItAll"><TextInputUnc value={props.spendItAll} onChange={props.onSpendItAll}/></td>
-                <td title="upgradeThemAll"><TextInputUnc value={props.upgradeThemAll} onChange={props.onUpgradeThemAll}/></td>
-                <td title="scavenger"><TextInputUnc value={props.scavenger} onChange={props.onScavenger}/></td>
-                <td title="speedLooter"><TextInputUnc value={props.speedLooter} onChange={props.onSpeedLooter}/></td>
-                <td title="efficientCrusading"><TextInputUnc value={props.efficientCrusading} onChange={props.onEfficientCrusading}/></td>
+                <td title="everyLastCent"><TextInputUnc value={props.everyLastCent} onChange={props.onEveryLastCentChange}/></td>
+                <td title="spendItAll"><TextInputUnc value={props.spendItAll} onChange={props.onSpendItAllChange}/></td>
+                <td title="upgradeThemAll"><TextInputUnc value={props.upgradeThemAll} onChange={props.onUpgradeThemAllChange}/></td>
+                <td title="scavenger"><TextInputUnc value={props.scavenger} onChange={props.onScavengerChange}/></td>
+                <td title="speedLooter"><TextInputUnc value={props.speedLooter} onChange={props.onSpeedLooterChange}/></td>
+                <td title="efficientCrusading"><TextInputUnc value={props.efficientCrusading} onChange={props.onEfficientCrusadingChange}/></td>
+            </tr>
+            <tr data-row="11">
+                <th>Number of epics/legendaries on DPS</th><td>{props.mainDpsEpics}</td>
+                <th colSpan="2" /><th>Doing it Again</th><th>Deep Idol Scavenger</th><th>Extra Training</th><th>Triple Tier Trouble</th><th></th><th>Total:</th>
             </tr>
             <tr>
+                <th>Number of epics/legendaries on alts</th><td>{props.dpsSlotEpics - props.mainDpsEpics}</td>
+                <th colSpan="2" />
+                <td title="doingItAgain"><TextInputUnc value={props.doingItAgain} onChange={props.onDoingItAgainChange}/></td>
+                <td title="deepIdolScavenger"><TextInputUnc value={props.deepIdolScavenger} onChange={props.onDeepIdolScavengerChange}/></td>
+                <td title="extraTraining"><TextInputUnc value={props.extraTraining} onChange={props.onExtraTrainingChange}/></td>
+                <td title="tripleTierTrouble"><TextInputUnc value={props.tripleTierTrouble} onChange={props.onTripleTierTroubleChange}/></td>
+                <td />
+                <td></td>
                 </tr>
-            <tr>
-                <td title="z"><TextInputUnc value={props.z} onChange={props.onz}/></td>
-                </tr>
+
         </thead>
         <tbody>
         </tbody>
         </table>
-        );
 };"""
 
 // ----------------------------------------------------------------------------------------------------------------------
@@ -80,17 +87,32 @@ let propTypesDeclaration =
     onCooldownEpicChange: React.PropTypes.func.isRequired,
     crusaders:React.PropTypes.array.isRequired"""
 let consumerDeclaration = 
-    """          <TalentCalc
+    """     <TalentCalc
             sharingIsCaringLevel={+this.state.saved.sharingIsCaringLevel}
             crusaders={props.jsonData.crusaders}
-            mainDpsEP={talentSelectedCrusader ? getNumberOrDefault(this.state.saved.enchantmentPoints[talentSelectedCrusader.id]): 0}
-            dpsSlotEP={ talentSelectedCrusader ? +props.jsonData.crusaders.filter(cru => cru.slot == talentSelectedCrusader.slot).map(cru => this.state.saved.enchantmentPoints[cru.id] || 0).reduce((a,b) => +a + +b): 0}
+            mainDpsEpics={talentSelectedCrusader.mainDpsEpics}
+            dpsSlotEpics={talentSelectedCrusader.dpsSlotEpics}
+            mainDpsEP={talentSelectedCrusader.mainDpsEP}
+            dpsSlotEP={ talentSelectedCrusader.dpsSlotEP}
             critChance={getNumberOrDefault(this.state.saved.critChance, 0)} onCritChanceChange={val => (this.changeSaveState({critChance: inspect(+val || 0, 'changeSaveState crit')}))}
             cooldownCommon={getNumberOrDefault(this.state.saved.cooldownCommon,0)} onCooldownCommonChange={val => this.changeSaveState({cooldownCommon: +val || 0})}
             cooldownUncommon={getNumberOrDefault(this.state.saved.cooldownUncommon,0)} onCooldownUncommonChange={val => this.changeSaveState({cooldownUncommon: +val || 0})}
             cooldownRare={getNumberOrDefault(this.state.saved.cooldownRare,0)} onCooldownRareChange={val => this.changeSaveState({cooldownRare: +val || 0})}
             cooldownEpic={getNumberOrDefault(this.state.saved.cooldownEpic,0)} onCooldownEpicChange={val => this.changeSaveState({cooldownEpic: +val || 0})}
-            selectedHeroId={typeof(this.state.saved.talentCalcHeroId) ==="string"? this.state.saved.talentCalcHeroId : undefined} onHeroChange={val => this.changeSaveState({talentCalcHeroId:val})}"""
+            selectedHeroId={typeof(this.state.saved.talentCalcHeroId) ==="string"? this.state.saved.talentCalcHeroId : undefined} onHeroChange={val => this.changeSaveState({talentCalcHeroId:val})}
+            timeORama={getNumberOrDefault(this.state.saved.timeORama)} ontimeORamaChange={val => this.changeSaveState({timeORama:val})}
+            massiveCriticals={getNumberOrDefault(this.state.saved.massiveCriticals)} onMassiveCriticalsChange={val => this.changeSaveState({massiveCriticals:val})}
+            speedRunner={getNumberOrDefault(this.state.saved.speedRunner)} onSpeedRunnerChange={val => this.changeSaveState({speedRunner:val})}
+            enduranceTraining={getNumberOrDefault(this.state.saved.enduranceTraining)} onEnduranceTrainingChange={val => this.changeSaveState({enduranceTraining:val})}
+            goldOSplosion={getNumberOrDefault(this.state.saved.goldOSplosion)} onGoldOSplosionChange={val => this.changeSaveState({goldOSplosion:val})}
+            sniper={getNumberOrDefault(this.state.saved.sniper)} onSniperChange={val => this.changeSaveState({sniper:val})}
+            everyLastCent={getNumberOrDefault(this.state.saved.everyLastCent)} onEveryLastCentChange={val => this.changeSaveState({everyLastCent:val})}
+            spendItAll={getNumberOrDefault(this.state.saved.spendItAll)} onSpendItAllChange={val => this.changeSaveState({spendItAll:val})}
+            upgradeThemAll={getNumberOrDefault(this.state.saved.upgradeThemAll)} onUpgradeThemAllChange={val => this.changeSaveState({upgradeThemAll:val})}
+            scavenger={getNumberOrDefault(this.state.saved.scavenger)} onScavengerChange={val => this.changeSaveState({scavenger:val})}
+            speedLooter={getNumberOrDefault(this.state.saved.speedLooter)} onSpeedLooterChange={val => this.changeSaveState({speedLooter:val})}
+            efficientCrusading={getNumberOrDefault(this.state.saved.efficientCrusading)} onEfficientCrusadingChange={val => this.changeSaveState({efficientCrusading:val})}
+            />"""
 let refs = findReferences text
 let passed = findPassedProps consumerDeclaration
 let propTypeInfo = findPropTypes propTypesDeclaration

@@ -69,6 +69,7 @@ module Fs =
 type RowId = 
     |RowIdentifier of int
     |RowIndex of int
+// shadow the constructor
 let RowIdentifier x = 
     if x > 0 then Some (RowIdentifier x) else None
 

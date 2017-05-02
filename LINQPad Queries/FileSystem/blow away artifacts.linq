@@ -3,6 +3,7 @@
 void Main()
 {
 	//consider cleaning "C:\Program Files (x86)\Microsoft Visual Studio 12.0\Common7\IDE\ItemTemplatesCache" also? then run devenv.exe /setup
+    // similar functionality at ProjectFolderCleaner.linq
 	//clean bin and obj files, .suo and .user
 	var fileEndings= new [] {".suo","proj.user"};
 	if(Util.ReadLine<bool>("Include vs user files?")==false)

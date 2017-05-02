@@ -4,8 +4,13 @@
   <Namespace>FParsec</Namespace>
 </Query>
 
+// fparsec javascript
+
+//let target = "C:\TFS\PracticeManagement\dev\PracticeManagement\Pm.Web\Scripts\extensions.js"
+
+
 // fparsec practice
-// not working in linqpad see FsInteractive MacroRunner FParsecTry2.fsx
+
 let target = // change this to use %devroot% or create %practicemanagement% ?
     @"D:\Projects\PracticeManagement\Source-dev-rewrite\PracticeManagement\Db\Schema Objects\Schemas\dbo\Tables\Payment.table.sql"
 let test p str = 
@@ -14,6 +19,7 @@ let test p str =
     |Failure(errorMsg, _, _) -> printfn "Failure: %s" errorMsg
     
 // following http://trelford.com/blog/post/parsecsharp.aspx (http://fssnip.net/lf)
+// this parser was originally based of a C# parser, modifying it for javascript
 module Ast =
     // Base type abbreviations
     type Name = string
@@ -31,9 +37,13 @@ module Ast =
         | MethodInvoke of MemberName * Arg list
         | PropertyGet of MemberName
         | Cast of TypeName * Expr
+        // example: a + b
         | InfixOp of Expr * string * Expr
+        // example: ++i
         | PrefixOp of string * Expr
+        // example: i++
         | PostfixOp of Expr * string
+        // example: boolExpr ? Expr<'t> : Expr<'t>
         | TernaryOp of Expr * Expr * Expr
     and Arg = Arg of ArgType * Expr
     // Statements
@@ -172,16 +182,12 @@ module Parser =
         between (str_ws "(") (str_ws ")") (many parg)
         |>> fun (name,args) -> MethodInvoke(name,args)
     
-    let pcast =
-        let ptypecast = between (str_ws "(") (str_ws ")") pidentifier_ws
-        ptypecast .>>. pexpr |>> fun (name,e) -> Cast(name,e)
-    
     let pvalue = (pliteral |>> fun x -> Value(x)) <|> 
-                 attempt pinvoke <|> attempt pvar <|> attempt pcast
+                 attempt pinvoke <|> attempt pvar
     
     type Assoc = Associativity
     
-    let opp = OperatorPrecedenceParser<Expr,unit,unit>()
+    let opp = OperatorPrecedenceParser<Expr,Expr,unit>()
     pexprimpl := opp.ExpressionParser
     let term = pvalue .>> ws <|> between (str_ws "(") (str_ws ")") pexpr
     opp.TermParser <- term
@@ -190,17 +196,22 @@ module Parser =
                  "==";"!=";"<=";">=";"<";">";"??"
                  "."]
     for op in inops do
-        opp.AddOperator(InfixOperator(op, ws, 1, Assoc.Left, fun x y -> InfixOp(x, op, y)))
-    let preops = ["-";"++";"--"]
+        opp.AddOperator(InfixOperator<Expr,Expr,unit>(op, pexpr, 1, Assoc.Left, fun x y -> InfixOp(x, op, y)))
+    let preops = ["-";"++";"--";"!"]
     for op in preops do
-        opp.AddOperator(PrefixOperator(op, ws, 1, true, fun x -> PrefixOp(op, x)))
-    opp.AddOperator(PrefixOperator("new", ws1, 1, true, fun x -> PrefixOp("new", x)))
+        opp.AddOperator(PrefixOperator(op, pexpr, 1, true, fun x -> PrefixOp(op, x)))
+    opp.AddOperator(PrefixOperator("new", pexpr, 1, true, fun x -> PrefixOp("new", x)))
     let postops = ["++";"--"]
     for op in postops do
-        opp.AddOperator(PostfixOperator(op, ws, 1, true, fun x -> PostfixOp(x, op)))
-    
-    let pexpr' = between (str_ws "(") (str_ws ")") pexpr
-    
+        opp.AddOperator(PostfixOperator(op, pexpr, 1, true, fun x -> PostfixOp(x, op)))
+    let pexprInParens = (between (str_ws "(") (str_ws ")") pexpr)
+    let pexprParenthesized = between (str_ws "(") (str_ws ")") pexpr
+    // ternary is hard!
+    // a non operator option : https://github.com/stephan-tolksdorf/fparsec/blob/master/Samples/FSharpParsingSample/FParsecVersion/parser.fs#L88-L93
+    // a sample ternaryOperator option: https://github.com/stephan-tolksdorf/fparsec/blob/69dd75043a7d3f77b276b55f4830bb59947fcb97/Test/OperatorPrecedenceParserTests.fs#L267
+    let pexpr2 = spaces >>. (pexprParenthesized <|> pexpr) .>> spaces
+    let tern = TernaryOperator<Expr,Expr,unit>("?", pexpr2, ":", pexpr2,1, Associativity.Left, fun (condition:Expr) left right -> TernaryOp( condition, left, right))
+    opp.AddOperator(tern)
     // Statement blocks
     
     let pstatement, pstatementimpl = createParserForwardedToRef()
@@ -232,11 +243,11 @@ module Parser =
     // Selection statements
     
     let pif =
-        pipe2 (str_ws "if" >>. pexpr') pstatementblock
+        pipe2 (str_ws "if" >>. pexprParenthesized) pstatementblock
             (fun e block -> If(e,block))
     
     let pifelse =
-        pipe3 (str_ws "if" >>. pexpr') pstatementblock (str_ws "else" >>. pstatementblock)
+        pipe3 (str_ws "if" >>. pexprParenthesized) pstatementblock (str_ws "else" >>. pstatementblock)
             (fun e t f -> IfElse(e,t,f))
     
     let pcase = str_ws1 "case" >>. pliteral .>> str_ws ":" 
@@ -248,7 +259,7 @@ module Parser =
     let pcases = between (str_ws "{") (str_ws "}") pcases'
     
     let pswitch =
-        pipe2 (str_ws "switch" >>. pexpr') pcases
+        pipe2 (str_ws "switch" >>. pexprParenthesized) pcases
             (fun e cases -> Switch(e, cases))
     
     // Iteration statements
@@ -276,13 +287,13 @@ module Parser =
             (fun (define,collection) block -> ForEach(define,collection,block))
     
     let pwhile = 
-        pipe2 (str_ws "while" >>. pexpr') pstatementblock
+        pipe2 (str_ws "while" >>. pexprParenthesized) pstatementblock
             (fun e block -> While(e,block))
     
     let pdowhile =
         pipe2
             (str_ws "do" >>. pstatementblock)
-            (str_ws "while" >>. pexpr')
+            (str_ws "while" >>. pexprParenthesized)
             (fun block e -> DoWhile(block, e))
     
     // Jump statements
@@ -314,7 +325,7 @@ module Parser =
     // Lock statement
     
     let plock = 
-        str_ws "lock" >>. pexpr' .>>. pstatementblock 
+        str_ws "lock" >>. pexprParenthesized .>>. pstatementblock 
         |>> (fun (e,block) -> Lock(e,block))
     
     // Statement implementation
@@ -453,155 +464,34 @@ module Parser =
          (fun imports classes -> Types(imports, classes))
     
     pscopeimpl := ws >>. (pnsblock <|> ptypes)
-
-let text = """
-        {
-            new TableInfo
-            {
-                Name="Payment",
-                Schema="dbo",
-                Columns = new []
-                {
-                    new ColumnInfo{Name="PaymentID", Type = typeof(int), 
-                        Attributes = new []{"identity","primary key"},
-                        },
-                    CreateFKeyedColumn<int>("AppointmentId", new FKeyInfo{Schema="dbo",Table="Appointments",Column="AppointmentId"}, /* allowNull= */ true),
-                    new ColumnInfo
-                    {
-                        Name="PaymentTypeId", Type= typeof(string), Length=50,
-                        FKey=new FKeyInfo{ Schema="Accounts", Table="PaymentType",Column="PaymentTypeId" },
-                        GenerateReferenceTable = true,
-                        ReferenceValuesWithComment= new Dictionary<string,string>{
-                            {"Patient",null},{"ThirdParty",null},
-                            {"Era",null}
-                            },
-                        Comments= new[]{
-                            "|Patient of PatientIdentifier * PatientPayment |ThirdParty of PayerIdentifier * ThirdPartyPayment |Era of PayerIdentifier * EraPaymentMethod"
-                            }
-                        },
-                    new ColumnInfo{
-                        Name="PaymentMethodId", Type = typeof(string),
-                        Length=50,
-                        GenerateReferenceTable = true,
-                        FKey=new FKeyInfo{ Schema="Accounts", Table="PaymentMethod"},
-                        ReferenceValuesWithComment = new Dictionary<string,string>{
-                            {"Cash",null},{"CC",null},{"Check",null},{"Ach",null},{"Fsa",null},{"Other","for when Era amount is 0 or a catch-all"}
-                            },
-                        },
-                    new ColumnInfo{
-                        Name="PaymentStatusId", Type = typeof(string),
-                        Length=50,
-                        GenerateReferenceTable = true,
-                        FKey=new FKeyInfo{ Schema="Accounts", Table="PaymentStatus"},
-                        ReferenceValuesWithComment = new []{"New", "Partial", "Complete"}.ToDictionary(f=>f,f=> (string)null),
-                        },
-                    new ColumnInfo{
-                        Name="TotalAmount", Type = typeof(decimal),
-                        Precision=12,Scale=2, // see: http://stackoverflow.com/questions/2377174/how-do-i-interpret-precision-and-scale-of-a-number-in-a-database
-                        Comments = new[]{ "was Amount (18,2)"}
-                        },
-                    CreateUserIdColumn(null, true, "null to allow system inserts/adjustments that aren't done by a user"),
-                    CreateFKeyedColumn<int>("PayerID", new FKeyInfo{ Schema="dbo", Table="Payers" }, /* allowNull= */ true),
-                    CreatePatientIdColumn(null, true,null),
-                    new ColumnInfo{
-                        Name="Created", Type = typeof(DateTime),
-                        AllowNull=true,
-                        Comments = new[]{ "was timestamp"}
-                        },
-                    new ColumnInfo{
-                        Name="TransactionNumber", Type = typeof(string),
-                        Length=30,
-                        AllowNull=true,
-                        Comments = new[]{ "was checkNumber now will store check number or ACH number (when applicable)"}
-                        },
-                    new ColumnInfo{
-                        Name="Rcd", Type = typeof(DateTime),
-                        Comments = new []{"Payment Recvd"},
-                        AllowNull=true,
-                        },
-                    new ColumnInfo{
-                        Name="IsElectronic", Type = typeof(bool),
-                        },
-                    CreateFKeyedColumn<int>("CCItemID", new FKeyInfo{ Schema="Accounts", Table="CCItem"},true),
-                    new ColumnInfo{
-                        Name="Comments", Type = typeof(string),
-                        UseMax=true,
-                        AllowNull=true,
-                        },
-                    }
-                },
-            new TableInfo{
-                Schema="Accounts",
-                Name="CCItem",
-                Columns = new []
-                {
-                    new ColumnInfo{
-                        Name="CCItemID", Type = typeof(int), Attributes = new []{"identity","primary key"},
-                        },
-                    MakeNullable50("ResponseCode"),
-                    MakeNullable50("ResponseDescription"),
-                    MakeNullable50("TransactionID"),
-                    MakeNullable50("TransactionType"),
-                    MakeNullable50("CardType"),
-                    MakeNullable50("MaskedAcctNum"),
-                    MakeNullable50("ExpDate"),
-                    MakeNullable50("AcctNumSource"),
-                    MakeNullable50("CardholderName"),
-                    MakeNullable50("Alias"),
-                    MakeNullable50("ProcessorResponse"),
-                    MakeNullable50("BatchNum"),
-                    MakeNullable50("BatchAmount"),
-                    MakeNullable50("ApprovalCode"),
-                    }
-                },
-            new TableInfo{
-                Schema="Accounts",
-                Name="PaymentItem",
-                Columns = new []{
-                    new ColumnInfo{ Name = "PaymentItemID", Type = typeof(int), Attributes = new []{"identity","primary key"}},
-                    new ColumnInfo{ Name = "PaymentID", Type = typeof(int), FKey= new FKeyInfo{Schema="dbo",Table="Payment"}},
-                    new ColumnInfo{ Name = "PaymentItemTypeId", Type = typeof(string), Length=50,
-                        AllowNull=true,
-                        GenerateReferenceTable=true, FKey= new FKeyInfo{Schema="Accounts", Table="PaymentItemType", Column="PaymentItemTypeId"},
-                        ReferenceValuesWithComment = new []{"EraPayment", "EraAdjustment", "PtRespDeductible", "PtRespCoPay","PtRespCoIns","Other"}.ToDictionary(f => f, f => (string)null),
-                    },
-                    new ColumnInfo{
-                        Name="PaymentTierId", Type = typeof(string),
-                        Length=50,
-                        GenerateReferenceTable = true,
-                        AllowNull=true,
-                        FKey=new FKeyInfo{ Schema="Accounts", Table="PaymentTier",Column="PaymentTierId" },
-                        ReferenceValuesWithComment = new []{"Primary", "Secondary", "Tertiary", "Worker'sComp"}.ToDictionary(f=>f,f=> (string)null),
-                        },
-                    new ColumnInfo{
-                        Name="PtRespTypeId", Type = typeof(string),
-                        Length=50,
-                        GenerateReferenceTable = true,
-                        AllowNull=true,
-                        FKey=new FKeyInfo{ Schema="Accounts", Table="PtRespType",Column="PtRespTypeId" },
-                        ReferenceValuesWithComment = new []{"Deductible", "CoIns", "CoPay"}.ToDictionary(f=>f,f=> (string)null),
-                        },
-                    new ColumnInfo{ Name = "Created", Type= typeof(DateTime)},
-                    new ColumnInfo{ Name = "Amount", Type= typeof(decimal), Precision=8, Scale=2},
-                    new ColumnInfo{ Name = "PatientResponsiblityAmt", Type = typeof(decimal), Precision=8, Scale=2},
-                    CreateFKeyedColumn<int>("ChargeID", new FKeyInfo{Schema="dbo",Table="Charge"},true),
-                    MakeNullable50("RemarkCode"),
-                    MakeNullable50("AdjustmentCode"),
-                    new ColumnInfo{ Name = "PaymentItemStatusId", Type = typeof(string), Length=50,
-                        GenerateReferenceTable=true, FKey= new FKeyInfo{Schema="Accounts", Table="PaymentItemStatus"},
-                        ReferenceValuesWithComment = new []{"Posted", "Unposted"}.ToDictionary(f=>f,f=> (string)null),
-                    },
-                    new ColumnInfo{
-                        Name="Comments", Type = typeof(string),
-                        UseMax=true,
-                        AllowNull=true,
-                    },
-                }
-            }
-        }
-"""
 open Parser
-run pnsscope text
-|> sprintf "%A"
-|> Dump
-|> ignore
+// start off slower with simple ternaries?
+let ternSamples =[
+    "false ? 0 : 1"
+    "false ? b : a"
+    "c?b:a"
+    "condition ? true : false"
+    "1 + 2 == 5 ? 1 : 0"
+]
+ternSamples
+|> Seq.iter (run pexpr >> sprintf "%A\r\n\r\n" >> Dump >> ignore)
+
+printfn "finished with ternaries\r\n"
+// start off slow with expressions
+let expressionSamples= [
+    """!Object.keys"""
+    """(name)"""
+    """getIsChanging(name)"""
+    """(getIsChanging(name))"""
+    """1+2==5?"abc":4"""
+    """(getIsChanging(name) ? ['changing', next[name]]
+    : getIsAdding(name)? ['adding', next[name]]
+    : getIsDeleting(name) ? ['deleting',undefined]
+    : [undefined,undefined])"""           
+]
+expressionSamples
+|> Seq.iter (run (pexpr <|> pexpr') >> sprintf "%A\r\n\r\n" >> Dump >> ignore)
+//run pexpr
+//|> sprintf "%A"
+//|> Dump
+//|> ignore

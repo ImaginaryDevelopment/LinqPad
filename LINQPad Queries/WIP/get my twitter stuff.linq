@@ -470,14 +470,9 @@ let saveAppendish savePathOpt key (data:Tweet list) =
             |> Seq.sortBy fst
             |> Map.ofSeq
         let dataMap : Map<int64 option, Tweet list> = 
-            let result :(int64 option * Tweet seq ) seq = 
-                data
-                |> Seq.groupBy(fun t -> t.Id |> Option.ofNullable)
-                
-            result
-            |> Seq.map (fun (tId:int64 option, tweets) -> 
-                tId, 
-                    List.ofSeq tweets) 
+            data
+            |> Seq.groupBy(fun t -> t.Id |> Option.ofNullable)
+            |> Seq.map (fun (tId, tweets) -> tId, List.ofSeq tweets)
             |> Map.ofSeq
 //        let oldDataKeys = mappedOld |> Seq.map(fun t -> t.Id) |> Set.ofSeq
         let orderedFullOuterKeys = 

@@ -7,6 +7,7 @@
 </Query>
 
 // this thing works fine via linqpad (translating reference paths only)
+// can't work in vs2017, as db projects don't open
 
 
 // TODO: Convert/import from SqlGenerator : inputs for GenerateAccountingInserts
@@ -57,9 +58,30 @@ let dumpft t f x=
     x
     
 // items that we aren't generating the SQL for, but need datamodels generated from the sql db schema    
-let dataModelsToGen = [
+let dataModelsToGen : TableIdentifier list = [
         {TableIdentifier.Schema="dbo"; Name="Appointments"}
-        //{Schema="dbo"; Name="ReferralSources"; GenerateFull = false}
+        {Schema="dbo"; Name="Payers"}
+        {Schema="dbo"; Name="Users"}
+        {Schema="dbo"; Name="ReferralSources"}
+        {Schema="dbo"; Name="AuditLog"}
+        {Schema="dbo"; Name="Intellidox"}
+        {Schema="dbo"; Name="HIPAAAuthorizations"}
+        {Schema="dbo"; Name="DocumentTypes"}
+        {Schema="dbo"; Name="PayerProfileInfo"}
+        // we need to have the GuarantorId field on this be mapped to measure PatientId
+        {Schema="dbo"; Name="PatientsInfo"}
+        {Schema="dbo"; Name="Patients"}
+        {Schema="dbo"; Name="Charge"}
+        {Schema="dbo"; Name="CodeChargeMappings"}
+        {Schema="dbo"; Name="Codes"}
+        
+        {Schema="dbo"; Name="PaperworkType"}
+        {Schema="dbo"; Name="Facilities"}
+        {Schema="dbo"; Name="Claims"}
+        {Schema="dbo"; Name="ClaimPaperworkItem"}
+        {Schema="dbo"; Name="ClaimFilingIndicator"}
+        {Schema="dbo"; Name="ChargeProfiles"}
+        {Schema="dbo"; Name="B2BEligibility"}
     ]
     
 let dte = 
@@ -101,8 +123,8 @@ let codeTableBlacklist = ["Payments"]
 
 let columnBlacklist = 
     [
-        "Claims",["_CurrentLevel_"; "_MaxLevel_"]
-        "Charge", ["TotalAmount"]
+        "Claims", Set ["_CurrentLevel_"; "_MaxLevel_"]
+        "Charge", Set ["TotalAmount"]
     ]
     |> Map.ofSeq
 let measureList = 
@@ -116,7 +138,9 @@ let measureList =
         "PatientInfoId"
         "PayerId"
         "PaymentId"
-        
+        "PaymentItemId"
+        "PayerProfileId"
+        "PayerProfileInfoId"
         "UserId"
     ]
 let measureBlacklist =
@@ -157,12 +181,20 @@ let cgsm =
             CString = cString
             UseOptionTypes= false
             ColumnBlacklist= columnBlacklist
-            Measures= measureList
-            MeasuresBlacklist= measureBlacklist
+            Measures= measureList |> Set.ofSeq
+            MeasuresBlacklist= measureBlacklist |> Set.ofSeq
             IncludeNonDboSchemaInNamespace= true
+            TypeGenerationBlacklist = Set [
+                                        "PaymentReversal"
+            ]
             GenerateValueRecords= false
             SprocSettingMap= Some {
-                SprocBlacklist=[    "sp_alterdiagram"
+                SprocInputMapBlacklist = Set [  "uspAppointmentInsWithClaim"
+                                                "uspClaimsInsUpdInput"
+                                                "uspGuarantorProfileInfoInsUpd"
+                                                "uspPatientsInfoInsUpd"
+                ]
+                SprocBlacklist=Set ["sp_alterdiagram"
                                     "sp_creatediagram"
                                     "sp_dropdiagram"
                                     "sp_helpdiagramdefinition"
@@ -172,11 +204,19 @@ let cgsm =
 
             UseCliMutable= false
             GetMeasureNamepace= Some (fun _ -> "Pm.Schema")
-            AdditionalNamespaces= ["Pm.Schema.BReusable"]
+            AdditionalNamespaces= Set ["Pm.Schema.BReusable"]
         }
 // these are the items we will generate into a sql project
 let toGen : TableInput list = 
     [
+        TableInput(
+            Schema="dbo",
+            Name="PaymentReversal",
+            Columns = [
+                { ColumnInput.createFKeyedColumn<int> "PaymentId" (FKeyIdentifier {Table={Schema="dbo"; Name="Payment"}; Column="PaymentId"}) with Attributes = ["primary key"]}
+                { ColumnInput.createFKeyedColumn<int> "ReversalPaymentId" (FKeyIdentifier {Table={Schema="dbo"; Name="Payment"}; Column="PaymentId"}) with Attributes = ["primary key"]}
+            ]
+        )
         TableInput(
             Schema="dbo",
             Name="Payment",
