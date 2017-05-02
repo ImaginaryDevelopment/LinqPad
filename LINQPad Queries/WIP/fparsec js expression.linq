@@ -272,8 +272,8 @@ let valueSamples =
     // non generated quote cases
     // '\0' should become \0
     // "\0" should become \0
-    yield "'\\0'", Equals {Expected= Ast.RLiteral.StringLiteral "\\0" |> rl; ExpectedRaw= "'\\0'"; Input="'\\0'"}
-    yield "\"\\0\"", Equals {Expected= Ast.RLiteral.StringLiteral"\\0" |> rl; ExpectedRaw="\\\\\"\\0\\\\\""; Input= "\"\\0\""}
+    yield """'\0'""", Equals {Expected= Ast.RLiteral.StringLiteral "\\0" |> rl; ExpectedRaw= "'\\0'"; Input="'\\0'"}
+    yield sprintf "\"%s\"" """\0""", Equals {Expected= Ast.RLiteral.StringLiteral"\\0" |> rl; ExpectedRaw="\\\\\"\\0\\\\\""; Input= "\"\\0\""}
     yield "'\\0'", Equals {Expected= Ast.RLiteral.StringLiteral "\\0" |> rl; ExpectedRaw="'\\0'"; Input= "'\\0'"}
     yield! [
         yield "0e"
