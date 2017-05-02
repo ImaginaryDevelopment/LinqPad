@@ -205,19 +205,11 @@ module Parser =
     for op in postops do
         opp.AddOperator(PostfixOperator(op, pexpr, 1, true, fun x -> PostfixOp(x, op)))
     let pexprInParens = (between (str_ws "(") (str_ws ")") pexpr)
-    let pexpr' = between (str_ws "(") (str_ws ")") pexpr
+    let pexprParenthesized = between (str_ws "(") (str_ws ")") pexpr
     // ternary is hard!
     // a non operator option : https://github.com/stephan-tolksdorf/fparsec/blob/master/Samples/FSharpParsingSample/FParsecVersion/parser.fs#L88-L93
     // a sample ternaryOperator option: https://github.com/stephan-tolksdorf/fparsec/blob/69dd75043a7d3f77b276b55f4830bb59947fcb97/Test/OperatorPrecedenceParserTests.fs#L267
-    let pexpr2 = 
-        
-        spaces >>. (pexpr' <|> pexpr) .>> spaces
-        
-    let tItemParser : CharStream<unit> -> Reply<unit> = (fun x -> 
-        pexpr2 x |> ignore
-        Reply<unit>()
-    )
-    // not sure this is going to return anything
+    let pexpr2 = spaces >>. (pexprParenthesized <|> pexpr) .>> spaces
     let tern = TernaryOperator<Expr,Expr,unit>("?", pexpr2, ":", pexpr2,1, Associativity.Left, fun (condition:Expr) left right -> TernaryOp( condition, left, right))
     opp.AddOperator(tern)
     // Statement blocks
@@ -251,11 +243,11 @@ module Parser =
     // Selection statements
     
     let pif =
-        pipe2 (str_ws "if" >>. pexpr') pstatementblock
+        pipe2 (str_ws "if" >>. pexprParenthesized) pstatementblock
             (fun e block -> If(e,block))
     
     let pifelse =
-        pipe3 (str_ws "if" >>. pexpr') pstatementblock (str_ws "else" >>. pstatementblock)
+        pipe3 (str_ws "if" >>. pexprParenthesized) pstatementblock (str_ws "else" >>. pstatementblock)
             (fun e t f -> IfElse(e,t,f))
     
     let pcase = str_ws1 "case" >>. pliteral .>> str_ws ":" 
@@ -267,7 +259,7 @@ module Parser =
     let pcases = between (str_ws "{") (str_ws "}") pcases'
     
     let pswitch =
-        pipe2 (str_ws "switch" >>. pexpr') pcases
+        pipe2 (str_ws "switch" >>. pexprParenthesized) pcases
             (fun e cases -> Switch(e, cases))
     
     // Iteration statements
@@ -295,13 +287,13 @@ module Parser =
             (fun (define,collection) block -> ForEach(define,collection,block))
     
     let pwhile = 
-        pipe2 (str_ws "while" >>. pexpr') pstatementblock
+        pipe2 (str_ws "while" >>. pexprParenthesized) pstatementblock
             (fun e block -> While(e,block))
     
     let pdowhile =
         pipe2
             (str_ws "do" >>. pstatementblock)
-            (str_ws "while" >>. pexpr')
+            (str_ws "while" >>. pexprParenthesized)
             (fun block e -> DoWhile(block, e))
     
     // Jump statements
@@ -333,7 +325,7 @@ module Parser =
     // Lock statement
     
     let plock = 
-        str_ws "lock" >>. pexpr' .>>. pstatementblock 
+        str_ws "lock" >>. pexprParenthesized .>>. pstatementblock 
         |>> (fun (e,block) -> Lock(e,block))
     
     // Statement implementation
@@ -477,6 +469,7 @@ open Parser
 let ternSamples =[
     "false ? 0 : 1"
     "false ? b : a"
+    "c?b:a"
     "condition ? true : false"
     "1 + 2 == 5 ? 1 : 0"
 ]
