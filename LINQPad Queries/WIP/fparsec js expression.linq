@@ -29,15 +29,25 @@ module Ast =
     type Value = obj
     
     // this should only be returning number literals, bool literals, strings
-    type Literal = |Number of obj | Bool of bool | StringLiteral of string
+    type RLiteral = 
+        // [(+|-)][digits][.digits][(E|e)[(+|-)]digits] per mdn
+        |Number of obj 
+        | Bool of bool 
+        | StringLiteral of string 
+        
     // Expressions
-    type Expr = 
-        | Value of Literal
+    and Expr = 
+        // {abc:123}
+        | ObjectLiteral of string
+        // leaving this here for convience
+        // regular expressions can be literals /ab+c/
+        | RegexLiteral of string
+        | RegularLiteral of RLiteral
         | Variable of VarName
         // arguments to methods can be expressions
         | MethodInvoke of MemberName * Expr list
         // examples: a.b; (a.b).c; a["b"]; a['b'];a[1])
-        | PropertyGet of Expr * Literal
+        | PropertyGet of Expr * RLiteral
         // for a[Expr]
         | DynamicPropertyGet of Expr * Expr
         | Cast of TypeName * Expr
@@ -66,16 +76,18 @@ module Parser =
     
     type Lit = NumberLiteralOptions
     let numberFormat = Lit.AllowMinusSign ||| Lit.AllowFraction ||| Lit.AllowExponent
-    let pnumber : Parser<Literal, unit> =
+    let pnumber : Parser<RLiteral, unit> =
         numberLiteral numberFormat "number"
         |>> fun nl ->
-                if nl.IsInteger then Literal.Number(int nl.String)
-                else Literal.Number(float nl.String)
+            printfn "it is a number! %A %A" nl.Info nl.String
+            if nl.IsInteger then RLiteral.Number(int nl.String)
+            else RLiteral.Number(float nl.String)
+                    
     let ptrue = 
         str_ws "true" 
-        |>> fun _ -> Literal.Bool(true)
+        |>> fun _ -> RLiteral.Bool(true)
         //<?> "true"
-    let pfalse = str_ws "false" |>> fun _ -> Literal.Bool(false)
+    let pfalse = str_ws "false" |>> fun _ -> RLiteral.Bool(false)
     let pbool = ptrue <|> pfalse
     let pstringliteral =
         let normalChar = satisfy (fun c -> c <> '\\' && c <> '"')
@@ -87,7 +99,7 @@ module Parser =
         let escapedChar = pstring "\\" >>. (anyOf "\\nrt\"" |>> unescape)
         between (pstring "\"") (pstring "\"")
                 (manyChars (normalChar <|> escapedChar))
-        |>> fun s -> Literal.StringLiteral(s)
+        |>> RLiteral.StringLiteral
     
     let pliteral = pnumber <|> pbool <|> pstringliteral
     
@@ -112,7 +124,7 @@ module Parser =
         between (str_ws "(") (str_ws ")") (many pexpr)
         |>> fun (name,args) -> MethodInvoke(name,args)
     // should a method call really be included in 'pvalue' ?
-    let pvalue = (pliteral |>> fun x -> Value(x)) <|> 
+    let pvalue = (pliteral |>> fun x -> Ast.RegularLiteral x) <|> 
                  attempt pinvoke <|> attempt pvar
     
     type Assoc = Associativity
@@ -135,53 +147,76 @@ module Parser =
 type Railway<'T> = 
     |RSuccess of 'T
     |RFailure of string
+
+let getUnionCaseName (x:'A) = 
+    match FSharp.Reflection.FSharpValue.GetUnionFields(x, typeof<'A>) with
+    | case, _ -> case.Name
+type ComparisonAssertion = { Expected: Ast.Expr}
+type Assertion = 
+    |Equals of ComparisonAssertion
+    |NotEquals of ComparisonAssertion
+    |ShouldFail
+
 let fSamples title p items = 
     items
-    |> Seq.map(fun (x,expected) ->
+    |> Seq.map(fun (x,assertion) ->
         let r = 
-            match run p x with
-            |Success(result,_,_) -> 
-                if result = expected then 
-                    None
-                else Some (RSuccess result)
-            |Failure(errorMsg, _,_) -> RFailure errorMsg |> Some
+            match assertion, run p x with
+            |Equals {Expected= expected}, Success(result,_,_) when result = expected -> None
+            |NotEquals{Expected= expected}, Success(result,_,_) when result <> expected -> None
+            |ShouldFail, Failure _ ->
+                None
+            |_, Failure(errorMsg, _,_) -> RFailure errorMsg |> Some
+            |_, Success(result,_,_) -> RSuccess result |> Some
         
-        sprintf "%A\r\n" x, r
+        sprintf "%A" x,getUnionCaseName assertion, r
     )
     |> dumpt title
     |> ignore
     
 open Parser
 let valueSamples = [
-    yield! [0..13] |> Seq.map (fun x -> string x, Ast.Value(Ast.Literal.Number(box x)))
-    yield "true", Ast.Value (Ast.Literal.Bool true)
-    yield "false", Ast.Value (Ast.Literal.Bool false)
-    // yield "'helloworld'", Ast.Value(
-    yield "\"helloworld\"", Ast.Value (Ast.Literal.StringLiteral "helloworld")
-    // yield "' hello world'"
-    yield "\"hello world\"", Ast.Value (Ast.Literal.StringLiteral "hello world")
-    yield "\" hello $%&^&* \"", Ast.Value(Ast.Literal.StringLiteral " hello $%&^&* ")
-    yield "hello(world)", Ast.MethodInvoke("hello",[Ast.Variable "world"])
+    yield! [
+        yield! [0..13] |> Seq.map (fun x -> string x, Ast.Expr.RegularLiteral(Ast.RLiteral.Number(box x)))
+        yield "true", Ast.RegularLiteral (Ast.RLiteral.Bool true)
+        yield "false", Ast.RegularLiteral (Ast.RLiteral.Bool false)
+        // yield "'helloworld'", Ast.Value(
+        yield "\"helloworld\"", Ast.RegularLiteral (Ast.RLiteral.StringLiteral "helloworld")
+        // yield "' hello world'"
+        yield "\"hello world\"", Ast.RegularLiteral (Ast.RLiteral.StringLiteral "hello world")
+        yield "\" hello $%&^&* \"", Ast.RegularLiteral(Ast.RLiteral.StringLiteral " hello $%&^&* ")
+        yield "hello(world)", Ast.MethodInvoke("hello",[Ast.Variable "world"])
+    ] |> Seq.map (fun (x,exp) -> x,Equals {Expected= exp})
+    yield! [
+        yield "0e"
+        // should fail, but does not currently
+        yield "0a"
+        yield "1a"
+        
+    ] |> Seq.map (fun x -> x,ShouldFail)
 ]
 valueSamples
 |> fSamples "valueSamples" pvalue
 //|> Seq.iter (run (spaces >>. pvalue .>> spaces) >> fOut "pvalue")
 // start off slower with simple ternaries?
-let exprNumber x = Ast.Value (Ast.Literal.Number x)
-let exprBool x = Ast.Value (Ast.Literal.Bool x)
+let exprNumber x = Ast.Expr.RegularLiteral (Ast.RLiteral.Number x)
+let exprBool x = Ast.Expr.RegularLiteral (Ast.RLiteral.Bool x)
 let exprVar x = Ast.Variable x
 let ternSamples = [
-    // not valid C# perhaps, but valid js!
-    "5 ? 1 : 0", Ast.TernaryOp(exprNumber 5,exprNumber 1,exprNumber 0)
-    "5?1:0", Ast.TernaryOp(exprNumber 5,exprNumber 1,exprNumber 0)
-    "5 ?1:0", Ast.TernaryOp(exprNumber 5,exprNumber 1,exprNumber 0)
-    "5?1 :0", Ast.TernaryOp(exprNumber 5,exprNumber 1,exprNumber 0)
-    "5?1: 0", Ast.TernaryOp(exprNumber 5,exprNumber 1,exprNumber 0)
-    //"1 + 2 == 5 ? 1 : 0", Ast.TernaryOp(Ast.Expr(Ast.MethodInvoke("+", [ Ast.Arg(Ast.Literal
-    "false ? 0 : 1", Ast.TernaryOp(exprBool false, exprNumber 0, exprNumber 1)
-    "false ? b : a", Ast.TernaryOp(exprBool false, exprVar "b", exprVar "a")
-    "c?b:a", Ast.TernaryOp(exprVar "c", exprVar "b", exprVar "a")
-    "condition ? true : false", Ast.TernaryOp(exprVar "condition", exprBool true, exprBool false)
+    yield! [
+        // not valid C# perhaps, but valid js!
+        "5 ? 1 : 0", Ast.TernaryOp(exprNumber 5,exprNumber 1,exprNumber 0)
+        "5?1:0", Ast.TernaryOp(exprNumber 5,exprNumber 1,exprNumber 0)
+        "5 ?1:0", Ast.TernaryOp(exprNumber 5,exprNumber 1,exprNumber 0)
+        "5?1 :0", Ast.TernaryOp(exprNumber 5,exprNumber 1,exprNumber 0)
+        "5?1: 0", Ast.TernaryOp(exprNumber 5,exprNumber 1,exprNumber 0)
+        //"1 + 2 == 5 ? 1 : 0", Ast.TernaryOp(Ast.Expr(Ast.MethodInvoke("+", [ Ast.Arg(Ast.Literal
+        "false ? 0 : 1", Ast.TernaryOp(exprBool false, exprNumber 0, exprNumber 1)
+        "false ? b : a", Ast.TernaryOp(exprBool false, exprVar "b", exprVar "a")
+        "c?b:a", Ast.TernaryOp(exprVar "c", exprVar "b", exprVar "a")
+        "condition ? true : false", Ast.TernaryOp(exprVar "condition", exprBool true, exprBool false)
+        "hello(world) ? world : false", Ast.TernaryOp(Ast.MethodInvoke("hello",[exprVar "world"]), exprVar "world", exprBool false)
+    ] |> Seq.map (fun (x,exp) -> x,Equals {Expected= exp})
 ]
 
 //ternSamples
