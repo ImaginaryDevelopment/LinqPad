@@ -191,7 +191,7 @@ module Parser =
     type Assoc = Associativity
     
     let opp = OperatorPrecedenceParser<Expr,Expr,unit>()
-    pexprimpl := opp.ExpressionParser
+    pexprimpl := ((spaces >>. opp.ExpressionParser .>> spaces) <|> (spaces >>. (between (str_ws "(") (str_ws ")") opp.ExpressionParser) .>> spaces))
     let term = pvalue .>> ws <|> between (str_ws "(") (str_ws ")") pexpr
     opp.TermParser <- term
     let pexprInParens = (between (str_ws "(") (str_ws ")") pexpr)
@@ -208,12 +208,13 @@ module Parser =
     
 open Parser
 // start off slower with simple ternaries?
-let ternSamples =[
+let ternSamples = [
+    "1 + 2 == 5 ? 1 : 0"
     "false ? 0 : 1"
     "false ? b : a"
     "c?b:a"
     "condition ? true : false"
-    "1 + 2 == 5 ? 1 : 0"
+    
 ]
 ternSamples
 |> Seq.iter (run (spaces >>. pexpr .>> spaces) >> sprintf "%A\r\n\r\n" >> Dump >> ignore)
