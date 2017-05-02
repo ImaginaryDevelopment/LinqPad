@@ -5,15 +5,13 @@
 </Query>
 
 // fparsec javascript
+// just expressions right now
+// excluding es6, and '' strings for now
+
 let dumpt t x = x.Dump(description=t)
 let hoist f x = f x |> ignore; x
-//let target = "C:\TFS\PracticeManagement\dev\PracticeManagement\Pm.Web\Scripts\extensions.js"
-
 
 // fparsec practice
-
-let target = // change this to use %devroot% or create %practicemanagement% ?
-    @"D:\Projects\PracticeManagement\Source-dev-rewrite\PracticeManagement\Db\Schema Objects\Schemas\dbo\Tables\Payment.table.sql"
 let test p str = 
     match run p str with
     |Success(result, _, _)   -> printfn "Success: %A" result
@@ -29,14 +27,19 @@ module Ast =
     type MemberName = Name
     type LabelName = Name
     type Value = obj
-    type Literal = Literal of Value
+    
+    // this should only be returning number literals, bool literals, strings
+    type Literal = |Number of obj | Bool of bool | StringLiteral of string
     // Expressions
     type Expr = 
         | Value of Literal
         | Variable of VarName
         // arguments to methods can be expressions
         | MethodInvoke of MemberName * Expr list
-        | PropertyGet of MemberName
+        // examples: a.b; (a.b).c; a["b"]; a['b'];a[1])
+        | PropertyGet of Expr * Literal
+        // for a[Expr]
+        | DynamicPropertyGet of Expr * Expr
         | Cast of TypeName * Expr
         // example: a + b
         | InfixOp of Expr * string * Expr
@@ -66,13 +69,13 @@ module Parser =
     let pnumber : Parser<Literal, unit> =
         numberLiteral numberFormat "number"
         |>> fun nl ->
-                if nl.IsInteger then Literal(int nl.String)
-                else Literal(float nl.String)
+                if nl.IsInteger then Literal.Number(int nl.String)
+                else Literal.Number(float nl.String)
     let ptrue = 
         str_ws "true" 
-        |>> fun _ -> Literal(true)
+        |>> fun _ -> Literal.Bool(true)
         //<?> "true"
-    let pfalse = str_ws "false" |>> fun _ -> Literal(false)
+    let pfalse = str_ws "false" |>> fun _ -> Literal.Bool(false)
     let pbool = ptrue <|> pfalse
     let pstringliteral =
         let normalChar = satisfy (fun c -> c <> '\\' && c <> '"')
@@ -84,7 +87,7 @@ module Parser =
         let escapedChar = pstring "\\" >>. (anyOf "\\nrt\"" |>> unescape)
         between (pstring "\"") (pstring "\"")
                 (manyChars (normalChar <|> escapedChar))
-        |>> fun s -> Literal(s)
+        |>> fun s -> Literal.StringLiteral(s)
     
     let pliteral = pnumber <|> pbool <|> pstringliteral
     
@@ -149,30 +152,31 @@ let fSamples title p items =
     
 open Parser
 let valueSamples = [
-    yield! [0..13] |> Seq.map (fun x -> string x, Ast.Value(Ast.Literal(box x)))
-    yield "true", Ast.Value (Ast.Literal true)
-    yield "false", Ast.Value (Ast.Literal false)
+    yield! [0..13] |> Seq.map (fun x -> string x, Ast.Value(Ast.Literal.Number(box x)))
+    yield "true", Ast.Value (Ast.Literal.Bool true)
+    yield "false", Ast.Value (Ast.Literal.Bool false)
     // yield "'helloworld'", Ast.Value(
-    yield "\"helloworld\"", Ast.Value (Ast.Literal "helloworld")
+    yield "\"helloworld\"", Ast.Value (Ast.Literal.StringLiteral "helloworld")
     // yield "' hello world'"
-    yield "\"hello world\"", Ast.Value (Ast.Literal "hello world")
-    yield "\" hello $%&^&* \"", Ast.Value(Ast.Literal " hello $%&^&* ")
+    yield "\"hello world\"", Ast.Value (Ast.Literal.StringLiteral "hello world")
+    yield "\" hello $%&^&* \"", Ast.Value(Ast.Literal.StringLiteral " hello $%&^&* ")
     yield "hello(world)", Ast.MethodInvoke("hello",[Ast.Variable "world"])
 ]
 valueSamples
 |> fSamples "valueSamples" pvalue
 //|> Seq.iter (run (spaces >>. pvalue .>> spaces) >> fOut "pvalue")
 // start off slower with simple ternaries?
-let exprLiteral (x:obj) = Ast.Value(Ast.Literal x)
-let exprVar (x:string) = Ast.Variable x
+let exprNumber x = Ast.Value (Ast.Literal.Number x)
+let exprBool x = Ast.Value (Ast.Literal.Bool x)
+let exprVar x = Ast.Variable x
 let ternSamples = [
     // not valid C# perhaps, but valid js!
-    "5 ? 1 : 0", Ast.TernaryOp(exprLiteral 5,exprLiteral 1,exprLiteral 0)
+    "5 ? 1 : 0", Ast.TernaryOp(exprNumber 5,exprNumber 1,exprNumber 0)
     //"1 + 2 == 5 ? 1 : 0", Ast.TernaryOp(Ast.Expr(Ast.MethodInvoke("+", [ Ast.Arg(Ast.Literal
-    "false ? 0 : 1", Ast.TernaryOp(exprLiteral false, exprLiteral 0, exprLiteral 1)
-    "false ? b : a", Ast.TernaryOp(exprLiteral false, exprVar "b", exprVar "a")
+    "false ? 0 : 1", Ast.TernaryOp(exprBool false, exprNumber 0, exprNumber 1)
+    "false ? b : a", Ast.TernaryOp(exprBool false, exprVar "b", exprVar "a")
     "c?b:a", Ast.TernaryOp(exprVar "c", exprVar "b", exprVar "a")
-    "condition ? true : false", Ast.TernaryOp(exprVar "condition", exprLiteral true, exprLiteral false)
+    "condition ? true : false", Ast.TernaryOp(exprVar "condition", exprBool true, exprBool false)
 ]
 
 //ternSamples
