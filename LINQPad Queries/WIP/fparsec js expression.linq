@@ -138,7 +138,10 @@ module Parser =
         |>> fun nl ->
                 if nl.IsInteger then Literal(int nl.String)
                 else Literal(float nl.String)
-    let ptrue = str_ws "true" |>> fun _ -> Literal(true)
+    let ptrue = 
+        str_ws "true" 
+        |>> fun _ -> Literal(true)
+        <?> "true"
     let pfalse = str_ws "false" |>> fun _ -> Literal(false)
     let pbool = ptrue <|> pfalse
     let pstringliteral =
