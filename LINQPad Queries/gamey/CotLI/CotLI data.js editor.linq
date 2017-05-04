@@ -3,47 +3,53 @@
   <Namespace>Newtonsoft.Json.Linq</Namespace>
 </Query>
 
-// desired: fix these to use upper case, but serialize back to lower
-
-let hoist f x = f x; x
-
-    
-let dumpReverse :  (obj) -> unit =
-    let dc = DumpContainer()
-    dc.Dump() |> ignore
-    (fun o -> 
-        match dc.Content with
-        | :? (obj list) as items -> List.Cons(o,items)
-        | _ -> [ o ]
-        |> fun content -> dc.Content <- content
-    )
 let cotLIPath = if Directory.Exists(@"D:\projects\CotLICheatSheet\") then @"D:\projects\CotLICheatSheet\js" else @"C:\projects\CotLICheatSheet\js"
-let path = Path.Combine(cotLIPath,"data.js")
-let flip f y x = f x y
-let dumpt (t:string) x = x.Dump(t,exclude="Raw"); x
-let dumpRemoval (items:string seq) x = 
-    let x = Util.ToExpando x
-    let dic = (box x) :?> IDictionary<string,obj>
-    items
-    |> Seq.iter(dic.Remove >> ignore<bool>)
-//    x.Dump("duplicateDump")
-    x
-let dumpRemoveRaw x = 
-    x |> dumpRemoval ["Raw"]
-let getStr (name:string) (jo:JObject) = jo.[name] |> string
-let getPropertyNames (jo:JObject) = jo.Properties() |> Seq.map (fun p -> p.Name) |> List.ofSeq
-let getProperty (name:string) (jo:JObject) : JProperty option = jo.Property name |> Option.ofObj
-let getPropertyValue name jo = getProperty name jo |> Option.map (fun jp -> jp.Value) |> Option.bind Option.ofObj
-let deserializeJO x = Newtonsoft.Json.JsonConvert.DeserializeObject<JObject>(x)
-let hasProperty (name:string) (jo:JObject) = jo.Property(name) |> isNull |> not
-let setProperty (name:string) (value:obj) jo = 
-    let t = JToken.FromObject value
-    if jo |> hasProperty name then 
-        // would be nice if this took objects and camelcased them
-        jo.Property(name).Value <- t
-    else
-        //printfn "adding new property %s" name
-        jo.Add(name,t)
+[<AutoOpen>]
+module Helpers =
+    let hoist f x = f x; x
+    let dumpReverse :  (obj) -> unit =
+        let dc = DumpContainer()
+        dc.Dump() |> ignore
+        (fun o -> 
+            match dc.Content with
+            | :? (obj list) as items -> List.Cons(o,items)
+            | _ -> [ o ]
+            |> fun content -> dc.Content <- content
+        )
+        
+    let (|IsInt|_|) (x:string) = match Int32.TryParse x with | true, x -> Some x |_ -> None
+    let flip f y x = f x y
+    let dumpt (t:string) x = x.Dump(t,exclude="Raw"); x
+    let dumpRemoval (items:string seq) x = 
+        let x = Util.ToExpando x
+        let dic = (box x) :?> IDictionary<string,obj>
+        items
+        |> Seq.iter(dic.Remove >> ignore<bool>)
+    //    x.Dump("duplicateDump")
+        x
+    let dumpRemoveRaw x = 
+        x |> dumpRemoval ["Raw"]
+        
+        
+[<AutoOpen>]
+module JsonHelpers =
+    let getStr (name:string) (jo:JObject) = jo.[name] |> string
+    let getPropertyNames (jo:JObject) = jo.Properties() |> Seq.map (fun p -> p.Name) |> List.ofSeq
+    let getProperty (name:string) (jo:JObject) : JProperty option = jo.Property name |> Option.ofObj
+    let getPropertyValue name jo = getProperty name jo |> Option.map (fun jp -> jp.Value) |> Option.bind Option.ofObj
+    let deserializeJO x = Newtonsoft.Json.JsonConvert.DeserializeObject<JObject>(x)
+    let hasProperty (name:string) (jo:JObject) = jo.Property(name) |> isNull |> not
+    let setProperty (name:string) (value:obj) jo = 
+        let t = JToken.FromObject value
+        if jo |> hasProperty name then 
+            // would be nice if this took objects and camelcased them
+            jo.Property(name).Value <- t
+        else
+            //printfn "adding new property %s" name
+            jo.Add(name,t)
+            
+            
+            
 type MissionTag={Id:string; DisplayName:string; Image:string; Raw:JObject} with member x.ToDump() = x |> dumpRemoveRaw
 
 type CrusaderLoot = {Slot:int; Rarity:int; IsGolden:bool; Name:string; LootId:int} with 
@@ -54,44 +60,87 @@ type CrusaderLoot = {Slot:int; Rarity:int; IsGolden:bool; Name:string; LootId:in
         if x.IsGolden then
             result.Add jGolden
         result
-type Crusader= { Id:string;Link:string;DisplayName:string; HeroId:int; Loot: CrusaderLoot list; Raw:JObject} with member x.ToDump() = x |> dumpRemoveRaw
 
-type CrusaderData = {Wikibase: string; MissionTags: MissionTag list; Crusaders: Crusader list; Raw:JObject} with member x.ToDump() = x |> dumpRemoveRaw
-        
-let mapMissionTag (jo:JObject) = 
-    {Id = jo.["id"] |> string; DisplayName= jo.["displayName"] |> string; Image= jo.["image"] |> string; Raw=jo}
-//let mutable succeededOnce = false    
-let mapCrusader (jo:JObject) = 
-    {   Id = jo.["id"] |> string
-        DisplayName= jo.["displayName"] |> string
-        Link = getStr "link" jo
-        Loot = 
-//            let ja = jo.["loot"] :?> JArray |> Option.ofObj |> Option.map Seq.cast<JObject> |> Option.getOrDefault Seq.empty |> List.ofSeq
-//            
-//            if not<| List.isEmpty ja then
-//                ja |> List.map (fun jo -> 
-//                    try
-//                        let lootId = jo.Property("id").Value |> Dump |> int
-//                        printfn "finished id prop"
-//                        let result ={LootId= lootId; Name=jo.Property("Name").Value |> string; Rarity= jo.Property("Rarity").Value |> int}
-//                        succeededOnce <- true
-//                        result
-//                    with ex ->
-//                        (getPropertyNames jo,jo,succeededOnce).Dump("failed to map loot")
-//                        reraise()
-//                    )
-//                
-////                (ja.Properties() |> Seq.map (fun jp -> jp.Name) |> List.ofSeq,ja).Dump("found items, but didn't read them in")
-//            else []
-            []
-        Raw = jo
-        HeroId= jo.["heroId"] |> string |> int
-        }
+
 let (|StartsWithI|_|) (d:string) (s:string) = 
     if s.StartsWith(d, StringComparison.InvariantCultureIgnoreCase) then Some () else None
 let mutable hasChanges = false
+
+module MyDataFile = 
+    type Crusader= { Id:string;Link:string;DisplayName:string; HeroId:int; Loot: CrusaderLoot list; Raw:JObject} with member x.ToDump() = x |> dumpRemoveRaw
+
+    type CrusaderData = {Wikibase: string; MissionTags: MissionTag list; Crusaders: Crusader list; Raw:JObject} with member x.ToDump() = x |> dumpRemoveRaw
+    let path = Path.Combine(cotLIPath,"data.js")
+            
+    let mapMissionTag (jo:JObject) = 
+        {Id = jo.["id"] |> string; DisplayName= jo.["displayName"] |> string; Image= jo.["image"] |> string; Raw=jo}
+    
+    
+    let mapCrusader (jo:JObject) = 
+        {   Id = jo.["id"] |> string
+            DisplayName= jo.["displayName"] |> string
+            Link = getStr "link" jo
+            Loot = []
+            Raw = jo
+            HeroId= jo.["heroId"] |> string |> int
+            }
+            
+            
+module GameData = 
+    type LootItem = {HeroId:int; CL:CrusaderLoot}
+    let gameData = lazy(
+        Path.Combine(cotLIPath,"gamedata.json")
+        |> File.ReadAllText
+        |> deserializeJO
+    )
+    let lootItems = lazy(
+            let x = 
+                gameData.Value
+            let patchVersion = x |> getProperty "patch_version"
+            patchVersion.Dump("patch_version")
+            let getInt name (jo:JObject) = 
+                jo |> getPropertyValue name |> Option.get |> string |> int
+            x 
+            |> getPropertyValue "loot_defines"
+            |> Option.get
+            |> fun x -> x :?> JArray
+            |> Seq.cast<JObject>
+            |> Seq.map (fun raw ->
+                {   HeroId= raw |> getInt  "hero_id"
+                    CL ={   LootId=raw |> getInt "id"
+                            Rarity=raw |> getInt "rarity"
+                            Name= raw |> getPropertyValue "name" |> Option.get |> string
+                            Slot= raw |> getInt "slot_id"
+                            IsGolden= 
+                                raw 
+                                |> getPropertyValue "golden" 
+                                |> Option.get 
+                                |> string 
+                                |> function 
+                                    |"0" -> false 
+                                    |"1" -> true 
+                                    | x -> 
+                                        x.Dump("Invalid option for field golden")
+                                        raise <| InvalidOperationException(message="Invalid option for field golden")
+                    }
+                }
+            )
+         
+            |> Seq.filter(fun li -> li.HeroId > 0)
+            |> Seq.groupBy(fun li -> li.HeroId)
+            |> Seq.map (fun (heroId,items) -> 
+                (heroId, 
+                    items
+                    |> Seq.map(fun li -> li.CL) 
+                    |> Seq.sortBy(fun cl -> cl.Slot, cl.Rarity, cl.LootId) 
+                    |> List.ofSeq
+                )
+            )
+            |> Map.ofSeq
+    )
 module MappedChanges = 
-    let (|IsInt|_|) (x:string) = match Int32.TryParse x with | true, x -> Some x |_ -> None
+    open MyDataFile
+    
     let slotMap= 
         function
         |IsInt x when x < 21 -> x
@@ -170,55 +219,13 @@ module MappedChanges =
             printfn "found nothing for slotMap %A" x
             0
     // type CrusaderLoot = {LootId:int; Name:string; Rarity:int; Slot:int option; Golden:bool}
-    type LootItem = {HeroId:int; CL:CrusaderLoot}
+    let findCrusadersMissingGearData (x:CrusaderData) = 
+        let gd = GameData.gameData.Value
+        ()
+    
+    // take the current loot information from gamedata.json and import it
     let addLootItemsFromGameData (x:CrusaderData) = 
-        let lootItems = 
-            let x = 
-                Path.Combine(cotLIPath,"gamedata.json")
-                |> File.ReadAllText
-                |> deserializeJO
-            let patchVersion = x |> getProperty "patch_version"
-            patchVersion.Dump("patch_version")
-            let getInt name (jo:JObject) = 
-                jo |> getPropertyValue name |> Option.get |> string |> int
-            x 
-            |> getPropertyValue "loot_defines"
-            |> Option.get
-            |> fun x -> x :?> JArray
-            |> Seq.cast<JObject>
-            |> Seq.map (fun raw ->
-                {   HeroId= raw |> getInt  "hero_id"
-                    CL ={   LootId=raw |> getInt "id"
-                            Rarity=raw |> getInt "rarity"
-                            Name= raw |> getPropertyValue "name" |> Option.get |> string
-                            Slot= raw |> getInt "slot_id"
-                            IsGolden= 
-                                raw 
-                                |> getPropertyValue "golden" 
-                                |> Option.get 
-                                |> string 
-                                |> function 
-                                    |"0" -> false 
-                                    |"1" -> true 
-                                    | x -> 
-                                        x.Dump("Invalid option for field golden")
-                                        raise <| InvalidOperationException(message="Invalid option for field golden")
-                    }
-                }
-            )
-            
-//#warning take 20            
-            |> Seq.filter(fun li -> li.HeroId > 0)
-            |> Seq.groupBy(fun li -> li.HeroId)
-            |> Seq.map (fun (heroId,items) -> 
-                (heroId, 
-                    items
-                    |> Seq.map(fun li -> li.CL) 
-                    |> Seq.sortBy(fun cl -> cl.Slot, cl.Rarity, cl.LootId) 
-                    |> List.ofSeq
-                )
-            )
-            |> Map.ofSeq
+        let lootItems = GameData.lootItems.Value
 
         x.Crusaders
         |> Seq.map (fun c ->
@@ -273,8 +280,12 @@ module MappedChanges =
             )
         
         {x with Crusaders=crusaders}
+        
+        
+open MyDataFile
+open GameData
 let starter,text,trailer = 
-    let text = File.ReadAllText(path)
+    let text = File.ReadAllText(MyDataFile.path)
     text |> before "=", text |> after "=" |> before ";", text |> after ";"
 text
 |> trim
