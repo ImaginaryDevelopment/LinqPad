@@ -19,7 +19,7 @@ module Helpers =
         
     let (|IsInt|_|) (x:string) = match Int32.TryParse x with | true, x -> Some x |_ -> None
     let flip f y x = f x y
-    let dumpt (t:string) x = x.Dump(t,exclude="Raw"); x
+    let inline dumpt (t:string) x = x.Dump(t,exclude="Raw"); x
     let dumpRemoval (items:string seq) x = 
         let x = Util.ToExpando x
         let dic = (box x) :?> IDictionary<string,obj>
@@ -37,6 +37,10 @@ module JsonHelpers =
     let getPropertyNames (jo:JObject) = jo.Properties() |> Seq.map (fun p -> p.Name) |> List.ofSeq
     let getProperty (name:string) (jo:JObject) : JProperty option = jo.Property name |> Option.ofObj
     let getPropertyValue name jo = getProperty name jo |> Option.map (fun jp -> jp.Value) |> Option.bind Option.ofObj
+    let getArray name jo = getProperty name jo |> Option.map (fun jp -> jp.Value |> fun x -> x :?> JArray)
+    let getArrayT<'T> name jo = getArray name jo |> Option.map (Seq.cast<'T>)
+//    let getObjectArray name jo = getArray name jo |> Option.map (Seq.cast<JObject>)
+//    let getValueArray name jo = getProperty name jo |> Option.map (fun jp -> jp.Value |> fun x -> x :?> JArray |> Seq.cast<JObject>)
     let deserializeJO x = Newtonsoft.Json.JsonConvert.DeserializeObject<JObject>(x)
     let hasProperty (name:string) (jo:JObject) = jo.Property(name) |> isNull |> not
     let setProperty (name:string) (value:obj) jo = 
@@ -67,7 +71,7 @@ let (|StartsWithI|_|) (d:string) (s:string) =
 let mutable hasChanges = false
 
 module MyDataFile = 
-    type Crusader= { Id:string;Link:string;DisplayName:string; HeroId:int; Loot: CrusaderLoot list; Raw:JObject} with member x.ToDump() = x |> dumpRemoveRaw
+    type Crusader= { Id:string;Link:string;DisplayName:string; HeroId:int; Loot: CrusaderLoot list; Raw:JObject; Gear: string list } with member x.ToDump() = x |> dumpRemoveRaw
 
     type CrusaderData = {Wikibase: string; MissionTags: MissionTag list; Crusaders: Crusader list; Raw:JObject} with member x.ToDump() = x |> dumpRemoveRaw
     let path = Path.Combine(cotLIPath,"data.js")
@@ -83,6 +87,7 @@ module MyDataFile =
             Loot = []
             Raw = jo
             HeroId= jo.["heroId"] |> string |> int
+            Gear = jo |> getArrayT<JValue> "gear" |> Option.getOrDefault Seq.empty |> Seq.map (fun x -> x.Value) |> Seq.cast<string> |> List.ofSeq
             }
             
             
@@ -138,6 +143,8 @@ module GameData =
             )
             |> Map.ofSeq
     )
+    
+    
 module MappedChanges = 
     open MyDataFile
     
@@ -219,9 +226,6 @@ module MappedChanges =
             printfn "found nothing for slotMap %A" x
             0
     // type CrusaderLoot = {LootId:int; Name:string; Rarity:int; Slot:int option; Golden:bool}
-    let findCrusadersMissingGearData (x:CrusaderData) = 
-        let gd = GameData.gameData.Value
-        ()
     
     // take the current loot information from gamedata.json and import it
     let addLootItemsFromGameData (x:CrusaderData) = 
@@ -281,6 +285,67 @@ module MappedChanges =
         
         {x with Crusaders=crusaders}
         
+    // crusaders that don't have the "gear": [ "alldps,"gold","selfdps"] property, or don't have values in it
+    let findCrusadersMissingGearData (x:CrusaderData) = 
+        let gearTypes = 
+            x.Crusaders
+            |> Seq.map (fun c -> c.Gear |> Seq.ofList ) 
+            |> Seq.concat 
+            |> Seq.distinct 
+            |> List.ofSeq
+        gearTypes.Dump("gear types")
+        
+        let gd = GameData.gameData.Value
+
+        let loot = gd |> getArrayT<JObject> "loot_defines"
+        let mutable saveAndQuit = false
+        {x with 
+            Crusaders = 
+                x.Crusaders
+                |> Seq.map (fun cru ->
+                    if saveAndQuit || cru.Gear.Length <> 0 then
+                        cru
+                    else
+                        let mutable skip = false
+                        [0..2]
+                        |> Seq.map (fun i -> 
+                            if saveAndQuit then
+                                null 
+                            else 
+                                match if skip then "skip" else Util.ReadLine(sprintf "gear for %s slot %i?" cru.DisplayName i,"alldps", gearTypes |> List.filter(fun a -> a.StartsWith("ability") |> not)) with
+                                | null | "" ->
+                                    saveAndQuit <- true
+                                    null
+                                | "skip" ->
+                                    skip <- true
+                                    null
+                                | x -> x
+                        )
+                        |> List.ofSeq
+                        |> function
+                            | _ when saveAndQuit = true -> cru
+                            | x when x |> Seq.exists(isNull) -> 
+                                cru
+                            | x when x |> Seq.exists(fun x-> x = "skip") -> cru
+                            | [a;b;c] as gears -> 
+                                let arr = Array.ofList gears
+                                cru.Raw |> setProperty "gear" arr
+                                cru.Raw.Property("gear").Value.Dump("changed it?")
+                                hasChanges <- true
+                                {cru with Gear = gears}
+                            | _ -> 
+                                // something was entered wrongish
+                                saveAndQuit <-true
+                                cru
+                            
+                        
+                )
+                |> List.ofSeq
+        }
+
+        
+//        gd.Properties()
+//        |> Seq.map (fun p -> p.Name)
         
 open MyDataFile
 open GameData
@@ -309,9 +374,9 @@ text
 // what change operation?
 //|> MappedChanges.setEmptyLinks
 //|> MappedChanges.addOrSetHeroIds
-|> MappedChanges.addLootItemsFromGameData
+|> MappedChanges.findCrusadersMissingGearData
 |> hoist dumpReverse
 |> fun x -> Newtonsoft.Json.JsonConvert.SerializeObject(x.Raw, Newtonsoft.Json.Formatting.Indented)
 |> fun x -> sprintf "%s=\r\n%s%s;" starter x trailer
 |> fun x -> if hasChanges then File.WriteAllText(path, x) else ()
-//|> dumpReverse
+
