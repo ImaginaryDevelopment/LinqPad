@@ -265,10 +265,14 @@ let loopCommands () =
                         |JArr ja -> ja.Parent 
                         |> function
                             | :? JProperty as jp -> 
+                                // double parenting eh?
                                 jp.Parent
                                 |> function
                                     | :? JObject as jo -> JObj jo 
                                     | :? JArray as ja -> JArr ja
+                            | :? JArray as ja ->
+                                JArr ja
+                                
                             | x -> 
                                 x.Dump("ascending into failure")
                                 failwithf "unexpected type to ascend into %s" (x.GetType().Name)
@@ -279,12 +283,20 @@ let loopCommands () =
                 |> function
                     |JArr (JObjArray items) -> 
                         let arg = args |> beforeOrSelf " "
+                        let getPropertyValues item =
+                            args 
+                            |> after " "
+                            |> String.split [","]
+                            |> Seq.map (fun x -> getPropertyValue (x.Trim()) item |> Option.map (getShallowDisplay >> string) |> Option.getOrDefault "")
+                            |> delimit ","
+                            
                         items
                         |> Seq.mapi (fun i item ->
                             item
-                            |> getPropertyValue arg
-                            |> Option.map (getShallowDisplay >> (fun x -> sprintf "%i,%A"i x))
-                            
+//                            |> getPropertyValue arg
+//                            |> Option.map (getShallowDisplay >> (fun x -> sprintf "%i,%A"i x))
+                            |> getPropertyValues
+                            |> sprintf "%i, %A" i
                         )
                         |> setDisplay 
                         getCurrentPath()
@@ -360,4 +372,3 @@ let loopCommands () =
     
 
 loopCommands()
-
