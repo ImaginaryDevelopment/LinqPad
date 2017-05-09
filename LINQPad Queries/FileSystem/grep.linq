@@ -160,9 +160,9 @@ module IOFileSystem_Tree =
         InternalNode (dirInfo,subItems)
 open IOFileSystem_Tree        
 let currentDir = fromDir (DirectoryInfo("."))  
-
+let filePattern = """(?<!\\(obj|debug)\\)\.(cs|fs)\s*$"""
 currentDir
-|> grep @"(?<!\\obj\\)\.cs\s*$" "AddParameter"  // AddParameter ? // DatabaseConfig
+|> grep filePattern "phantom.exit"  // AddParameter ? // DatabaseConfig
 |> Async.RunSynchronously    
 |> Dump
 |> ignore
