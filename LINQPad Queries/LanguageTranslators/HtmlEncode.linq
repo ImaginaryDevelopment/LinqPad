@@ -6,6 +6,7 @@
 
 //var input=LINQPad.Util.ReadLine<string>("What shall we encode?");
 let input=System.Windows.Forms.Clipboard.GetText()
+    
 let dumpt title x = x.Dump(description = title); x
 // works but won't compile if we don't have a usage for it
 //let dumpLen x = (^T:(member Length:int) x).Dump("length"); x
@@ -121,42 +122,38 @@ module Copying =
         
 input.Dump("Raw input from clipboard");
 
-let modern() = // would be nice to move this to using a table of copyables
+let modern rawInput = // would be nice to move this to using a table of copyables
     printfn "starting main block ----------------------------\r\n\r\n"
     let tableCopyable tagId encodedInput = Copying.getCopyableHtml System.Net.WebUtility.HtmlEncode tagId encodedInput
     let htmlEncodedPre x = sprintf "%s%s%s" "<pre class='brush: csharp'>"(System.Net.WebUtility.HtmlEncode x) "</pre>"
     let htmlEncodedCode x = sprintf "%s%s%s" "<code>"(System.Net.WebUtility.HtmlEncode x) "</code>"
     [
-        "htmlEncodedPre", htmlEncodedPre, None
-        "htmlEncodedCode", htmlEncodedCode, None
+        "webUtilityHtmlEncodedCode", htmlEncodedCode, None
+        "webUtilityHtmlEncodedPre", htmlEncodedPre, None
+        // this one is supposed to be nearly equal to WebUtility.HtmlEncode
+        "securityElement", System.Security.SecurityElement.Escape, (Some "System.Security.SecurityElement.Escape") // reverse it with s => SecurityElement.FromString s |> fun x -> x.Text
         "htmlEncoded", System.Net.WebUtility.HtmlEncode, (Some "System.Net.WebUtility.HtmlEncode")
+        "httpUtilityHtmlEncode", System.Web.HttpUtility.HtmlEncode,(Some "System.Web.HttpUtility.HtmlEncode")
+        
+        "urlEncoded", System.Net.WebUtility.UrlEncode, (Some "System.Net.WebUtility.UrlEncode")
+        "httpUtilityUrlEncode", System.Web.HttpUtility.UrlEncode, (Some "System.Web.HttpUtility.UrlEncode")
+        "escapeUriString", System.Uri.EscapeUriString, (Some "System.Uri.EscapeUriString")
+        
+        "httpUtilityAttributeEncode", System.Web.HttpUtility.HtmlAttributeEncode, (Some "System.Web.HttpUtility.HtmlAttributeEncode")
+        "escapedDataString", System.Uri.EscapeDataString, (Some "System.Uri.EscapeDataString")
+        
+        "jsEncoded", System.Web.HttpUtility.JavaScriptStringEncode, (Some "System.Web.HttpUtility.JavaScriptStringEncode")
+
     ]
     |> Seq.map (fun (nameId,f, nameOverrideOpt) ->
         
-        let v = f input
+        let v = f rawInput
         nameOverrideOpt |> Option.getOrDefault nameId, v, Util.RawHtml(tableCopyable nameId v)
-
     )
     |> Dump
     |> ignore
-    printfn "starting non-table block ----------------------------\r\n\r\n"
-    
-    let lessModern() = 
-        htmlEncodedPre input
-        |> Copying.dumpCopyable "htmlEncodePre"
-        sprintf "%s%s%s" "<code>" (System.Net.WebUtility.HtmlEncode(input)) "</code>"
-        |> Copying.dumpCopyableHighlighted "codeTagged" "htmlEncodeCode"
-    
-        System.Net.WebUtility.HtmlEncode(input).Dump("System.Net.WebUtility.HtmlEncode")
-        
-    System.Net.WebUtility.HtmlEncode(input)
-    |> Copying.dumpCopyable "WebUtilityHtmlEncode"
-    System.Net.WebUtility.UrlEncode(input).Dump("UrlEncode")
-    System.Uri.EscapeDataString(input).Dump("EscapeDataString")
-    System.Uri.EscapeUriString(input).Dump("EscapeUriString")
-    System.Web.HttpUtility.HtmlEncode(input).Dump("System.Web.HttpUtility.HtmlEncode")
-    System.Web.HttpUtility.UrlEncode(input).Dump("System.Web.HttpUtility.UrlEncode")
-    System.Web.HttpUtility.HtmlAttributeEncode(input).Dump("HtmlAttribute")
+
+printfn "System.Net and System.Security don't appear to require an outside dll"
 
 //legacy()
-modern()
+modern input
