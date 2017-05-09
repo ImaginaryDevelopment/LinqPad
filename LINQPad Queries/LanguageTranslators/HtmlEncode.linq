@@ -121,20 +121,42 @@ module Copying =
         
 input.Dump("Raw input from clipboard");
 
-printfn "starting main block ----------------------------\r\n\r\n"
+let modern() = // would be nice to move this to using a table of copyables
+    printfn "starting main block ----------------------------\r\n\r\n"
+    let tableCopyable tagId encodedInput = Copying.getCopyableHtml System.Net.WebUtility.HtmlEncode tagId encodedInput
+    let htmlEncodedPre x = sprintf "%s%s%s" "<pre class='brush: csharp'>"(System.Net.WebUtility.HtmlEncode x) "</pre>"
+    let htmlEncodedCode x = sprintf "%s%s%s" "<code>"(System.Net.WebUtility.HtmlEncode x) "</code>"
+    [
+        "htmlEncodedPre", htmlEncodedPre, None
+        "htmlEncodedCode", htmlEncodedCode, None
+        "htmlEncoded", System.Net.WebUtility.HtmlEncode, (Some "System.Net.WebUtility.HtmlEncode")
+    ]
+    |> Seq.map (fun (nameId,f, nameOverrideOpt) ->
+        
+        let v = f input
+        nameOverrideOpt |> Option.getOrDefault nameId, v, Util.RawHtml(tableCopyable nameId v)
 
-sprintf "%s%s%s" "<pre class='brush: csharp'>"(System.Net.WebUtility.HtmlEncode(input)) "</pre>"
-|> Copying.dumpCopyable "htmlEncodePre"
-sprintf "%s%s%s" "<code>" (System.Net.WebUtility.HtmlEncode(input)) "</code>"
-|> Copying.dumpCopyableHighlighted "codeTagged" "htmlEncodeCode"
+    )
+    |> Dump
+    |> ignore
+    printfn "starting non-table block ----------------------------\r\n\r\n"
+    
+    let lessModern() = 
+        htmlEncodedPre input
+        |> Copying.dumpCopyable "htmlEncodePre"
+        sprintf "%s%s%s" "<code>" (System.Net.WebUtility.HtmlEncode(input)) "</code>"
+        |> Copying.dumpCopyableHighlighted "codeTagged" "htmlEncodeCode"
+    
+        System.Net.WebUtility.HtmlEncode(input).Dump("System.Net.WebUtility.HtmlEncode")
+        
+    System.Net.WebUtility.HtmlEncode(input)
+    |> Copying.dumpCopyable "WebUtilityHtmlEncode"
+    System.Net.WebUtility.UrlEncode(input).Dump("UrlEncode")
+    System.Uri.EscapeDataString(input).Dump("EscapeDataString")
+    System.Uri.EscapeUriString(input).Dump("EscapeUriString")
+    System.Web.HttpUtility.HtmlEncode(input).Dump("System.Web.HttpUtility.HtmlEncode")
+    System.Web.HttpUtility.UrlEncode(input).Dump("System.Web.HttpUtility.UrlEncode")
+    System.Web.HttpUtility.HtmlAttributeEncode(input).Dump("HtmlAttribute")
 
-
-System.Net.WebUtility.HtmlEncode(input).Dump("System.Net.WebUtility.HtmlEncode")
-System.Net.WebUtility.HtmlEncode(input)
-|> Copying.dumpCopyable "WebUtilityHtmlEncode"
-System.Net.WebUtility.UrlEncode(input).Dump("UrlEncode")
-System.Uri.EscapeDataString(input).Dump("EscapeDataString")
-System.Uri.EscapeUriString(input).Dump("EscapeUriString")
-System.Web.HttpUtility.HtmlEncode(input).Dump("System.Web.HttpUtility.HtmlEncode")
-System.Web.HttpUtility.UrlEncode(input).Dump("System.Web.HttpUtility.UrlEncode")
-System.Web.HttpUtility.HtmlAttributeEncode(input).Dump("HtmlAttribute")
+//legacy()
+modern()
