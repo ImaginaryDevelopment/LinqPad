@@ -8,6 +8,8 @@
 let input=System.Windows.Forms.Clipboard.GetText()
     
 let dumpt title x = x.Dump(description = title); x
+let trimEnd (delim:char) (x:string) = 
+    x.TrimEnd(delim)
 // works but won't compile if we don't have a usage for it
 //let dumpLen x = (^T:(member Length:int) x).Dump("length"); x
 let addLeadingSpaceIfValue s = 
@@ -121,12 +123,24 @@ module Copying =
         Util.RawHtml(Html.headerify titling innerHtml).Dump()
         
 input.Dump("Raw input from clipboard");
-
+input
+|> Seq.map (fun x -> x,int x)
+|> Dump
+|> ignore
 let modern rawInput = // would be nice to move this to using a table of copyables
     printfn "starting main block ----------------------------\r\n\r\n"
     let tableCopyable tagId encodedInput = Copying.getCopyableHtml System.Net.WebUtility.HtmlEncode tagId encodedInput
     let htmlEncodedPre x = sprintf "%s%s%s" "<pre class='brush: csharp'>"(System.Net.WebUtility.HtmlEncode x) "</pre>"
     let htmlEncodedCode x = sprintf "%s%s%s" "<code>"(System.Net.WebUtility.HtmlEncode x) "</code>"
+    let xHtmlEncode x = 
+        use sw = new StringWriter()
+        use xtw = new XmlTextWriter(sw)
+        xtw.WriteAttributeString("attr",x)
+        sw.GetStringBuilder()
+        |> string
+        |> after "\""
+        |> trimEnd '"'
+        
     [
         "webUtilityHtmlEncodedCode", htmlEncodedCode, None
         "webUtilityHtmlEncodedPre", htmlEncodedPre, None
@@ -143,12 +157,23 @@ let modern rawInput = // would be nice to move this to using a table of copyable
         "escapedDataString", System.Uri.EscapeDataString, (Some "System.Uri.EscapeDataString")
         
         "jsEncoded", System.Web.HttpUtility.JavaScriptStringEncode, (Some "System.Web.HttpUtility.JavaScriptStringEncode")
-
+        "xHtmlEncoded", xHtmlEncode, (Some "XmlTextWriterAttributeString")
+        "regexEncoded", System.Text.RegularExpressions.Regex.Escape, (Some "System.Text.RegularExpressions.Regex.Escape")
+        // none of the items below appear to properly handle escapes ['\t';'\r'] etc.. =(
+        // Start bad code section----
+        
+        //not sure if this properly handles multi-line strings
+        "VerbatimString", replace "\"" "\"\"" >> sprintf "@\"%s\"", None
+        // this doesn't properly handle things like tab
+        "LiteralString", replace "\"" "\\\"" >> sprintf "\"%s\"", None
+        // limitations, string can not start with triple-quotes already, and can't end with a quote or double quote
+        "FString", sprintf "\"\"\"%s\"\"\"", None
+        "FStripLead", (fun s -> s |> String.split [ "\r\n"; "\n"; "\r"] |> delimit "\\\r\n" |> sprintf "\"\"\"%s\"\"\""), None
     ]
     |> Seq.map (fun (nameId,f, nameOverrideOpt) ->
         
         let v = f rawInput
-        nameOverrideOpt |> Option.getOrDefault nameId, v, Util.RawHtml(tableCopyable nameId v)
+        nameOverrideOpt |> Option.getOrDefault nameId, Util.RawHtml(tableCopyable nameId v) // checksum with v if desired
     )
     |> Dump
     |> ignore
@@ -157,3 +182,7 @@ printfn "System.Net and System.Security don't appear to require an outside dll"
 
 //legacy()
 modern input
+printfn "test data for copying to test"
+let copyIt () = 
+    "hello \t tab" |> System.Windows.Forms.Clipboard.SetText
+printfn "hello\\ttab"
