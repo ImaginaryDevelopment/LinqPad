@@ -1,10 +1,7 @@
 <Query Kind="FSharpProgram" />
 
 // find unreferenced language translations
-
-// open any .xaml where the root element is ResourceDictionary
-
-//let samplePath = @"C:\TFS\PracticeManagement\dev\PracticeManagement\PracticeManagement.UI.Localization\Cultures\DefaultResources.xaml"
+// I don't think this is working
 
 let searchRoot = @"C:\TFS\PracticeManagement\dev\PracticeManagement"
 let getName (xe:XElement) = xe.Name
@@ -25,43 +22,99 @@ let dumpReverse :  (obj) -> unit =
         |> fun content -> dc.Content <- content
     )
 
-let getElementWithoutChildren (xe:XElement) = 
-    let x = XElement(xe.Name)
-    x.Add(xe.Attributes() |> Array.ofSeq)
-    x
-asdfasfdasdfasdfasdfsfd
-is not including all the namespaces, missing xmlns:system currently    
-let getDocNamespaces (xd:XDocument) = 
-    //xd.Root |> getElementWithoutChildren |> dumpt "root"
-    //xd.Root |> getAttributeNames |> dumpt "AttribNames" |> ignore
-    seq{
-        yield! xd.Root.Attributes() |> Seq.filter(fun a -> a.Name.NamespaceName = "http://www.w3.org/2000/xmlns/") (* |> dumpt "xmlns" *) |> Seq.map (fun a -> XNamespace.Get(a.Value))
-    }
-    |> List.ofSeq 
-    |> uncurry List.Cons xd.Root.Name.Namespace
-    |> Seq.distinct
-    |> List.ofSeq
-    //|> dumpt "namespaces"
-let getDescendants (ns:XNamespace) name (xe:XElement) = 
-    xe.Descendants(ns + name)
+let getDescendants (xe:XElement) = 
+    xe.Descendants()
+type StringResource = { Key:string; Value:string; NamespaceName:string;LocalName:string}    
+let getStringResources (xe:XElement) = 
+    let srNs = XNamespace.Get(@"http://schemas.microsoft.com/winfx/2006/xaml")
+    let sNs = XNamespace.Get(@"clr-namespace:System;assembly=mscorlib")
+    getDescendants xe
+    |> Seq.filter(fun x -> x.Name.LocalName = "String" && x.Name.Namespace = sNs)
+    |> Seq.map (fun x -> {Key=x.GetAttribValOrNull(srNs + "Key"); Value=x.Value; NamespaceName= x.Name.NamespaceName;LocalName= x.Name.LocalName})
+//    |> dumpt "descendants"
     
-let getStringResources (namespaces:XNamespace list) (xe:XElement) = 
-    getDescendants namespaces.[1] "String" xe
+let getSrsFromDoc (doc:XDocument) = 
+    // after testing come back and make this return an option?
+    if doc.Root.Name.LocalName <> "ResourceDictionary" then
+        failwith "not a resource dictionary"
+    getStringResources doc.Root |> List.ofSeq
     
-let raw =
+let getSRsFromPath (path:string) = 
+    let doc = XDocument.Load path
+    path, doc, getSrsFromDoc doc |> List.ofSeq
+type RDStrategy = 
+    | OnlyRdRoots
+    | AnyRd
+let getAllXamlPathsUnder searchRoot = 
     Directory.GetFiles(searchRoot, "*.xaml", SearchOption.AllDirectories)
-    |> dumpLengthT "Files"
-    |> Seq.map (fun f-> f, XDocument.Load f)
-    |> Seq.map (fun (f,doc) -> f,doc, getDocNamespaces doc)
+let getAllRdStrings rds searchRoot = 
+    getAllXamlPathsUnder searchRoot
+    |> Seq.choose (fun f ->
+        let doc = XDocument.Load f
+        let isRd (x:XElement) = x.Name.LocalName = "ResourceDictionary"
+        match rds with
+        | OnlyRdRoots -> 
+            if isRd doc.Root then
+                Some [f,getSrsFromDoc doc,doc]
+            else None
+        | AnyRd -> 
+            [             
+                if isRd doc.Root then
+                    let srs = getSrsFromDoc doc
+                    yield! srs
+                let childRdSrs = 
+                    doc.Root.Descendants()
+                    |> Seq.filter isRd
+                    |> Seq.map getStringResources
+                    |> Seq.concat
+                yield! childRdSrs
+
+            ]
+            |> function
+                | [] -> None
+                | x -> Some([f,x,doc])
+    )
     |> List.ofSeq
-    //|> Seq.map (fun (f, doc, namespaces) -> f,doc,namespaces, getComboBoxes namespaces doc.Root |> Seq.append (getRadCombos namespaces doc.Root) |> List.ofSeq) // doc.Descendants(namespaces.[0] + "ComboBox") 
-    //|> Seq.map (fun (f,doc,namespaces) -> elements, namespaces, f, (if elements.Length < 1 then doc.ToString() else null))
-    //|> Seq.filter (fun (es,_,_,_) -> es.Length > 0)
-let rds = 
-    raw
-    |> Seq.filter (fun (f,doc,namespaces) -> doc.Root.Name.LocalName = "ResourceDictionary")
-    |> Seq.map (fun (f, doc, namespaces) -> f,doc,namespaces, getStringResources namespaces doc.Root |> List.ofSeq)
-    |> Seq.map (fun (f,doc,namespaces,elements) -> elements, namespaces, f, (if elements.Length < 1 then doc.ToString() else null))
     
-rds |> dumpt "raw"
+    
+let samplePath = @"C:\TFS\PracticeManagement\dev\PracticeManagement\PracticeManagement.UI.Localization\Cultures\DefaultResources.xaml"    
+let _tryGetSRsFromSample () = 
+    getSRsFromPath samplePath
+    |> fun (path,doc, sr) -> (sr, if List.isEmpty sr then doc else null)
+    |> Dump
+    |> ignore
+let tryGetAllRDStrings() = 
+    getAllRdStrings AnyRd searchRoot 
+    |> Seq.concat
+    |> List.ofSeq
+//    |> Dump
+//    |> ignore
+let rdStrings = Util.Cache(fun () -> 
+    tryGetAllRDStrings()
+    |> Seq.map (fun (_,sr,_) -> sr)
+    |> Seq.concat
+)
+// this doesn't account for commented out blocks =(
+// walk the xaml files that aren't resource dictionaries, and pull in all string refs
+// example: <TextBlock Text="{lang:Translate PracticeManagement_MainWindow_Schedule}" VerticalAlignment="Center" HorizontalAlignment="Center" />
+let getAllKeyRefs () =
+    getAllXamlPathsUnder searchRoot
+    |> Seq.map (fun p -> p,File.ReadAllText p)
+    |> Seq.choose(fun (p,text) -> 
+        Regex.Matches(text,"{\s*lang\s*:\s*Translate\s*(\w+)\s*}")
+        |> Seq.cast<Match>
+        |> List.ofSeq
+        |> function
+            | [] -> None
+            | x -> Some (p,x |> Seq.map (fun m -> m.Groups.[1].Value))
+    )
+
+//    |> Map.ofSeq
+
+let usedKeys = Util.Cache(fun () -> getAllKeyRefs())
+
+//|> Seq.filter(fun (_,text) -> rdStrings |> Seq.exists(fun sr -> text.Contains(sr.Key)))
+rdStrings
+|> Seq.filter (fun sr -> usedKeys |> Seq.map (snd) |> Seq.concat |> Seq.exists(fun k -> sr.Key = k) |> not)
+|> Dump
 |> ignore
