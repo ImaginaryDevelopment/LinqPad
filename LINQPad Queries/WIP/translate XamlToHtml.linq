@@ -4,17 +4,13 @@
 
 
 [<AutoOpen>]        
+        
 module ReverseDumper2 = 
     // reverse dumper with raw html support
-
-
-    type DumpType = 
-        | Raw of string
-        | DumpObj of obj
     // linqpad helper (for when you can't .Dump(description), but still want the html)
     // also of note: there is an extra open div tag, because the ToHtmlString closes one that it didn't open
     let titleize t (x:obj) = 
-        let objHtml = Util.ToHtmlString(enableExpansions=true, noHeader=false, objectsToDump= ([ x ] |> Array.ofList))
+        let objHtml = Util.ToHtmlString(enableExpansions=true, noHeader=true, objectsToDump= ([ x ] |> Array.ofList))
         let result = sprintf """<table class="headingpresenter">
         <tr>
         <th class="">%s</th>
@@ -23,8 +19,10 @@ module ReverseDumper2 =
         <td class="headingpresenter"><div>%s</td>
         </tr>
         </table>"""                 t objHtml
-        result        
-        |> Raw
+        Util.RawHtml result
+    type DumpType = 
+        | Raw of string
+        | DumpObj of obj
     // consider taking in obj, downcast to string, check for "<" starting the string to autodetect a raw html string? nah.    
     let dumpReverse :  DumpType -> unit =
         let dc = DumpContainer()
@@ -40,14 +38,14 @@ module ReverseDumper2 =
             | _ -> [ o ]
             |> fun content -> dc.Content <- content
         )
-    let dumpt t x = x.Dump(description=t); x
-    let dumptRev t x = x |> titleize t |> dumpReverse
+    let dumptRev t x = 
+        titleize t x |> DumpObj |> dumpReverse
+        x
     // override/overwrite existing dump methods, no direct dumpReverse calls required
     type System.Object with
         member x.Dump() = printfn "override hit!";  x |> DumpObj |> dumpReverse |> ignore
-        member x.Dump description = 
-            printfn "override2 hit! %s" description
-            x |> titleize description |> dumpReverse |> ignore
+        member x.Dump description = printfn "override2 hit! %s" description; x |> titleize description |> DumpObj |> dumpReverse |> ignore
+        
         
 module Xml = 
     open System.Xml.Linq
@@ -120,14 +118,22 @@ module Xml =
 
 let target = @"c:\tfs\practicemanagement\dev\practicemanagement\practicemanagement\patientdatagrid\appointmentaddeditpopup.xaml"
 let makeTable fElement (ns:XNamespace) (e:XElement) = 
-    e.Elements()
-    |> Seq.map fElement
-    let columns = e.Elements() //ns + "Grid.ColumnDefinitions")
-    columns
     
-let rec mapElement (e:XElement) = 
+    let columns = e.Elements(ns + "Grid.ColumnDefinitions")
+    let rows = 
+        e.Elements()
+        |> Seq.map fElement
+        |> delimit Environment.NewLine
+    let table = sprintf "<table><thead>%s</thead><tbody>%s</tbody>" (sprintf "<tr>%s</tr>" (columns |> Seq.map (fun _c ->"<td></td>") |> delimit String.Empty) )
+    
+    table
+    
+    
+    
+let rec mapElement (e:XElement) : string = 
     match e.Name.LocalName with
     | "Grid" ->
+        printfn "mapping grid"
         makeTable mapElement e.Name.Namespace e
     | n -> failwithf "unknown element type %s" n
 let doc = XDocument.Load target
