@@ -58,7 +58,7 @@ void Main()
 		var lines = System.IO.File.ReadLines(logFile) as IEnumerable<string>;
 		string cleaned;
 		using(IEnumerator<string> enumerator = lines.GetEnumerator()){
-		var content=ReadBlock(enumerator,buildServer,null,string.Empty);
+		    var content=ReadBlock(enumerator,buildServer,null,string.Empty);
 			cleaned=Htmlify(logFile,index,content);
 		}
 		
