@@ -123,7 +123,7 @@ type MyTagBuilder =
     //public static string Include(string tag, IDictionary<string,string> attributes, bool selfClose){
     static member Include(tag:string,attributes:IDictionary<string,string>,selfClose:bool) =
         let closing =if selfClose then " />" else "></"+tag+">"
-        let attributesText =if attributes=null then String.Empty else attributes.Select( fun x -> x.Key+"='"+HttpUtility.HtmlAttributeEncode(x.Value)+"'") |> delimit " "
+        let attributesText = if attributes=null then String.Empty else attributes.Select( fun x -> x.Key+"='"+HttpUtility.HtmlAttributeEncode(x.Value)+"'") |> delimit " "
         sprintf "<%s %s%s" tag attributesText closing
     //public static string Include(string tag, IDictionary<string,string> attributes, string content){
     static member Include(tag:string, attributes:IDictionary<string,string>, content:string) =
@@ -132,7 +132,6 @@ type MyTagBuilder =
         let attributesText = match attributes with
                                 | null ->String.Empty 
                                 | _ -> " "+ (attributes.Select(fun (x:KeyValuePair<string,string>) -> x.Key+"='"+HttpUtility.HtmlAttributeEncode(x.Value)+"'") |> delimit " ")
-        attributesText.Dump("yay?")
         sprintf  "<%s%s>%s%s" tag attributesText content closing
     //public static string BootstrapToggleButton(string selector,string text){  //http://getbootstrap.com/javascript/#collapse
     static member BootstrapToggleButton (selector,text) =
@@ -197,7 +196,7 @@ let MarkupFileReferences line server :string =
                 sb.Append(System.Net.WebUtility.HtmlEncode( line |> before fr.Value)) |> ignore
                 index <- fr.Index
             let cleanedPath = System.IO.Path.GetFullPath(fr.Value) // eliminate c:\abc\..\def type stuff
-        //firefox doesn't like this http://kb.mozillazine.org/Links_to_local_pages_don%27t_work
+            //firefox doesn't like this http://kb.mozillazine.org/Links_to_local_pages_don%27t_work
             let uncLinkStyle ="file://"+ (if firefoxUnc then "///" else String.Empty)
         
             let linkPath = 
