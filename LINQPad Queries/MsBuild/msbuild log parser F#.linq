@@ -154,6 +154,7 @@ type MyTagBuilder =
 //public static string Htmlify(string title, int lineCount,string content){
 // make a pretty html page wrapping the text
 let htmlify (title,lineCount:int,content) :string =
+    printfn "htmlify'ing with linecount %i title %s" lineCount title
     let headContent = (sprintf "<title>%s</title>%s%s%s%s" 
                                         (WebUtility.HtmlEncode(title))
                                         Environment.NewLine
@@ -354,12 +355,9 @@ let processLog (buildServer:string) (filePath:string) (index:int) =
             )
     else
         printfn "starting a process via \"%s\"" targetFilePath.Normalized
-        let p = Process.Start(targetFilePath.Normalized)
-        Debug.Assert(not <| isNull p,"process was null")
-        if isNull p then
-            failwithf "Process was null"
-        
-        openLink <- {Id=p.Id;ModuleName = if not <| isNull p.MainModule then p.MainModule.ModuleName else "null"} 
+        match Process.Start(targetFilePath.Normalized) with
+        | null -> ()
+        | p ->openLink <- {Id=p.Id;ModuleName = if not <| isNull p.MainModule then p.MainModule.ModuleName else "null"} 
     
     let logFileWrapper= filePath |> FilePathWrapper 
     {
