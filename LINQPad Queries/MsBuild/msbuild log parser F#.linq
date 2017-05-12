@@ -22,6 +22,8 @@
 </Query>
 
 // compiles and runs
+// works - mostly, but crashes on large files
+// also line 333 was a null ref exception
 #if INTERACTIVE
 open System
 open System.Diagnostics
@@ -77,10 +79,14 @@ type FilePathWrapper(path) =
     inherit PathWrapper(path)
     
     // allow other programs to read/write the file (I believe this also allows us to open files other programs are using
-    member x.ReadAllShared() = 
+    member x.ReadAllTextShared() = 
         use r = System.IO.File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
         use sr = new StreamReader(r, detectEncodingFromByteOrderMarks = true)
         sr.ReadToEnd()
+        
+    member x.ReadAllLinesShared() = 
+        x.ReadAllTextShared()
+        |> String.split ["\r\n";"\n";"\r"]
     member x.GetDirectoryName() = Path.GetDirectoryName path
     member x.GetLastWriteLocalTime() = File.GetLastWriteTime path
     member x.GetLastWriteUtcTime() = File.GetLastWriteTimeUtc path
@@ -287,7 +293,7 @@ module LocalServerBuildLogs =
             
         let buildsPath = @"\\" + buildServer + "\\c$\\builds"
         
-        let buildPaths = 
+        let buildPaths =  
             query{
                 for agentFolder in System.IO.Directory.EnumerateDirectories(buildsPath) do
                 for teamFolder in System.IO.Directory.EnumerateDirectories(agentFolder) do
@@ -325,13 +331,20 @@ let createTempHtmlFile buildServer (* was filePath *) title (i:int) (lines:strin
     System.IO.File.Move(tempFile,targetFileName)
     System.IO.File.WriteAllText(targetFileName,cleaned)
     targetFileName |> PathWrapper
-    
-let processLog (buildServer:string) (filePath:string) (index:int) (text:string) = 
+let sampleOnlineFilePath = @"C:\TFS\PracticeManagement\dev\sampleTfsBuild.log" |> FilePathWrapper
+
+let processLog (buildServer:string) (filePath:string) (index:int) = 
+    printfn "processing log %s" filePath
     let mutable leaned:string = null
     
     let targetFilePath= 
-        File.ReadLines(filePath)
+        filePath
+        |> FilePathWrapper
+        |> fun x -> x.ReadAllLinesShared()
+        |> Seq.ofArray
+        //File.ReadLines(filePath)
         |> createTempHtmlFile buildServer filePath index
+    printfn "tempHtmlFileCreated at %s" targetFilePath.Normalized
     let mutable openLink:obj = null;
     if delayLoad then
         openLink <- Util.OnDemand("OpenFile",
@@ -340,17 +353,22 @@ let processLog (buildServer:string) (filePath:string) (index:int) (text:string) 
                                 {Id=p.Id; ModuleName=p.MainModule.ModuleName}
             )
     else
+        printfn "starting a process via \"%s\"" targetFilePath.Normalized
         let p = Process.Start(targetFilePath.Normalized)
-        Debug.Assert(p <> null,"process was null")
-        openLink <- {Id=p.Id;ModuleName = if p.MainModule <> null then p.MainModule.ModuleName else "null"} 
+        Debug.Assert(not <| isNull p,"process was null")
+        if isNull p then
+            failwithf "Process was null"
+        
+        openLink <- {Id=p.Id;ModuleName = if not <| isNull p.MainModule then p.MainModule.ModuleName else "null"} 
     
     let logFileWrapper= filePath |> FilePathWrapper 
     {
         LogLink= logFileWrapper.ToAHref()
         FileLink = targetFilePath.ToAHref()
         ExplorerLink =targetFilePath.AsExplorerSelectLink("ExplorerLink")
-        OpenLink= openLink
+        OpenLink = openLink
     }
+    
 let processSlnFolderFiles buildServer slnFolder = 
     for logFile in System.IO.Directory.EnumerateFiles(slnFolder,"*.log", SearchOption.AllDirectories) do //consider caching previous log file locations and blacklisting debug and bin folders?
         let info = new System.IO.FileInfo(logFile)
@@ -358,41 +376,10 @@ let processSlnFolderFiles buildServer slnFolder =
             info.Dump("Empty logfile"+logFile)
         else 
             printfn "Reading log file: %s" logFile
-            let lines = System.IO.File.ReadLines(logFile)
-            let mutable leaned:string = null
-            let cleaned = 
-                use enumerator = lines.GetEnumerator()
-                let content= MakeHtmlFromLogBlock(enumerator,buildServer,null,String.Empty)
-                let cleaned = htmlify(logFile,index,content)
-                cleaned
-            
-            cleaned.SplitLines().Take(100).Dump("cleaned html")
-            let tempFile = System.IO.Path.GetTempFileName()
-            let targetFileName= tempFile+".htm"
-            System.IO.File.Move(tempFile,targetFileName)
-            System.IO.File.WriteAllText(targetFileName,cleaned)
-            let targetFilePath= targetFileName |> PathWrapper
-            let mutable openLink:obj = null;
-            if delayLoad then
-                openLink <- Util.OnDemand("OpenFile",
-                                    fun () ->
-                                        let p = Process.Start(targetFileName)
-                                        {Id=p.Id; ModuleName=p.MainModule.ModuleName}
-                    )
-                    
-            else
-                let p = Process.Start(targetFileName)
-                Debug.Assert(p <> null,"process was null")
-                openLink <- {Id=p.Id;ModuleName = if p.MainModule <> null then p.MainModule.ModuleName else "null"} 
-            
-            let logFileWrapper= logFile |> FilePathWrapper 
-            {
-                LogLink= logFileWrapper.ToAHref()
-                FileLink = targetFilePath.ToAHref()
-                ExplorerLink =targetFilePath.AsExplorerSelectLink("ExplorerLink")
-                OpenLink= openLink
-                }.Dump()
+            processLog buildServer logFile index 
+            |> (fun x -> x.Dump())
         ()
     
-    
     //write out the file as html grouping based on indention?
+
+processSlnFolderFiles "localhost" @"C:\TFS\PracticeManagement\dev\PracticeManagement"
