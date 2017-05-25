@@ -9,6 +9,8 @@
 //  get tfs online build logs with help from : http://stackoverflow.com/questions/39715860/get-zipped-tfs-2015-vnext-build-output-logs-through-powershell-just-like-the
 
 let doWinForms = true
+    
+type SaferString = | Escaped of string | Plain of string
 [<AutoOpen>]
 module StringExtensions = 
     let private sc = StringComparison.InvariantCultureIgnoreCase
@@ -124,7 +126,27 @@ module Regexing =
     let spaceOrStringLiteral = @"(?<arg>(?:""[^""]+?""|[^ ])+(?: |$))"
 module Slicing = 
     // this one encodes . when it doesn't need to, but should work fine
-    let escape = System.Security.SecurityElement.Escape // or we could reference System.Web and use HttpUtility.HtmlEncode t 
+    let toEscape s = 
+        System.Security.SecurityElement.Escape s |> Escaped // or we could reference System.Web and use HttpUtility.HtmlEncode t 
+    let escape = 
+        function
+         |Plain x -> toEscape s
+         | x -> x
+    // don't use unless we are at an endpoing
+    let fromEscaped =
+        function 
+        | Plain x -> x
+        | Escaped 
+    let useEscaped f e = 
+        escape e
+        |> fromEscaped
+        |> function
+            |Escaped
+    
+        match e with
+        | Plain x -> escape x
+        | x -> x
+        |> f
     let sliceMsBuildArg (t:string) =
         match t with
         | StartsWithI "/p:"
@@ -219,10 +241,33 @@ module Slicing =
                     let x1 = 
                         m
                         |> Seq.cast<Match>
-                        |> Seq.map (fun m -> 
-                            m.Value |> sliceCompilerArg "li"
-                        )
+                        |> Seq.map (fun m -> m.Value)
+                        |> Seq.fold (fun state arg ->
+                            // going to have to use reverse at the end
+                            // if there's a reference arg, and the head list item is a reference arg, mate, other wise start new list
+                            match arg,state with
+                            
+                            // more refs, mate them
+                            | ReferenceArg as a, ((ReferenceArg as prevRa)::otherRefs) :: tl ->
+                                let head = a::prevRa::otherRefs
+                                head::tl
+                            | _ ->
+                                [arg] :: state
+                        ) List.empty
                         |> List.ofSeq
+                        
+                        |> List.rev
+                        |> List.map (
+                            function
+                            | [] -> failwithf "should never have an empty list"
+                            | [x] -> escape x
+                            | items -> 
+                                items
+                                |> Seq.map escape
+                                |> ul
+                        )
+                        
+                        
                     x1
                 | args -> failwithf "how did we get here in compiler args? %s" x
             |> delimit "\r\n    "

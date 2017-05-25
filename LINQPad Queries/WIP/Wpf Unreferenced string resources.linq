@@ -1,7 +1,7 @@
 <Query Kind="FSharpProgram" />
 
 // find unreferenced language translations
-// I don't think this is working
+// works, but doesn't account for xaml comments as falsely in use, nor translations accessed from code-behind, or elsewhere in the project
 
 let searchRoot = @"C:\TFS\PracticeManagement\dev\PracticeManagement"
 let getName (xe:XElement) = xe.Name
