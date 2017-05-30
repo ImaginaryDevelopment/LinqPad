@@ -233,14 +233,17 @@ type World = {
                 | None, None -> None
                 | Some _, None -> failwithf "a spot wasn't in the layout %A" spot2 
                 | None, Some _ -> failwithf "a spot wasn't in the layout %A" spot1
-            member x.GetAdjacentSpots spot = 
-                ()
+            
             // will this work for all cases? there are some columns that are semi-offset, yes?
             member x.IsAdjacent spot1 spot2 =
                 match x.GetPositions spot1 spot2 with
                 | Some Adjacent -> true
                 | _ -> false
-                
+            member x.GetAdjacentSpots spot = 
+                x.Layout
+                |> Seq.concat
+                |> Seq.choose id
+                |> Seq.filter(x.IsAdjacent spot)
             member x.GetIsBehind front maybeBehind = 
                 match x.GetPositions front maybeBehind with
                 | Some (Position(_,Column c1),Position(_,Column c2)) when int c1 - int c2 = 1 -> true
@@ -252,8 +255,7 @@ let a = Some()
 module Data = 
     type Source = |GameData | Data
     let source = GameData
-    let toDump (x:JProperty) = 
-        (x.Name, x.Value)
+    let toDump (x:JProperty) = (x.Name, x.Value)
     type JProperty with 
         member x.ToDump() =
             box (x.Name, x.Value)
@@ -352,7 +354,7 @@ let getDps includeWindUp (world:World,formation:Formation, dpsCru, dpsC:DpsCalcu
             Some level
         | _ -> None
     let getLegendarySlotLevel slot =
-        function 
+        match c with
         | Cru _ -> None
         | Geared gc -> 
             match slot with |0 -> gc.Slot0 |1 -> gc.Slot1 | 2 -> gc.Slot2 | x -> failwithf "unexpected slot %i" x
@@ -388,14 +390,14 @@ let getDps includeWindUp (world:World,formation:Formation, dpsCru, dpsC:DpsCalcu
                 // buddy system
                 // if there is at least 1 adjacent, he gets a self-buff
                 let hasAdjacentCrusader = 
-                    let spot = formation |> Seq.findIndex(fun hIdOpt -> hIdOpt = Some hId)
-                    spot
+                    let spot = formation |> Seq.findIndex(fun hIdOpt -> hIdOpt = Some (HeroId hId)) |> byte
+                    Spot spot
                     |> world.GetAdjacentSpots 
-                    |> Seq.exists(fun adjSpot -> Option.isSome formation.[adjSpot])
+                    |> Seq.exists(fun (Spot adjSpot) -> Option.isSome formation.[int adjSpot])
                 if hasAdjacentCrusader then
                     match getLegendarySlotLevel 1 with
-                    | true, None -> yield Some (Ability,ModifierEffect.Dps,1.5)
-                    | true, Some level -> yield Some (GearMod true, Dps, 1 + getLegendaryFactor level)
+                    | None -> yield Some (Ability,ModifierEffect.Dps,1.5)
+                    | Some level -> yield Some (GearMod true, Dps, 1. + getLegendaryFactor level)
                     | _ -> ()
     
             | NotDps -> ()
