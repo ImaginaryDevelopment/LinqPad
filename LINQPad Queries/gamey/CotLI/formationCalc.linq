@@ -31,9 +31,10 @@ module Crusaders =
             | "leprechaun" -> Leprechaun
             | "dwarf" -> Dwarf
             | "gold" -> GoldFinder
-            |"clicker" -> Clicker
+            | "clicker" -> Clicker
             | "elf" -> Elf
             | "orc" -> Orc
+            | x -> failwithf "Unexpected tag %s" x
             
         
     type Crusader = 
@@ -45,13 +46,95 @@ module Crusaders =
         member private x.ToDump() = 
             let y = {x with Raw = x.Raw |> string}
             y
-    
-//    let (|BushWhacker|_|) = fromByte 1uy
-//    match 1uy with
-//    | Bushwhacker -> printfn "found bush!"
-//    
-//    let (|RoboRabbit|_|) = fromByte 38uy
-//    let (|Graham|_|) = fromByte 66uy
+    let (|BushWhacker|_|) = patternFromEquality 1uy // The Bush Whacker
+    let (|Jim|_|) = patternFromEquality 2uy // Jim the Lumberjack
+    let (|Emo|_|) = patternFromEquality 3uy // Emo Werewolf
+    let (|Sasha|_|) = patternFromEquality 4uy // Sasha the Fierce Warrior
+    let (|Hermit|_|) = patternFromEquality 5uy // The Washed Up Hermit
+    let (|Detective|_|) = patternFromEquality 6uy // Detective Kaine
+    let (|Princess|_|) = patternFromEquality 7uy // The Princess
+    let (|Natalie|_|) = patternFromEquality 8uy // Natalie Dragon
+    let (|Jason|_|) = patternFromEquality 9uy // Jason, Master of Shadows
+    let (|Artaxes|_|) = patternFromEquality 10uy // Artaxes, the Lion
+    let (|Khouri|_|) = patternFromEquality 11uy // Khouri, the Witch Doctor
+    let (|DarkGryphon|_|) = patternFromEquality 12uy // Dark Gryphon
+    let (|Sarah|_|) = patternFromEquality 13uy // Sarah, the Collector
+    let (|Panda|_|) = patternFromEquality 14uy // Gold Panda
+    let (|Sal|_|) = patternFromEquality 15uy // Prince Sal, the Merman
+    let (|Phoenix|_|) = patternFromEquality 16uy // Fire Phoenix
+    let (|Reginald|_|) = patternFromEquality 17uy // King Reginald IV
+    let (|Thalia|_|) = patternFromEquality 18uy // Thalia, the Thunder King
+    let (|Merci|_|) = patternFromEquality 19uy // Merci, the Mad Wizard
+    let (|Nate|_|) = patternFromEquality 20uy // Nate Dragon
+    let (|Mister|_|) = patternFromEquality 21uy // Mister the Monkey
+    let (|Pete|_|) = patternFromEquality 22uy // Pete the Carney
+    let (|Wendy|_|) = patternFromEquality 23uy // Wendy the Witch
+    let (|Jack|_|) = patternFromEquality 24uy // Jack O'Lantern
+    let (|RoboTurkey|_|) = patternFromEquality 25uy // RoboTurkey
+    let (|Momma|_|) = patternFromEquality 26uy // Momma Kaine
+    let (|RoboSanta|_|) = patternFromEquality 27uy // RoboSanta
+    let (|Frosty|_|) = patternFromEquality 28uy // Frosty the Snowman
+    let (|Pam|_|) = patternFromEquality 29uy // Pilot Pam
+    let (|Siri|_|) = patternFromEquality 30uy // Queen Siri
+    let (|Groklok|_|) = patternFromEquality 31uy // Groklok the Orc
+    let (|Drizzle|_|) = patternFromEquality 32uy // Drizzle the Dark Elf
+    let (|Rocky|_|) = patternFromEquality 33uy // Rocky the Rockstar
+    let (|Sally|_|) = patternFromEquality 34uy // Sally the Succubus
+    let (|Larry|_|) = patternFromEquality 35uy // Larry the Leprechaun
+    let (|Kyle|_|) = patternFromEquality 36uy // Kyle the Party Bro
+    let (|Alan|_|) = patternFromEquality 37uy // Alan the ArchAngel
+    let (|RoboRabbit|_|) = patternFromEquality 38uy // RoboRabbit
+    let (|Bat|_|) = patternFromEquality 39uy // The Bat Billionaire
+    let (|MetalSoldierette|_|) = patternFromEquality 40uy // The Metal Soldierette
+    let (|Broot|_|) = patternFromEquality 41uy // Broot
+    let (|Robbie|_|) = patternFromEquality 42uy // Robbie Raccoon
+    let (|Leerion|_|) = patternFromEquality 43uy // Leerion, the Royal Dwarf
+    let (|Brogon|_|) = patternFromEquality 44uy // Brogon, Prince of Dragons
+    let (|Montana|_|) = patternFromEquality 45uy // Montana James
+    let (|Draco|_|) = patternFromEquality 46uy // Serpent King Draco
+    let (|Billy|_|) = patternFromEquality 47uy // President Billy Smithsonian
+    let (|Kizlblyp|_|) = patternFromEquality 48uy // Kizlblyp, the Alien Traitor
+    let (|Rayna|_|) = patternFromEquality 49uy // Ranger Rayna
+    let (|Littlefoot|_|) = patternFromEquality 50uy // Littlefoot
+    let (|Veronica|_|) = patternFromEquality 51uy // Veronica, the Android Archer
+    let (|Bubba|_|) = patternFromEquality 52uy // Bubba, the Swimming Orc
+    let (|Karen|_|) = patternFromEquality 53uy // Karen, the Cat Teenager
+    let (|Boggins|_|) = patternFromEquality 54uy // Mr. Boggins, the Substitute
+    let (|Exterminator|_|) = patternFromEquality 55uy // The Exterminator
+    let (|Shadow|_|) = patternFromEquality 56uy // The Shadow Queen
+    let (|Greyskull|_|) = patternFromEquality 57uy // Greyskull the Pirate
+    let (|Gloria|_|) = patternFromEquality 58uy // Gloria, the Good Witch
+    let (|Ilsa|_|) = patternFromEquality 59uy // Ilsa, the Insane Wizard
+    let (|Eiralon|_|) = patternFromEquality 60uy // Eiralon, the Blood Mage
+    let (|PoT|_|) = patternFromEquality 61uy // Priestess of Time
+    let (|Mindy|_|) = patternFromEquality 62uy // Mindy the Mime
+    let (|HalfBlood|_|) = patternFromEquality 63uy // The Half-Blood Elf
+    let (|Henry|_|) = patternFromEquality 64uy // Henry, the Scaredy-Ghoul
+    let (|Fright|_|) = patternFromEquality 65uy // Fright-o-Tron 4000
+    let (|Graham|_|) = patternFromEquality 66uy // Graham the Driver
+    let (|Paul|_|) = patternFromEquality 67uy // Paul the Pilgrim
+    let (|Petra|_|) = patternFromEquality 68uy // Petra the Pilgrim
+    let (|DarkHelper|_|) = patternFromEquality 69uy // The Dark Helper
+    let (|Robo|_|) = patternFromEquality 70uy // Robo-Rudolph
+    let (|Bernard|_|) = patternFromEquality 71uy // Bernard the Bartender
+    let (|Val|_|) = patternFromEquality 72uy // Princess Val the Mermaid
+    let (|Karl|_|) = patternFromEquality 73uy // Karl the Kicker
+    let (|Cindy|_|) = patternFromEquality 74uy // Cindy the Cheer-Orc
+    let (|Warwick|_|) = patternFromEquality 75uy // Warwick the Warlock
+    let (|Katie|_|) = patternFromEquality 76uy // Katie the Cupid
+    let (|Snickette|_|) = patternFromEquality 77uy // Snickette the Sneaky
+    let (|Squiggles|_|) = patternFromEquality 78uy // Squiggles the Clown
+    let (|Arachnobuddy|_|) = patternFromEquality 79uy // Arachnobuddy
+    let (|Foresight|_|) = patternFromEquality 80uy // Foresight
+    let (|Baenarall|_|) = patternFromEquality 81uy // Baenarall, Angel of Hope
+    let (|Sisaron|_|) = patternFromEquality 82uy // Sisaron the Dragon Sorceress
+    let (|Spaceking|_|) = patternFromEquality 83uy // Spaceking
+    let (|Grandmora|_|) = patternFromEquality 84uy // Grandmora
+    let (|Devin|_|) = patternFromEquality 85uy // Devin the Dataminer
+    let (|Darcy|_|) = patternFromEquality 86uy // Darcy the Dataminer
+    let (|Danni|_|) = patternFromEquality 87uy // Danni the Daring Damsel
+    let (|Polly|_|) = patternFromEquality 88uy // Polly the Parrot
+
 open Crusaders
 
 module Gearing = 
@@ -95,10 +178,12 @@ module Gearing =
     
     type GearedCrusader = {
         Crusader: Crusader 
-        Slot0: Rarity
-        Slot1: Rarity
-        Slot2: Rarity
-    }
+        Slot0: Rarity option
+        Slot1: Rarity option
+        Slot2: Rarity option
+    } with
+        member x.AllGear() = 
+            [x.Slot0;x.Slot1;x.Slot2]
 
 open Gearing
 
@@ -109,43 +194,52 @@ type Crusaderish =
     
 type ModifierType = 
     | Ability
-    | GearMod
-    | Legendary
-    
-type CrusaderDps = 
-    {   GlobalDpsModifier: (decimal * ModifierType) list
-        GlobalGoldModifier: (decimal * ModifierType) list
-        CritChance: byte
-    }
-    static member Zero = 
-        {   GlobalDpsModifier= List.empty
-            GlobalGoldModifier= List.empty
-            CritChance= 0uy
-        }        
+    | GearMod of fromLegendary:bool    
+    | Positional
+type ModifierEffect = 
+    | Dps
+    | Gold
+    | Crit
+       
 type Positioning = | SameRow | InFront|Behind|Adjacent | Other
 type DpsCalculation =
     | IsDps
     | NotDps of Positioning
+    
 let getDps dpsC includeWindUp cSpot c = 
-    let cruId, tags = 
+    let getLegendaryLevel = 
+        function
+        | Legendary(_,level) ->
+            Some level
+        | _ -> None
+        
+    let cruId, tags, gearOpt = 
         match c with
-        | Cru {Id=cruId;Tags=tags} -> cruId,tags
-        | Geared {Crusader = {Id=cruId;Tags=tags} } -> cruId, tags
+        | Cru {Id=cruId;Tags=tags} -> cruId,tags, None
+        | Geared gc -> 
+            let gearOpt = 
+                if [gc.Slot0; gc.Slot1; gc.Slot2] |> Seq.exists(Option.isSome) then
+                    Some gc
+                else None
+            gc.Crusader.Id, gc.Crusader.Tags, gearOpt
     let zero = 1m
     match cruId,dpsC with
-    | 1uy, _ -> zero
-    | 2uy, NotDps SameRow -> // jim
-        1.5m
-    | 2uy, _ -> zero
-    |>
-        // insure all 0 multipliers become 1 as no ability shuts off all dps (cept perhaps draco on himself?)
-        function
-        |0m -> 1m
-        | x -> x
-    ()
-
-        
-
+    | BushWhacker, _ ->
+        let result = 
+            gearOpt
+            |> Option.map(fun gc ->
+                [   gc.Slot0 |> Option.bind getLegendaryLevel |> Option.map (fun l -> ModifierEffect.Crit, 1. * (getLegendaryFactor l))
+                    gc.Slot1 |> Option.bind getLegendaryLevel |> Option.map (fun l -> ModifierEffect.Dps, 1. + 1. * (getLegendaryFactor l))
+                ]
+                |> List.choose id
+                |> List.map(fun (e,ef) -> GearMod true, e,ef)
+            )
+            |> Option.getOrDefault List.empty
+        result
+    | Jim, NotDps SameRow -> // jim
+        [   Positional, Dps, 1.5
+        ]
+    | _, _ -> List.empty
 
 
 let mutable dpsChar:Crusader option = None
@@ -164,6 +258,7 @@ module Layouts =
     
     let getCrusaderSpot formation cruId = formation |> Seq.tryFindIndex ((=) cruId)
     let getDpsSpot formation dpsCruId = getCrusaderSpot formation dpsCruId
+    
 open Layouts  
 
 type World = {
@@ -283,11 +378,3 @@ let worlds =
         ]}
     ]
 
-
-
-worlds
-|> Dump
-|> ignore
-Data.getCrusader 1uy
-|> Dump
-|> ignore
