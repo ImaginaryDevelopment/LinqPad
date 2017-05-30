@@ -85,12 +85,17 @@ let dataModelsToGen : TableIdentifier list = [
     ]
     
 let dte = 
-    Macros.VsMacros.getWindowNames()
-    |> Seq.find(fun wn -> wn.Contains("PracticeManagement"))
-    |> dumpt "VisualStudioWindowName"
-    |> Macros.VsMacros.getDteByWindowName
-    |> dumpft "VisualStudioProcInfo" (fun p -> p.Name)
-    //System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE") :?> EnvDTE.DTE
+    try
+        Macros.VsMacros.getWindowNames()
+        |> Seq.find(fun wn -> wn.Contains("PracticeManagement"))
+        |> dumpt "VisualStudioWindowName"
+        |> Macros.VsMacros.getDteByWindowName
+        |> dumpft "VisualStudioProcInfo" (fun p -> p.Name)
+        //System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE") :?> EnvDTE.DTE
+    with ex ->
+        let msg = "could not find or hook into a vs instance"
+        ex.Dump(msg)
+        reraise()
     
 printfn "Got dte for solution %s" dte.Solution.FileName
 let cString = 
@@ -307,6 +312,8 @@ let toGen : TableInput list =
                  Precision = None
                  Scale = None
                  UseMax = false
+                 DefaultValue = null
+                 CustomSqlType = null
                  Attributes = List.empty
                  FKey = Some (FKeyWithReference {
                                 FKeyId={Table={Schema="Accounts"; Name="PaymentItemType"}; Column="PaymentItemTypeId"}
@@ -413,6 +420,7 @@ let toGenAccounting =
                 ColumnInput.createFKeyedNColumn<int> "PaymentItemID"    (FKeyIdentifier{Table={Schema="Accounts"; Name="PaymentItem"}; Column=null})
                 ColumnInput.createFKeyedNColumn<int> "PatientID"        (FKeyIdentifier{Table={Schema="dbo"; Name="Patients"}; Column=null})
                 ColumnInput.createFKeyedNColumn<int> "AppointmentID"    (FKeyIdentifier{Table={Schema="dbo"; Name="Appointments"}; Column=null})
+                {ColumnInput.create "EffectiveDate" typeof<DateTime> with CustomSqlType = "smalldatetime"}
                 ColumnInput.createUserIdColumn null Nullability.AllowNull ["null to allow system inserts/adjustments that aren't done by a user"]
                 ColumnInput.create "Entered" typeof<DateTime>
                 {ColumnInput.create "Comments" typeof<string> with UseMax=true; AllowNull=Nullability.AllowNull}
