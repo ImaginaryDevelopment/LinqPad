@@ -187,66 +187,11 @@ module Gearing =
 
 open Gearing
 
-// able to account for doing dps calcs with or without gear
-type Crusaderish = 
-    | Cru of Crusader
-    | Geared of GearedCrusader
-    
-type ModifierType = 
-    | Ability
-    | GearMod of fromLegendary:bool    
-    | Positional
-type ModifierEffect = 
-    | Dps
-    | Gold
-    | Crit
-       
-type Positioning = | SameRow | InFront|Behind|Adjacent | Other
-type DpsCalculation =
-    | IsDps
-    | NotDps of Positioning
-    
-let getDps dpsC includeWindUp cSpot c = 
-    let getLegendaryLevel = 
-        function
-        | Legendary(_,level) ->
-            Some level
-        | _ -> None
-        
-    let cruId, tags, gearOpt = 
-        match c with
-        | Cru {Id=cruId;Tags=tags} -> cruId,tags, None
-        | Geared gc -> 
-            let gearOpt = 
-                if [gc.Slot0; gc.Slot1; gc.Slot2] |> Seq.exists(Option.isSome) then
-                    Some gc
-                else None
-            gc.Crusader.Id, gc.Crusader.Tags, gearOpt
-    let zero = 1m
-    match cruId,dpsC with
-    | BushWhacker, _ ->
-        let result = 
-            gearOpt
-            |> Option.map(fun gc ->
-                [   gc.Slot0 |> Option.bind getLegendaryLevel |> Option.map (fun l -> ModifierEffect.Crit, 1. * (getLegendaryFactor l))
-                    gc.Slot1 |> Option.bind getLegendaryLevel |> Option.map (fun l -> ModifierEffect.Dps, 1. + 1. * (getLegendaryFactor l))
-                ]
-                |> List.choose id
-                |> List.map(fun (e,ef) -> GearMod true, e,ef)
-            )
-            |> Option.getOrDefault List.empty
-        result
-    | Jim, NotDps SameRow -> // jim
-        [   Positional, Dps, 1.5
-        ]
-    | _, _ -> List.empty
 
-
-let mutable dpsChar:Crusader option = None
 
 module Layouts = 
-    type Layout = byte option list list
     type Spot = |Spot of byte
+    type Layout = Spot option list list
     type Row = | Row of byte
     type Column = | Column of byte
     type Position = | Position of Row * Column
@@ -258,8 +203,9 @@ module Layouts =
     
     let getCrusaderSpot formation cruId = formation |> Seq.tryFindIndex ((=) cruId)
     let getDpsSpot formation dpsCruId = getCrusaderSpot formation dpsCruId
+    let getHasAdjacentCru formation cruId = ()
     
-open Layouts  
+open Layouts
 
 type World = {
     	Name:string
@@ -268,16 +214,12 @@ type World = {
         Layout : Layouts.Layout} with
             member x.Slots 
                 with get() = x.Layout |> Seq.map(Seq.choose id >> Seq.length) |> Seq.sum
-            member x.GetRow y = 
-                match y with
-                | Spot spot ->
-                    x.Layout |> Seq.tryFindIndex(fun row -> row |> Seq.choose id |> Seq.exists ((=) spot))
-                    |> Option.map (byte >> Row)
-            member x.GetColumn y = 
-                match y with
-                | Spot spot ->
-                    x.Layout |> Seq.tryPick(fun row -> row |> Seq.tryFindIndex((=) (Some spot)))
-                    |> Option.map (byte >> Column)
+            member x.GetRow spot =
+                x.Layout |> Seq.tryFindIndex(fun row -> row |> Seq.choose id |> Seq.exists ((=) spot))
+                |> Option.map (byte >> Row)
+            member x.GetColumn spot = 
+                x.Layout |> Seq.tryPick(fun row -> row |> Seq.tryFindIndex((=) (Some spot)))
+                |> Option.map (byte >> Column)
             member x.GetPosition spot = 
                 match x.GetRow spot, x.GetColumn spot with
                 | Some r, Some c -> Some (Position (r,c))
@@ -291,6 +233,8 @@ type World = {
                 | None, None -> None
                 | Some _, None -> failwithf "a spot wasn't in the layout %A" spot2 
                 | None, Some _ -> failwithf "a spot wasn't in the layout %A" spot1
+            member x.GetAdjacentSpots spot = 
+                ()
             // will this work for all cases? there are some columns that are semi-offset, yes?
             member x.IsAdjacent spot1 spot2 =
                 match x.GetPositions spot1 spot2 with
@@ -303,7 +247,7 @@ type World = {
                 | _ -> false
             
 // heroId list (position in list determines where in the layout that hero is)
-type Formation = byte option list                
+                
 let a = Some()
 module Data = 
     type Source = |GameData | Data
@@ -366,15 +310,102 @@ module Data =
                             Raw = box c
                 
             }
+  
 let worlds = 
+    let ss = Spot >> Some
     Set[
         {   Name = "World's Wake"; Id = 1uy; 
             Layout = 
-                [   [Some 0uy]
-                    [Some 1uy; Some 5uy;]
-                    [Some 2uy; Some 6uy; Some 9uy; ]
-                    [Some 3uy; Some 7uy; ]
-                    [Some 4uy; Some 8uy;]
+                [   [ss 0uy]
+                    [ss  1uy; ss  5uy;]
+                    [ss  2uy; ss  6uy; ss  9uy; ]
+                    [ss  3uy; ss  7uy; ]
+                    [ss  4uy; ss  8uy;]
         ]}
     ]
+type HeroId = | HeroId of byte    
+type Formation = HeroId option list
+// able to account for doing dps calcs with or without gear
+type Crusaderish = 
+    | Cru of Crusader
+    | Geared of GearedCrusader
+    
+type ModifierType = 
+    | Ability
+    | GearMod of fromLegendary:bool    
+    | Positional
+type ModifierEffect = 
+    | Dps
+    | Gold
+    | Crit
+       
+type DpsCalculation =
+    | IsDps
+    | NotDps
+ 
+let mutable dpsChar:Crusader option = None
+// get dps modifiers of a crusader
+let getDps includeWindUp (world:World,formation:Formation, dpsCru, dpsC:DpsCalculation) (c:Crusaderish) = 
+    let getLegendaryLevel = 
+        function
+        | Legendary(_,level) ->
+            Some level
+        | _ -> None
+    let getLegendarySlotLevel slot =
+        function 
+        | Cru _ -> None
+        | Geared gc -> 
+            match slot with |0 -> gc.Slot0 |1 -> gc.Slot1 | 2 -> gc.Slot2 | x -> failwithf "unexpected slot %i" x
+            |> Option.bind getLegendaryLevel
+        
+    let hId, tags, gearOpt = 
+        match c with
+        | Cru {Id=hId;Tags=tags} -> hId,tags, None
+        | Geared gc -> 
+            let gearOpt = 
+                if [gc.Slot0; gc.Slot1; gc.Slot2] |> Seq.exists(Option.isSome) then
+                    Some gc
+                else None
+            gc.Crusader.Id, gc.Crusader.Tags, gearOpt
+    let zero = 1m
+    match hId with
+    | BushWhacker ->
+        let result = 
+            gearOpt
+            |> Option.map(fun gc ->
+                [   gc.Slot0 |> Option.bind getLegendaryLevel |> Option.map (fun l -> ModifierEffect.Crit, 1. * (getLegendaryFactor l))
+                    gc.Slot1 |> Option.bind getLegendaryLevel |> Option.map (fun l -> ModifierEffect.Dps, 1. + 1. * (getLegendaryFactor l))
+                ]
+                |> List.choose id
+                |> List.map(fun (e,ef) -> GearMod true, e,ef)
+            )
+            |> Option.getOrDefault List.empty
+        result
+    | Jim ->
+        [
+            match dpsC with
+            | IsDps ->
+                // buddy system
+                // if there is at least 1 adjacent, he gets a self-buff
+                let hasAdjacentCrusader = 
+                    let spot = formation |> Seq.findIndex(fun hIdOpt -> hIdOpt = Some hId)
+                    spot
+                    |> world.GetAdjacentSpots 
+                    |> Seq.exists(fun adjSpot -> Option.isSome formation.[adjSpot])
+                if hasAdjacentCrusader then
+                    match getLegendarySlotLevel 1 with
+                    | true, None -> yield Some (Ability,ModifierEffect.Dps,1.5)
+                    | true, Some level -> yield Some (GearMod true, Dps, 1 + getLegendaryFactor level)
+                    | _ -> ()
+    
+            | NotDps -> ()
+                // column buff
+//                if world.GetColumn dpsSpot = 
+//            
+//                [   Positional, Dps, 1.5
+//                ] 
+        ]
+        |> List.choose id
+    | _ -> List.empty
+  
 
