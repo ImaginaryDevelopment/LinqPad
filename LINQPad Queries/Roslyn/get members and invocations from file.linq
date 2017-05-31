@@ -1,4 +1,4 @@
-<Query Kind="Program">
+<Query Kind="FSharpProgram">
   <NuGetReference>Microsoft.CodeAnalysis.CSharp</NuGetReference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
   <NuGetReference>System.Collections.Immutable</NuGetReference>
@@ -7,161 +7,132 @@
   <Namespace>Microsoft.CodeAnalysis.CSharp.Syntax</Namespace>
 </Query>
 
-void Main()
-{
-	var rootPath = @"C:\TFS\PracticeManagement\dev\PracticeManagement";
-	var propsSeq = Directory.GetFiles(rootPath, "*.cs", SearchOption.AllDirectories).Where(PathFilter).Select(f =>
-	{
-		var code = File.ReadAllText(f);
-		return new { f, Properties = ModelCollector.VisitProperties(code), Methods = ModelCollector.VisitMethods(code), Invocations = ModelCollector.VisitInvocations(code) };
-	})
-	//.Where(x => x.Properties.Any())
-	.Take(6)
-	.Dump();
-}
+// mutate the items
+type ModelCollectionMode = 
+    | Properties
+    | Methods
+    | MethodInvocations
+type ModelCollector private (mcm, items:Dictionary<string, ResizeArray<string>>) =
+    inherit CSharpSyntaxWalker()
+    let addToLookup key value = 
+        if not <| items.ContainsKey key then
+            items.[key] <- ResizeArray()
+        items.[key].Add value
+    
+    override x.VisitPropertyDeclaration node = 
+        match mcm with
+        | Properties ->
+            let classNode = node.Parent :?> ClassDeclarationSyntax
+            let className = classNode.Identifier.ValueText
+            
+            addToLookup className node.Identifier.ValueText
+            (* to get character index in file:
+                node.FullSpan.Start.Dump(); *)
+        | _ -> ()
+        base.VisitPropertyDeclaration node
+        
+    static member private FindClassParent (node:SyntaxNode) = 
+        match node.Parent with
+        | null -> null
+        | :? ClassDeclarationSyntax as cds -> cds
+        | x -> ModelCollector.FindClassParent(x.Parent)
+       
+    override __.VisitInvocationExpression node = 
+        match mcm with
+        | MethodInvocations ->
+            match ModelCollector.FindClassParent node with 
+            | null -> node.Dump()
+            | classNode ->
+                let className = classNode.Identifier.ValueText
+                match node.Expression with
+                | :? IdentifierNameSyntax as ins ->
+                    sprintf "this.%s" ins.Identifier.ValueText
+                    |> addToLookup className 
+                | :? MemberAccessExpressionSyntax as maes ->
+                    let parent = node.Parent
+                    match maes.Expression with
+                    | :? IdentifierNameSyntax as ins ->
+                        let identifier = ins.Identifier.ValueText
+                        sprintf "id:%s%s%s" identifier (string maes.OperatorToken) maes.Name.Identifier.ValueText
+                        |> addToLookup className
+                    | :? BaseExpressionSyntax ->
+                        maes 
+                        |> string
+                        |> sprintf "base:%s"
+                        |> addToLookup className
+                    | :? MemberAccessExpressionSyntax ->
+                        maes
+                        |> string
+                        |> addToLookup className
+                    | :? ThisExpressionSyntax as tes ->
+                        let tes' = tes.Token.ValueText
+                        sprintf "%s%s%s" tes' (string maes.OperatorToken) maes.Name.Identifier.ValueText
+                        |> addToLookup className
+                    | :? ParenthesizedExpressionSyntax ->
+                        maes
+                        |> string
+                        |> addToLookup className
+                    | :? PredefinedTypeSyntax ->
+                        if maes.Expression |> string <> "string" then
+                            maes.Expression.Dump("unknown PredefinedTypeSyntax")
+                    | :? InvocationExpressionSyntax ->
+                        maes
+                        |> string
+                        |> sprintf "Ies:%s"
+                        |> addToLookup className
+                    | _ ->
+                        maes.Expression.Dump("unknown maes")
+                        maes
+                        |> string
+                        |> addToLookup className
+                        ()
+                | _ -> 
+                    node.Expression.Dump("unknown invocation type")
+                    ()
+        | _ -> ()
+                
+        base.VisitInvocationExpression node
 
-bool PathFilter(string path)
-{
-	return path.Contains("CodedUITest") == false && path.Contains("ViewModelsC") == false;
-}
 
-// Define other methods and classes here
-class ModelCollector : CSharpSyntaxWalker
-{
-	readonly Dictionary<string, List<string>> classProperties = new Dictionary<string, List<string>>();
-	readonly Dictionary<string, List<string>> classMethods = new Dictionary<string, List<string>>();
-	readonly Dictionary<string, List<string>> classMethodInvocations = new Dictionary<string, List<string>>();
+    (* since we get no intellisense for override declarations *)
+    override __.VisitMethodDeclaration node = 
+        match node.Parent with
+        | :? ClassDeclarationSyntax as classnode ->
+            let className = classnode.Identifier.ValueText
+            addToLookup className node.Identifier.ValueText
+        | _ -> node.Dump("parent is not a class")
+        base.VisitMethodDeclaration node
+        
+    static member VisitMcm mode (text:string) = 
+        let items = Dictionary<string,ResizeArray<string>>()
+        let tree = CSharpSyntaxTree.ParseText text
+        let root = tree.GetRoot() :?> CompilationUnitSyntax
+        let mc = ModelCollector(Properties, items)
+        mc.Visit(root)
+        items
+let pathFilter (path:string) = 
+    not <| path.Contains "CodedUITest"
+    && not <| path.Contains "ViewModelsC"
+    && not <| path.Contains "Pm.TestsC"
+    && not <| path.Contains "Packages"
+    && not <| path.Contains "node_modules"
 
-	public static IDictionary<string, List<string>> VisitProperties(string text)
-	{
-		var tree = CSharpSyntaxTree.ParseText(text);
-		var root = (CompilationUnitSyntax)tree.GetRoot();
-		
-		var mc = new ModelCollector();
-		mc.Visit(root);
-		return mc.classProperties;
-	}
-
-	public static IDictionary<string, List<string>> VisitMethods(string text)
-	{
-		var tree = CSharpSyntaxTree.ParseText(text);
-		var root = (CompilationUnitSyntax)tree.GetRoot();
-		var mc = new ModelCollector();
-		mc.Visit(root);
-		return mc.classMethods;
-	}
-
-	public static IDictionary<string, List<string>> VisitInvocations(string text)
-	{
-		var tree = CSharpSyntaxTree.ParseText(text);
-		var root = (CompilationUnitSyntax)tree.GetRoot();
-		var mc = new ModelCollector();
-		mc.Visit(root);
-		return mc.classMethodInvocations;
-	}
-
-	static void AddToLookup<T>(Dictionary<string, List<T>> dic, string key, T value)
-	{
-		if (!dic.ContainsKey(key))
-			dic.Add(key, new List<T>());
-		dic[key].Add(value);
-	}
-
-	static ClassDeclarationSyntax FindClassParent(SyntaxNode node)
-	{
-		if (node.Parent is ClassDeclarationSyntax)
-			return (ClassDeclarationSyntax)node.Parent;
-		return FindClassParent(node.Parent);
-	}
-
-	public override void VisitInvocationExpression(InvocationExpressionSyntax node)
-	{
-		var classnode = FindClassParent(node);
-		if (classnode == null)
-			node.Dump();
-		var className = classnode.Identifier.ValueText;
-		var ins = node.Expression as IdentifierNameSyntax;
-		if (ins != null)
-		{
-			AddToLookup(classMethodInvocations, className,"this."+ ins.Identifier.ValueText);
-		}
-		else if (node.Expression is MemberAccessExpressionSyntax)
-		{
-			var maes = (MemberAccessExpressionSyntax)node.Expression;
-			var parent = node.Parent;
-			if (maes.Expression is IdentifierNameSyntax)
-			{
-				var identifier = ((IdentifierNameSyntax)maes.Expression).Identifier.ValueText;
-				AddToLookup(classMethodInvocations, className, "id:" + identifier + maes.OperatorToken + maes.Name.Identifier.ValueText);
-			}
-			else if (maes.Expression is BaseExpressionSyntax)
-			{
-				AddToLookup(classMethodInvocations, className, "base:" + maes.ToString());
-			}
-			else if (maes.Expression is MemberAccessExpressionSyntax)
-			{
-				AddToLookup(classMethodInvocations, className, maes.ToString());
-			}
-			else if (maes.Expression is ThisExpressionSyntax)
-			{
-				var tes = ((ThisExpressionSyntax) maes.Expression).Token.ValueText;
-				AddToLookup(classMethodInvocations, className, tes+maes.OperatorToken+maes.Name.Identifier.ValueText);
-			}
-			else if (maes.Expression is ParenthesizedExpressionSyntax)
-			{
-				AddToLookup(classMethodInvocations, className, maes.ToString());
-			}
-			else if (maes.Expression is PredefinedTypeSyntax)
-			{
-				if(maes.Expression.ToString() != "string")
-					maes.Expression.Dump("unknown predefinedtypesyntax");
-			}
-			else
-			{
-				maes.Expression.Dump("unknown maes");
-				AddToLookup(classMethodInvocations, className,"Maes:"+ maes.ToString());
-			}
-		}
-		else
-		{
-			node.Expression.Dump("unknown invocation type");
-		}
-
-		base.VisitInvocationExpression(node);
-	}
-
-	public override void VisitPropertyDeclaration(PropertyDeclarationSyntax node)
-	{
-
-		var classnode = (ClassDeclarationSyntax)node.Parent;
-		var className = classnode.Identifier.ValueText;
-		AddToLookup(classProperties, className, node.Identifier.ValueText);
-
-		/* character index in file:
-			node.FullSpan.Start.Dump(); */
-	}
-
-	/* since we get no intellisense for override declarations */
-	public override void VisitMethodDeclaration(MethodDeclarationSyntax node)
-	{
-		var classnode = node.Parent as ClassDeclarationSyntax;
-
-		if (classnode == null)
-		{
-			node.Dump("parent is not a class");
-
-		}
-		else
-		{
-			var className = classnode.Identifier.ValueText;
-			AddToLookup(classMethods, className, node.Identifier.ValueText);
-		}
-
-		base.VisitMethodDeclaration(node);
-	}
-
-	public override void VisitClassDeclaration(ClassDeclarationSyntax node)
-	{
-		base.VisitClassDeclaration(node);
-	}
-}
+    //"C:\TFS\PracticeManagement\dev\PracticeManagement\PracticeManagementRW_local.sln"
+let rootPath = @"C:\TFS\PracticeManagement\dev\PracticeManagement"
+let propsSeq = 
+    [
+        ".cs"
+        ".fs"
+    ]
+    |> Seq.collect (fun ext -> Directory.GetFiles(rootPath, sprintf "*%s" ext, SearchOption.AllDirectories))
+    |> Seq.filter (pathFilter)
+    |> Seq.map (fun f -> 
+        let code = File.ReadAllText f
+        f, ModelCollector.VisitMcm Properties  code, ModelCollector.VisitMcm Methods code, ModelCollector.VisitMcm MethodInvocations code
+    )
+    
+    //.Where(x => x.Properties.Any())
+    |> Seq.truncate 6
+    |> Dump
+    |> ignore
+    
