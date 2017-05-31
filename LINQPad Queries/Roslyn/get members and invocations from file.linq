@@ -33,15 +33,15 @@ type ModelCollector private (mcm, items:Dictionary<string, ResizeArray<string>>)
         
     static member private FindClassParent (node:SyntaxNode) = 
         match node.Parent with
-        | null -> null
         | :? ClassDeclarationSyntax as cds -> cds
-        | x -> ModelCollector.FindClassParent(x.Parent)
+        | null -> null
+        | _ -> ModelCollector.FindClassParent(node.Parent)
        
     override __.VisitInvocationExpression node = 
         match mcm with
         | MethodInvocations ->
             match ModelCollector.FindClassParent node with 
-            | null -> node.Dump()
+            | null -> node.Dump("null parent")
             | classNode ->
                 let className = classNode.Identifier.ValueText
                 match node.Expression with
@@ -96,18 +96,22 @@ type ModelCollector private (mcm, items:Dictionary<string, ResizeArray<string>>)
 
     (* since we get no intellisense for override declarations *)
     override __.VisitMethodDeclaration node = 
-        match node.Parent with
-        | :? ClassDeclarationSyntax as classnode ->
-            let className = classnode.Identifier.ValueText
-            addToLookup className node.Identifier.ValueText
-        | _ -> node.Dump("parent is not a class")
+        match mcm with
+        | Methods ->
+        
+            match node.Parent with
+            | :? ClassDeclarationSyntax as classnode ->
+                let className = classnode.Identifier.ValueText
+                addToLookup className node.Identifier.ValueText
+            | _ -> node.Dump("parent is not a class")
+        | _ -> ()
         base.VisitMethodDeclaration node
         
     static member VisitMcm mode (text:string) = 
         let items = Dictionary<string,ResizeArray<string>>()
         let tree = CSharpSyntaxTree.ParseText text
         let root = tree.GetRoot() :?> CompilationUnitSyntax
-        let mc = ModelCollector(Properties, items)
+        let mc = ModelCollector(mode, items)
         mc.Visit(root)
         items
 let pathFilter (path:string) = 
@@ -116,6 +120,7 @@ let pathFilter (path:string) =
     && not <| path.Contains "Pm.TestsC"
     && not <| path.Contains "Packages"
     && not <| path.Contains "node_modules"
+    && not <| path.EndsWith "AssemblyInfo.cs"
 
     //"C:\TFS\PracticeManagement\dev\PracticeManagement\PracticeManagementRW_local.sln"
 let rootPath = @"C:\TFS\PracticeManagement\dev\PracticeManagement"
@@ -128,7 +133,10 @@ let propsSeq =
     |> Seq.filter (pathFilter)
     |> Seq.map (fun f -> 
         let code = File.ReadAllText f
-        f, ModelCollector.VisitMcm Properties  code, ModelCollector.VisitMcm Methods code, ModelCollector.VisitMcm MethodInvocations code
+        let properties = ModelCollector.VisitMcm Properties code
+        let methods = ModelCollector.VisitMcm Methods code
+        let mi = ModelCollector.VisitMcm MethodInvocations code
+        f, properties, methods, mi 
     )
     
     //.Where(x => x.Properties.Any())
