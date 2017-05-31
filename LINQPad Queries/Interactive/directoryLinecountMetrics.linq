@@ -81,7 +81,6 @@ type StringGrouping =
 
 module Strategy = 
     let getHighestLinesByFileBase (files:FileSummary seq) : IEnumerable<FilenameGrouping>  =
-
         files
         |> Seq.filter(fun f -> f.FileName.Contains("."))
         |> Seq.groupBy(fun f -> f.FileName.Substring(0, f.FileName.IndexOf('.')))
@@ -92,7 +91,6 @@ module Strategy =
                                     FilenameDetails = 
                                         v 
                                         |> Seq.map (fun x -> {FilenameDetail.Lines= x.Lines; FileName= x.FileName;RelativePath= x.RelativePath;Nonspaces= x.Nonspaces})
-//                                        |> fun x -> x.OrderBy(fun fd -> fd.RelativePath)
                                         |> Seq.sortBy(fun fd -> fd.RelativePath)
                                         |> List.ofSeq
                             }
@@ -113,6 +111,7 @@ module Strategy =
         |> Seq.filter (fun (_,v) -> v |> Seq.sumBy (fun x -> x.Lines) > HIGHEST_LINES_BY_FOLDER_MINIMUM)
         |> Seq.map (fun (k,v) -> {StringGrouping.Key = k; Lines = v |> Seq.sumBy (fun x -> x.Lines); Files = v |> Seq.map (fun x -> x.FileName)})
         |> Seq.sortByDescending(fun r -> r.Lines)
+    
 open Strategy
 let directoriesSearched:HashSet<string> = new HashSet<string>()
 

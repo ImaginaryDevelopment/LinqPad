@@ -1,6 +1,7 @@
 <Query Kind="Program">
   <NuGetReference>Microsoft.CodeAnalysis.CSharp</NuGetReference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
+  <NuGetReference>System.Collections.Immutable</NuGetReference>
   <Namespace>Microsoft.CodeAnalysis</Namespace>
   <Namespace>Microsoft.CodeAnalysis.CSharp</Namespace>
   <Namespace>Microsoft.CodeAnalysis.CSharp.Syntax</Namespace>
@@ -8,7 +9,7 @@
 
 void Main()
 {
-	var rootPath = @"C:\tfs\Pm-Rewrite\Source-dev-rewrite\PracticeManagement\";
+	var rootPath = @"C:\TFS\PracticeManagement\dev\PracticeManagement";
 	var propsSeq = Directory.GetFiles(rootPath, "*.cs", SearchOption.AllDirectories).Where(PathFilter).Select(f =>
 	{
 		var code = File.ReadAllText(f);
