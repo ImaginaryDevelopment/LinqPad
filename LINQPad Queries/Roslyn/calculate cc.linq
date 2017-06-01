@@ -190,6 +190,7 @@ type ModelCollector private (fMsg) =
                                 let cn = addClass cn
                                 addMethod mn |> ignore
                             | Branch(cn,mn,bType,line,extra) ->
+                                let cn = addClass cn
                                 let mn = addMethod cn mn
                                 sprintf "%i: %s (%s)" line bType extra
                                 |> items.[cn].[mn].Add
@@ -237,11 +238,14 @@ let propsSeq =
                 cn, classCC, ccByMethod
                 
             )
-        
-        f, cc //,branches
+        let fileCC = cc |> Seq.map(fun (_,classCC,_) -> classCC) |> Seq.sum
+        f, fileCC, cc //,branches
     )
+    |> Seq.sortByDescending (fun (_,cc,_) -> 
+        cc
+    )
+    
     //.Where(x => x.Properties.Any())
     |> Seq.truncate 10
     |> Dump
     |> ignore
-    
