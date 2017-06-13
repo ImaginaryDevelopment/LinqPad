@@ -158,18 +158,22 @@ GO"""
 ////|> Seq.map (fun l -> sprintf "Insert into
 // "dbo" "Language" "LanguageID" 
 let text = generateMerge schema tableName joiner true target 
-Util.OnDemand("Copy to clipboard", fun () ->
-    System.Windows.Forms.Clipboard.SetText text
-) |> Dump |> ignore
-Util.OnDemand("Save to file",fun () ->
-    //SaveFileDialog()
-    
-    ()
-)
-|> Dump |> ignore
-Util.OnDemand("Dump", fun () ->
-    text
-)
-|> Dump |> ignore
+let rec refreshDisplay() = 
+    Util.ClearResults()
+    [
+        "Refresh display", (fun () -> refreshDisplay(); "Refreshed")
+        "Copy to clipboard", fun () ->
+            System.Windows.Forms.Clipboard.SetText text
+            "Saved to clipboard"
+        "Save to file", fun () ->
+            use sfd = new System.Windows.Forms.SaveFileDialog()
+            match sfd.ShowDialog() = System.Windows.Forms.DialogResult.OK with
+            | true ->
+                File.WriteAllText(sfd.FileName,text)
+                sprintf "Saved to file %s" sfd.FileName
+            | _ -> "Save cancelled"
+        "Dump", fun () -> text
+    ] |> Seq.iter (Util.OnDemand >> Dump >> ignore)
+refreshDisplay()
 
 

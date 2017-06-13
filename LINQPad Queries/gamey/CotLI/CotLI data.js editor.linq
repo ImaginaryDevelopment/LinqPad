@@ -481,7 +481,8 @@ text
 //|> MappedChanges.setEmptyLinks
 //|> MappedChanges.addOrSetHeroIds
 //|> MappedChanges.findCrusadersMissingGearData
-|> MappedChanges.addMissingCrusaders
+//|> MappedChanges.addMissingCrusaders
+|> MappedChanges.addLootItemsFromGameData
 |> hoist dumpReverse
 |> fun x -> Newtonsoft.Json.JsonConvert.SerializeObject(x.Raw, Newtonsoft.Json.Formatting.Indented)
 |> fun x -> sprintf "%s=\r\n%s%s;" starter x trailer
