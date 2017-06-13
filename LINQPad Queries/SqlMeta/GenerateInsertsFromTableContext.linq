@@ -1,20 +1,28 @@
 <Query Kind="FSharpProgram">
-  
+  <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.dll</Reference>
 </Query>
 
 // read a table and generate inserts from it
 let dc = new TypedDataContext()
+module Helpers =
+    let startsWith d (s:string) = s.StartsWith d
+    let replace d (t:string) (s:string) = s.Replace(d, t)
+    let delimit d (items :string seq ) = String.Join(d,items |> Array.ofSeq)
+    let flip f y x = f x y
+open Helpers
 
-let startsWith d (s:string) = s.StartsWith d
-let replace d (t:string) (s:string) = s.Replace(d, t)
-let delimit d (items :string seq ) = String.Join(d,items |> Array.ofSeq)
-let flip f y x = f x y
-let t = typeof<TempLanguages>
+type Target = Codes
+let t = typeof<Target>
+let values = dc.Codes
+let schema = "dbo"
+let tableName = "Codes"
+let identityColumnName = "CodeID"
+let joiner = identityColumnName
 let target = 
 
     
     let persistent = 
-        dc.Mapping.GetTable(typeof<TempLanguages>).RowType.PersistentDataMembers 
+        dc.Mapping.GetTable(t).RowType.PersistentDataMembers 
         |> Seq.map (fun pm -> pm.Name, pm.Type, pm.CanBeNull,t.GetField(pm.Name))
         |> List.ofSeq
         //|> Dump
@@ -60,7 +68,7 @@ let mapValue t (canNull:bool) (x:obj) =
 //type InsertStrategy =
 //    |RowByRow
 //    |Merge
-let valuesMap members (x:TempLanguages) = 
+let valuesMap members (x:Target) = 
         members 
         |> Seq.map (fun (name:string,t:Type, nullable:bool, getter:obj -> obj) -> getter x |> mapValue t nullable) 
         |> List.ofSeq
@@ -73,17 +81,18 @@ let generateInserts tableName (rowType:Type) columnBlacklist (members:#seq<strin
         
     let insert:string = insertStatement tableName columns
     
-    dc.TempLanguages
+    dc.Codes
     |> Seq.map (valuesMap members >> sprintf "%s%s)" insert)
     
 
 let generateMyInserts() = 
-    generateInserts "Language" t ["LanguageID"] target
+    generateInserts tableName t [identityColumnName] target
     |> Dump
 
 let generateMerge (schema:string) (table:string) joiner isIdentity (members:#seq<string*Type*bool*(obj -> obj)>)  = 
+    let identitySetter on = if isIdentity then sprintf "%sset identity_insert %s.%s %s;%s" Environment.NewLine schema table (if on then "on" else "off") Environment.NewLine else null
     let columns = members |> Seq.map (fun (name,_,_,_) -> name) |> delimit ","
-    let valuesMap (x:TempLanguages) = 
+    let valuesMap (x:Target) = 
         members 
         |> Seq.map (fun (name,t, nullable, getter) -> getter x |> mapValue t nullable) 
         |> List.ofSeq
@@ -92,7 +101,7 @@ let generateMerge (schema:string) (table:string) joiner isIdentity (members:#seq
         sprintf """
 ---------------------------------------------------
 PRINT 'Synchronizing [%s.%s]';""" schema table
-    let starter2:string = if isIdentity then sprintf "%sset identity_insert %s.%s on%s" Environment.NewLine schema table Environment.NewLine else null
+    let starter2:string = identitySetter true
 // -----------------------------------------
     let starter3 = sprintf """
 WITH CTE_%s(%s) AS
@@ -102,7 +111,7 @@ WITH CTE_%s(%s) AS
 """ 
     let starter3 = starter3 table columns columns
     let allValues = 
-        dc.TempLanguages
+        values
         //|> Seq.take 10
         |> Seq.map valuesMap
         |> Seq.map (fun s -> "        (" + s + ")") 
@@ -123,6 +132,7 @@ WHEN NOT MATCHED BY TARGET THEN
     """
 // -------------------------------------------------------------------------
     let closer2 = closer2 table joiner joiner columns columns
+    let closer3 = identitySetter false
     let printout = sprintf """
     PRINT 'Done Synchronizing [%s.%s]';
 GO""" 
@@ -136,6 +146,7 @@ GO"""
         allValues
         closer1
         closer2
+        closer3
         printout]
     |> Seq.fold (fun sb l -> append l sb) (StringBuilder())
     |> string
@@ -145,5 +156,20 @@ GO"""
 //GO"" schema
 ////dc.TempLanguages
 ////|> Seq.map (fun l -> sprintf "Insert into
-generateMerge "dbo" "Language" "LanguageID" true target 
-|> Dump
+// "dbo" "Language" "LanguageID" 
+let text = generateMerge schema tableName joiner true target 
+Util.OnDemand("Copy to clipboard", fun () ->
+    System.Windows.Forms.Clipboard.SetText text
+) |> Dump |> ignore
+Util.OnDemand("Save to file",fun () ->
+    //SaveFileDialog()
+    
+    ()
+)
+|> Dump |> ignore
+Util.OnDemand("Dump", fun () ->
+    text
+)
+|> Dump |> ignore
+
+
