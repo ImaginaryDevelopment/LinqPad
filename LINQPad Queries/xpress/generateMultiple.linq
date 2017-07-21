@@ -224,15 +224,32 @@ let toGen : TableInput list =
                 {ColumnInput.createFKeyedInt "PaymentId" (FKeyIdentifier {Table={Schema="dbo"; Name="Payment"}; Column="PaymentId"}) with Nullability = PrimaryKey}
                 {ColumnInput.createFKeyedInt "ReversalPaymentId" (FKeyIdentifier {Table={Schema="dbo"; Name="Payment"}; Column="PaymentId"}) with Nullability = PrimaryKey}
             ]
-        )  
+        )
+        TableInput(
+            Schema="Diags",
+            Name="ScanStatistic",
+            Columns = [
+                ColumnInput.createPKIdentity "ScanStatisticID"
+                ColumnInput.create "BarcodeCaptured" ColumnType.Bit
+                ColumnInput.createFKeyedInt "FacilityId" (FKeyIdentifier {Table={Schema="dbo";Name="Facilities"};Column="FacilityID"})
+                ColumnInput.createUserIdColumn null Nullability.AllowNull List.empty
+                {ColumnInput.createFKeyedInt "PatientId"(FKeyIdentifier{Table={Schema="dbo"; Name="Patients"}; Column=null}) with Nullability=AllowNull}
+                ColumnInput.create "DeviceSerialNumber" ColumnType.IntColumn
+                ColumnInput.create "ScanHeight" ColumnType.IntColumn
+                ColumnInput.create "ScanWidth" ColumnType.IntColumn
+                ColumnInput.create "Resolution" ColumnType.IntColumn
+                ColumnInput.create "ScannerType" ColumnType.IntColumn
+                ColumnInput.create "SlibVersion" (ColumnType.StringColumn 255)
+                ColumnInput.create "CalibrationThreshold" ColumnType.IntColumn
+            ]
+        )
         TableInput(
             Schema="dbo",
             Name="ReportJob",
             Columns = [
                 ColumnInput.createPKIdentity "ReportJobID"
                 ColumnInput.createFKey "CustomReportName" (ColumnType.StringColumn 50) (FKeyIdentifier {Table={Schema="dbo"; Name="CustomReport";};Column="Name"})
-                ColumnInput.create "ReportName" (ColumnType.StringColumn 255) 
-                ColumnInput.create "Type" (ColumnType.StringColumn 255)
+                ColumnInput.create "ReportJobName" (ColumnType.StringColumn 255) 
                 ColumnInput.createUserIdColumn null Nullability.AllowNull ["null to allow system inserts/adjustments that aren't done by a user"]
                 {ColumnInput.createFKeyedInt "FacilityID" (FKeyIdentifier {Table={Schema="dbo";Name="Facilities"};Column="FacilityID"}) with Nullability = AllowNull}
                 {ColumnInput.create "RangeStart" ColumnType.DateTimeColumn with Nullability = Nullability.AllowNull}
@@ -241,7 +258,7 @@ let toGen : TableInput list =
                 {ColumnInput.create "CommandLine" (ColumnType.StringMax) with Nullability = Nullability.AllowNull}
                 {ColumnInput.create "CreatedUtc" (ColumnType.DateTimeColumn) with DefaultValue="getutcdate()"}
                 {ColumnInput.create "PID" (ColumnType.IntColumn) with Nullability = Nullability.AllowNull}
-                ColumnInput.create "DownloadLink" ColumnType.StringMax
+                {ColumnInput.create "Data" ColumnType.StringMax with Nullability = Nullability.AllowNull}
                 {ColumnInput.create "Error" ColumnType.StringMax with Nullability = Nullability.AllowNull}
                 
             ])

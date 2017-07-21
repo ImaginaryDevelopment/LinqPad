@@ -1,5 +1,6 @@
 <Query Kind="FSharpProgram" />
 
+// searching from a directory inside all files matching a regex, for text matching a regex, returning the files that have a match
 // my own grep!
 // via: https://fsharpforfunandprofit.com/posts/recursive-types-and-folds-3b/#grep
 // gist: https://gist.github.com/swlaschin/137c322b5a46b97cc8be
@@ -160,9 +161,11 @@ module IOFileSystem_Tree =
         InternalNode (dirInfo,subItems)
 open IOFileSystem_Tree        
 let currentDir = fromDir (DirectoryInfo("."))  
-let filePattern = """(?<!\\(obj|debug)\\)\.(cs|fs)\s*$"""
+//let filePattern = """(?<!\\(obj|debug)\\)\.(cs|fs)\s*$"""
+let filePattern = """.*(vb|cs)"""
+let wordPattern = """normalize"""
 currentDir
-|> grep filePattern "phantom.exit"  // AddParameter ? // DatabaseConfig
+|> grep filePattern wordPattern  // AddParameter ? // DatabaseConfig
 |> Async.RunSynchronously    
 |> Dump
 |> ignore

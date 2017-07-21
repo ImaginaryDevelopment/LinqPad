@@ -54,6 +54,7 @@ module AstMapping =
         | false, false ->
             box (r.FileName,r.StartLine, r.EndLine)
         |> dumpWithType
+        ()
 //    type FunctionAst = {Name:string; Branches: obj list}
 //    type ClassAst = |ClassAst of name:string * FunctionAst list
 //    type ModuleAstItem = | ClassAst of ClassAst | Function
@@ -62,72 +63,93 @@ module AstMapping =
 //    type AstItem = 
 //        | Class of name:string * FunctionAst list
 //        | Module of name:string * AstItem list
+    type MethodWrapper = {Namespacing:string; SynType:string; Name:string; Lines:string; Tokens: SynExpr list}
+    let makeLinesDisplay s e = 
+        if s = e then sprintf "%i" s else sprintf "%i-%i" s e
+    let getSynBinding =
+        function
+        | SynBinding.Binding(_,_,_,_,_,_,_,SynPat.Named(synPat, ident, isSelfIdentifier, _,_),_,expr,range,_) as decl ->
+            let lines  = makeLinesDisplay range.StartLine range.EndLine
+            ident.idText, lines, [expr]
+        | SynBinding.Binding(_,_,_,_,_,_,_,SynPat.LongIdent(liwd,identOpt, _, _, _, _),_,expr,range,_) as decl ->
+            let lines  = makeLinesDisplay range.StartLine range.EndLine
+            liwd.Lid |> string, lines, [expr]
+        
+        | SynBinding.Binding(_,_,_,_,_,_,_,synPat,_,expr,range,_) as decl ->
+            let lines  = makeLinesDisplay range.StartLine range.EndLine
+            (synPat,expr).Dump(lines)
+            failwithf "Unexpected synBinding"
     let getSynMemberDefn = 
         function
-        | SynMemberDefn.Member(SynBinding.Binding(_,kind,_,_,_,_,_,_,_,expr,_,_), range) ->
-            ("SynMemberDefn", expr |> string, kind |> string).Dump(range.FileName)
+        | SynMemberDefn.Member(synBinding,range) ->
+            getSynBinding synBinding
         | x ->
             dumpInfo "SynMemberDefn2" true x x.Range
+            failwithf" Unknown synMember defn"
             
-    let getTypeMembers : _ -> _ list option = 
+    let getTypeMembers : _ -> MethodWrapper list = 
         function
 //        |TypeDefn(ComponentInfo _,SynTypeDefnRepr.Simple(SynTypeDefnSimpleRepr.TypeAbbrev _,_),[],_) -> None
-        |TypeDefn(ComponentInfo _, _,[],_) -> None
+        |TypeDefn(ComponentInfo _, _,[],_) -> List.Empty
         |TypeDefn(ComponentInfo(attribs,typeParams,contrains,longIdent,xmlDoc,preferPostfix,accessibility,_cRange),typeDefnRepr, members,_range) as x ->
             // we need to find the type name for namespacing the methods found
             match typeDefnRepr with
             // type augmentation
             | SynTypeDefnRepr.ObjectModel(TyconAugmentation,[],typeRange) ->
                 let name = longIdent |> Seq.map (fun l -> l.idText) |> delimit "."
-                Some [name,members |> List.map(fun decl ->  decl.GetType().Name, decl.Range.StartLine, decl.Range.EndLine) ]
+                members |> List.map(fun x -> 
+                    let (name, lines, tokens) = getSynMemberDefn x
+                    
+                    { Namespacing = name; SynType="SynTypeDefnRepr.ObjectModel";Name=name; Lines = lines; Tokens=tokens})
+                //Some [name,members |> List.map(fun decl ->  decl.GetType().Name, decl.Range.StartLine, decl.Range.EndLine) ]
             | SynTypeDefnRepr.ObjectModel(TyconAugmentation,synMemberDefns,typeRange) ->
                 dumpInfo "ObjectModelAug" true x x.Range
                 (members |> List.map getSynMemberDefn,synMemberDefns).Dump("type aug members, synmembers")
-                None
+                List.Empty
+            // can contain DU (which can have methods, but those don't appear to be included here?)
+            | SynTypeDefnRepr.Simple(SynTypeDefnSimpleRepr.Union(_,cases,range2),range) ->
+                List.Empty
+            // record can have members attached, but those don't appear to be included here
+            | SynTypeDefnRepr.Simple(SynTypeDefnSimpleRepr.Record _, _ ) ->
+                List.Empty
             | x -> 
                 dumpInfo "Other DefnRepr" true x x.Range
                 typeDefnRepr.Dump("Unknown typeDefn")
-                
-                None
+                List.Empty
     let (|TypesMembers|) x =
         x
-        |> List.choose getTypeMembers
+        |> List.map getTypeMembers
         |> List.concat
-        
-    let getSynBinding=
-        function
-        | SynBinding.Binding(_,_,_,_,_,_,_,SynPat.LongIdent(liwd,identOpt, _, _, _, _),_,expr,range,_) as decl ->
-            
-//            dumpInfo "SynBinding" true expr expr.Range
-            liwd.Lid |> string, decl.RangeOfBindingAndRhs.StartLine, decl.RangeOfBindingAndRhs.EndLine
-            
-        
-    let rec findFunctions parentName x= 
+    
+    
+    
+    let rec findFunctions parentName x : MethodWrapper list= 
         
         match x with
     //    | SynModuleDecl.NestedModule(SynComponentInfo.ComponentInfo(synAttribs,synTyparDecls, synTypeContraints, longId,preXmlDoc,preferPostfix, accessibility,componentRange) as componEnt,isRecursive,synModuleDecls,_someBool, range) ->
+        | SynModuleDecl.Let(_someBool, synBindings, range) ->
+            
+            synBindings |> List.map (getSynBinding >> (fun (name,lines,tokens) -> 
+                {Namespacing = parentName; SynType = "LetDecl"; Name=name; Lines=lines; Tokens = tokens}))
+            
         | SynModuleDecl.NestedModule(SynComponentInfo.ComponentInfo(_,_,_, longId,_,_,_,_) as componEnt,isRecursive,synModuleDecls,_someBool, range) ->
         
             let name = longId |> Seq.map (fun l -> l.idText) |> delimit "."
-            [ sprintf "NestedModule %s" name, synModuleDecls |> List.map (fun decl -> decl.GetType().Name, decl.Range.StartLine, decl.Range.EndLine)]
-            |> Some
- 
-        | SynModuleDecl.Let(_someBool, synBindings, range) ->
-            
-            ["LetDecl", synBindings |> List.map getSynBinding //(fun decl -> decl.GetType().Name, decl.RangeOfBindingAndRhs.StartLine, decl.RangeOfBindingAndRhs.EndLine)
-            ] |> Some
-        | SynModuleDecl.Types (TypesMembers members,range) -> 
-            members
-            |> List.toOption
+            synModuleDecls |> List.map (findFunctions name) |> List.concat
+//            synModuleDecls
+//            |
+//            [ sprintf "NestedModule %s" name, synModuleDecls |> List.map (fun decl -> decl.GetType().Name, decl.Range.StartLine, decl.Range.EndLine)]
 
-        | SynModuleDecl.Open _ -> None
+        | SynModuleDecl.Types (TypesMembers members,range) -> 
+            members 
+        | SynModuleDecl.Open _ -> List.Empty
         | _ -> 
             printfn "Unknown SynModuleDecl %s" <| x.GetType().Name
             if x.Range.StartLine <> x.Range.EndLine then
                 (x.Range.FileName, x.Range.StartLine, x.Range.EndLine).Dump(sprintf "Unknown SynModuleDecl %s" <| x.GetType().Name)
             else
                 (x |> string).Dump(sprintf "Unknown SynModuleDecl %i: %s" x.Range.StartLine (x.GetType().Name))
-            None
+            List.Empty
 ()
     
     
@@ -185,10 +207,13 @@ let propsSeq =
             | Microsoft.FSharp.Compiler.Ast.SynModuleOrNamespace(identifiers,isRecursive,isModule, declarations, _xmlDoc, attribs, _accessibility, _range) ->
                 
                 let identifier = identifiers |> Seq.map(fun x -> x.idText) |> delimit "."
-                    
-                identifier,(*isModule, *) declarations |> Seq.choose(AstMapping.findFunctions identifier)
+                let mw = 
+                    declarations 
+                    |> Seq.map(AstMapping.findFunctions identifier) 
+                    |> Seq.concat
+                    //|> Seq.groupBy(fun mw -> mw.Namespacing)
+                identifier,(*isModule, *) mw
                 
         )
     )
     |> Dump
-    

@@ -307,7 +307,14 @@ let loopCommands () =
                 function
                 | null | "" ->
                     statusDc "show requires an int limit to function"
-                | limit ->
+                | bounds ->
+                    // TODO: feature show via skip truncate instead of only truncate
+//                    let upper,lower =
+//                        bounds
+//                        |> String.split [" "]
+//                        |> function
+//                            | [upper] -> upper, None
+//                            | [
                     match getCurrentObj(),System.Int32.TryParse limit with
                     | _,(false,_) -> statusDc "show requires an int limit to function"
                     | JArr(JObjArray items), (_,limit) ->
@@ -325,7 +332,7 @@ let loopCommands () =
             "filter", 
                 function
                 | null | "" ->
-                    statusDc "filter requires an argument(propName,value) to function"
+                        statusDc "filter requires an argument(propName,value) to function"
                 | args ->
                     match args.Split(' ') |> List.ofSeq with
                     | [propName;value] ->
