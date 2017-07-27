@@ -149,6 +149,26 @@ type ViewModel = {
 let withDispatcher f = 
     System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(Func<_>(f))
     
+//// untested, could not coerce data into shape to test    
+////http://stackoverflow.com/questions/19317064/disconnecting-an-element-from-any-unspecified-parent-container-in-wpf
+//let disconnectFromWpf (child:DependencyObject) = 
+//    // get parent, then remove the child
+//    match child, WpfHelpers.getParent true child with
+//    | (:? UIElement as child, Some(:? Panel as parent)) -> parent.Children.Remove child; true
+//    | _,None -> false
+//    // child is not a UIElement
+//    //| Some (:? Panel as p) when (child :?> UIElement) -> p.Children.Remove child; true
+//    | (:? UIElement as child, Some (:? System.Windows.Documents.FixedPage as fp)) -> fp.Children.Remove child; true
+//    | parent -> 
+//        let t = child.GetType()
+//        t.GetProperties() 
+//        |> Seq.filter(fun p -> p.Name.Contains("Children") || p.Name.Contains("Remove")) 
+//        |> Dump |> ignore
+//        t.GetMethods()
+//        |> Seq.filter(fun p -> p.Name.Contains("Children") || p.Name.Contains("Remove")) 
+//        |> Dump |> ignore
+//        false
+
 let (|DataContext|_|) (o:DependencyObject) =
     match o with
         | :? FrameworkElement as vp -> Some vp.DataContext

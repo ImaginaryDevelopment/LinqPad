@@ -1,7 +1,12 @@
 <Query Kind="FSharpProgram" />
 
+// data fetch auth is not working yet
 // new post era/eob rules
 // we will use the payment table to feed bundles of paymentItems
+
+// can an item exist/validate without any of the following (manual or auto) (manual made era, or data fed)
+// patientid, visitid, chargeid
+// chargeId should feed amount box? or no?
 
 module Domain = 
     [<Measure>] type PatientId
@@ -119,6 +124,101 @@ type SelectedItem =
     |InFlight of ItemInFlight
     |PI of PaymentItemPair
     
+module Items = 
+    let beginEdit = 
+        function
+            |InFlight _ -> None
+            |PI(itemType,itemCommon) -> 
+                {ItemType=itemType;Flight= 
+                    {   ChargeId=Some itemCommon.ChargeId
+                        VisitId=None
+                        PatientId=None
+                        PaymentItemType= Some itemCommon.PaymentItemType
+                        Amount = itemCommon.Amount
+                        PatientResp = itemCommon.PatientResp 
+                        RemarkCode = itemCommon.RemarkCode}
+                }
+                |> InFlight
+                |> Some
+                
+    let adjustAmount amount =
+        function
+        | PI _ -> None
+        | InFlight item -> Some item 
+        >> Option.map(fun item ->
+            {item with Flight = {item.Flight with Amount=amount} }
+            |> InFlight
+            |> Some
+        )
+        
+open Items
+// let's hit the app instead of the db?
+module DataBased = 
+    open System.Net
+//    let private dc = new TypedDataContext()
+    let private baseUrl = "http://localhost:8081"
+    type Address = 
+        | Uri of System.Uri
+        | Raw of String
+
+    let inline postIt url (formParams:IDictionary<string,string>) = 
+        // https://stackoverflow.com/questions/930807/login-to-website-via-c-sharp
+        let formParams = formParams |> Seq.map (|KeyValue|) |> Seq.map (fun (k,v) -> sprintf "%s=%s" k (System.Uri.EscapeDataString v)) |> delimit "&"
+        let req = 
+            match url with
+            | Uri x -> WebRequest.Create x
+            | Raw s -> WebRequest.Create s
+        req.ContentType <- "application/x-www-form-urlencoded"
+        req.RequestUri.Dump("request uri")
+        req.Method <- "POST"
+        let bytes = Encoding.ASCII.GetBytes(formParams)
+        formParams.Dump()
+        req.ContentLength <- int64 bytes.Length
+        (
+            use os = req.GetRequestStream()
+            os.Write(bytes, 0, bytes.Length)
+            os.Flush()
+        )
+        let resp = 
+            match req.GetResponse() with
+            | :? HttpWebResponse as x -> x
+            | x -> failwithf "response type %s is unexpected" (x.GetType().Name)
+        (int resp.StatusCode, resp.StatusCode, resp.StatusDescription)
+        |> Dump
+        |> ignore
+        match int resp.StatusCode with
+        | 302 -> ()
+        | x -> failwithf "expecting a 302 instead was %i" x
+        resp.Cookies.Dump("cookies?!?")
+        let content = 
+            use stream = resp.GetResponseStream()
+            use reader = new StreamReader(stream, Encoding.UTF8)
+            reader.ReadToEnd()
+        content.Dump("content")            
+        resp.Headers.Dump("headers")
+        
+        
+    let login () =
+        let url = sprintf "%s/authentication/login" baseUrl |> Raw
+        Map [   "Username", "main"
+                "Password","1234"
+        ]
+        |> postIt url 
+        
+    let searchPatients = 
+        function
+        | null | "" ->
+            String.Empty
+        | x ->
+            login()
+            |> Dump
+            |> ignore
+            //or use WebRequest.Create()
+            use wc = new System.Net.WebClient()
+            wc.DownloadString(sprintf "%s/patientSearch/%s" baseUrl x)
+
+()
+DataBased.searchPatients "dimp" |> Dump |> ignore
 let mp = MailboxProcessor.Start(fun inbox ->    
     let currentEra = makeStatefulDisplay (Some "Era") e
     let currentItem:Prop<SelectedItem option> = makeStatefulDisplay (Some "Item") None
@@ -127,40 +227,33 @@ let mp = MailboxProcessor.Start(fun inbox ->
         match msg with
         | OpenEra flight -> currentEra.Set flight
         | EraAct (SelectItem pi) -> pi |> Option.map PI |> currentItem.Set
-        | ItemAct Edit ->
-            // map PI -> Inflight and save in place
+        | ItemAct Add ->
             currentItem.Get()
-            |> Option.iter(function
-                |InFlight _ -> ()
-                |PI(itemType,itemCommon) -> 
-                    {ItemType=itemType;Flight= 
-                        {   ChargeId=Some itemCommon.ChargeId
-                            VisitId=None
-                            PatientId=None
-                            PaymentItemType= Some itemCommon.PaymentItemType
-                            Amount = itemCommon.Amount
-                            PatientResp = itemCommon.PatientResp 
-                            RemarkCode = itemCommon.RemarkCode}
+            |> function
+                | Some _ -> ()
+                | None ->
+                    {   ItemType= Guid() |> Manual
+                        Flight= {   ChargeId= None
+                                    VisitId= None
+                                    PatientId= None
+                                    Amount= 0m
+                                    RemarkCode=  None
+                                    PatientResp= None
+                                    PaymentItemType= None
+                        }
                     }
                     |> InFlight
                     |> Some
                     |> currentItem.Set
-            )
+        | ItemAct Edit ->
+            // map PI -> Inflight and save in place
+            currentItem.Get()
+            |> Option.iter(beginEdit >> currentItem.Set)
         | ItemAct (AdjustAmount amount) ->
             currentItem.Get()
-            |> Option.bind (
-                function
-                | PI _ -> None
-                | InFlight item -> 
-                    Some item 
-            )
-            |> Option.iter(fun item ->
-                {item with Flight = {item.Flight with Amount=amount} }
-                |> InFlight
-                |> Some
-                |> currentItem.Set
-            )
-//        | Print msg -> printfn "message is: %s" msg
+            |> Option.bind (adjustAmount amount)
+            |> Option.iter currentItem.Set   
+        | Print msg -> printfn "message is: %s" msg
         return! messageLoop()
     }
     messageLoop()
