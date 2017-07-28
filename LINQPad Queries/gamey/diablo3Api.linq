@@ -29,6 +29,8 @@ module Diablo3 =
             override x.ToString() = 
                 match x with | DemonHunter -> "dh" | WitchDoctor -> "wd" | _ -> sprintf "%A" x |> toLower
                 |> fun x -> x.ToLower()
+//            static member x.FromString() =
+//                match
     let eras = [1;2;3;4;5;6;7]
     let teams = [2;3;4]
     
@@ -114,6 +116,7 @@ module D3Api =
     let getSeasonIndex () (* accessKey *) = // works
         sprintf "https://us.api.battle.net/data/d3/season/?access_token=%s" (getAccessToken().Value)
         |> cachedGetMap<SeasonIndex> "getSeasonIndex" false
+        
     type SeasonLeaderboardRef ={
         Ladder: SeasonRef
         Team_Size: int Nullable
@@ -133,6 +136,8 @@ module D3Api =
         sprintf "https://us.api.battle.net/data/d3/season/%i?namespace%s&access_token=%s" season ``d3 url namespace`` (getAccessToken().Value)
         |> cachedGetMap<SeasonInfo> "getSeasonInfo" false
         |> Option.map (fun (x,raw) -> {x with Raw = raw})
+    let fixupHardcoreField (x:SeasonLeaderboardRef) = 
+        if x.Hardcore = Nullable() && x.Ladder.Href.Contains("hardcore") then { x with Hardcore = Nullable true} else x 
     type DataElement = {
         Id:string
         Number: int64 Nullable
@@ -160,22 +165,55 @@ module D3Api =
         Title: JObject
         Key: string
     }
+    let getLeaderboardFromUrl debug url =
+        // assuming they included the query string with namespace already, adding access token
+                sprintf "%s&access_token=%s" url (getAccessToken().Value)
+                |> cachedGetMap<SLDetailed> "getLeaderboardFromUrl" false
+                //|> Option.map (fun (x,) -> x)
 let getUriForDump url f = 
     Util.OnDemand(url, 
             fun () -> 
-                // assuming they included the query string with namespace already, adding access token
-                sprintf "%s&access_token=%s" url (BattleNet.getAccessToken().Value)
-                |> HttpClient.tryGetUrl true 
+                HttpClient.tryGetUrl true url
                 |> f)
-open D3Api
-getSeasonIndex()
+// putting this up here, as we aren't using it, but it does work                
+D3Api.getSeasonIndex()
 |> ignore
+
+//module D3LeaderboardApiRaw = 
+    
+// not yet in use
+module D3LeaderboardDisplay = 
+    open D3Api
+    type Player = { HeroBattleTag:string; HeroId:int64; ParagonLevel:int; HeroClass: string (* DClass *); Key:string}
+//    let ladderToDisplay url = 
+//        D3Api.getLeaderboardFromUrl url
+//        |> Option.map (fun x -> x.Leaderboard |> Seq.map (fun l -> l.L))
+    
+
+//open D3LeaderboardDisplay
+open D3Api
+open D3LeaderboardDisplay
 printfn "getting seasonInfo"
 getSeasonInfo 11
 //|> dumpt "Season Leaderboards whole"
 |> Option.map (fun x -> x.Leaderboard)
-|> Option.map (Array.filter (fun l -> l.Hardcore |> Nullable.getValueOrDefault |> not || l.Team_Size |> Nullable.getValueOrDefault > 1))
-// working
-|> Option.map (Array.map (fun l -> l.Hero_Class_String, getUriForDump l.Ladder.Href (clipAsText >> Option.map (fun text -> JsonConvert.DeserializeObject<SLDetailed> text))))
-|> dumpt "Season Leaderboards"
+|> Option.map (Array.map (fixupHardcoreField))
+|> Option.map (Array.filter (fun l -> l.Hardcore |> Nullable.getValueOrDefault |> not && l.Team_Size |> Nullable.getValueOrDefault = 1))
+|> Option.map (Array.filter(fun l -> l.Hero_Class_String = "crusader"))
+|> Option.map Seq.head
+|> Option.bind (fun x -> x.Ladder.Href |> getLeaderboardFromUrl true)
+|> Option.map (fun (x,raw) -> 
+                raw |> dumpt "leaderboard" |> ignore
+                x.Row
+                |> Seq.map (fun x -> x.Player |> Seq.head)
+                |> dumptd true "Players"
+                |> Seq.map (fun x -> {  Key=x.Key
+                                        HeroId=x.Data |> Seq.find(fun x -> x.Id="HeroId") |> fun x -> x.Number |> Nullable.getValueOrDefault
+                                        HeroBattleTag=x.Data |> Seq.find(fun x -> x.Id="HeroBattleTag") |> fun x -> x.String 
+                                        HeroClass=x.Data |> Seq.find(fun x -> x.Id="HeroClass") |> fun x -> x.String //|> function 
+                                        ParagonLevel=x.Data |> Seq.find(fun x -> x.Id="ParagonLevel") |> fun x -> x.Number |> Nullable.getValueOrDefault |> int
+                    }
+                )
+                |> dumpt "Season Leaderboards"
+)
 |> ignore
