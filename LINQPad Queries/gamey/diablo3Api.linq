@@ -9,8 +9,11 @@
 open Newtonsoft.Json.Linq
 module Helpers =
     let dumpt t x = x.Dump(description=t); x
+    let dumptd condition t x = if condition then dumpt t x else x
     let deserializeJO x = Newtonsoft.Json.JsonConvert.DeserializeObject<JObject>(x)
     let toLower (x:string) = x.ToLower()
+    // stopping linqpad is crashing perhaps
+    let clip x = x
 open Helpers
 module Diablo3 =
     type DClass = 
@@ -100,42 +103,51 @@ module D3Api =
         Last_Update_Time:string
         Season: SeasonRef[]
     }
-    let cachedGetMap<'T> name debug url : 'T option=
+    let cachedGetMap<'T> name debug url : ('T*obj) option=
         let getter() = 
             HttpClient.tryGetUrl debug url
         Util.Cache(getter,name)
-        |> Option.map (dumpt name)
-        |> Option.map (fun text -> JsonConvert.DeserializeObject<'T>(text))
-        |> dumpt (sprintf "%sMapped" name)
+        |> Option.map (dumptd debug name)
+        |> Option.map (fun text -> JsonConvert.DeserializeObject<'T>(text), box (Util.OnDemand("raw", fun () -> text)))
+        |> dumptd debug (sprintf "%sMapped" name)
     let getSeasonIndex () (* accessKey *) = // works
         sprintf "https://us.api.battle.net/data/d3/season/?access_token=%s" (getAccessToken().Value)
         |> cachedGetMap<SeasonIndex> "getSeasonIndex" false
-        
+    type SeasonLeaderboard ={
+        Ladder: SeasonRef
+        Team_Size: int Nullable
+        Hero_Class_String: string
+        Hardcore:bool Nullable
+    }
     type SeasonInfo = {
         Season_Id:int
         Last_Update_Time:string
         Generated_By: string
+        Leaderboard: SeasonLeaderboard[]
+        Raw: obj
     }
     // working
     let getSeasonInfo season = 
         let ``d3 url namespace`` = "2-6-US"
         sprintf "https://us.api.battle.net/data/d3/season/%i?namespace%s&access_token=%s" season ``d3 url namespace`` (getAccessToken().Value)
-        |> cachedGetMap<SeasonInfo> "getSeasonInfo" true
-//        |> HttpClient.tryGetUrl false
-//        |> dumpt "getSeasonInfo"
-//        |> Option.map (fun text -> JsonConvert.DeserializeObject<SeasonInfo>(text))
-//        |> dumpt "getSeasonInfoMapped"
-        
-//        
-//module D3LeaderboardsApi = 
-//    // not working
-//    let getSoloList dclass era = 
-//        let url = sprintf "http://us.battle.net/d3/en/rankings/season/%i/rift-%O" era dclass
-//        HttpClient.tryGetUrl false url
-        
+        |> cachedGetMap<SeasonInfo> "getSeasonInfo" false
+        |> Option.map (fun (x,raw) -> {x with Raw = raw})
+let getUriForDump url = 
+    Util.OnDemand(url, 
+            fun () -> 
+                // assuming they included the query string with namespace already, adding access token
+                sprintf "%s&access_token=%s" url (BattleNet.getAccessToken().Value)
+                |> HttpClient.tryGetUrl true 
+                |> clip)
 open D3Api
 getSeasonIndex()
 |> ignore
 printfn "getting seasonInfo"
 getSeasonInfo 11
+|> dumpt "Season Leaderboards whole"
+|> Option.map (fun x -> x.Leaderboard)
+|> Option.map (Array.filter (fun l -> l.Hardcore |> Nullable.getValueOrDefault |> not || l.Team_Size |> Nullable.getValueOrDefault > 1))
+// working
+|> Option.map (Array.map (fun l -> l.Hero_Class_String, getUriForDump l.Ladder.Href))
+|> dumpt "Season Leaderboards"
 |> ignore
