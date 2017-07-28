@@ -6,9 +6,10 @@
 </Query>
 
 //following https://github.com/stephenpoole/d3-leaderboards-api
-
+open Newtonsoft.Json.Linq
 module Helpers =
     let dumpt t x = x.Dump(description=t); x
+    let deserializeJO x = Newtonsoft.Json.JsonConvert.DeserializeObject<JObject>(x)
 open Helpers
 module Diablo3 =
     type DClass = 
@@ -42,8 +43,7 @@ module HttpClient =
             |> Some
             //|> ignore
         with ex ->
-            url.Dump()
-            ex.Dump()
+            (url,ex).Dump("failure")
             None
             
     let getToken key secret =
@@ -56,21 +56,18 @@ module BattleNet =
     let url = "https://us.api.battle.net/"
     let getSavedApiKey() = Util.GetPassword("Diablo3ApiKey")
     let getSavedSecret() = Util.GetPassword("Diablo3ApiSecret")
-    type AccessTokenInfo = {Access_Token:string;TokenType:string; ExpiresIn:int}
+    type AccessTokenInfo = {Access_Token:string;Token_Type:string; Expires_In:int}
     let getAccessToken() = // worked
         let getter() = 
             HttpClient.getToken (getSavedApiKey()) (getSavedSecret())
-//            |> dumpt "getAccessToken"
+            |> dumpt "getAccessToken"
         Util.Cache(getter,"Diablo3AccessToken")
-        |> dumpt "getAccessToken"
+        // don't stick this part in the getter, suspect caching won't like object vs string
         |> Option.map (fun text ->
                 JsonConvert.DeserializeObject<AccessTokenInfo>(text)
-                |> dumpt "Access token obj"
                 |> fun x -> x.Access_Token
-        )    
-    
-    
-    
+        )
+
 module D3Api = 
     (* 
         flow: get api key/secret
@@ -90,14 +87,27 @@ module D3Api =
     let getSampleSeasonDataTest() = 
         HttpClient.tryGetUrl (sprintf "https://us.api.battle.net/data/d3/season?apikey=%s" (getSavedApiKey()))
         |> dumpt "getSampleSeasonDataTest"
-    let getSeasonIndex () (* accessKey *) = 
-        sprintf "https://us.api.battle.net/data/d3/season/?access_token=%s" (getAccessToken().Value)
-        |> HttpClient.tryGetUrl
+    type SeasonRef = {Href:string}
+    type SeasonIndex = { 
+        // only contains url to get the data we already have, string failed
+        //_Links: Newtonsoft.Json.Linq.JRaw
+        Current_Season:int
+        Last_Update_Time:string
+    }
+    
+    let getSeasonIndex () (* accessKey *) = // works
+        let getter () = 
+            sprintf "https://us.api.battle.net/data/d3/season/?access_token=%s" (getAccessToken().Value)
+            |> dumpt "getSeasonIndexUrl"
+            |> HttpClient.tryGetUrl
+        Util.Cache(getter,"Diablo3SeasonIndex")
         |> dumpt "getSeasonIndex"
+        |> Option.map (fun text -> JsonConvert.DeserializeObject<SeasonIndex>(text))
+        |> dumpt "getSeasonIndexMapped"
 
-    // not working so far
+    // working
     let getSeasonInfo () = 
-        sprintf "https://us.api.battle.net/data/d3/season/7?namespace=2-1-US&access_token=%s" (getAccessToken().Value)
+        sprintf "https://us.api.battle.net/data/d3/season/7?namespace=2-6-US&access_token=%s" (getAccessToken().Value)
         |> HttpClient.tryGetUrl
         |> dumpt "getSeasonInfo"
         
@@ -110,4 +120,7 @@ module D3LeaderboardsApi =
         
 open D3Api
 getSeasonIndex()
+|> ignore
+
+getSeasonInfo()
 |> ignore
