@@ -1,5 +1,6 @@
 <Query Kind="FSharpProgram">
   <Reference>&lt;RuntimeDirectory&gt;\System.Net.Http.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.dll</Reference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
   <Namespace>Microsoft.FSharp</Namespace>
   <Namespace>Newtonsoft.Json</Namespace>
@@ -13,7 +14,7 @@ module Helpers =
     let deserializeJO x = Newtonsoft.Json.JsonConvert.DeserializeObject<JObject>(x)
     let toLower (x:string) = x.ToLower()
     // stopping linqpad is crashing perhaps
-    let clip x = x
+    let clipAsText x = (x |> string |> System.Windows.Forms.Clipboard.SetText); x
 open Helpers
 module Diablo3 =
     type DClass = 
@@ -113,7 +114,7 @@ module D3Api =
     let getSeasonIndex () (* accessKey *) = // works
         sprintf "https://us.api.battle.net/data/d3/season/?access_token=%s" (getAccessToken().Value)
         |> cachedGetMap<SeasonIndex> "getSeasonIndex" false
-    type SeasonLeaderboard ={
+    type SeasonLeaderboardRef ={
         Ladder: SeasonRef
         Team_Size: int Nullable
         Hero_Class_String: string
@@ -123,7 +124,7 @@ module D3Api =
         Season_Id:int
         Last_Update_Time:string
         Generated_By: string
-        Leaderboard: SeasonLeaderboard[]
+        Leaderboard: SeasonLeaderboardRef[]
         Raw: obj
     }
     // working
@@ -132,22 +133,49 @@ module D3Api =
         sprintf "https://us.api.battle.net/data/d3/season/%i?namespace%s&access_token=%s" season ``d3 url namespace`` (getAccessToken().Value)
         |> cachedGetMap<SeasonInfo> "getSeasonInfo" false
         |> Option.map (fun (x,raw) -> {x with Raw = raw})
-let getUriForDump url = 
+    type DataElement = {
+        Id:string
+        Number: int64 Nullable
+        String: string
+        Timestamp: int64 Nullable
+    }
+    type SLDetailPlayer = {
+        Key:string;
+        AccountId: int64 Nullable
+        Data: DataElement[]
+    }
+    type SLDetailedRow = {
+        Player: SLDetailPlayer[]
+        Order:int
+        Data: DataElement[]
+    }
+    type SLDetailed = {
+        Row: SLDetailedRow[]
+        Season:int;
+        Greater_Rift_Solo_Class: string
+        // don't know if truly optional
+        Greater_Rift:bool Nullable
+        Last_Update_Time:string;
+        Column: JRaw[]
+        Title: JObject
+        Key: string
+    }
+let getUriForDump url f = 
     Util.OnDemand(url, 
             fun () -> 
                 // assuming they included the query string with namespace already, adding access token
                 sprintf "%s&access_token=%s" url (BattleNet.getAccessToken().Value)
                 |> HttpClient.tryGetUrl true 
-                |> clip)
+                |> f)
 open D3Api
 getSeasonIndex()
 |> ignore
 printfn "getting seasonInfo"
 getSeasonInfo 11
-|> dumpt "Season Leaderboards whole"
+//|> dumpt "Season Leaderboards whole"
 |> Option.map (fun x -> x.Leaderboard)
 |> Option.map (Array.filter (fun l -> l.Hardcore |> Nullable.getValueOrDefault |> not || l.Team_Size |> Nullable.getValueOrDefault > 1))
 // working
-|> Option.map (Array.map (fun l -> l.Hero_Class_String, getUriForDump l.Ladder.Href))
+|> Option.map (Array.map (fun l -> l.Hero_Class_String, getUriForDump l.Ladder.Href (clipAsText >> Option.map (fun text -> JsonConvert.DeserializeObject<SLDetailed> text))))
 |> dumpt "Season Leaderboards"
 |> ignore
