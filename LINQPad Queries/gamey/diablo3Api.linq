@@ -10,6 +10,7 @@ open Newtonsoft.Json.Linq
 module Helpers =
     let dumpt t x = x.Dump(description=t); x
     let deserializeJO x = Newtonsoft.Json.JsonConvert.DeserializeObject<JObject>(x)
+    let toLower (x:string) = x.ToLower()
 open Helpers
 module Diablo3 =
     type DClass = 
@@ -19,9 +20,10 @@ module Diablo3 =
         | Wizard
         | Monk
         | Crusader
+        | Necromancer
         with 
             override x.ToString() = 
-                match x with | DemonHunter -> "dh" | WitchDoctor -> "witch-doctor" | _ -> sprintf "%A" x
+                match x with | DemonHunter -> "dh" | WitchDoctor -> "wd" | _ -> sprintf "%A" x |> toLower
                 |> fun x -> x.ToLower()
     let eras = [1;2;3;4;5;6;7]
     let teams = [2;3;4]
@@ -33,13 +35,15 @@ module HttpClient =
         |> Seq.map(fun (k,v) -> sprintf "%s=%s" k v) 
         |> delimit "&"
 
-    let tryGetUrl (url:string) = 
+    let tryGetUrl debug (url:string) = 
         use hc = new System.Net.Http.HttpClient()
         hc.DefaultRequestHeaders.Add("Accept", "application/json")
         
         try
-            hc.GetStringAsync(url).Result
-            |> Dump
+            let result = hc.GetStringAsync(url).Result
+            if debug then
+                result.Dump("tryGetUrl debug")
+            result
             |> Some
             //|> ignore
         with ex ->
@@ -50,10 +54,11 @@ module HttpClient =
         ["client_id",key; "client_secret", secret; "grant_type", "client_credentials"]
         |> buildQueryString
         |> sprintf "https://us.battle.net/oauth/token?%s"
-        |> tryGetUrl  
+        |> tryGetUrl false
     
 module BattleNet =
     let url = "https://us.api.battle.net/"
+    // key and secret at https://dev.battle.net/apps/mykeys
     let getSavedApiKey() = Util.GetPassword("Diablo3ApiKey")
     let getSavedSecret() = Util.GetPassword("Diablo3ApiSecret")
     type AccessTokenInfo = {Access_Token:string;Token_Type:string; Expires_In:int}
@@ -80,12 +85,12 @@ module D3Api =
     let testUrl = "https://us.api.battle.net/data/d3/season/7"
     
     let getSampleData key = 
-        HttpClient.tryGetUrl (sprintf "https://us.api.battle.net/d3/data/follower/templar?apikey=%s" key)
+        HttpClient.tryGetUrl false (sprintf "https://us.api.battle.net/d3/data/follower/templar?apikey=%s" key)
     let getSampleDataTest() = // works
         getSampleData (getSavedApiKey())
         |> dumpt "getSampleDataTest"
     let getSampleSeasonDataTest() = 
-        HttpClient.tryGetUrl (sprintf "https://us.api.battle.net/data/d3/season?apikey=%s" (getSavedApiKey()))
+        HttpClient.tryGetUrl false (sprintf "https://us.api.battle.net/data/d3/season?apikey=%s" (getSavedApiKey()))
         |> dumpt "getSampleSeasonDataTest"
     type SeasonRef = {Href:string}
     type SeasonIndex = { 
@@ -93,34 +98,44 @@ module D3Api =
         //_Links: Newtonsoft.Json.Linq.JRaw
         Current_Season:int
         Last_Update_Time:string
+        Season: SeasonRef[]
     }
-    
+    let cachedGetMap<'T> name debug url : 'T option=
+        let getter() = 
+            HttpClient.tryGetUrl debug url
+        Util.Cache(getter,name)
+        |> Option.map (dumpt name)
+        |> Option.map (fun text -> JsonConvert.DeserializeObject<'T>(text))
+        |> dumpt (sprintf "%sMapped" name)
     let getSeasonIndex () (* accessKey *) = // works
-        let getter () = 
-            sprintf "https://us.api.battle.net/data/d3/season/?access_token=%s" (getAccessToken().Value)
-            |> dumpt "getSeasonIndexUrl"
-            |> HttpClient.tryGetUrl
-        Util.Cache(getter,"Diablo3SeasonIndex")
-        |> dumpt "getSeasonIndex"
-        |> Option.map (fun text -> JsonConvert.DeserializeObject<SeasonIndex>(text))
-        |> dumpt "getSeasonIndexMapped"
-
+        sprintf "https://us.api.battle.net/data/d3/season/?access_token=%s" (getAccessToken().Value)
+        |> cachedGetMap<SeasonIndex> "getSeasonIndex" false
+        
+    type SeasonInfo = {
+        Season_Id:int
+        Last_Update_Time:string
+        Generated_By: string
+    }
     // working
-    let getSeasonInfo () = 
-        sprintf "https://us.api.battle.net/data/d3/season/7?namespace=2-6-US&access_token=%s" (getAccessToken().Value)
-        |> HttpClient.tryGetUrl
-        |> dumpt "getSeasonInfo"
+    let getSeasonInfo season = 
+        let ``d3 url namespace`` = "2-6-US"
+        sprintf "https://us.api.battle.net/data/d3/season/%i?namespace%s&access_token=%s" season ``d3 url namespace`` (getAccessToken().Value)
+        |> cachedGetMap<SeasonInfo> "getSeasonInfo" true
+//        |> HttpClient.tryGetUrl false
+//        |> dumpt "getSeasonInfo"
+//        |> Option.map (fun text -> JsonConvert.DeserializeObject<SeasonInfo>(text))
+//        |> dumpt "getSeasonInfoMapped"
         
-        
-module D3LeaderboardsApi = 
-    // not working
-    let getSoloList dclass era = 
-        let url = sprintf "http://us.battle.net/d3/en/rankings/season/%i/rift-%O" era dclass
-        HttpClient.tryGetUrl url
+//        
+//module D3LeaderboardsApi = 
+//    // not working
+//    let getSoloList dclass era = 
+//        let url = sprintf "http://us.battle.net/d3/en/rankings/season/%i/rift-%O" era dclass
+//        HttpClient.tryGetUrl false url
         
 open D3Api
 getSeasonIndex()
 |> ignore
-
-getSeasonInfo()
+printfn "getting seasonInfo"
+getSeasonInfo 11
 |> ignore
