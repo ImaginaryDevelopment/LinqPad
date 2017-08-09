@@ -5,7 +5,15 @@
 // consider adding menu to select installs to run
 let install cmd args = 
     Util.Cmd(cmd,args=args)
+module Helpers =
+    let dumpLinq uriOrPath = 
+        Hyperlinq(uriOrPath=uriOrPath)
+        |> Dump
+        |> ignore
+    ()
+open Helpers
 
+// https://www.linqpad.net/licensing/ListActivations.aspx
 module Chocolatey = 
     type ChocoInstalls = 
         | Choco
@@ -25,7 +33,8 @@ module Chocolatey =
             let result = chocoInstall  (sprintf "%A" x)
             match x with
             | LinqPad ->
-                printfn "setup license 7/2/09, setup custom my queries and extensions folder, dark theme"
+                printfn "setup license 7/2/09, setup custom my queries and extensions folder, dark theme, db connection(s)"
+                dumpLinq "https://www.linqpad.net/licensing/ListActivations.aspx"
             | Git -> printfn "setup SSH key, if not letting Kraken handle\r\nsetup push url git remote set-url --push origin git@github.com:ImaginaryDevelopment/LinqPad.git"
             | GitKraken -> printfn "setup SSH key if not done"
             | VisualStudioCode -> printfn "install vim"
