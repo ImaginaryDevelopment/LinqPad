@@ -21,7 +21,17 @@ module Chocolatey =
         | Choco -> // requires admin, as do some of the other installs (maybe only if c:\programData\ isn't created yet)
             install @"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" """-NoProfile -InputFormat None -ExecutionPolicy Bypass -Command "iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))" && SET "PATH=%PATH%;%ALLUSERSPROFILE%\chocolatey\bin" """
         | x ->
-            chocoInstall  (sprintf "%A" x)
+            
+            let result = chocoInstall  (sprintf "%A" x)
+            match x with
+            | LinqPad ->
+                printfn "setup license 7/2/09, setup custom my queries and extensions folder, dark theme"
+            | Git -> printfn "setup SSH key, if not letting Kraken handle"
+            | GitKraken -> printfn "setup SSH key if not done"
+            | VisualStudioCode -> printfn "install vim"
+            | _ -> ()
+            result
+            // print extra steps
     let getChocoPage =
         let getChocoLink relPath = Hyperlinq(sprintf "https://chocolatey.org/%s" relPath)
         function
@@ -33,3 +43,8 @@ module Chocolatey =
 Chocolatey.getChocoPage Chocolatey.GitKraken
 |> Dump
 |> ignore
+
+// other steps
+
+printfn """install visual studio 2017, update
+install vs2017's vsvim"""
