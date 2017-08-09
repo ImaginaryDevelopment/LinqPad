@@ -26,7 +26,7 @@ module Chocolatey =
             match x with
             | LinqPad ->
                 printfn "setup license 7/2/09, setup custom my queries and extensions folder, dark theme"
-            | Git -> printfn "setup SSH key, if not letting Kraken handle"
+            | Git -> printfn "setup SSH key, if not letting Kraken handle\r\nsetup push url git remote set-url --push origin git@github.com:ImaginaryDevelopment/LinqPad.git"
             | GitKraken -> printfn "setup SSH key if not done"
             | VisualStudioCode -> printfn "install vim"
             | _ -> ()
