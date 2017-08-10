@@ -82,7 +82,8 @@ type ConfigType =
         member x.ToDump() =
             sprintf "%A" x
 
-type Config = {Version:ConfigType; Name:string; Src:string; Raw:string} 
+type Config = {Version:ConfigType; Name:string; Src:string; Raw:string}
+
 module PackageConfigs = 
     let getPackageConfigs () = 
         slnDir
@@ -156,7 +157,6 @@ module AppWebConfigs =
         )
         |> Seq.groupBy(fun x -> x.Name)
         |> Seq.filter(fun (_, items) -> items |> Seq.map (fun x -> x.Version) |> Seq.distinct |> Seq.length |> fun x -> x > 1)
-        //|> Seq.map (fun (path,configs) -> match configs )
 
 Util.HorizontalRun(false, PackageConfigs.pOut, AppWebConfigs.awOut)
 |> Dump
