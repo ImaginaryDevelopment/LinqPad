@@ -56,4 +56,7 @@ Chocolatey.getChocoPage Chocolatey.GitKraken
 // other steps
 
 printfn """install visual studio 2017, update
-install vs2017's vsvim"""
+    install vs2017's vsvim 
+    install vsCode's vim (settings -> vim.useCtrlKeys : false)
+    install justdecompile or something similar
+    """
