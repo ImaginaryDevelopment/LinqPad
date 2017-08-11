@@ -1,8 +1,8 @@
 <Query Kind="FSharpProgram">
-  <Reference Relative="..\..\..\..\FsInteractive\MacroRunner\CodeGeneration\bin\Debug\CodeGeneration.dll">C:\projects\FsInteractive\MacroRunner\CodeGeneration\bin\Debug\CodeGeneration.dll</Reference>
-  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 10.0\Common7\IDE\PublicAssemblies\EnvDTE.dll</Reference>
-  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio 10.0\Common7\IDE\PublicAssemblies\EnvDTE80.dll</Reference>
-  <Reference Relative="..\..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\MacroRunner.exe">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\MacroRunner.exe</Reference>
+  <Reference Relative="..\..\..\FsInteractive\MacroRunner\CodeGeneration\bin\Debug\CodeGeneration.dll">C:\projects\FsInteractive\MacroRunner\CodeGeneration\bin\Debug\CodeGeneration.dll</Reference>
+  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio\2017\Enterprise\Common7\IDE\PublicAssemblies\envdte.dll</Reference>
+  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio\2017\Enterprise\Common7\IDE\PublicAssemblies\envdte80.dll</Reference>
+  <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\MacroRunner.exe">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\MacroRunner.exe</Reference>
   <GACReference>Microsoft.VisualStudio.TextTemplating.Interfaces.10.0, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
 </Query>
 
@@ -57,6 +57,11 @@ let dumpt t x=
 let dumpft t f x= 
     f x |> dumpt |> ignore
     x
+let after (delim:string) (x:string) = 
+    x.Substring(x.IndexOf(delim) + delim.Length)
+let before (delim:string) (x:string) = 
+    let i = x.IndexOf(delim)
+    x.Substring(0, i)
     
 // items that we aren't generating the SQL for, but need datamodels generated from the sql db schema    
 let dataModelsToGen : TableIdentifier list = [
@@ -217,6 +222,23 @@ let cgsm =
 // but currently it also expects they will already be created in the sql server =(
 let toGen : TableInput list = 
     [
+        TableInput(Schema="dbo", Name="Era", 
+            Columns=[
+                ColumnInput.createPKIdentity "EraID"
+                {ColumnInput.createFKeyedInt "PaymentId" (FKeyIdentifier {Table={Schema="dbo"; Name="Payment"}; Column="PaymentId"}) with Nullability = PrimaryKey}
+                ColumnInput.create "DeliveryMethod" (ColumnType.StringColumn 50)
+                ColumnInput.create "DeliveryName" (ColumnType.StringColumn 50)
+                ColumnInput.create "Name" (ColumnType.StringColumn 50)
+                {ColumnInput.create "CreatedUtc" (ColumnType.DateTimeColumn) with DefaultValue="getutcdate()"} 
+            ]
+        )
+        TableInput(Schema="dbo", Name="EraToCharge",
+            Columns=[
+                {ColumnInput.createFKeyedInt "EraID" (FKeyIdentifier{Table={Schema="dbo"; Name="Era"}; Column=null}) with Nullability=PrimaryKey}
+                {ColumnInput.createFKeyedInt "ChargeID" (FKeyIdentifier{Table={Schema="dbo"; Name="Charge"}; Column=null}) with Nullability=PrimaryKey}
+                {ColumnInput.create "CreatedUtc" (ColumnType.DateTimeColumn) with DefaultValue="getutcdate()"}
+            ]
+        )
         TableInput(
             Schema="dbo",
             Name="PaymentReversal",
