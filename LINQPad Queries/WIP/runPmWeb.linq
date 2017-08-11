@@ -1,8 +1,8 @@
 <Query Kind="FSharpProgram">
-  <Reference>&lt;ProgramFilesX86&gt;\Reference Assemblies\Microsoft\FSharp\.NETFramework\v4.0\4.4.0.0\FSharp.Core.dll</Reference>
   <Reference>C:\tfs\practicemanagement\trunk\Pm.Web\bin\Pm.Dal.dll</Reference>
   <Reference>C:\tfs\practicemanagement\trunk\Pm.Web\bin\Pm.Web.exe</Reference>
   <Reference>C:\tfs\practicemanagement\trunk\Pm.Web\bin\Suave.dll</Reference>
+  <NuGetReference>FSharp.Core</NuGetReference>
 </Query>
 
 let asm = System.Reflection.Assembly.GetExecutingAssembly()

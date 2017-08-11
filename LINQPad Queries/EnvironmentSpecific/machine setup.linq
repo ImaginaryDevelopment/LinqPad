@@ -57,6 +57,11 @@ Chocolatey.getChocoPage Chocolatey.GitKraken
 
 printfn """install visual studio 2017, update
     install vs2017's vsvim 
-    install vsCode's vim (settings -> vim.useCtrlKeys : false)
+    install vsCode's:
+        vim (settings -> vim.useCtrlKeys : false)
+        ionide-fsharp
+        ionide-paket
+        ionide-fake
+        icons (not decided on which yet)
     install justdecompile or something similar
     """
