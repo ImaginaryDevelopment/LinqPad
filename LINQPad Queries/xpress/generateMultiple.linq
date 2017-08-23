@@ -222,10 +222,9 @@ let cgsm =
 // but currently it also expects they will already be created in the sql server =(
 let toGen : TableInput list = 
     [
-        TableInput(Schema="dbo", Name="Era", 
+        TableInput(Schema="dbo", Name="EraPayment", 
             Columns=[
-                ColumnInput.createPKIdentity "EraID"
-                {ColumnInput.createFKeyedInt "PaymentId" (FKeyIdentifier {Table={Schema="dbo"; Name="Payment"}; Column="PaymentId"}) with Nullability = PrimaryKey}
+                {ColumnInput.createFKeyedInt "EraPaymentID" (FKeyIdentifier {Table={Schema="dbo"; Name="Payment"}; Column="PaymentId"}) with Nullability = PrimaryKey}
                 ColumnInput.create "DeliveryMethod" (ColumnType.StringColumn 50)
                 ColumnInput.create "DeliveryName" (ColumnType.StringColumn 50)
                 ColumnInput.create "Name" (ColumnType.StringColumn 50)
@@ -234,7 +233,7 @@ let toGen : TableInput list =
         )
         TableInput(Schema="dbo", Name="EraToCharge",
             Columns=[
-                {ColumnInput.createFKeyedInt "EraID" (FKeyIdentifier{Table={Schema="dbo"; Name="Era"}; Column=null}) with Nullability=PrimaryKey}
+                {ColumnInput.createFKeyedInt "EraPaymentID" (FKeyIdentifier{Table={Schema="dbo"; Name="EraPayment"}; Column="EraPaymentID"}) with Nullability=PrimaryKey}
                 {ColumnInput.createFKeyedInt "ChargeID" (FKeyIdentifier{Table={Schema="dbo"; Name="Charge"}; Column=null}) with Nullability=PrimaryKey}
                 {ColumnInput.create "CreatedUtc" (ColumnType.DateTimeColumn) with DefaultValue="getutcdate()"}
             ]
