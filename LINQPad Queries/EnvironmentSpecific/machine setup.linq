@@ -38,6 +38,7 @@ module Chocolatey =
             | Git -> printfn "setup SSH key, if not letting Kraken handle\r\nsetup push url git remote set-url --push origin git@github.com:ImaginaryDevelopment/LinqPad.git"
             | GitKraken -> printfn "setup SSH key if not done"
             | VisualStudioCode -> printfn "install vim"
+            | Chrome -> printfn "alter shortcut add --allow-file-access-from-files"
             | _ -> ()
             result
             // print extra steps
@@ -64,4 +65,5 @@ printfn """install visual studio 2017, update
         ionide-fake
         icons (not decided on which yet)
     install justdecompile or something similar
+    
     """
