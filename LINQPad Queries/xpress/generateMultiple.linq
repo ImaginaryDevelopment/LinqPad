@@ -130,7 +130,7 @@ let refData : ReferenceData list = [
             }
 ]
 
-let codeTableBlacklist = ["Payments"]
+let codeTableBlacklist = ["Payments"; "ScanStatistic"]
 
 let columnBlacklist = 
     [
@@ -262,6 +262,7 @@ let toGen : TableInput list =
                 ColumnInput.create "ScannerType" ColumnType.IntColumn
                 ColumnInput.create "SlibVersion" (ColumnType.StringColumn 255)
                 ColumnInput.create "CalibrationThreshold" ColumnType.IntColumn
+                {ColumnInput.create "CreatedUtc" (ColumnType.DateTimeColumn) with DefaultValue="getutcdate()"}
             ]
         )
         TableInput(
