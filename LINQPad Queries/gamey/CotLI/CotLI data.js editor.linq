@@ -1,8 +1,10 @@
 <Query Kind="FSharpProgram">
+  <Reference Relative="..\..\..\..\FsInteractive\BReusable.dll">C:\projects\FsInteractive\BReusable.dll</Reference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
   <Namespace>Newtonsoft.Json.Linq</Namespace>
 </Query>
 
+open BReusable.StringHelpers
 let cotLIPath = if Directory.Exists(@"D:\projects\CotLICheatSheet\") then @"D:\projects\CotLICheatSheet\js" else @"C:\projects\CotLICheatSheet\js"
 [<AutoOpen>]
 module Helpers =
@@ -29,6 +31,8 @@ module Helpers =
         x
     let dumpRemoveRaw x = 
         x |> dumpRemoval ["Raw"]
+    module Option = 
+        let getOrDefault y = function | Some x -> x | None -> y
         
         
 [<AutoOpen>]
