@@ -31,7 +31,7 @@ module Helpers =
                     | _ -> 
                         None
                 | None -> None
-                    
+
                 
             ) (Some List.Empty)
             |> Option.map (List.ofSeq>> List.rev)
@@ -145,15 +145,9 @@ let getShallowJODisplay jo =
                         | :? JObject ->
                             "obj"
                         | _ -> x.Type |> string
-                    //|> Seq.map (fun pi -> sprintf "%s:%s" pi.Name pi.PropertyType.Name)
-    //                |> delimit ","
                     |> sprintf "%s:{%s}" pn 
                 )
-//            |> Seq.map (fun childPropName ->
-//                let prop = childJo.[childPropName]
-//                prop |> string
-//            )
-//            |> delimit ","
+
         | Some (:? JValue as jv) -> 
             upcast [ sprintf "%A"jv.Value]
         | Some (:? JArray as ja) ->
@@ -223,13 +217,14 @@ let loopCommands () =
         let mutable currentObj : Explorable = JObj root
         let getCurrentPath,setCurrentPath = 
             let mutable currentPath = ""
-            DumpContainer(currentPath)
+            let display() = sprintf "CurrentPath: %s" currentPath
+            DumpContainer(display())
             |> Dump
             |> fun dc ->
                 let fGet() = currentPath
                 let fSet (x:string) = 
                     currentPath <- x
-                    dc.Content <- x
+                    dc.Content <- display()
                 fGet,fSet
         DumpContainer()
         |> Dump
@@ -257,26 +252,31 @@ let loopCommands () =
             "quit", fun _ -> input <- null
             "ascend",
                 fun _ -> 
-                    let newPath = getCurrentPath() |> beforeLast "."
-
-                    getCurrentObj()
-                    |> function
-                        |JObj jo -> jo.Parent
-                        |JArr ja -> ja.Parent 
+                    let cp = getCurrentPath()
+                    if cp |> String.contains "." |> not || cp = "." then
+                        "Already at root, can't ascend"
+                        |> setDisplay
+                    else                        
+                        let newPath = getCurrentPath() |> beforeLast "."
+    
+                        getCurrentObj()
                         |> function
-                            | :? JProperty as jp -> 
-                                // double parenting eh?
-                                jp.Parent
-                                |> function
-                                    | :? JObject as jo -> JObj jo 
-                                    | :? JArray as ja -> JArr ja
-                            | :? JArray as ja ->
-                                JArr ja
-                                
-                            | x -> 
-                                x.Dump("ascending into failure")
-                                failwithf "unexpected type to ascend into %s" (x.GetType().Name)
-                    |> setCurrentObj newPath
+                            |JObj jo -> jo.Parent
+                            |JArr ja -> ja.Parent 
+                            |> function
+                                | :? JProperty as jp -> 
+                                    // double parenting eh?
+                                    jp.Parent
+                                    |> function
+                                        | :? JObject as jo -> JObj jo 
+                                        | :? JArray as ja -> JArr ja
+                                | :? JArray as ja ->
+                                    JArr ja
+                                    
+                                | x -> 
+                                    x.Dump("ascending into failure")
+                                    failwithf "unexpected type to ascend into %s" (x.GetType().Name)
+                        |> setCurrentObj newPath
             // replace the display with a custom
             "select %s", fun args ->
                 getCurrentObj()
@@ -303,7 +303,54 @@ let loopCommands () =
                         |> sprintf "Showing (index,%s) property of %s" arg
                         |> statusDc
                     | JObj _ -> statusDc "use descend on object properties, select is for array item props"
-            
+            "show", 
+                function
+                | null | "" ->
+                    statusDc "show requires an int limit to function"
+                | bounds ->
+                    // TODO: feature show via skip truncate instead of only truncate
+//                    let upper,lower =
+//                        bounds
+//                        |> String.split [" "]
+//                        |> function
+//                            | [upper] -> upper, None
+//                            | [
+                    match getCurrentObj(),System.Int32.TryParse limit with
+                    | _,(false,_) -> statusDc "show requires an int limit to function"
+                    | JArr(JObjArray items), (_,limit) ->
+                        items
+                        |> Seq.truncate limit
+                        |> Seq.map string
+                        |> setDisplay
+                    | JArr(items), (_,limit) ->
+                        items
+                        |> Seq.truncate limit
+                        |> Seq.map string
+                        |> setDisplay
+                    | _ -> statusDc "show requires the target be an array to function"
+                    
+            "filter", 
+                function
+                | null | "" ->
+                        statusDc "filter requires an argument(propName,value) to function"
+                | args ->
+                    match args.Split(' ') |> List.ofSeq with
+                    | [propName;value] ->
+                        getCurrentObj()
+                        |> function
+                            |JArr (JObjArray items) ->
+                                items
+                                |> Seq.filter(fun item ->
+                                    item
+                                    |> getPropertyValue propName
+                                    |> Option.map (string >> (=) value)
+                                    |> Option.getOrDefault false
+                                )
+                                |> Seq.map string
+                                |> setDisplay
+                            | _ -> statusDc "filter requires the current array be an object array"
+                    | _ -> statusDc "filter requires a propName and value to function"
+                
             // refresh the display back to the currentPath object
             "refresh", fun _ -> 
                 refreshDisplay()

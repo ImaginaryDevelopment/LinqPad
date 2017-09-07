@@ -1,8 +1,10 @@
 <Query Kind="FSharpProgram">
+  <Reference Relative="..\..\..\..\FsInteractive\BReusable.dll">C:\projects\FsInteractive\BReusable.dll</Reference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
   <Namespace>Newtonsoft.Json.Linq</Namespace>
 </Query>
 
+open BReusable.StringHelpers
 let cotLIPath = if Directory.Exists(@"D:\projects\CotLICheatSheet\") then @"D:\projects\CotLICheatSheet\js" else @"C:\projects\CotLICheatSheet\js"
 [<AutoOpen>]
 module Helpers =
@@ -19,7 +21,7 @@ module Helpers =
         
     let (|IsInt|_|) (x:string) = match Int32.TryParse x with | true, x -> Some x |_ -> None
     let flip f y x = f x y
-    let inline dumpt (t:string) x = x.Dump(t,exclude="Raw"); x
+    let inline dumpt (t:string) x = x.Dump(t,exclude="Raw") |> ignore; x
     let dumpRemoval (items:string seq) x = 
         let x = Util.ToExpando x
         let dic = (box x) :?> IDictionary<string,obj>
@@ -29,6 +31,8 @@ module Helpers =
         x
     let dumpRemoveRaw x = 
         x |> dumpRemoval ["Raw"]
+    module Option = 
+        let getOrDefault y = function | Some x -> x | None -> y
         
         
 [<AutoOpen>]
@@ -71,7 +75,7 @@ let (|StartsWithI|_|) (d:string) (s:string) =
 let mutable hasChanges = false
 
 module MyDataFile = 
-    type Crusader= { Id:string;Link:string;DisplayName:string; HeroId:int; Loot: CrusaderLoot list; Raw:JObject; Gear: string list } with member x.ToDump() = x |> dumpRemoveRaw
+    type Crusader= { Id:string;Link:string;DisplayName:string; HeroId:int; BenchSlot:int; Loot: CrusaderLoot list; Raw:JObject; Gear: string list } with member x.ToDump() = x |> dumpRemoveRaw
 
     type CrusaderData = {Wikibase: string; MissionTags: MissionTag list; Crusaders: Crusader list; Raw:JObject} with member x.ToDump() = x |> dumpRemoveRaw
     let path = Path.Combine(cotLIPath,"data.js")
@@ -82,6 +86,7 @@ module MyDataFile =
     
     let mapCrusader (jo:JObject) = 
         {   Id = jo.["id"] |> string
+            BenchSlot= jo.["id"] |> string |> (fun id -> id.[0..1]) |> int
             DisplayName= jo.["displayName"] |> string
             Link = getStr "link" jo
             Loot = []
@@ -94,15 +99,22 @@ module MyDataFile =
 module GameData = 
     type LootItem = {HeroId:int; CL:CrusaderLoot}
     let gameData = lazy(
-        Path.Combine(cotLIPath,"gamedata.json")
-        |> File.ReadAllText
-        |> deserializeJO
+        let x = 
+            Path.Combine(cotLIPath,"gamedata.json")
+            |> File.ReadAllText
+            |> deserializeJO
+        let pv = 
+            x 
+            |> getProperty "patch_version"
+        pv
+        |> dumpt "patch_version"
+        |> ignore
+        x
     )
     let lootItems = lazy(
             let x = 
                 gameData.Value
-            let patchVersion = x |> getProperty "patch_version"
-            patchVersion.Dump("patch_version")
+            
             let getInt name (jo:JObject) = 
                 jo |> getPropertyValue name |> Option.get |> string |> int
             x 
@@ -143,6 +155,33 @@ module GameData =
             )
             |> Map.ofSeq
     )
+    type Hero = {Id:int;Name:string;SeatId:int;Tags:string list; Raw:obj}
+    let heroes = lazy(
+        let x = gameData.Value
+        x
+        |> getPropertyValue "hero_defines"
+        |> Option.get
+        |> fun x -> x :?> JArray
+        |> Seq.cast<JObject>
+        |> Seq.map(fun raw ->
+            //raw |> string |> dumpt"hero!" |> ignore
+            let propsNode = raw |> getPropertyValue "properties" |> Option.get
+            {   Id=raw |> getPropertyValue "id" |> Option.get |> string |> int
+                Name=raw |> getPropertyValue "name" |> Option.get |> string
+                SeatId= raw |> getPropertyValue "seat_id" |> Option.get |> string |> int
+                Tags = 
+                    propsNode :?> JObject
+                    |> getPropertyValue "tags" 
+                    |> Option.get 
+                    |> fun x -> x :?> JArray 
+                    |> Seq.cast<JValue> 
+                    |> Seq.map(fun rt -> rt.Value |> string) |> List.ofSeq
+                    
+                Raw=raw
+                }
+        )
+        //|> List.ofSeq
+    )
     
     
 module MappedChanges = 
@@ -167,7 +206,6 @@ module MappedChanges =
         |"05b" -> 46
         // Henry
         |"05c" -> 64
-        
         
         // Mister
         | "06a" -> 21
@@ -240,6 +278,7 @@ module MappedChanges =
         |> List.ofSeq
         |> fun y -> {x with Crusaders = y}
 
+    // uses the lookup above (slotMap) to set the HeroId (1..x) int value
     let addOrSetHeroIds (x:CrusaderData) =
         let mutable abort = false
         x.Crusaders
@@ -343,10 +382,75 @@ module MappedChanges =
                 |> List.ofSeq
         }
 
+    let addMissingCrusaders (x:CrusaderData) = 
+        let makeIdentifier (seatId:int) = 
+            function
+            | 0 -> seatId |> string
+            | x -> 
+                x - 1
+                |> char 
+                |> (+) 'a'
+                |> string
+                |> (+) (seatId |> string |> fun x -> x.PadLeft(2,'0'))
+
+        // heroes (id,name,seat,tags) are mapped, need to find ones that are missing and add them to x next
+        GameData.heroes.Value
         
-//        gd.Properties()
-//        |> Seq.map (fun p -> p.Name)
-        
+        |> Seq.filter(fun h -> x.Crusaders |> Seq.exists(fun cru -> cru.HeroId = h.Id) |> not)
+        |> List.ofSeq
+        |> function
+            | [] -> x
+            | missingHeroes ->
+                //x.Raw.["crusaders"] :?> JArray
+                // change x.Crusaders, x.Raw.["crusaders"] :?> JArray, and hasChanges
+                hasChanges <- true
+                x.Raw.["crusaders"] :?> JArray
+                // normally would be id,displayName,image,slot, ...
+                |> fun cruArray -> 
+                    missingHeroes
+                    |> Seq.map(fun hero ->
+                       
+                        let identifier = 
+                            x.Crusaders 
+                            |> Seq.filter(fun cru -> cru.BenchSlot = hero.SeatId) 
+                            |> Seq.map(fun cru -> cru.HeroId) 
+                            |> Seq.append [hero.Id] 
+                            |> Seq.sortBy id
+                            |> Seq.findIndex((=) hero.Id)
+                            |> makeIdentifier hero.SeatId
+                        let cruRaw = 
+                            JObject(
+                                // TODO: event, eventLink, loot (reference loot data), gear (gear is what each loot slot does for the person if present)
+                                JProperty("id",identifier),
+                                JProperty("heroId",hero.Id),
+                                JProperty("displayName",hero.Name),
+                                JProperty("image",String.Empty),
+                                JProperty("slot",hero.SeatId),
+                                JProperty("tags",JArray(hero.Tags |> List.map JValue |> Array.ofList))
+                            )
+                        (cruRaw |> string,cruRaw).Dump("cruRaw")
+                        // prior should be the one in the same seat but cru.heroId < hero.Id or last
+                        let priorCru = 
+                            x.Crusaders 
+                            |> Seq.filter(fun cru -> cru.BenchSlot = hero.SeatId) 
+                            |> List.ofSeq 
+                            |> List.rev 
+                            |> List.tryHead 
+                        match priorCru with
+                        | Some cru -> 
+                            let targetIndex = x.Crusaders |> List.findIndex((=) cru)                            
+                            cruArray.Insert(targetIndex, cruRaw)
+                        | None -> cruArray.Add cruRaw
+                        cruArray |> string |> dumpt "inserted!" |> ignore
+                        {Id=identifier;HeroId=hero.Id;DisplayName=hero.Name;BenchSlot=hero.SeatId;Link=String.Empty;Raw=cruRaw;Gear=List.empty;Loot=List.empty}
+                    )
+                    |> fun crus -> 
+                        {x with Crusaders = 
+                                crus 
+                                |> Seq.append x.Crusaders 
+                                |> Seq.sortBy(fun cru -> cru.BenchSlot,cru.HeroId) 
+                                |> List.ofSeq }
+
 open MyDataFile
 open GameData
 let starter,text,trailer = 
@@ -368,15 +472,22 @@ text
                 Crusaders=
                     x.["crusaders"] :?> JArray
                     |> Seq.cast<JObject>
-                    |> Seq.map mapCrusader
+                    |> Seq.map (fun cru -> 
+                        try
+                            mapCrusader cru
+                        with ex ->
+                            (cru |> string,cru).Dump("failed")
+                            reraise()
+                    )
                     |> List.ofSeq
                 Raw = x}
 // what change operation?
 //|> MappedChanges.setEmptyLinks
 //|> MappedChanges.addOrSetHeroIds
-|> MappedChanges.findCrusadersMissingGearData
+//|> MappedChanges.findCrusadersMissingGearData
+//|> MappedChanges.addMissingCrusaders
+|> MappedChanges.addLootItemsFromGameData
 |> hoist dumpReverse
 |> fun x -> Newtonsoft.Json.JsonConvert.SerializeObject(x.Raw, Newtonsoft.Json.Formatting.Indented)
 |> fun x -> sprintf "%s=\r\n%s%s;" starter x trailer
 |> fun x -> if hasChanges then File.WriteAllText(path, x) else ()
-

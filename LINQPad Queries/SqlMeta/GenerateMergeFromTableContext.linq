@@ -73,7 +73,7 @@ let valuesMap members (x:Target) =
         |> Seq.map (fun (name:string,t:Type, nullable:bool, getter:obj -> obj) -> getter x |> mapValue t nullable) 
         |> List.ofSeq
         |> delimit ","
-let generateInserts tableName (rowType:Type) columnBlacklist (members:#seq<string*Type*bool*(obj -> obj)>) = 
+let generateValuesInsert tableName (rowType:Type) columnBlacklist (members:#seq<string*Type*bool*(obj -> obj)>) = 
     
     let insertStatement tableName columns= sprintf "insert into %s(%s) values (" tableName columns
     let members = members |> Seq.filter(fun (name,_,_,_) -> columnBlacklist |> Seq.exists (fun b -> b = name) |> not) |> List.ofSeq
@@ -84,12 +84,16 @@ let generateInserts tableName (rowType:Type) columnBlacklist (members:#seq<strin
     dc.Codes
     |> Seq.map (valuesMap members >> sprintf "%s%s)" insert)
     
-
-let generateMyInserts() = 
-    generateInserts tableName t [identityColumnName] target
+let generateInsert tableName rowType columnBlacklist (members: string*Type*bool*(obj->obj)) = 
+    generateValuesInsert tableName rowType columnBlacklist [members]
+    
+let _generateMyValuesInserts() = 
+    generateValuesInsert tableName t [identityColumnName] target
     |> Dump
-
-let generateMerge (schema:string) (table:string) joiner isIdentity (members:#seq<string*Type*bool*(obj -> obj)>)  = 
+type GenerationStrategy = 
+    | Merge // CTE
+    | Inserts
+let generate strat (schema:string) (table:string) joiner isIdentity (members:#seq<string*Type*bool*(obj -> obj)>)  = 
     let identitySetter on = if isIdentity then sprintf "%sset identity_insert %s.%s %s;%s" Environment.NewLine schema table (if on then "on" else "off") Environment.NewLine else null
     let columns = members |> Seq.map (fun (name,_,_,_) -> name) |> delimit ","
     let valuesMap (x:Target) = 
@@ -103,53 +107,66 @@ let generateMerge (schema:string) (table:string) joiner isIdentity (members:#seq
 PRINT 'Synchronizing [%s.%s]';""" schema table
     let starter2:string = identitySetter true
 // -----------------------------------------
-    let starter3 = sprintf """
-WITH CTE_%s(%s) AS
-(
-    SELECT %s
-    FROM (VALUES
-""" 
-    let starter3 = starter3 table columns columns
-    let allValues = 
+    match strat with
+    | Inserts ->
         values
-        //|> Seq.take 10
         |> Seq.map valuesMap
-        |> Seq.map (fun s -> "        (" + s + ")") 
-        |> delimit ("," + Environment.NewLine)
-    let closer1 = sprintf """    )
-    AS SOURCE(%s)
-)
-MERGE INTO [%s].[%s] AS TARGET
-USING CTE_%s""" 
-
-// ---------------------------------------------------------------------------
-    let closer1 = closer1 columns schema table table
-    let closer2 = sprintf """
-    ON CTE_%s.[%s] = TARGET.[%s]
-WHEN NOT MATCHED BY TARGET THEN
-    INSERT(%s)
-    VALUES(%s);
-    """
-// -------------------------------------------------------------------------
-    let closer2 = closer2 table joiner joiner columns columns
-    let closer3 = identitySetter false
-    let printout = sprintf """
-    PRINT 'Done Synchronizing [%s.%s]';
-GO""" 
-    let printout = printout schema table
-    let append (text:string) (sb:StringBuilder) = sb.Append(text)
+        //|> Seq.truncate 5
+        |> Seq.map (fun s -> sprintf "        insert into %s.%s(%s) values(%s)" schema table columns s)
+        |> delimit Environment.NewLine
+        |> flip (+) (identitySetter false)
+        |> (+) starter2
+        |> (+) starter1
+        //|> replace "\r\n" "\\r\\n"
     
+    | Merge -> 
+        let starter3 = sprintf """
+    WITH CTE_%s(%s) AS
+    (
+        SELECT %s
+        FROM (VALUES
+    """ 
+        let starter3 = starter3 table columns columns
+        let allValues = 
+            values
+            //|> Seq.take 10
+            |> Seq.map valuesMap
+            |> Seq.map (fun s -> "        (" + s + ")") 
+            |> delimit ("," + Environment.NewLine)
+        let closer1 = sprintf """    )
+        AS SOURCE(%s)
+    )
+    MERGE INTO [%s].[%s] AS TARGET
+    USING CTE_%s""" 
     
-    [   starter1
-        starter2
-        starter3
-        allValues
-        closer1
-        closer2
-        closer3
-        printout]
-    |> Seq.fold (fun sb l -> append l sb) (StringBuilder())
-    |> string
+    // ---------------------------------------------------------------------------
+        let closer1 = closer1 columns schema table table
+        let closer2 = sprintf """
+        ON CTE_%s.[%s] = TARGET.[%s]
+    WHEN NOT MATCHED BY TARGET THEN
+        INSERT(%s)
+        VALUES(%s);
+        """
+    // -------------------------------------------------------------------------
+        let closer2 = closer2 table joiner joiner columns columns
+        let closer3 = identitySetter false
+        let printout = sprintf """
+        PRINT 'Done Synchronizing [%s.%s]';
+    GO""" 
+        let printout = printout schema table
+        let append (text:string) (sb:StringBuilder) = sb.Append(text)
+        
+        
+        [   starter1
+            starter2
+            starter3
+            allValues
+            closer1
+            closer2
+            closer3
+            printout]
+        |> Seq.fold (fun sb l -> append l sb) (StringBuilder())
+        |> string
     
     
 //PRINT 'Done Synchronizing [<#= schema #>.<#= table #>]';
@@ -157,7 +174,7 @@ GO"""
 ////dc.TempLanguages
 ////|> Seq.map (fun l -> sprintf "Insert into
 // "dbo" "Language" "LanguageID" 
-let text = generateMerge schema tableName joiner true target 
+let text = generate Inserts schema tableName joiner true target 
 let rec refreshDisplay() = 
     Util.ClearResults()
     [
@@ -175,5 +192,3 @@ let rec refreshDisplay() =
         "Dump", fun () -> text
     ] |> Seq.iter (Util.OnDemand >> Dump >> ignore)
 refreshDisplay()
-
-
