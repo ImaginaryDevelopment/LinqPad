@@ -90,6 +90,7 @@ type PoIMap = { CrusaderTabSelector: P
                 StormFormationButton:P
                 MagnifyButton:P
                 StormButton:P
+                AdvanceArrowButton:P
                 }
 
 let populatePoints () = 
@@ -123,6 +124,9 @@ let populatePoints () =
         StormButton = 
             Util.ReadLine("Position mouse over storm rider button") |> ignore
             WinForm.getMousePosition()
+        AdvanceArrowButton = 
+            Util.ReadLine("Position mouse over the yellow advance button") |> ignore
+            WinForm.getMousePosition()
     }
 let p = Util.Cache(populatePoints, "points")
 let getRandomInsideBox=
@@ -137,6 +141,8 @@ let getRandomizedClickSweepPoint () =
     getRandomInsideBox()
 let funs = 
     let mutable lastCast = DateTime.Now
+    // advance no more than once every 2 min
+    let mutable lastAdvanceClick = DateTime.Now
     let mutable lastClicks = List.empty
     let dumpStatus =
         
@@ -165,10 +171,10 @@ let funs =
             Simulator.shiftClick () |> ignore
         doRandomSweepClick
         doRandomSweepClick
-        moveClick p.FormationButton
+//        moveClick p.FormationButton
         doRandomSweepClick
         doRandomSweepClick
-        moveClick p.FormationButton
+//        moveClick p.FormationButton
         doRandomSweepClick
         // in case auto advance was turned off at some point, click where the advance arrow would be
         moveClick p.MoveClickTopRight
@@ -181,6 +187,12 @@ let funs =
                 moveClick p.StormButton ()
                 sleep 400
                 lastCast <- DateTime.Now
+                moveClick p.FormationButton ()
+        fun () ->
+            if DateTime.Now - lastAdvanceClick > TimeSpan.FromMinutes 4. then
+                moveClick p.AdvanceArrowButton
+                lastAdvanceClick <- DateTime.Now
+    
     ]
 let delay = 800
 let watchPosition = false

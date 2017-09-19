@@ -51,6 +51,8 @@ if(!dfd.ShowDialog().GetValueOrDefault())
 	
 if (File.Exists(dfd.FileName))
 {
+    // the dialog is confirming you want to overwrite... so don't fail (is the safety prompt only happening on windows 10?)
+    
 	dfd.FileName.Dump("File already exists, failing");
 	return;
 }

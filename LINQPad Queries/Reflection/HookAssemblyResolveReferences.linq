@@ -21,7 +21,7 @@ let listenToResolveAttempts () =
         with ex -> ex.Dump()
         null
         )
-    AppDomain.CurrentDomain.TypeResolve.Add (fun e -> e.)
+    //AppDomain.CurrentDomain.TypeResolve.Add (fun e -> e.)
     AppDomain.CurrentDomain.add_AssemblyResolve onResolveEvent
     
 let RedirectAssembly shortName (targetVersion:Version) publicKeyToken =

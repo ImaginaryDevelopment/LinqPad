@@ -7,6 +7,8 @@
   <Namespace>Microsoft.CodeAnalysis.CSharp.Syntax</Namespace>
 </Query>
 
+// this appears to walk all files in a solution, and find methods that have a try inside the method
+
 void Main()
 {
     //with help from https://github.com/dotnet/roslyn/wiki/Getting-Started-C%23-Semantic-Analysis

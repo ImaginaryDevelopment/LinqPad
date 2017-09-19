@@ -6,3 +6,7 @@ Fsx/paket.exe
 Fsx/paket.lock
 LINQPad Queries/**/*.pri
 Fsx/.paket/
+
+*.pdb
+
+Framework 4\.6/MyExtensions\.FW46\.xml

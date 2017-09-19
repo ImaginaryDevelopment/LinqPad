@@ -11,6 +11,7 @@ let tokenPathParent = lazy(Path.Combine(localAppDataPath.Value, "slackApi"))
 let tokenPath = lazy(Path.Combine(tokenPathParent.Value, "token.txt"))
 tokenPath.Value
 |> Dump
+|> ignore
 let setupTokenFileForTP () = 
     let token = token.Value
     

@@ -7,5 +7,13 @@ let uninstallKey = Microsoft.Win32.Registry.LocalMachine.OpenSubKey("Software\\M
 
 uninstallKey.GetSubKeyNames()
 |> Seq.map (fun n -> n, uninstallKey.OpenSubKey n)
-|> Seq.map (fun (name, sk) -> name, sk.GetValueNames() |> Seq.map (fun vn -> vn,sk.GetValue vn))
-|> Seq.sortBy( fun (name, _) -> name |> containsI "scanner"|> not && name |> containsI "cssn" |> not)
+|> Seq.map (fun (name, sk) -> 
+    let vNames = sk.GetValueNames() |> List.ofSeq
+    let pairs = vNames |> Seq.map (fun vn -> vn,sk.GetValue vn)
+    match name.StartsWith"{", pairs |> Seq.tryFind(fun (k,v) -> k = "DisplayName") with
+    | true, Some (_,v) -> 
+        v |> string,name, pairs
+    | _, _ -> name, null, pairs
+)
+|> Seq.sortBy( fun (name, _, _) -> 
+    name |> containsI "scanner"|> not && name |> containsI "cssn" |> not, name.StartsWith("{"))

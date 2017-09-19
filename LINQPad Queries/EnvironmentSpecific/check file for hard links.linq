@@ -144,5 +144,4 @@ directoryToCheck
     )
 |> List.ofSeq
 |> Dump
-
-
+|> ignore

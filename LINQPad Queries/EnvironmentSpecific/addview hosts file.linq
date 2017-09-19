@@ -1,9 +1,10 @@
 <Query Kind="FSharpProgram">
-  <Reference Relative="..\..\..\..\FsInteractive\BReusable.dll">C:\projects\FsInteractive\BReusable.dll</Reference>
+  <Reference Relative="..\..\..\FsInteractive\BReusable.dll">C:\projects\FsInteractive\BReusable.dll</Reference>
   <Namespace>BReusable</Namespace>
   <Namespace>System.Security.Principal</Namespace>
 </Query>
 
+open BReusable.StringHelpers
 // manage host file
 // must be running as admin to edit
 // would be better served to operate with a mailbox processor
@@ -34,8 +35,7 @@ let others =
     |> Seq.filter(fst >> (=) "127.0.0.1" >> not)
     |> List.ofSeq
     
-(toSelf,others)
-|> dumpt "toself,others"
+
 
 
 let requireAdmin () = 
@@ -47,10 +47,25 @@ let requireAdmin () =
         failwithf "Can't alter hosts file without admin permissions"
 
 
-
 let mutable newLines = lines
 let promptCommand () = Util.ReadLine("Add ipTarget (blank to stop, s to save, . for localhost/block)")
 let mutable targetIp = promptCommand()
+let dumpF=
+    let dc = DumpContainer("host file not altered")
+    dc.Dump("hostfile text")
+    fun () ->
+        dc.Content <- box newLines
+// dumpt and dump container are failing to display until the top dc has contents
+(toSelf,others)
+|> dumpt "toSelf,others"
+|> ignore
+
+let dumpErr = 
+    let dc = DumpContainer()
+    dc.Dump("errorDisplay")
+    fun (o:obj) ->
+        dc.Content <- o
+// consider adding the ability to add comments or start a combined localhost block of names
 while not <| String.IsNullOrWhiteSpace targetIp do
     match targetIp with
     | "s" -> 
@@ -62,9 +77,12 @@ while not <| String.IsNullOrWhiteSpace targetIp do
             | "." -> "127.0.0.1"
             | _ -> targetIp
         let uri = Util.ReadLine("uri?")
-        let uri = Uri(uri)
+        try
+            let uri = Uri(uri)
         
-        newLines <- List.append lines [ sprintf "%s %s" targetIp uri.Host ] |> Seq.distinct |> List.ofSeq
-        newLines.Dump()
+            newLines <- List.append newLines [ sprintf "%s %s" targetIp uri.Host ] |> Seq.distinct |> List.ofSeq
+            dumpF()
+        with ex -> 
+            dumpErr ex
     
     targetIp <- promptCommand()
