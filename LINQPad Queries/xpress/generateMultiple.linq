@@ -184,6 +184,11 @@ let manager =
         printfn "ProjectItem= %A" (templateProjectItem.FileNames(0s))
     let dteWrapper = wrapDte dte
     MultipleOutputHelper.Managers.VsManager(None, dteWrapper, sb, templateProjectItem)
+let pluralizer = 
+    Macros.VsMacros.createPluralizer()
+    |> function
+        | Choice1Of2 p -> p
+        | _ -> failwith "Could not locate pluralizer"
     
 let cgsm = 
         {
@@ -195,6 +200,8 @@ let cgsm =
             Measures= measureList |> Set.ofSeq
             MeasuresBlacklist= measureBlacklist |> Set.ofSeq
             IncludeNonDboSchemaInNamespace= true
+            Pluralize=pluralizer.Pluralize
+            Singularize=pluralizer.Singularize
             TypeGenerationBlacklist = Set [
                                         "PaymentReversal"
             ]
@@ -329,7 +336,7 @@ let toGen : TableInput list =
                     {ColumnInput.create "Created" ColumnType.DateTimeColumn with Nullability = Nullability.AllowNull; Comments = ["was timestamp"]}
                     {ColumnInput.create "TransactionNumber" (ColumnType.StringColumn 30) with Nullability=Nullability.AllowNull; Comments = ["was checkNumber now will store check number or ACH number (when applicable)"]}
                     {ColumnInput.create "Rcd" ColumnType.DateTimeColumn with Nullability = Nullability.AllowNull; Comments=["Payment Recvd"]}
-                    ColumnInput.create "IsElectronic" ColumnType.Bit
+                    {ColumnInput.create "IsPaper" ColumnType.Bit with DefaultValue = "0"}
                     {ColumnInput.createFKeyedInt "CCItemID" (FKeyIdentifier {Table={ Schema="Accounts" ; Name="CCItem"}; Column=null})with Nullability = AllowNull} 
                     {ColumnInput.create "Comments" StringMax with Nullability = Nullability.AllowNull}
 
@@ -401,7 +408,7 @@ let toGen : TableInput list =
                                 Nullability = AllowNull
                                 
                 }
-                ColumnInput.create "Created" DateTimeColumn 
+                {ColumnInput.create "Created" (ColumnType.DateTimeColumn) with DefaultValue="getutcdate()"} 
                 ColumnInput.create "Amount" (DecimalColumn (Some {Precision=Precision.Create(8uy).Value; Scale= Scale.Create(2uy).Value}))
                 ColumnInput.create "PatientResponsiblityAmt" (DecimalColumn (Some {Precision=Precision.Create(8uy).Value; Scale= Scale.Create(2uy).Value}))
                 {ColumnInput.createFKeyedInt "ChargeID" (FKeyIdentifier {Table={ Schema="dbo"; Name="Charge"}; Column= null}) with Nullability=AllowNull}
@@ -488,8 +495,9 @@ let toGen2 =
 let results = 
     //runFullGeneration scriptFullPath generatePartials toGen addlCodeTables |> Map.ofDictionary
     //    type TableGenerationInfo = {Schema:string; Name:string; GenerateFull:bool}
+    let iDte = GenerateAllTheThings.DteGenWrapper(dte)
     GenerateAllTheThings.runGeneration  
-        (sprintf "%s.linq" Util.CurrentQuery.Name) sb dte manager cgsm toGen2 dataModelsToGen
+        (sprintf "%s.linq" Util.CurrentQuery.Name) sb iDte manager cgsm toGen2 dataModelsToGen
     let r = manager.Process doMultiFile
     r
 // not important, just nice to have, clean up of opened documents in VS
@@ -503,11 +511,10 @@ try
         dte.Documents.GetEnumerator()
         |> Seq.ofIEnumerator
         |> Seq.cast<EnvDTE.Document>
-        |> Seq.tryFind(fun d-> d.FullName = fullPath)
+        |> Seq.tryFind(fun d -> d.FullName = fullPath)
         |> Option.iter (fun d -> d.Close())
     )
     
-    //|> dumpt "results"
     
     // below works, but with the documents created all getting closed, we don't need it anymore
     let reactivateLastWindow() = 
