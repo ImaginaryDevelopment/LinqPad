@@ -156,7 +156,6 @@ module Sample =
         let res2 = inMemoryEventStore.SaveEvents (StreamId 1) (StreamVersion 2) ["Hello2";"World2"]
 
         [res0;res1;res2] |> List.iteri (fun i v -> printfn "%i: %A" i v)
-Sample.run()        
 
 module Accounting = 
     // later we can use UoM or tuple or whatever once we decide
@@ -188,6 +187,8 @@ module Accounting =
         [{Name="Carnage Heart"; Amount = 1; Price=12m}]
         [{Name="Gale Coil Two-Stone Ring";Amount=1;Price=6m}]
         [{Name="Empyrean Spiral Two-Stone Ring"; Amount=1; Price=3m}]
+        [{Name="Vortex Goad Hydrascale Boots"; Amount=1; Price=6m}]
+        [{Name="Dyadus"; Amount=1; Price=4m}]
     ]
     |> Seq.fold(fun (vOpt) items ->
         match vOpt with
@@ -201,17 +202,7 @@ module Accounting =
     |> ignore
     es.GetEvents sId
     |> dumpt "end"
-//    res0
-//    |> dumpt "res0"
-//    |> bindSave es sId [{Name="Gale Coil Two-Stone Ring";Amount=1;Price=6m}]
-//    |> dumpt "res1"
-//    |> interject (fun () -> es.GetEvents sId|> dumpt "end")
-//    |> bindSave es sId [{Name="Empyrean Spiral Two-Stone Ring"; Amount=1; Price=3m}]
-//    |> dumpt "res2"
-//    |> ignore
-//    es.GetEvents sId
-//    |> dumpt "end2"
-//    |> ignore
+    |> ignore
 
     
 ()
