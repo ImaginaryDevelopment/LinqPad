@@ -374,7 +374,7 @@ let toGen : TableInput list =
                                 FKeyId={Table={Schema="Accounts"; Name="PaymentItemType"}; Column="PaymentItemTypeId"}
                                 GenerateReferenceTable = true
                                 ValuesWithComment = 
-                                    ["EraPayment"; "EraAdjustment"; "PtRespDeductible"; "PtRespCoPay";"PtRespCoIns";"Other"] 
+                                    ["EraPayment"; "EraAdjustment";"Other"] 
                                     |> Seq.map (fun x -> x,null) 
                                     |> dict 
                             })
@@ -394,13 +394,13 @@ let toGen : TableInput list =
                     with Nullability = AllowNull
                 }            
                 { ColumnInput.createFKey //<string> 
-                    "PtRespTypeId" 
+                    "AdjTypeId" 
                     (ColumnType.StringColumn 50)
                     (FKeyWithReference {
-                        FKeyId={Table={ Schema="Accounts"; Name="PtRespType"}; Column= null}
+                        FKeyId={Table={ Schema="Accounts"; Name="AdjTypeId"}; Column= null}
                         GenerateReferenceTable = true
                         ValuesWithComment =
-                                    ["Deductible"; "CoIns"; "CoPay"]
+                                    ["PR"; "CO"; "OA"]
                                     |> Seq.map (fun x -> x,null)
                                     |> dict
                         })
@@ -410,7 +410,6 @@ let toGen : TableInput list =
                 }
                 {ColumnInput.create "Created" (ColumnType.DateTimeColumn) with DefaultValue="getutcdate()"} 
                 ColumnInput.create "Amount" (DecimalColumn (Some {Precision=Precision.Create(8uy).Value; Scale= Scale.Create(2uy).Value}))
-                ColumnInput.create "PatientResponsiblityAmt" (DecimalColumn (Some {Precision=Precision.Create(8uy).Value; Scale= Scale.Create(2uy).Value}))
                 {ColumnInput.createFKeyedInt "ChargeID" (FKeyIdentifier {Table={ Schema="dbo"; Name="Charge"}; Column= null}) with Nullability=AllowNull}
                 ColumnInput.makeNullable50 "RemarkCode"
                 ColumnInput.makeNullable50 "AdjustmentCode"
