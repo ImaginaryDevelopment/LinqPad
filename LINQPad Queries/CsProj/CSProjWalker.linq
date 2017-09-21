@@ -1,7 +1,7 @@
 <Query Kind="Statements" />
 
 bool debug=false;
-var baseDir=Util.ReadLine("Directory?",@"C:\projects\psh\hpx");
+var baseDir=Util.ReadLine("Directory?",System.Environment.GetEnvironmentVariable("devroot"));
 var projects= System.IO.Directory.GetFiles(baseDir,"*.*proj", SearchOption.AllDirectories);
 //sample projFile
 //XDocument.Load(projects.Take(1).Single ( )).DumpFormatted(projects.Take(1).Single ());
@@ -15,7 +15,7 @@ var baseQuery=(from i in csProjects
 var references= from i in baseQuery
 	from ig in i.ProjNode.Elements(i.RootNs+"ItemGroup")
 	
-	select new{Project=i.Path,Condition=ig.Attribute(XNamespace.None+"Condition"),Items= ig.Nodes().Cast<XElement>()};
+	select new{Project=i.Path,Condition=ig.Attribute(XNamespace.None+"Condition"),Items= ig.Nodes().OfType<XElement>()};
 	references.Where (r => r.Items.Any (i => i.Attribute(XNamespace.None+"Include").Value.Contains("Hibernate")))
 		.Select (r => new{r.Project,HibernateReferences=r.Items.Where (i => i.Attribute(XNamespace.None+"Include").Value.Contains("Hibernate")).ToArray()})
 		.Dump("hibernate references")
