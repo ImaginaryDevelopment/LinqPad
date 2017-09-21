@@ -17,16 +17,12 @@ void Main()
 		let csproj= new CsProj(doc.Root)
 		
 		select new{ Path=i, Doc=doc,csproj}).ToArray();
-		
-		
-		
-		
-		
+
 		
 	var projsWithConfig= from i in baseQuery
 		let config= i.csproj.GetItems().FirstOrDefault (c =>c.GetAttribValOrNull("Include")!=null && c.GetAttribValOrNull("Include").IsIgnoreCaseMatch("app.config")|| c.GetAttribValOrNull("Include").IsIgnoreCaseMatch("web.config"))
 		where config!=null
-		let configPath = i.Path.AsFilePath().GetDirectoryName().AsDirPath().PathCombine(config.GetAttribValOrNull("Include"))
+		let configPath = Path.Combine(Path.GetDirectoryName(i.Path), config.GetAttribValOrNull("Include"))
 		let configDoc = XDocument.Load(configPath)
 		let configFile= new ConfigurationFile(configDoc.Root)
 		where configFile.GetRuntime()!=null
