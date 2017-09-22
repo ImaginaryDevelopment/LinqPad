@@ -172,7 +172,38 @@ module ReadModels =
     
 // aggregate roots area
 module ClaimProcess =
-    type Entity<'T> = {Value:'T; StreamId:StreamId; Version:StreamVersion}
+    module Generalities =
+        let cInMemory<'T> fValidate = 
+            createInMemoryEventStore<'T, string> "This is a version error" fValidate
+        type Entity<'T> = {Value:'T; StreamId:StreamId; Version:StreamVersion}
+        type FoldProcess<'TState> = | Finished of 'TState |FoldOK of 'TState
+        let updateFromPartialT (partial:'TPartial) (model:'TModel) (updates: (('TPartial -> 'TProp option )*('TProp->'TModel -> 'TModel)) seq) =
+            let updateIf (fProp,fUpdate) model = 
+                match fProp partial with
+                | Some x -> fUpdate x model
+                | None -> model
+            updates
+            |> Seq.fold (flip updateIf) model
+        type FoldStatus<'T> = 
+        | Proceed of StreamVersion
+        | Failed of string*StreamVersion*('T)
+        
+        let applyCommands f (StreamId sId as s) v =
+            Seq.fold(fun fs events ->
+                match fs with
+                | Proceed (StreamVersion sv as v) ->
+                    let result = f s v [events]
+                    result
+                    |> function
+                        | Success (x: _ list) ->
+                            Proceed (sv + x.Length |> StreamVersion)
+                        | Failure msg ->
+                            Failed (msg, v, events)
+                | x -> x
+            ) (Proceed v)
+    ()
+    open Generalities
+    
     
     type [<Measure>] PatientId    
     
@@ -187,14 +218,8 @@ module ClaimProcess =
         | Create of Patient 
         // how do we serialize this update?
         | Update of PartialPatient
-//    
-//    type ApptStatus = |Scheduled | CheckedIn | CheckedOut
-//    type Appointment = { AppointmentId: Identity; StartDate: DateTime; Status:ApptStatus; Created:DateTime} with member x.StreamId = x.AppointmentId
-//    type AppointmentEvent = 
-//        | Create
     
-    let cInMemory<'T> fValidate = 
-        createInMemoryEventStore<'T, string> "This is a version error" fValidate
+
     
     let esPt = 
         let validation v = 
@@ -206,14 +231,12 @@ module ClaimProcess =
                 None
         cInMemory<PatientCommand> validation
     ReadModels.printer esPt
-    type FoldProcess<'TState> = | Finished of 'TState |Proceed of 'TState
-    let updateFromPartial (p:PartialPatient) (pt:Patient) = 
-        let updateIf fProp fUpdate pt = 
-            match fProp p with
-            | Some x -> fUpdate x pt
-            | None -> pt
-        pt
-        |> updateIf (fun pt -> pt.DoB) (fun dob pt -> {pt with DoB = dob})
+
+        
+    let updatePtFromPartial (p:PartialPatient) (pt:Patient) = 
+        updateFromPartialT p pt [
+            (fun p -> p.DoB),(fun dob pt -> {pt with Patient.DoB = dob})
+        ]
         
         
     let fGetCurrent = 
@@ -224,15 +247,15 @@ module ClaimProcess =
                 match fpPtOpt,e with
                 | Finished x, _ -> Finished x
                 // create when there's already one? faulted, finish fold
-                | Proceed (Some _ as ptOpt), PatientCommand.Create _ -> Finished ptOpt
-                | Proceed None, PatientCommand.Create pt -> Some pt |> Proceed
+                | FoldOK (Some _ as ptOpt), PatientCommand.Create _ -> Finished ptOpt
+                | FoldOK None, PatientCommand.Create pt -> Some pt |> FoldOK
                 // update when there's no patient created? finish
-                | Proceed None, PatientCommand.Update _ -> Finished None
-                | Proceed (Some pt), PatientCommand.Update f -> pt |> updateFromPartial f |> Some |> Proceed
+                | FoldOK None, PatientCommand.Update _ -> Finished None
+                | FoldOK (Some pt), PatientCommand.Update part -> pt |> updatePtFromPartial part |> Some |> FoldOK
                 
-            ) (Proceed(if current.ContainsKey s then current.[s] |> Some else None))
+            ) (FoldOK(if current.ContainsKey s then current.[s] |> Some else None))
             |> function
-                | Proceed ptOpt -> ptOpt
+                | FoldOK ptOpt -> ptOpt
                 | Finished ptOpt -> ptOpt
             |> function
                 | Some pt -> current.[s] <- pt
@@ -241,23 +264,13 @@ module ClaimProcess =
         )
         fun streamId -> if current.ContainsKey streamId then Some current.[streamId]  else None
     
-    type FoldStatus<'T> = 
-        | Proceed of StreamVersion
-        | Failed of string*StreamVersion*('T)
-    
-    let applyCommands f (StreamId sId as s) v =
-        Seq.fold(fun fs events ->
-            match fs with
-            | Proceed (StreamVersion sv as v) ->
-                let result = f s v [events]
-                result
-                |> function
-                    | Success (x: _ list) ->
-                        Proceed (sv + x.Length |> StreamVersion)
-                    | Failure msg ->
-                        Failed (msg, v, events)
-            | x -> x
-        ) (Proceed v)
+
+    //    
+//    type ApptStatus = |Scheduled | CheckedIn | CheckedOut
+//    type Appointment = { AppointmentId: Identity; StartDate: DateTime; Status:ApptStatus; Created:DateTime} with member x.StreamId = x.AppointmentId
+//    type AppointmentEvent = 
+//        | Create
+
 open ClaimProcess
 
 // setup some sample event for my domain and run them
@@ -273,7 +286,7 @@ let cmdStream = [
 ]
 
 cmdStream
-|> Seq.map (function | CommandType.Patient pc -> applyCommands esPt.SaveEvents (StreamId 1) (StreamVersion 0) [pc])
+|> Seq.map (function | CommandType.Patient pc -> Generalities.applyCommands esPt.SaveEvents (StreamId 1) (StreamVersion 0) [pc])
 |> sprintf "%A"
 |> Dump
 |> ignore
