@@ -233,12 +233,6 @@ module ClaimProcess =
         cInMemory<PatientCommand> validation
     ReadModels.printer esPt
 
-        
-//    let updatePtFromPartial (part:PartialPatient) (x:Patient) = 
-//        updateFromPartialT part x [
-//            (fun x -> part.DoB |> Option.map (fun dob -> {x with Patient.DoB = dob}))
-//            (fun x -> part.FirstName |> Option.map (fun first -> {x with Patient.FirstName = first}))
-//        ]
     let updatePtFromPartial (part:PartialPatient) (x:Patient) =
         updateFromPartialT part x [
             (fun x -> part.LastName |> Option.map (fun lastName -> {x with Patient.LastName = lastName}))
@@ -268,7 +262,6 @@ module ClaimProcess =
             |> function
                 | Some pt -> current.[s] <- pt
                 | None -> current.Remove(s) |> ignore
-            //if current.ContainsKey s then (s,current.[s]).Dump("current")
         )
         fun streamId -> if current.ContainsKey streamId then Some current.[streamId]  else None
     
@@ -285,7 +278,7 @@ open ClaimProcess
 [<RequireQualifiedAccess>]
 type CommandType = 
     |Patient of PatientCommand
-
+//TODO: nice to have: auto tracking of stream versions for this command set per type per streamId
 let cmdStream : (StreamVersion*CommandType) list=[
     StreamVersion 0,CommandType.Patient
         (PatientCommand.Create {LastName="Reid";FirstName="Riley";DoB=DateTime(1991,7,8); Guarantor=None})
