@@ -260,22 +260,8 @@ let ptStream = [
         (PatientCommand.Update (fun x -> {x with DoB = DateTime(1991,7,9)}))
 ]
 
-//let ptApply = applyCommands esPt.SaveEvents (StreamId 1) (StreamVersion 0)
 [ptStream]
 |> applyCommands esPt.SaveEvents (StreamId 1) (StreamVersion 0)
-//|> Seq.fold (fun fs events ->
-//    match fs with
-//    | Proceed((StreamId sId as s), (StreamVersion sv as v)) ->
-//        let result = esPt.SaveEvents s v [events]
-//        result
-//        |> function
-//            | Success events2 -> 
-//                events2.Dump("events2")
-//                Proceed(s, sv + events2.Length |> StreamVersion)
-//            | Failure msg ->
-//                Failed (msg,s,v,[events])
-//    | x -> x
-//    ) (Proceed(StreamId 1,StreamVersion 0))
 |> sprintf "%A"
 |> Dump
 |> ignore
