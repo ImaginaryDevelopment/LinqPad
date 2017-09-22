@@ -65,17 +65,40 @@ module Generation =
                     |> delimit ";"
                     |> sprintf "    static member Zero = {%s}" 
         ]
-    let generate abbrev useMeasure (t:Type) (commandDU:obj) : string list = 
+    
+    let toCamel s = // https://github.com/ayoung/Newtonsoft.Json/blob/master/Newtonsoft.Json/Utilities/StringUtils.cs
+        if String.IsNullOrEmpty s then
+            s
+        elif not <| Char.IsUpper s.[0] then
+            s
+        else
+            let camelCase = Char.ToLower(s.[0], Globalization.CultureInfo.InvariantCulture).ToString(Globalization.CultureInfo.InvariantCulture)
+            if (s.Length > 1) then
+                camelCase + (s.Substring 1)
+            else 
+                camelCase
+    let generatePartialUpdate abbrev typeName (propNames:string seq) = 
+        [
+            yield sprintf "let update%sFromPartial (part:Partial%s) (x:%s) =" abbrev typeName typeName
+            yield "    updateFromPartialT part x ["
+            yield! 
+                propNames
+                |> Seq.map (fun p -> sprintf "        (fun x -> part.%s |> Option.map (fun %s -> {x with %s.%s = %s}))" p (toCamel p) typeName p (toCamel p))
+            yield "    ]"
+            //(fun pt -> p.FirstName |> Option.map (fun first -> {pt with Patient.FirstName = first}))
+        ]
+    let generate abbrev useMeasure (t:Type) : string list = 
         let props = t.GetProperties ()
         [   
             if useMeasure then yield (sprintf "type [<Measure>] %sId" t.Name)
             yield! (generateRecord Regular useMeasure t.Name props)
             yield! (generateRecord Partial useMeasure t.Name props)
+            yield! (generatePartialUpdate abbrev t.Name (props |> Seq.map (fun p -> p.Name)))
             yield sprintf "let es%s =" abbrev
             yield "    //TODO: let validation (v:EventsToValidate) = "
             yield sprintf "    cInMemory<%s> validation" t.Name]
-    // TODO: partial update function
-    let generatePartialUpdate () = ()
+    
+        
 // end generation code section
 
 // begin sample usage
@@ -83,10 +106,10 @@ module Patients =
     type Patient = { LastName:string; FirstName:string; DoB:DateTime;Guarantor:Generation.SelfIdReference option} 
 
 let types = [
-    "Pt", true, typeof<Patients.Patient>, typeof<Patients.PatientCommand>
+    "Pt", true, typeof<Patients.Patient>
 ]
 types.[0]
-|> uncurry2 (Generation.generate)
+|> uncurry1 (Generation.generate)
 |> delimit "\r\n"
 //|> indent "    "
 |> Dump

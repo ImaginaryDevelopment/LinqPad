@@ -177,10 +177,10 @@ module ClaimProcess =
             createInMemoryEventStore<'T, string> "This is a version error" fValidate
         type Entity<'T> = {Value:'T; StreamId:StreamId; Version:StreamVersion}
         type FoldProcess<'TState> = | Finished of 'TState |FoldOK of 'TState
-        let updateFromPartialT (partial:'TPartial) (model:'TModel) (updates: (('TPartial -> 'TProp option )*('TProp->'TModel -> 'TModel)) seq) =
-            let updateIf (fProp,fUpdate) model = 
-                match fProp partial with
-                | Some x -> fUpdate x model
+        let updateFromPartialT (partial:'TPartial) (model:'TModel) (updates: _ seq) =
+            let updateIf (fUpdate:'TModel -> 'TModel option) model = 
+                match fUpdate model with
+                | Some updated -> updated
                 | None -> model
             updates
             |> Seq.fold (flip updateIf) model
@@ -192,6 +192,7 @@ module ClaimProcess =
             Seq.fold(fun fs events ->
                 match fs with
                 | Proceed (StreamVersion sv as v) ->
+                    //printfn "Trying to save id:%i with event expecting version %i %A" sId sv events
                     let result = f s v [events]
                     result
                     |> function
@@ -233,11 +234,18 @@ module ClaimProcess =
     ReadModels.printer esPt
 
         
-    let updatePtFromPartial (p:PartialPatient) (pt:Patient) = 
-        updateFromPartialT p pt [
-            (fun p -> p.DoB),(fun dob pt -> {pt with Patient.DoB = dob})
+//    let updatePtFromPartial (part:PartialPatient) (x:Patient) = 
+//        updateFromPartialT part x [
+//            (fun x -> part.DoB |> Option.map (fun dob -> {x with Patient.DoB = dob}))
+//            (fun x -> part.FirstName |> Option.map (fun first -> {x with Patient.FirstName = first}))
+//        ]
+    let updatePtFromPartial (part:PartialPatient) (x:Patient) =
+        updateFromPartialT part x [
+            (fun x -> part.LastName |> Option.map (fun lastName -> {x with Patient.LastName = lastName}))
+            (fun x -> part.FirstName |> Option.map (fun firstName -> {x with Patient.FirstName = firstName}))
+            (fun x -> part.DoB |> Option.map (fun doB -> {x with Patient.DoB = doB}))
+            (fun x -> part.Guarantor |> Option.map (fun guarantor -> {x with Patient.Guarantor = guarantor}))
         ]
-        
         
     let fGetCurrent = 
         let current:Dictionary<StreamId, Patient> = Dictionary()
@@ -278,15 +286,15 @@ open ClaimProcess
 type CommandType = 
     |Patient of PatientCommand
 
-let cmdStream = [
-    CommandType.Patient
+let cmdStream : (StreamVersion*CommandType) list=[
+    StreamVersion 0,CommandType.Patient
         (PatientCommand.Create {LastName="Reid";FirstName="Riley";DoB=DateTime(1991,7,8); Guarantor=None})
-    CommandType.Patient
+    StreamVersion 1,CommandType.Patient
         (PatientCommand.Update ( { PartialPatient.Zero with DoB = Some <| DateTime(1991,7,9)}))
 ]
 
 cmdStream
-|> Seq.map (function | CommandType.Patient pc -> Generalities.applyCommands esPt.SaveEvents (StreamId 1) (StreamVersion 0) [pc])
+|> Seq.map (fun (sv,cmd) -> cmd |> function | CommandType.Patient pc -> Generalities.applyCommands esPt.SaveEvents (StreamId 1) sv [pc])
 |> sprintf "%A"
 |> Dump
 |> ignore
