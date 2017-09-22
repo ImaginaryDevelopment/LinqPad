@@ -172,11 +172,13 @@ module ReadModels =
     
 // aggregate roots area
 module ClaimProcess =
-    type [<Measure>] PatientId
     type Entity<'T> = {Value:'T; StreamId:StreamId; Version:StreamVersion}
     
+    type [<Measure>] PatientId    
     
-    type Patient = { LastName:string; FirstName:string; DoB:DateTime;Guarantor:int<PatientId> option} 
+    type Patient = { LastName:String;FirstName:String;DoB:DateTime;Guarantor:int<PatientId> option }
+    type PartialPatient = { LastName:String option;FirstName:String option;DoB:DateTime option;Guarantor:int<PatientId> option option } with
+        static member Zero = {LastName=None;FirstName=None;DoB=None;Guarantor=None}
     type PatientE = Entity<Patient>
     let getPatientId (pe:PatientE) = pe.StreamId
         
@@ -184,7 +186,7 @@ module ClaimProcess =
     type PatientCommand = 
         | Create of Patient 
         // how do we serialize this update?
-        | Update of (Patient -> Patient)
+        | Update of PartialPatient
 //    
 //    type ApptStatus = |Scheduled | CheckedIn | CheckedOut
 //    type Appointment = { AppointmentId: Identity; StartDate: DateTime; Status:ApptStatus; Created:DateTime} with member x.StreamId = x.AppointmentId
@@ -205,6 +207,15 @@ module ClaimProcess =
         cInMemory<PatientCommand> validation
     ReadModels.printer esPt
     type FoldProcess<'TState> = | Finished of 'TState |Proceed of 'TState
+    let updateFromPartial (p:PartialPatient) (pt:Patient) = 
+        let updateIf fProp fUpdate pt = 
+            match fProp p with
+            | Some x -> fUpdate x pt
+            | None -> pt
+        pt
+        |> updateIf (fun pt -> pt.DoB) (fun dob pt -> {pt with DoB = dob})
+        
+        
     let fGetCurrent = 
         let current:Dictionary<StreamId, Patient> = Dictionary()
         esPt.AddSubscriber "Current" (fun (StreamId sId as s, events) -> 
@@ -217,7 +228,7 @@ module ClaimProcess =
                 | Proceed None, PatientCommand.Create pt -> Some pt |> Proceed
                 // update when there's no patient created? finish
                 | Proceed None, PatientCommand.Update _ -> Finished None
-                | Proceed (Some pt), PatientCommand.Update f -> pt |> f |> Some |> Proceed
+                | Proceed (Some pt), PatientCommand.Update f -> pt |> updateFromPartial f |> Some |> Proceed
                 
             ) (Proceed(if current.ContainsKey s then current.[s] |> Some else None))
             |> function
@@ -253,11 +264,12 @@ open ClaimProcess
 [<RequireQualifiedAccess>]
 type CommandType = 
     |Patient of PatientCommand
+
 let cmdStream = [
     CommandType.Patient
         (PatientCommand.Create {LastName="Reid";FirstName="Riley";DoB=DateTime(1991,7,8); Guarantor=None})
     CommandType.Patient
-        (PatientCommand.Update (fun x -> {x with DoB = DateTime(1991,7,9)}))
+        (PatientCommand.Update ( { PartialPatient.Zero with DoB = Some <| DateTime(1991,7,9)}))
 ]
 
 cmdStream
