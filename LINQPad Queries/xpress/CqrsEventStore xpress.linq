@@ -232,13 +232,13 @@ module ClaimProcess =
     
     type FoldStatus<'T> = 
         | Proceed of StreamVersion
-        | Failed of string*StreamVersion*('T list)
+        | Failed of string*StreamVersion*('T)
     
     let applyCommands f (StreamId sId as s) v =
         Seq.fold(fun fs events ->
             match fs with
             | Proceed (StreamVersion sv as v) ->
-                let result = f s v events
+                let result = f s v [events]
                 result
                 |> function
                     | Success (x: _ list) ->
@@ -253,15 +253,15 @@ open ClaimProcess
 [<RequireQualifiedAccess>]
 type CommandType = 
     |Patient of PatientCommand
-let ptStream = [
-    //CommandType.Patient
+let cmdStream = [
+    CommandType.Patient
         (PatientCommand.Create {LastName="Reid";FirstName="Riley";DoB=DateTime(1991,7,8); Guarantor=None})
-    //CommandType.Patient
+    CommandType.Patient
         (PatientCommand.Update (fun x -> {x with DoB = DateTime(1991,7,9)}))
 ]
 
-[ptStream]
-|> applyCommands esPt.SaveEvents (StreamId 1) (StreamVersion 0)
+cmdStream
+|> Seq.map (function | CommandType.Patient pc -> applyCommands esPt.SaveEvents (StreamId 1) (StreamVersion 0) [pc])
 |> sprintf "%A"
 |> Dump
 |> ignore
