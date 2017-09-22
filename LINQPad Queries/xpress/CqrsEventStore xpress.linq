@@ -172,16 +172,16 @@ module ReadModels =
     
 // aggregate roots area
 module ClaimProcess =
-    
+    type [<Measure>] PatientId
     type Entity<'T> = {Value:'T; StreamId:StreamId; Version:StreamVersion}
     
     
-    type Patient = { LastName:string; FirstName:string; DoB:DateTime} 
+    type Patient = { LastName:string; FirstName:string; DoB:DateTime;Guarantor:int<PatientId> option} 
     type PatientE = Entity<Patient>
     let getPatientId (pe:PatientE) = pe.StreamId
         
     [<RequireQualifiedAccess>]
-    type PatientEvent = 
+    type PatientCommand = 
         | Create of Patient 
         // how do we serialize this update?
         | Update of (Patient -> Patient)
@@ -196,13 +196,13 @@ module ClaimProcess =
     
     let esPt = 
         let validation v = 
-            match v.EventsToValidate |> Seq.exists(function | PatientEvent.Create _ -> true | _ -> false) with
+            match v.EventsToValidate |> Seq.exists(function | PatientCommand.Create _ -> true | _ -> false) with
             | true ->
-                v.GetPreviousEvents.Value |> Seq.choose(function | PatientEvent.Create _ -> Some (sprintf "Patient already created for id: %i" (v.StreamId.Value)) | _ -> None)
+                v.GetPreviousEvents.Value |> Seq.choose(function | PatientCommand.Create _ -> Some (sprintf "Patient already created for id: %i" (v.StreamId.Value)) | _ -> None)
                 |> Seq.tryHead
             | false ->
                 None
-        cInMemory<PatientEvent> validation
+        cInMemory<PatientCommand> validation
     ReadModels.printer esPt
     type FoldProcess<'TState> = | Finished of 'TState |Proceed of 'TState
     let fGetCurrent = 
@@ -213,11 +213,11 @@ module ClaimProcess =
                 match fpPtOpt,e with
                 | Finished x, _ -> Finished x
                 // create when there's already one? faulted, finish fold
-                | Proceed (Some _ as ptOpt), PatientEvent.Create _ -> Finished ptOpt
-                | Proceed None, PatientEvent.Create pt -> Some pt |> Proceed
+                | Proceed (Some _ as ptOpt), PatientCommand.Create _ -> Finished ptOpt
+                | Proceed None, PatientCommand.Create pt -> Some pt |> Proceed
                 // update when there's no patient created? finish
-                | Proceed None, PatientEvent.Update _ -> Finished None
-                | Proceed (Some pt), PatientEvent.Update f -> pt |> f |> Some |> Proceed
+                | Proceed None, PatientCommand.Update _ -> Finished None
+                | Proceed (Some pt), PatientCommand.Update f -> pt |> f |> Some |> Proceed
                 
             ) (Proceed(if current.ContainsKey s then current.[s] |> Some else None))
             |> function
@@ -233,14 +233,18 @@ module ClaimProcess =
 open ClaimProcess
 
 // setup some sample event for my domain and run them
-
+[<RequireQualifiedAccess>]
+type CommandType = 
+    |Patient of PatientCommand
 let ptStream = [
-    PatientEvent.Create {LastName="Reid";FirstName="Riley";DoB=DateTime(1991,7,8)}
-    PatientEvent.Update (fun x -> {x with DoB = DateTime(1991,7,9)})
+    //CommandType.Patient
+        (PatientCommand.Create {LastName="Reid";FirstName="Riley";DoB=DateTime(1991,7,8); Guarantor=None})
+    //CommandType.Patient
+        (PatientCommand.Update (fun x -> {x with DoB = DateTime(1991,7,9)}))
 ]
 type FoldStatus = 
     | Proceed of StreamId*StreamVersion
-    | Failed of string*StreamId*StreamVersion*(PatientEvent list)
+    | Failed of string*StreamId*StreamVersion*(PatientCommand list)
     
 ptStream
 |> Seq.fold (fun fs events ->
