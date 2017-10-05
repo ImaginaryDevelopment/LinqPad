@@ -1,5 +1,7 @@
 <Query Kind="FSharpProgram">
   <Reference>&lt;RuntimeDirectory&gt;\System.Net.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Net.Http.dll</Reference>
+  <NuGetReference>Newtonsoft.Json</NuGetReference>
   <Namespace>Newtonsoft.Json.Linq</Namespace>
 </Query>
 
@@ -113,16 +115,69 @@ let maybeCache f cacheKey useCache =
         result
     else
         f()
-let fetch useCache = 
-    let fetch() =
+type SequenceState = 
+    | Start
+    | Continue of nextChangeId:string
+    | Finished
+let fetch useCache (fKey:string option -> string) (fContinue:string -> 'T option * SequenceState) = 
+    let fetch changeIdOpt =
         use client = new System.Net.Http.HttpClient()
+        let target = match changeIdOpt with | None -> target | Some x -> sprintf "%s?id=%s" target x
         Async.RunSynchronously(async{
                 return client.GetStringAsync(target)
-            }).Result 
-    maybeCache fetch "public-stash-tabs" useCache
+            }).Result
+    
+    //maybeCache fetch "public-stash-tabs" useCache
+    SequenceState.Start
+    |> Seq.unfold(
+        function 
+        | Start -> 
+            printfn "getting first item"
+            let result = maybeCache (fun _ -> fetch None) (fKey None) useCache
+            printfn "finished fetch"
+            fContinue result
+            |> Some
+        | SequenceState.Continue changeId ->
+            printfn "getting %s" changeId
+            // if what you get back is empty, we reached the end
+            let result = maybeCache(fun _ -> Some changeId |> fetch ) (Some changeId |> fKey) useCache
+            printfn "finished fetch"
+            fContinue result
+            |> Some
+        | SequenceState.Finished ->
+            None
+    )
+    |> Seq.choose id
+type FetchStat = {Fetches:int; TextLength: int64} with
+    member x.LengthDisplay =         
+        let formatBytes (x:System.Int64) = 
+            let k = 1000L
+            let mb = k * 1000L
+            let gb = mb * 1000L
+            if x >= gb then
+                float x / float gb |> sprintf "%.2f GB"
+            elif x >= mb then
+                float x / float mb |> sprintf "%.2f MB"
+            elif x >= k then
+                float x / float k |> sprintf "%.2f KB"
+            else sprintf "%d" x
+        formatBytes x.TextLength
+let fStatsOut = 
+    let dc = DumpContainer()
+    let mutable fetchStat = {Fetches=0; TextLength=0L}
+    
+    dc.Dump("length")
+    dc.Content <- fetchStat
+    (fun l -> 
+        fetchStat <- {Fetches = fetchStat.Fetches + 1; TextLength = l + fetchStat.TextLength}
+        dc.Content <- fetchStat
+    )
+        
 let deserial text = 
     //text.Dump()
-    Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string,JToken>>(text)
+    let x = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string,JToken>>(text)
+    fStatsOut (text.Length |> int64)
+    x    
 type Item = {Name:string;NamePrefix:string; TypeLine:string; TypeLinePrefix:string; Verified:bool; Identified:bool; Corrupted:bool; Icon:obj; } with 
     member x.ToDump() =
         // if the thing has already been transformed, don't do it again
@@ -153,18 +208,35 @@ type Item = {Name:string;NamePrefix:string; TypeLine:string; TypeLinePrefix:stri
         
         
         
-type Stash = {AccountName:string;LastCharacterName:string;Id:string; Stash:string; StashType:string;Public:bool; Items:Item[];} //with
+type Stash = {AccountName:string;LastCharacterName:string;Id:string; Stash:string;League:string; StashType:string;Public:bool; Items:Item[];} //with
 //    member x.ToDump():obj =
 //        printfn "preparing to dump"
 //        {x with Items = x.Items |> Seq.cast<JObject> |> Seq.map(fun item -> item.Properties() |> Seq.map(fun p -> box(p.Name, p.Value)) |> Array.ofSeq) |> Seq.map box |> Array.ofSeq  }
 //        |> box
-fetch true
-|> deserial
-|> fun x -> x.["stashes"] :?> JArray
+let pairOfF f x = f x, x
 
+let rawPair f x = f x, Util.OnDemand("Raw", fun _ -> x)
+fetch true 
+    (function | None -> "public-stash-tabs" | Some changeId -> sprintf "public-stash-tabs,%s" changeId)
+    (function
+        | null
+        | WhiteSpace
+        | EmptyString -> None, Finished
+        | raw ->
+            let data = deserial raw
+            let nextChangeId = data.["next_change_id"]
+            Some data, Continue (nextChangeId |> string)
+    )
+|> Seq.collect(fun dic -> 
+    dic.["stashes"] :?> JArray
+)
 |> Seq.cast<JObject>
 |> Seq.map(fun x -> x |> string |> deserializeT<Stash>, Util.OnDemand("Raw", fun _ -> x |> string))
-|> Seq.filter(fun (x,_) -> x.Items.Length > 0)
-|> Seq.take 2
+|> Seq.takeWhile (fun (x,_) -> x.LastCharacterName <> "DontLetMeGetMe")
+//|> Seq.filter(fun (x,_) -> x.LastCharacterName = "DontLetMeGetMe")
+|> Seq.maxBy(fun (x,_) -> if isNull x.AccountName then 0 else x.AccountName.Length)
+|> fun (x,raw) -> x.AccountName.Length, x, raw
+//|> Seq.filter(fun (x,_) -> x.Items.Length > 0)
+//|> Seq.take 2
 |> Dump
 |> ignore
