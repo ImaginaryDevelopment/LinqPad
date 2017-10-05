@@ -168,28 +168,28 @@ let fetch useCache (fKey:string option -> string) (fContinue:string -> 'T option
             None
     )
     |> Seq.choose id
-type FetchStat = {Fetches:int; TextLength: int64} with
-    member x.LengthDisplay =         
-        let formatBytes (x:System.Int64) = 
-            let k = 1000L
-            let mb = k * 1000L
-            let gb = mb * 1000L
-            if x >= gb then
-                float x / float gb |> sprintf "%.2f GB"
-            elif x >= mb then
-                float x / float mb |> sprintf "%.2f MB"
-            elif x >= k then
-                float x / float k |> sprintf "%.2f KB"
-            else sprintf "%d" x
-        formatBytes x.TextLength
+let formatBytes (x:System.Int64) = 
+    let k = 1000L
+    let mb = k * 1000L
+    let gb = mb * 1000L
+    if x >= gb then
+        float x / float gb |> sprintf "%.2f GB"
+    elif x >= mb then
+        float x / float mb |> sprintf "%.2f MB"
+    elif x >= k then
+        float x / float k |> sprintf "%.2f KB"
+    else sprintf "%d" x
+type FetchStat = {Fetches:int; TextLength: int64;Memory:int64} with
+    member x.LengthDisplay = formatBytes x.TextLength
+    member x.MemoryDisplay = formatBytes x.Memory
 let fStatsOut = 
     let dc = DumpContainer()
-    let mutable fetchStat = {Fetches=0; TextLength=0L}
+    let mutable fetchStat = {Fetches=0; TextLength=0L;Memory=GC.GetTotalMemory true}
     
     dc.Dump("length")
     dc.Content <- fetchStat
     (fun l -> 
-        fetchStat <- {Fetches = fetchStat.Fetches + 1; TextLength = l + fetchStat.TextLength}
+        fetchStat <- {Fetches = fetchStat.Fetches + 1; TextLength = l + fetchStat.TextLength; Memory = GC.GetTotalMemory true}
         dc.Content <- fetchStat
     )
         
@@ -245,7 +245,8 @@ let fStashStats =
         stats <- {Stashes = stats.Stashes + int64 stashes.Length; MaxAccountNameLength=max stats.MaxAccountNameLength maxAN; Leagues = l}
         dc.Content <- stats
     )
-fetch true 
+// out of memory, perhaps not caching anything will relieve memory pressure?
+fetch false 
     (function | None -> "public-stash-tabs" | Some changeId -> sprintf "public-stash-tabs,%s" changeId)
     (function
         | null
@@ -257,7 +258,6 @@ fetch true
             Some data, Continue (nextChangeId |> string)
     )
 |> Seq.collect(fun dic -> 
-    printfn "Collecting!"
     let stashContainer = 
         dic.["stashes"] :?> JArray
         |> Seq.cast<JObject>
