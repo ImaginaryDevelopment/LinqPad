@@ -119,6 +119,26 @@ type SequenceState =
     | Start
     | Continue of nextChangeId:string
     | Finished
+let fFetch = 
+    let dcFetchStatus = DumpContainer()
+    let mutable textBuffer = List.empty
+    let mutable dumped = false
+    (fun (s:string) ->
+        if dumped |> not then
+            dumped <- true
+            dcFetchStatus.Dump("Fetch status")
+        match textBuffer with
+        | [] -> 
+            textBuffer <- [s]
+        | a::[] -> 
+            textBuffer <- s::[a]
+        | a::b::[] ->
+            textBuffer <- s::a::b::[]
+        | a::b::c::[] ->
+            textBuffer <- s::a::b::[]
+        | _ -> textBuffer <- List.empty
+        dcFetchStatus.Content <- textBuffer
+    )
 let fetch useCache (fKey:string option -> string) (fContinue:string -> 'T option * SequenceState) = 
     let fetch changeIdOpt =
         use client = new System.Net.Http.HttpClient()
@@ -132,16 +152,16 @@ let fetch useCache (fKey:string option -> string) (fContinue:string -> 'T option
     |> Seq.unfold(
         function 
         | Start -> 
-            printfn "getting first item"
+            fFetch "getting first item"
             let result = maybeCache (fun _ -> fetch None) (fKey None) useCache
-            printfn "finished fetch"
+            fFetch "finished fetch"
             fContinue result
             |> Some
         | SequenceState.Continue changeId ->
-            printfn "getting %s" changeId
+            fFetch (sprintf "getting %s" changeId)
             // if what you get back is empty, we reached the end
             let result = maybeCache(fun _ -> Some changeId |> fetch ) (Some changeId |> fKey) useCache
-            printfn "finished fetch"
+            fFetch "finished fetch"
             fContinue result
             |> Some
         | SequenceState.Finished ->
@@ -213,9 +233,18 @@ type Stash = {AccountName:string;LastCharacterName:string;Id:string; Stash:strin
 //        printfn "preparing to dump"
 //        {x with Items = x.Items |> Seq.cast<JObject> |> Seq.map(fun item -> item.Properties() |> Seq.map(fun p -> box(p.Name, p.Value)) |> Array.ofSeq) |> Seq.map box |> Array.ofSeq  }
 //        |> box
-let pairOfF f x = f x, x
-
-let rawPair f x = f x, Util.OnDemand("Raw", fun _ -> x)
+type StashStat = {Stashes:int64;MaxAccountNameLength:int;Leagues:string Set}
+let fStashStats = 
+    let dc = DumpContainer()
+    let mutable stats = {Stashes = 0L; MaxAccountNameLength=0; Leagues = Set.empty}
+    dc.Dump("StashStats")
+    dc.Content<- stats
+    (fun (stashes: Stash list) ->
+        let maxAN = stashes |> Seq.map(fun x -> if isNull x.AccountName then 0 else x.AccountName.Length) |> Seq.max
+        let l = stashes |> Seq.fold(fun leagues stash -> leagues |> Set.add stash.League) stats.Leagues
+        stats <- {Stashes = stats.Stashes + int64 stashes.Length; MaxAccountNameLength=max stats.MaxAccountNameLength maxAN; Leagues = l}
+        dc.Content <- stats
+    )
 fetch true 
     (function | None -> "public-stash-tabs" | Some changeId -> sprintf "public-stash-tabs,%s" changeId)
     (function
@@ -228,10 +257,16 @@ fetch true
             Some data, Continue (nextChangeId |> string)
     )
 |> Seq.collect(fun dic -> 
-    dic.["stashes"] :?> JArray
+    printfn "Collecting!"
+    let stashContainer = 
+        dic.["stashes"] :?> JArray
+        |> Seq.cast<JObject>
+        |> Seq.map(fun jo -> jo |> string |> deserializeT<Stash>,Util.OnDemand("Raw", fun _ -> jo |> string))
+        |> List.ofSeq
+    fStashStats (stashContainer |> List.map fst)
+    stashContainer
 )
-|> Seq.cast<JObject>
-|> Seq.map(fun x -> x |> string |> deserializeT<Stash>, Util.OnDemand("Raw", fun _ -> x |> string))
+
 |> Seq.takeWhile (fun (x,_) -> x.LastCharacterName <> "DontLetMeGetMe")
 //|> Seq.filter(fun (x,_) -> x.LastCharacterName = "DontLetMeGetMe")
 |> Seq.maxBy(fun (x,_) -> if isNull x.AccountName then 0 else x.AccountName.Length)
