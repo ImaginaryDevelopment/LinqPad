@@ -6,6 +6,7 @@
 </Query>
 
 // play with stash tab api
+// for help see https://np.reddit.com/r/pathofexiledev/
 
 let target = "http://www.pathofexile.com/api/public-stash-tabs"
 
@@ -198,7 +199,7 @@ let deserial text =
     let x = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string,JToken>>(text)
     fStatsOut (text.Length |> int64)
     x    
-type Item = {Name:string;NamePrefix:string; TypeLine:string; TypeLinePrefix:string; Verified:bool; Identified:bool; Corrupted:bool; Icon:obj; } with 
+type Item = {Name:string;NamePrefix:string; TypeLine:string; TypeLinePrefix:string; Verified:bool; Identified:bool; Corrupted:bool; League:string; Icon:obj; } with 
     member x.ToDump() =
         // if the thing has already been transformed, don't do it again
         match x.Icon with
@@ -219,8 +220,8 @@ type Item = {Name:string;NamePrefix:string; TypeLine:string; TypeLinePrefix:stri
             | WhiteSpace as s -> printfn "should this whitespace be here?'%s'" s
             | ValueString as s when s.Contains("<") -> ()
             | _ -> printfn "Bad typeline prefix result: %A -> %A" x r
-            //printfn "Name:%s,NP:%s,X:%A" x.Name nPrefix x
-            // this creates a new one, which means the new one will have dump called again
+            
+            // this creates a new one, which means the new one will have dump called again (makes this recursive)
             r
         | _ -> 
             //printfn "Recursed :("
@@ -228,46 +229,91 @@ type Item = {Name:string;NamePrefix:string; TypeLine:string; TypeLinePrefix:stri
         
         
         
-type Stash = {AccountName:string;LastCharacterName:string;Id:string; Stash:string;League:string; StashType:string;Public:bool; Items:Item[];} //with
+type Stash = {AccountName:string;LastCharacterName:string;Id:string; Stash:string;StashType:string;Public:bool; Items:Item[];} //with
 //    member x.ToDump():obj =
 //        printfn "preparing to dump"
 //        {x with Items = x.Items |> Seq.cast<JObject> |> Seq.map(fun item -> item.Properties() |> Seq.map(fun p -> box(p.Name, p.Value)) |> Array.ofSeq) |> Seq.map box |> Array.ofSeq  }
 //        |> box
-type StashStat = {Stashes:int64;MaxAccountNameLength:int;Leagues:string Set}
+type StashStat = {Included:int;MaxAccountNameLength:int;Leagues:string Set;LargestStash:(Stash*obj) option;Excluded:int} with 
+    member x.AllStashes = x.Included + x.Excluded
+module List = 
+    let maxOpt =
+        function
+        | [] -> None
+        | x -> x |> Seq.max |> Some
+    let maxByOpt f = 
+        function
+        | [] -> None
+        | x -> x |> Seq.maxBy f |> Some
+        
 let fStashStats = 
     let dc = DumpContainer()
-    let mutable stats = {Stashes = 0L; MaxAccountNameLength=0; Leagues = Set.empty}
+    let mutable stats = {Included = 0; MaxAccountNameLength=0; Leagues = Set.empty;LargestStash=None; Excluded=0}
     dc.Dump("StashStats")
     dc.Content<- stats
-    (fun (stashes: Stash list) ->
-        let maxAN = stashes |> Seq.map(fun x -> if isNull x.AccountName then 0 else x.AccountName.Length) |> Seq.max
-        let l = stashes |> Seq.fold(fun leagues stash -> leagues |> Set.add stash.League) stats.Leagues
-        stats <- {Stashes = stats.Stashes + int64 stashes.Length; MaxAccountNameLength=max stats.MaxAccountNameLength maxAN; Leagues = l}
+    (fun (stashes: (Stash*obj) list) (filtered: (Stash*obj) list) ->
+        let maxAN = defaultArg (stashes |> Seq.map(fst >> fun x -> if isNull x.AccountName then 0 else x.AccountName.Length) |> List.ofSeq |> List.maxOpt) 0
+        let l = stashes |> Seq.map fst |> Seq.collect(fun x -> x.Items) |> Seq.map(fun item -> item.League) |> Seq.fold(fun leagues league -> leagues |> Set.add league ) stats.Leagues
+        let biggestStash = 
+            let stashMaxOpt = filtered |> List.maxByOpt (fst >> fun st -> st.Items.Length)
+            match stashMaxOpt,stats.LargestStash with
+            | Some x, None -> Some x
+            | None, Some x -> Some x
+            | None, None -> None
+            | Some (xStash,xRaw), Some(stash,raw) ->
+                
+                if xStash.Items.Length > stash.Items.Length then
+                    xStash, xRaw
+                else stash,raw
+                |> Some
+        
+        stats <- {Included = stats.Included + filtered.Length; MaxAccountNameLength=max stats.MaxAccountNameLength maxAN; Leagues = l;LargestStash = biggestStash; Excluded= stats.Excluded + stashes.Length - filtered.Length}
         dc.Content <- stats
+        match biggestStash with
+        | None -> 
+            printfn "No largest found in %i,%i" stats.Included stats.Excluded
+            if filtered.Length > 0 then
+                printfn "Sample item: %A" filtered.[0]
+        | _ -> ()
     )
-// out of memory, perhaps not caching anything will relieve memory pressure?
-fetch false 
-    (function | None -> "public-stash-tabs" | Some changeId -> sprintf "public-stash-tabs,%s" changeId)
-    (function
-        | null
-        | WhiteSpace
-        | EmptyString -> None, Finished
-        | raw ->
-            let data = deserial raw
-            let nextChangeId = data.["next_change_id"]
-            Some data, Continue (nextChangeId |> string)
-    )
-|> Seq.collect(fun dic -> 
-    let stashContainer = 
-        dic.["stashes"] :?> JArray
-        |> Seq.cast<JObject>
-        |> Seq.map(fun jo -> jo |> string |> deserializeT<Stash>,Util.OnDemand("Raw", fun _ -> jo |> string))
-        |> List.ofSeq
-    fStashStats (stashContainer |> List.map fst)
-    stashContainer
-)
 
-|> Seq.takeWhile (fun (x,_) -> x.LastCharacterName <> "DontLetMeGetMe")
+let wrapRaw x = Util.OnDemand("Raw", fun _ -> x)
+let fetchStashes useCache = 
+
+    fetch useCache
+        (function | None -> "public-stash-tabs" | Some changeId -> sprintf "public-stash-tabs,%s" changeId)
+        (function
+            | null
+            | WhiteSpace
+            | EmptyString -> None, Finished
+            | raw ->
+                let data = deserial raw
+                let nextChangeId = data.["next_change_id"]
+                Some data, Continue (nextChangeId |> string)
+        )
+    |> Seq.collect(fun dic -> 
+        let filter(stash:Stash) = 
+            [
+                // null account names are banned, unless we are diffing, don't include them
+                fun stash -> isNull stash.AccountName |> not
+                // lets skip non harbinger leagues for now
+                fun stash -> stash.Items |> Seq.exists(fun item -> item.League = "Harbinger")
+            ] |> Seq.fold(fun x f -> 
+                x && f stash) true
+        let stashContainer = 
+            dic.["stashes"] :?> JArray
+            |> Seq.cast<JObject>
+            |> Seq.map(fun jo -> jo |> string |> deserializeT<Stash>, jo |> string |> wrapRaw |> box)
+            |> List.ofSeq
+        let filtered = 
+            stashContainer
+            |> List.filter(fst >> filter)
+        fStashStats stashContainer filtered
+        filtered
+    )
+
+fetchStashes false
+|> Seq.takeWhile (fun (x,_) -> x.LastCharacterName <> "DontLetMeGetMe" || x.AccountName = "DevelopersDevelopersDevelopers")
 //|> Seq.filter(fun (x,_) -> x.LastCharacterName = "DontLetMeGetMe")
 |> Seq.maxBy(fun (x,_) -> if isNull x.AccountName then 0 else x.AccountName.Length)
 |> fun (x,raw) -> x.AccountName.Length, x, raw
