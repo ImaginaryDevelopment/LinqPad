@@ -3,11 +3,10 @@
 </Query>
 
 // purpose: pull apart info from poe.trade into a more usable form (perhaps to render items with tooltips?)
-type Option<'T> with
-    member x.toDump() = 
-        match x with
-        | None -> Unchecked.defaultof<_>
-        | Some x -> x
+// purpose2: make something you can paste straight into PoE builder!
+
+module Option = 
+    let getOrDefault x= function | Some x -> x | None -> x
 module Helpers = 
     let getText useCache = 
         let f:unit -> string = System.Windows.Forms.Clipboard.GetText
