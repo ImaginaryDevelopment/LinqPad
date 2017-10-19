@@ -17,7 +17,9 @@ let dumpt t x = x.Dump(description=t); x
 let dumpCount t (x: _ list) = x.Length.Dump(description=t); x
 // functional wpf
 // http://fsharpcode.blogspot.it/2011/07/functional-wpf-part-five-simple-example.html
+let debug = true
 
+type Cont<'T> = 'T list
 #if INTERACTIVE
 #r @"WindowsBase.dll"
 #r @"PresentationCore.dll"
@@ -108,8 +110,6 @@ and parseFrameworkElement x =
 //        let attrs = sprintf "%s" attrs
         sprintf @"<PasswordBox x:Name=""Mine"" %s />" 
             (parseAttributes attrs)
-            
-            
 
     | StackPanel (xs, attrs, orient) ->
              let (+) x y = sprintf "%s\n%s" x y
@@ -159,43 +159,141 @@ module WpfHelpers =
     open System.Windows.Media
     open System.Windows.Markup
     let getXaml(o:obj) = 
-        XamlWriter.Save(o)
-    let tryDumpXaml (o:obj) =
-        (getXaml o).Dump("xaml?")
-    type Child =
-        | Logical of obj*(Child list)
-        | Visual of obj*(Child list)
-        | Both of obj*(Child list)
+        try
+            XamlWriter.Save(o)
+            |> Some
+        with ex ->
+            ex.Dump("Failed getXaml")
+            None
+
+    let tryDumpXaml (o:obj) = (getXaml o).Dump("xaml?")
         
-    // duplicate problem
-    let rec walkChildren (x:obj) : obj seq = // turn element into sequence of children
-        let walkVisualChildren fChildren (dObj:DependencyObject) =
+    type Tree<'T> = 
+        | Leaf of 'T*('T Tree list)
+    module Tree =
+        let rec map f (Leaf(leaf,children))=
+                Leaf(f leaf, children |> List.map (map f))
+        let rec length (Leaf(leaf,children)) = 
+            1 + (children |> Seq.map length |> Seq.sum)
+        let rec flatten (Leaf(leaf,children) as l) =
+        
+            let result = 
+                seq{
+                    yield leaf
+                    yield! children |> Seq.collect flatten
+                }
+                |> List.ofSeq
+            
+            if children.Length <> result.Length - 1 then
+                printfn "Flatten was bad"
+            if result.Length <> length l then
+                printfn "Flatten WAS bad"
+            result
+            |> Seq.ofList
+        
+                
+    type Child =
+        | Logical of obj
+        | Visual of DependencyObject
+        | Both of DependencyObject
+        with 
+            static member GetValue =
+                function
+                | Logical o -> o
+                | Visual v 
+                | Both v -> box v
+    type ChildTree = Tree<Child>
+    
+    let unionall<'T> (left:'T list) (right:obj list) fJoin =
+        let minCount = if left.Length > 0 || right.Length > 0 then min left.Length right.Length |> max 1 else 0
+        let result = 
             seq{
-                match System.Windows.Media.VisualTreeHelper.GetChildrenCount(dObj) with
-                    | 0 -> ()
-                    | x ->
-                        let items = [0..x - 1] |> Seq.map(fun i -> VisualTreeHelper.GetChild(dObj, i))
-                        yield! items |> Seq.cast<obj>
-                        yield! items |> Seq.cast<obj> |> Seq.collect fChildren
+                yield! 
+                    left
+                    |> Seq.map(fun l ->
+                        Some l, right |> Seq.tryFind (fJoin l)
+                    )
+                let rights = 
+                    right
+                    |> Seq.filter(fun r ->
+                        left |> Seq.exists(fun l -> fJoin l r) |> not
+                    )
+                    |> Seq.map(fun r -> None, Some r)
+                    |> List.ofSeq
+                if right.Length > left.Length && right.Length < 1 then
+                    printfn "bad right"
+                
+                yield! rights
+                    
             }
+            |> List.ofSeq
+        printfn "Left:%i,Right:%i,Result:%i" left.Length right.Length result.Length
+        if result.Length < minCount then
+            printfn "bad unionall"
+        result
+        
+    let getVisualChildren (dObj:DependencyObject) : DependencyObject seq =
+        let getVChild i = VisualTreeHelper.GetChild(dObj,i)
+        seq{
+            match System.Windows.Media.VisualTreeHelper.GetChildrenCount dObj with
+            | 0 -> ()
+            | x ->
+                let items = [0..x - 1] |> Seq.map getVChild
+                yield! items
+        }
+    let getItemsControlElements (ic:ItemsControl) =
+        [0.. ic.Items.Count - 1]
+        |> Seq.map ic.ItemContainerGenerator.ContainerFromIndex
+    let mapChildTree = List.map(Tree.map(function | Visual v -> "Visual", v.GetType().Name | Logical l -> "Logical", l.GetType().Name | Both v -> "Both", v.GetType().Name))
+    // duplicate problem
+    let rec walkChildren (x:obj) : ChildTree seq = // turn element into sequence of children
+        printfn "walking children"
         seq{
             match x with
             | null -> ()
             | :? ItemsControl as ic -> // items control won't have items stuff until rendered =(
                 let items = 
-                    [0.. ic.Items.Count - 1]
-                    |> Seq.map ic.ItemContainerGenerator.ContainerFromIndex
+                    getItemsControlElements ic
+                    |> Seq.map(fun item -> ChildTree.Leaf (Visual item, walkChildren item |> List.ofSeq))
                     |> List.ofSeq
-                yield! items |> dumpCount "items control items" |> Seq.cast<obj>
+                yield! items |> dumpCount "items control items"
             | :? DependencyObject as dObj -> 
+                let vChildren = getVisualChildren dObj |> List.ofSeq
                 let items = LogicalTreeHelper.GetChildren(dObj) |> Seq.cast<obj> |> List.ofSeq
-                yield! items 
-                let vChildren = walkVisualChildren walkChildren dObj |> Seq.cast<obj> |> List.ofSeq
-                yield! vChildren
+                let minCount = 
+                    if vChildren.Length > 0 && items.Length > 0 then min vChildren.Length items.Length else 0
+                printfn "dObj children: %i, %i" vChildren.Length items.Length
+//                vChildren |> Seq.map(fun v -> v.GetType().Name,getXaml v) |> dumpt "some children" |> ignore
+//                items |> Seq.map(fun v -> v.GetType().Name,getXaml v) |> dumpt "item children" |> ignore
+                // will this finally fix duplicates?
+                let mated = unionall vChildren items (fun x y -> Object.ReferenceEquals(x,y)) |> List.ofSeq
+                if mated.Length < minCount then
+                    printfn "bad unionall afterall"
+                let unionMapped = 
+                    mated
+                    // can't get 2 None, but what are we gonna do?
+                    |> Seq.choose(
+                        function
+                        | Some dObj,None ->
+                            
+                            ChildTree.Leaf(Visual dObj, walkChildren dObj |> List.ofSeq)
+                            |> Some
+                        | Some dObj, Some _ ->
+                            ChildTree.Leaf(Both dObj, walkChildren dObj |> List.ofSeq)
+                            |> Some
+                        | None, Some l ->
+                            ChildTree.Leaf(Logical l, walkChildren l |> List.ofSeq)
+                            |> Some
+                        | None, None ->
+                            printfn "None? this shouldn't have happened"
+                            None
+                    )
+                    |> List.ofSeq
+                if unionMapped.Length < minCount then
+                    printfn "bad unionmap"
                 
-                let children = items |> Seq.collect walkChildren |> List.ofSeq
-                // remove duplicates
-                yield! children |> Seq.filter(fun item -> vChildren |> Seq.exists(fun x -> Object.ReferenceEquals(item,x)) |> not)
+                yield! unionMapped
+                    
                 
             | :? String as s -> ()
             | x -> x.GetType().Name.Dump("no match, non dep object")
@@ -245,16 +343,22 @@ let run app data =
             if isNull pb then
                 let pbOpt = 
                     let children = walkChildren x.MainWindow |> List.ofSeq
-                    children |> dumpCount "main window children" |> ignore
+                    children |> Seq.map Tree.length |> Seq.sum |> dumpt "main window children" |> ignore
+                    //children |> List.map(Tree.map mapChildTree)  |> dumpt "Tree" |> ignore
                     (children |> Seq.map(fun x -> (x.GetType().Name), getXaml x)).Dump("children types")
-                    children |> Seq.choose(function | :? PasswordBox as pb -> Some pb | _ -> None) |> Seq.tryHead
+                    let allMyChildren = children |> Seq.collect Tree.flatten |> Seq.map Child.GetValue |> List.ofSeq
+                    allMyChildren.Length.Dump("allMyChildren")
+                    allMyChildren |> Seq.map getXaml |> dumpt "all my treedom" |> ignore
+                    allMyChildren|> Seq.choose(function | :? PasswordBox as pb -> Some pb | _ -> None) |> Seq.tryHead
                 match pbOpt with
                 | Some pb ->
                     printfn "found it alternative method"
                     bindIt pb
                     true
                
-                | None -> false
+                | None -> 
+                    printfn "Did not find it =("
+                    false
             else
                 printfn "Found it directly"
                 bindIt pb
