@@ -17,9 +17,9 @@ let dumpt t x = x.Dump(description=t); x
 let dumpCount t (x: _ list) = x.Length.Dump(description=t); x
 // functional wpf
 // http://fsharpcode.blogspot.it/2011/07/functional-wpf-part-five-simple-example.html
-let debug = true
 
-type Cont<'T> = 'T list
+let pboxName = "INeedCandy"
+
 #if INTERACTIVE
 #r @"WindowsBase.dll"
 #r @"PresentationCore.dll"
@@ -108,7 +108,8 @@ and parseFrameworkElement x =
 //        let attrs = parseAttributes attrs
         //let bindAssist = sprintf @"ff:PasswordBoxAssistant.BindPassword=""true"" ff:PasswordBoxAssistant.BoundPassword=""{Binding Path=%s}""" name
 //        let attrs = sprintf "%s" attrs
-        sprintf @"<PasswordBox x:Name=""Mine"" %s />" 
+        sprintf @"<PasswordBox x:Name=""%s"" %s />" 
+            pboxName
             (parseAttributes attrs)
 
     | StackPanel (xs, attrs, orient) ->
@@ -163,7 +164,8 @@ module WpfHelpers =
             XamlWriter.Save(o)
             |> Some
         with ex ->
-            ex.Dump("Failed getXaml")
+            if ex.Message.StartsWith("Cannot serialize a nested public type") |> not then
+                ex.Dump("Failed getXaml")
             None
 
     let tryDumpXaml (o:obj) = (getXaml o).Dump("xaml?")
@@ -184,8 +186,8 @@ module WpfHelpers =
                 }
                 |> List.ofSeq
             
-            if children.Length <> result.Length - 1 then
-                printfn "Flatten was bad"
+            if children.Length > result.Length + 1 then
+                printfn "Flatten was bad (expected length to be >%i, but was %i)" (children.Length) result.Length
             if result.Length <> length l then
                 printfn "Flatten WAS bad"
             result
@@ -227,10 +229,18 @@ module WpfHelpers =
                     
             }
             |> List.ofSeq
-        printfn "Left:%i,Right:%i,Result:%i" left.Length right.Length result.Length
+        //if debug then printfn "Left:%i,Right:%i,Result:%i" left.Length right.Length result.Length
         if result.Length < minCount then
             printfn "bad unionall"
         result
+    let getName (x:obj) : string option= 
+        match x with
+        | :? DependencyObject as dObj ->
+            
+            dObj.GetValue FrameworkElement.NameProperty
+            |> Option.ofObj
+            |> Option.map (fun x -> x:?> string)
+        | _ -> None
         
     let getVisualChildren (dObj:DependencyObject) : DependencyObject seq =
         let getVChild i = VisualTreeHelper.GetChild(dObj,i)
@@ -241,13 +251,14 @@ module WpfHelpers =
                 let items = [0..x - 1] |> Seq.map getVChild
                 yield! items
         }
+        
     let getItemsControlElements (ic:ItemsControl) =
         [0.. ic.Items.Count - 1]
         |> Seq.map ic.ItemContainerGenerator.ContainerFromIndex
+        
     let mapChildTree = List.map(Tree.map(function | Visual v -> "Visual", v.GetType().Name | Logical l -> "Logical", l.GetType().Name | Both v -> "Both", v.GetType().Name))
-    // duplicate problem
+
     let rec walkChildren (x:obj) : ChildTree seq = // turn element into sequence of children
-        printfn "walking children"
         seq{
             match x with
             | null -> ()
@@ -262,10 +273,6 @@ module WpfHelpers =
                 let items = LogicalTreeHelper.GetChildren(dObj) |> Seq.cast<obj> |> List.ofSeq
                 let minCount = 
                     if vChildren.Length > 0 && items.Length > 0 then min vChildren.Length items.Length else 0
-                printfn "dObj children: %i, %i" vChildren.Length items.Length
-//                vChildren |> Seq.map(fun v -> v.GetType().Name,getXaml v) |> dumpt "some children" |> ignore
-//                items |> Seq.map(fun v -> v.GetType().Name,getXaml v) |> dumpt "item children" |> ignore
-                // will this finally fix duplicates?
                 let mated = unionall vChildren items (fun x y -> Object.ReferenceEquals(x,y)) |> List.ofSeq
                 if mated.Length < minCount then
                     printfn "bad unionall afterall"
@@ -300,9 +307,45 @@ module WpfHelpers =
                 
                     
         }
+    let findByNameOrChildren (name:string) (parent:FrameworkElement) : obj option = 
+        match parent.FindName name with
+        | null -> 
+            let childs = walkChildren parent |> Seq.collect Tree.flatten |> Seq.map Child.GetValue
+            let f : obj -> bool = getName >>(
+                                    function 
+                                    | Some (n:string) -> n = name 
+                                    | _ -> false
+            )
+            childs |> Seq.tryFind f
+        | x -> Some x
+        
+        
 open WpfHelpers
 type System.Object with
     static member cast<'T> (o:obj) = match o with | :? 'T as t -> Some t | _ -> None
+
+let handlePbBinding parent = 
+            let bindIt (pb:PasswordBox) = 
+                let binding = System.Windows.Data.Binding()
+                binding.Path <- PropertyPath("Password")
+                binding.Mode <- Data.BindingMode.OneWayToSource
+                let bp = FunctionalFun.UI.PasswordBoxAssistant.BoundPasswordProperty
+    
+                pb.SetBinding(bp, binding) |> ignore
+                FunctionalFun.UI.PasswordBoxAssistant.SetBindPassword pb (box true)
+                
+            findByNameOrChildren pboxName parent
+            |> function
+            | Some (:? PasswordBox as pb) ->
+                bindIt pb
+                true
+            | Some x ->
+                getXaml x 
+                |> failwithf "Found something else %A"
+            | None -> 
+                printfn "Did not find it =("
+                false
+
 let run app data = 
     // force load type into app domain
     FunctionalFun.UI.PasswordBoxAssistant.BindPasswordProperty |> ignore
@@ -316,7 +359,6 @@ let run app data =
     |> fun x -> printfn "Parsed just fine!"; x
     |> fun x -> (x :?> System.Windows.Application)
     |> fun x -> 
-        
         x.Dispatcher.UnhandledException.Add(fun t ->
             t.Dump("t")
             ()
@@ -325,46 +367,12 @@ let run app data =
             printfn "Startup may have completed"   
             ()
         )
-        if true then
-            x.MainWindow.DataContext <- data
-            printfn "Set datacontext just fine"
-        printfn "Finding password box!"
-        let handlePbBinding () = 
-            let bindIt (pb:PasswordBox) = 
-                let binding = System.Windows.Data.Binding()
-                binding.Path <- PropertyPath("Password")
-                let bp = FunctionalFun.UI.PasswordBoxAssistant.BoundPasswordProperty
-    
-                pb.SetBinding(bp, binding) |> ignore
-                FunctionalFun.UI.PasswordBoxAssistant.SetBindPassword pb (box true)
-                printfn "done with binding"
-                
-            let pb = x.MainWindow.FindName("Mine") |> fun x -> x.Dump("found it?"); x |> fun x -> x :?> PasswordBox 
-            if isNull pb then
-                let pbOpt = 
-                    let children = walkChildren x.MainWindow |> List.ofSeq
-                    children |> Seq.map Tree.length |> Seq.sum |> dumpt "main window children" |> ignore
-                    //children |> List.map(Tree.map mapChildTree)  |> dumpt "Tree" |> ignore
-                    (children |> Seq.map(fun x -> (x.GetType().Name), getXaml x)).Dump("children types")
-                    let allMyChildren = children |> Seq.collect Tree.flatten |> Seq.map Child.GetValue |> List.ofSeq
-                    allMyChildren.Length.Dump("allMyChildren")
-                    allMyChildren |> Seq.map getXaml |> dumpt "all my treedom" |> ignore
-                    allMyChildren|> Seq.choose(function | :? PasswordBox as pb -> Some pb | _ -> None) |> Seq.tryHead
-                match pbOpt with
-                | Some pb ->
-                    printfn "found it alternative method"
-                    bindIt pb
-                    true
-               
-                | None -> 
-                    printfn "Did not find it =("
-                    false
-            else
-                printfn "Found it directly"
-                bindIt pb
-                true
+        
+        x.MainWindow.DataContext <- data
+            
+        
         try
-                handlePbBinding() |> ignore
+                handlePbBinding x.MainWindow |> ignore
             with ex ->
                 ex.Dump("pbBinding exception")
         try
@@ -373,20 +381,17 @@ let run app data =
             printfn "Showing just fine"
             
         with _ ->
-            
-            //System.AppDomain.CurrentDomain.GetAssemblies().Dump()
             reraise()
         
         x.Run()
+        
    |> ignore
 type LoginCredential() = 
     member val Username:string = null with get,set //{ mutable Username:string; mutable Password:string}
     member val Password:string = null with get,set
-    member val BindPassword:bool = false with get,set
-    member val BoundPassword:string = String.Empty with get,set
 
-
-let dataContext = [LoginCredential()]
+let credential = LoginCredential()
+let dataContext = credential
 
 
 // Header
@@ -417,3 +422,4 @@ let sampleApplication = application mainWindow
 // Run the app with the given dataContext                                                               
 [<STAThread()>]
 do run sampleApplication dataContext
+credential.Dump()
