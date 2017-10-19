@@ -162,10 +162,14 @@ module WpfHelpers =
         XamlWriter.Save(o)
     let tryDumpXaml (o:obj) =
         (getXaml o).Dump("xaml?")
+    type Child =
+        | Logical of obj*(Child list)
+        | Visual of obj*(Child list)
+        | Both of obj*(Child list)
         
     // duplicate problem
     let rec walkChildren (x:obj) : obj seq = // turn element into sequence of children
-        let walkVisualChildren fChildren (dObj:DependencyObject)  =
+        let walkVisualChildren fChildren (dObj:DependencyObject) =
             seq{
                 match System.Windows.Media.VisualTreeHelper.GetChildrenCount(dObj) with
                     | 0 -> ()
@@ -186,9 +190,13 @@ module WpfHelpers =
             | :? DependencyObject as dObj -> 
                 let items = LogicalTreeHelper.GetChildren(dObj) |> Seq.cast<obj> |> List.ofSeq
                 yield! items 
-                yield! items |> Seq.collect walkChildren
-                let vChildren = walkVisualChildren walkChildren dObj |> Seq.cast<obj>
+                let vChildren = walkVisualChildren walkChildren dObj |> Seq.cast<obj> |> List.ofSeq
                 yield! vChildren
+                
+                let children = items |> Seq.collect walkChildren |> List.ofSeq
+                // remove duplicates
+                yield! children |> Seq.filter(fun item -> vChildren |> Seq.exists(fun x -> Object.ReferenceEquals(item,x)) |> not)
+                
             | :? String as s -> ()
             | x -> x.GetType().Name.Dump("no match, non dep object")
                 
@@ -240,7 +248,6 @@ let run app data =
                     children |> dumpCount "main window children" |> ignore
                     (children |> Seq.map(fun x -> (x.GetType().Name), getXaml x)).Dump("children types")
                     children |> Seq.choose(function | :? PasswordBox as pb -> Some pb | _ -> None) |> Seq.tryHead
-                pbOpt.Dump("somebody think of the children!?")
                 match pbOpt with
                 | Some pb ->
                     printfn "found it alternative method"
@@ -248,7 +255,8 @@ let run app data =
                     true
                
                 | None -> false
-            else                 
+            else
+                printfn "Found it directly"
                 bindIt pb
                 true
         try
