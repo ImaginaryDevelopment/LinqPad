@@ -60,6 +60,7 @@ type Reply =
     | Failure of string
     | Exception of Command*exn
 let processCommand cmd startState : Reply * State = 
+    printfn "Processing cmd %A" cmd
     let replyFail () = Failure "A failure!"
     match cmd with
     | HelloWorld msg ->
@@ -67,7 +68,9 @@ let processCommand cmd startState : Reply * State =
     | Add pId ->
         Ok, {startState with Products = pId::startState.Products}
     | Remove pId ->
-        Ok, {startState with Products = startState.Products |> List.filter((=) pId)}
+        let before = startState
+        let result = {startState with Products = startState.Products |> List.filter((=) pId >> not)}
+        Ok, result
     // for now model checkout with simple start over
     | Checkout
     | Clear ->
@@ -83,18 +86,12 @@ module AgentHelper =
 type Message = Command * State (* State *) * AsyncReplyChannel<Reply*State>    
 let mailbox = 
     let mp = new Agent<Message>(fun inbox ->
-        printfn "agent initializing inbox"
         let rec messageLoop() = async{
-            printfn "getting msg"
             let! (cmd,startState,rc) = inbox.Receive()
-            printfn "msg received!"
             let reply,state = 
                 try
-                    printfn "Processing command"
                     processCommand cmd startState
-                    |> dumpt "processed"
                 with ex -> Exception (cmd,ex), startState
-                |> dumpt "reply and state, next loop starting"
             rc.Reply (reply,state)
             // why was this return! instead of do! ?
             do! messageLoop()
@@ -105,64 +102,49 @@ let mailbox =
     mp
 
 type CommandTranslateResult = | Success of Command | Bad of string
-let commandTranslator = 
+
+let (|AddCmd|_|) =
     function
     | RMatchI "Add (\d+)" r ->
-        r.Groups.[1].Value 
-        |> int
-        |> ProductId
-        |> Add
-        |> Success
-    | RMatchI "Remove (\d+)" r ->
-        r.Groups.[1].Value
-        |> int
-        |> ProductId
-        |> Remove
-        |> Success
-    | x -> 
-        Bad x
-        
-let rec takeInput (state:State) (s:string) : bool*State = 
-    printfn "Taking input"
+            Command.Add (r.Groups.[1].Value |> int |> ProductId)
+            |> Some
+    | _ -> None
+let (|RemoveCmd|_|) = 
+    function
+    | RMatchI "Remove (\d+)" r -> 
+        Command.Remove (r.Groups.[1].Value |> int |> ProductId)
+        |> Some
+    | _ -> None
     
-    let op (command:Command)  = Some <| (fun (replyChannel:AsyncReplyChannel<Reply*State>) -> printfn "Reply channel fun activated"; (command,state,replyChannel))
+let rec takeInput (state:State) (s:string) : bool*State = 
+    
+    let op (command:Command)  = Some <| (fun (replyChannel:AsyncReplyChannel<Reply*State>) -> (command,state,replyChannel))
 //        let move dir = op <| Command.Move dir
     let inputMap = 
         match s with
-        | RMatchI "Add (\d+)" r ->
-            op <| Command.Add (r.Groups.[1].Value |> int |> ProductId)
-//        | RMatchI "Remove (
+        | AddCmd cmd -> op cmd 
+        | RemoveCmd cmd -> op cmd
         | x -> x.Dump("did not understand"); None
         
-    printfn "input mapped"
     match inputMap with 
     |Some msg -> 
-        printfn "Processing msg"
-            
         let reply,newState  = mailbox.PostAndReply msg
-        printfn "Replied"
-        //(reply,newState).Dump("replied?")
         try
             match reply with
-            | Ok -> true, newState
+            | Ok -> printfn "Cart: %A" newState; true, newState
             | Msg s -> printfn "%s" s; true, newState
             | Exception (cmd, ex) -> printfn "Failed to process cmd '%A' input exception was %A" cmd ex;  false, newState
             | x -> printfn "bad reply! '%A'" x; false,newState
         with ex ->
             printfn "Failed to process cmd input exception was %A" ex;  false, newState
-        |> fun x -> printfn "to be continued"; x
-        |> dumpt "yay reply async finished"
-        
     |None -> false,state
-    |> dumpt "takeInput finished"
     
 let rec msgPump (state:State):State option = 
     printfn "Msg pumping"
     let shouldContinue,newState =
         printfn "Command?"
         takeInput state <| readLine()
-        |> dumpt "finished take Input"
-    if shouldContinue then printfn "continuing shopping"; msgPump newState
+    if shouldContinue then msgPump newState
     else printfn "quitting!"; None
     |> dumpt "Msg pump finished"
 
