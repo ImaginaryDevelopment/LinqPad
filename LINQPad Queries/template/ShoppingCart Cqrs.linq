@@ -53,7 +53,10 @@ type Command =
     | Remove of ProductId
     | Clear
     | Checkout
-    
+type OuterCommand = 
+    | InnerCommand of Command
+    | Unknown
+    | Quit
 type Reply = 
     | Ok
     | Msg of string
@@ -118,16 +121,19 @@ let (|RemoveCmd|_|) =
     
 let rec takeInput (state:State) (s:string) : bool*State = 
     
-    let op (command:Command)  = Some <| (fun (replyChannel:AsyncReplyChannel<Reply*State>) -> (command,state,replyChannel))
+    
 //        let move dir = op <| Command.Move dir
     let inputMap = 
         match s with
-        | AddCmd cmd -> op cmd 
-        | RemoveCmd cmd -> op cmd
-        | x -> x.Dump("did not understand"); None
+        | AddCmd cmd -> InnerCommand cmd 
+        | RemoveCmd cmd -> InnerCommand cmd
+        | RMatchI "quit" _ -> Quit
+        | x -> x.Dump("did not understand"); Unknown
         
+    let op (command:Command)  = (fun (replyChannel:AsyncReplyChannel<Reply*State>) -> (command,state,replyChannel))    
     match inputMap with 
-    |Some msg -> 
+    |InnerCommand cmd -> 
+        let msg = op cmd
         let reply,newState  = mailbox.PostAndReply msg
         try
             match reply with
@@ -137,7 +143,8 @@ let rec takeInput (state:State) (s:string) : bool*State =
             | x -> printfn "bad reply! '%A'" x; false,newState
         with ex ->
             printfn "Failed to process cmd input exception was %A" ex;  false, newState
-    |None -> false,state
+    | Unknown -> true, state
+    | Quit -> false,state
     
 let rec msgPump (state:State):State option = 
     printfn "Msg pumping"
@@ -151,4 +158,6 @@ let rec msgPump (state:State):State option =
 let initialState = State.Initial
 msgPump initialState |> dumpt "final state" |> ignore
 printfn "msgPump finished, waiting for any key to exit"
+#if Interactive
 readLine () |> ignore<string>
+#endif
