@@ -44,7 +44,19 @@ module Helpers =
         printfn "displaying %s" t // in case dump is stuck because of UI lock elsewhere
         x.Dump(description=t)
         x
-    let readLine () = Console.ReadLine() // Util.ReadLine()
+    let readLine () = 
+    #if Interactive
+        Console.ReadLine() // Util.ReadLine()
+    #else // can't if Linqpad in F#
+        Util.ReadLine()
+    #endif
+    let readLine1 (prompt:string) = 
+    #if Interactive
+        Console.Write(prompt)
+        Console.ReadLine()
+    #else
+        Util.ReadLine(prompt)
+    #endif
 open Helpers
 type State = Cart
 type Command = 
@@ -53,15 +65,18 @@ type Command =
     | Remove of ProductId
     | Clear
     | Checkout
+// wrapper for the repl shell    
 type OuterCommand = 
     | InnerCommand of Command
     | Unknown
     | Quit
+    
 type Reply = 
     | Ok
     | Msg of string
     | Failure of string
     | Exception of Command*exn
+    
 let processCommand cmd startState : Reply * State = 
     printfn "Processing cmd %A" cmd
     let replyFail () = Failure "A failure!"
@@ -79,13 +94,11 @@ let processCommand cmd startState : Reply * State =
     | Clear ->
         Ok, {startState with Products = List.empty}
         
-        
-    
+       
 [<AutoOpen>]
 module AgentHelper =
     type Agent<'T> = MailboxProcessor<'T>
 
-    
 type Message = Command * State (* State *) * AsyncReplyChannel<Reply*State>    
 let mailbox = 
     let mp = new Agent<Message>(fun inbox ->
@@ -96,7 +109,7 @@ let mailbox =
                     processCommand cmd startState
                 with ex -> Exception (cmd,ex), startState
             rc.Reply (reply,state)
-            // why was this return! instead of do! ?
+            // why was this `return!` instead of `do!` ?
             do! messageLoop()
         }
         messageLoop()
@@ -112,21 +125,28 @@ let (|AddCmd|_|) =
             Command.Add (r.Groups.[1].Value |> int |> ProductId)
             |> Some
     | _ -> None
+    
 let (|RemoveCmd|_|) = 
     function
     | RMatchI "Remove (\d+)" r -> 
         Command.Remove (r.Groups.[1].Value |> int |> ProductId)
         |> Some
     | _ -> None
+
+let (|ClearCmd|_|) = 
+    function
+    | RMatchI "Clear" _ ->
+        Command.Clear
+        |> Some
+    | _ -> None
     
 let rec takeInput (state:State) (s:string) : bool*State = 
-    
-    
-//        let move dir = op <| Command.Move dir
     let inputMap = 
         match s with
+        | RMatchI "HelloWorld" -> InnerCommand <| Command.HelloWorld "Hello"
         | AddCmd cmd -> InnerCommand cmd 
         | RemoveCmd cmd -> InnerCommand cmd
+        | RMatchI "Checkout" _ -> InnerCommand Command.Checkout
         | RMatchI "quit" _ -> Quit
         | x -> x.Dump("did not understand"); Unknown
         
@@ -147,13 +167,10 @@ let rec takeInput (state:State) (s:string) : bool*State =
     | Quit -> false,state
     
 let rec msgPump (state:State):State option = 
-    printfn "Msg pumping"
     let shouldContinue,newState =
-        printfn "Command?"
-        takeInput state <| readLine()
+        takeInput state <| readLine1 "Command?"
     if shouldContinue then msgPump newState
     else printfn "quitting!"; None
-    |> dumpt "Msg pump finished"
 
 let initialState = State.Initial
 msgPump initialState |> dumpt "final state" |> ignore
