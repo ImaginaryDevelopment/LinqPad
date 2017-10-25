@@ -11,7 +11,7 @@ module Schema =
     type Id = int
     type ProductId = ProductId of Id
 //    type CartId = CartId of Id
-    type Product ={ProductId:ProductId; Name:string; Cost:decimal}
+    type Product = {ProductId:ProductId; Name:string; Cost:decimal}
     // lets hold off on this until we have a working simple cart
     module Discounts = 
         type DiscountId = DiscountId of Id
@@ -23,8 +23,6 @@ module Schema =
     type Cart = {(* CartId:CartId; *) (* Discounts:DiscountId list;*) Products: ProductId list} with
         static member Initial = {Products = list.Empty}
 
-
-
 open Schema
 #if !Interactive
 open System
@@ -35,6 +33,7 @@ type System.Object with
     member x.Dump(description:string) =
         printfn "%s:%A" description x
 #endif
+
 module Helpers =
     let (|RMatchI|_|) (p:string) x =
         let r = Regex.Match(x,p, RegexOptions.IgnoreCase)
@@ -59,7 +58,7 @@ module Helpers =
         Util.ReadLine(prompt)
     #endif
 open Helpers
-type State = ProductsCart
+type State = Product list * Cart
 
 type UserCommand = 
     | HelloWorld of string
@@ -71,6 +70,10 @@ type UserCommand =
 type AdminCommand = 
     | AddProduct of ProductId
     | RemoveProduct of ProductId
+    
+type Command = 
+    | UserCmd of UserCommand 
+    | AdminCmd of AdminCommand
     
 // wrapper for the repl shell    
 type OuterCommand = 
@@ -84,23 +87,25 @@ type Reply =
     | Failure of string
     | Exception of Command*exn
     
-let processCommand cmd startState : Reply * State = 
+let processCommand cmd ((products,cart) as startState) : Reply * State = 
     printfn "Processing cmd %A" cmd
     let replyFail () = Failure "A failure!"
     match cmd with
-    | HelloWorld msg ->
+    | UserCmd(HelloWorld msg) ->
         Msg msg,startState
-    | Add pId ->
-        Ok, {startState with Products = pId::startState.Products}
-    | Remove pId ->
+    | UserCmd (Add pId) ->
+        if products |> Seq.exists(fun p -> p.ProductId = pId) then
+            Ok, (products,{cart with Products = pId::cart.Products})
+        else
+            Reply.Failure "Product not found", startState
+    | UserCmd(Remove pId) ->
         let before = startState
-        let result = {startState with Products = startState.Products |> List.filter((=) pId >> not)}
+        let result = products,{cart with Products = cart.Products |> List.filter((=) pId >> not)}
         Ok, result
     // for now model checkout with simple start over
-    | Checkout
-    | Clear ->
-        Ok, {startState with Products = List.empty}
-        
+    | UserCmd Checkout
+    | UserCmd Clear ->
+        Ok, (products,{cart with Products = List.empty})
        
 [<AutoOpen>]
 module AgentHelper =
@@ -129,31 +134,31 @@ type CommandTranslateResult = | Success of Command | Bad of string
 let (|AddCmd|_|) =
     function
     | RMatchI "Add (\d+)" r ->
-            Command.Add (r.Groups.[1].Value |> int |> ProductId)
+            UserCommand.Add (r.Groups.[1].Value |> int |> ProductId)
             |> Some
     | _ -> None
     
 let (|RemoveCmd|_|) = 
     function
     | RMatchI "Remove (\d+)" r -> 
-        Command.Remove (r.Groups.[1].Value |> int |> ProductId)
+        UserCommand.Remove (r.Groups.[1].Value |> int |> ProductId)
         |> Some
     | _ -> None
 
 let (|ClearCmd|_|) = 
     function
     | RMatchI "Clear" _ ->
-        Command.Clear
+        UserCommand.Clear
         |> Some
     | _ -> None
     
 let rec takeInput (state:State) (s:string) : bool*State = 
     let inputMap = 
         match s with
-        | RMatchI "HelloWorld" -> InnerCommand <| Command.HelloWorld "Hello"
-        | AddCmd cmd -> InnerCommand cmd 
-        | RemoveCmd cmd -> InnerCommand cmd
-        | RMatchI "Checkout" _ -> InnerCommand Command.Checkout
+        | RMatchI "HelloWorld" _ -> UserCommand.HelloWorld "Hello" |> UserCmd |> InnerCommand
+        | AddCmd cmd -> cmd |> UserCmd |> InnerCommand
+        | RemoveCmd cmd -> cmd |> UserCmd |> InnerCommand
+        | RMatchI "Checkout" _ -> UserCommand.Checkout |> UserCmd |> InnerCommand 
         | RMatchI "quit" _ -> Quit
         | x -> x.Dump("did not understand"); Unknown
         
@@ -166,8 +171,9 @@ let rec takeInput (state:State) (s:string) : bool*State =
             match reply with
             | Ok -> printfn "Cart: %A" newState; true, newState
             | Msg s -> printfn "%s" s; true, newState
+            | Failure msg -> printfn "Failed '%s'. Process cmd '%A', " msg cmd; true,newState
             | Exception (cmd, ex) -> printfn "Failed to process cmd '%A' input exception was %A" cmd ex;  false, newState
-            | x -> printfn "bad reply! '%A'" x; false,newState
+            //| x -> printfn "bad reply! '%A'" x; false,newState
         with ex ->
             printfn "Failed to process cmd input exception was %A" ex;  false, newState
     | Unknown -> true, state
@@ -178,8 +184,8 @@ let rec msgPump (state:State):State option =
         takeInput state <| readLine1 "Command?"
     if shouldContinue then msgPump newState
     else printfn "quitting!"; None
-
-let initialState = State.Initial
+// {ProductId:ProductId; Name:string; Cost:decimal}
+let initialState = [ {ProductId=ProductId 1;Name="Nikita"; Cost=800000.00m }],Cart.Initial
 msgPump initialState |> dumpt "final state" |> ignore
 printfn "msgPump finished, waiting for any key to exit"
 #if Interactive
