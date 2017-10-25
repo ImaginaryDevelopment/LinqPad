@@ -2,6 +2,7 @@
 
 // purpose: make a simple cqrs shopping cart (assumes, for now at least, single user)
 // desired branches: multi-user; discounts
+// cqrs: all commands should be serializable for playback to see the full state at any point 
 
 // my mailbox reference example: https://github.com/ImaginaryDevelopment/MudChallenge
 // halfway through implementation found this F# shopping cart reference example: http://codebetter.com/matthewpodwysocki/2009/12/14/going-hybrid-implementing-a-shopping-cart-in-f/
