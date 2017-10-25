@@ -6,7 +6,7 @@
 </Query>
 
 // recursive deserialization with raw meta field
-
+// fails on DU all other tests work
 
 let trim (x:string) = x.Trim()  
 let replace (delim:string) (r:string) (x:string) = x.Replace(delim,r)
@@ -20,7 +20,7 @@ let (|EnumerableT|_|) (t:Type) =
     |> Seq.tryFind(fun x -> x.IsGenericType && x.GetGenericTypeDefinition() = typedefof<Collections.Generic.IEnumerable<_>>)
     |> Option.map (fun t -> t.GenericTypeArguments.[0])
     
-let rec maybeAddRaw (t:Type) (jt:JToken):unit = 
+let rec maybeAddRaw debug (t:Type) (jt:JToken):unit = 
     match jt with
     | :? JObject as jo -> 
         //printfn "checking jo"
@@ -37,10 +37,11 @@ let rec maybeAddRaw (t:Type) (jt:JToken):unit =
         // so the object itself is handled, now for child objects
         jo.Properties()
         |> Seq.iter(fun sourceProp -> 
+            sourceProp.Name.Dump("checking")
             // what type is the property supposed to be? // and we don't always map all properties
             getPropCI t sourceProp.Name
             |> Option.iter(fun targetProp ->
-                maybeAddRaw targetProp.PropertyType sourceProp
+                maybeAddRaw debug targetProp.PropertyType sourceProp
             )
         )
         
@@ -48,7 +49,7 @@ let rec maybeAddRaw (t:Type) (jt:JToken):unit =
         //printfn "checking jp"
         match jp.Value with
         | null -> ()
-        | x -> maybeAddRaw t x
+        | x -> maybeAddRaw debug t x
     | :? JArray as ja ->
         match t with
         | EnumerableT itemT ->
@@ -73,17 +74,21 @@ let deserializeObjectReflectively<'T>(x:string) :'T =
     //x.Dump("with raw?")
     x
     |> deserialize
-    
+
 type SimpleChild={V2:string; N:decimal; Raw:string}
-type SimpleGuy={V:string; N:int; Child:SimpleChild; Raw:string; Children:SimpleChild[]; Children2:SimpleChild list list}
+type PushingOurLuck = 
+    | NotSo of SimpleChild
+    // see what I did here?
+    | Raw
+type SimpleGuy={V:string; N:int; Child:SimpleChild; Raw:string; Children:SimpleChild[]; Children2:SimpleChild list list; AhPushIt: PushingOurLuck seq}
 
 let serialized = 
     let simpleChildren = [| {V2="Child1"; N=2m; Raw=null};{V2="Child2"; N=3m; Raw=null}|]
-    {V="hello";N=2;Child={V2="world";N=1m; Raw=null};Raw=null; Children=simpleChildren; Children2= [ simpleChildren |> List.ofSeq]}
+    {V="hello";N=2;Child={V2="world";N=1m; Raw=null};Raw=null; Children=simpleChildren; Children2= [ simpleChildren |> List.ofSeq]; AhPushIt = [ Raw; NotSo simpleChildren.[1]] }
     |> Newtonsoft.Json.JsonConvert.SerializeObject
     |> replace (""" ,"Raw":null""" |> trim) ""
 
-    
+
 serialized
 |> Dump
 |> deserializeObjectReflectively<SimpleGuy>

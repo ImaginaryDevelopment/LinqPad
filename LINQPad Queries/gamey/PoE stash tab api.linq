@@ -7,7 +7,11 @@
 
 // play with stash tab api
 // for help see https://np.reddit.com/r/pathofexiledev/
-// let url = "https://www.pathofexile.com/character-window/get-stash-items?league=Harbinger&tabs=1&tabIndex=1&accountName=DevelopersDevelopersDevelopers"
+
+(* 
+    doesn't work without authorization =/
+    let url = "https://www.pathofexile.com/character-window/get-stash-items?league=Harbinger&tabs=1&tabIndex=1&accountName=DevelopersDevelopersDevelopers" 
+*)
 let target = "http://www.pathofexile.com/api/public-stash-tabs"
 
 module Helpers =
