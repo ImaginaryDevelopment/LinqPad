@@ -17,15 +17,15 @@ module BasicReverseDumper =
 module ReverseDumper2 = 
     // reverse dumper with raw html support
     // linqpad helper (for when you can't .Dump(description), but still want the html)
-    // also of note: there is an extra open div tag, because the ToHtmlString closes one that it didn't open
-    let titleize t (x:obj) = 
+    // extra div has been fixed by linqpad
+    let titleize (t:string) (x:obj) = 
         let objHtml = Util.ToHtmlString(enableExpansions=true, noHeader=true, objectsToDump= ([ x ] |> Array.ofList))
         let result = sprintf """<table class="headingpresenter">
         <tr>
         <th class="">%s</th>
         </tr>
         <tr>
-        <td class="headingpresenter"><div>%s</td>
+        <td class="headingpresenter">%s</td>
         </tr>
         </table>"""                 t objHtml
         Util.RawHtml result
@@ -80,4 +80,3 @@ dumptRev "Hello tRev" (makeXEl "trev") |> ignore
 makeDiv "yay html!" |> dumptRev "hello actual html" |> ignore
 dumptRev "Hello list" [ makeXEl "listitem1"; makeXEl "listitem2"] |> ignore
 dumpReverse (Raw "<div>Hello world2</div>")
-
