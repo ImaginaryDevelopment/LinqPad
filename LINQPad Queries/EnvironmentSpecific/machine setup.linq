@@ -37,7 +37,7 @@ module Chocolatey =
                 dumpLinq "https://www.linqpad.net/licensing/ListActivations.aspx"
             | Git -> printfn "setup SSH key, if not letting Kraken handle\r\nsetup push url git remote set-url --push origin git@github.com:ImaginaryDevelopment/LinqPad.git"
             | GitKraken -> printfn "setup SSH key if not done"
-            | VisualStudioCode -> printfn "install vim"
+            | VisualStudioCode -> printfn "install vim, fix cross-project memory referencing Tools -> Options -> Text Editor -> F# -> Performance"
             | Chrome -> printfn "alter shortcut add --allow-file-access-from-files"
             | _ -> ()
             result
