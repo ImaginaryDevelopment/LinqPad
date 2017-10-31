@@ -5,11 +5,19 @@
 // replace all references to X with a consistent one (auto adjust for project depths differing?)
 // also add to packages.config if not there
 // project file with no package references won't have the content include entry =(
-let targetRef = "FSharp.Core"
-let desiredRefText = """<Reference Include="FSharp.Core, Version=4.4.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-          <AssemblyName>FSharp.Core.dll</AssemblyName>
-          <HintPath>..\packages\FSharp.Core.4.2.2\lib\net45\FSharp.Core.dll</HintPath>
-        </Reference>"""
+
+module Settings = // to run this script targeting a different dll/package everything in Settings may need changing
+    let targetRef = "FSharp.Core"
+    // in this case they are the same, but they may not be
+    let packageName, targetVersion = targetRef, "4.2.3"
+    // we don't want to assume the package subdirectories always have the version number in the folder name, or the same way
+    let desiredRefText = """<Reference Include="FSharp.Core, Version=4.4.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+      <AssemblyName>FSharp.Core.dll</AssemblyName>
+      <HintPath>..\packages\FSharp.Core.4.2.3\lib\net45\FSharp.Core.dll</HintPath>
+    </Reference>
+"""
+    let desiredPCRefText = """<package id="FSharp.Core" version="4.2.3" targetFramework="net452" />"""
+open Settings
 module Helpers =
     type String = 
         static member EqualsI (x:string) y =
@@ -36,6 +44,11 @@ module Helpers =
         if x.IndexOf d < 0 then
             failwithf "Must replace did not find '%s'" d
         replace d r x
+    let (|RMatch|_|) p x = 
+        let r = Regex.Match(x,p)
+        if r.Success then
+            Some r
+        else None
         
     type XElement with
         static member GetElement1 name (x:XElement) = x.Element(XNamespace.None + name)
@@ -92,7 +105,7 @@ module ReverseDumper2 =
     // reverse dumper with raw html support
     // linqpad helper (for when you can't .Dump(description), but still want the html)
     // also of note: there is an extra open div tag, because the ToHtmlString closes one that it didn't open
-    let titleize t (x:obj) = 
+    let titleize (t:string) (x:obj) = 
         let objHtml = Util.ToHtmlString(enableExpansions=true, noHeader=true, objectsToDump= ([ x ] |> Array.ofList))
         let result = sprintf """<table class="headingpresenter">
         <tr>
@@ -175,16 +188,15 @@ let projs =
     //|> Seq.filter(fun (_, items) -> items |> Seq.map snd |> Seq.distinct |> Seq.length |> fun x -> x > 1)
     |> Seq.tryFind(fun (k,v) -> k = targetRef)
     |> Option.map snd
-projs.Dump("projects with fsharp.core refs?")
+projs.Dump(sprintf "projects with %s refs?" targetRef)
 module RefFixing = 
-    
-        
+
     let getRefText t = 
         let start = Regex.Match(t,sprintf "<Reference.*%s" targetRef).Index
-        let length = 
-            let r = Regex.Match(t.[start..],"</Reference>")
-            r.Index + r.Length
-        t.[start..start+length]    
+        let length =             
+            let closer = "</Reference>" 
+            t.[start..].IndexOf closer + closer.Length
+        t.[start..start+length]
     let getFailHint oldText replacementText = 
         
         (oldText,replacementText) |> dumptRev "full text" |> ignore
@@ -211,7 +223,6 @@ module RefFixing =
             getFailHint text text'
             failwith "replace did not update"
         File.WriteAllText(fullProjectPath,text')
-        
     
     let fixRefs debug = 
         let dumpReverseT x = 
@@ -234,28 +245,59 @@ module RefFixing =
         |> ignore
 // fix package.config files too
 module PConfigFixing = 
-    type ProjectConfigMeta = {RelativeProjPath:string; HasPackageConfigFile:bool;PackageConfigPath:string;FullPath:string}
+//    type ProjectConfigDisplay = {RelativeProjPath:string; HasPConfigFile:bool}
+    type ProjectConfigMeta = {RelativeProjPath:string; HasPackageConfigFile:bool;PackageConfigPath:string}
         
+    type PackageConfigMeta = {PCPath:string; CurrentValue:string; Text:string}
     let fixProjectConfigs debug relPaths = 
+        let dumpReverseT x = 
+            if debug then dumpReverseT x
+            else x
+        let dumptRev t x = 
+            if debug then dumptRev t x
+            else x
         relPaths // relativeProjPaths
         |> Seq.map(fun (rpp:string) ->
             let fullProjectPath = Path.Combine(slnDir, rpp.[1..])
             if not <| File.Exists fullProjectPath then
                 failwithf "Project file didn't exist at '%s'" fullProjectPath
-            
             let pc = Path.Combine(Path.GetDirectoryName fullProjectPath, "packages.config")
-            {RelativeProjPath=rpp; PackageConfigPath = pc; HasPackageConfigFile = File.Exists pc; FullPath = fullProjectPath }
+            {RelativeProjPath=rpp; PackageConfigPath = pc; HasPackageConfigFile = File.Exists pc}
         )
-        |> dumptRev "meta"
-//        |> Seq.choose(fun ->
-//            let fullProjectPath = Path.Combine(slnDir, relativeProjPath)
-//            let pc = Path.Combine(Path.GetDirectoryName fullProjectPath, "packages.config")
-//            pc.Dump("package.config?")
-//            if File.Exists pc then
-//                Some pc
-//            else None
-//        )
-//        |> dumptRev "package configs!"
+        |> List.ofSeq
+        |> fun metaData ->
+            let toCheck = 
+                metaData
+                |> List.filter(fun x -> x.HasPackageConfigFile)
+                |> List.map(fun x -> x.PackageConfigPath)
+            sprintf "Checking %i PackageConfigs out of %i" toCheck.Length metaData.Length |> dumpReverseT |> ignore
+            metaData
+            |> Seq.filter(fun metaItem -> not metaItem.HasPackageConfigFile)
+            |> Seq.map(fun x -> x.RelativeProjPath)
+            |> fun x -> Util.WithStyle(x,"color: red")
+            |> dumptRev "can't check package.config, doesn't exist"
+            |> ignore
+            toCheck
+        |> dumptRev "to check"
+        |> List.map(fun pcPath ->
+            let text = File.ReadAllText pcPath
+            match text with
+            |RMatch (sprintf "<package .*%s.*/>" packageName) r ->
+                {PCPath=pcPath;CurrentValue = r.Value; Text=text}
+            | _ -> {PCPath=pcPath; CurrentValue = null;Text = text}
+        )
+        |> dumptRev "checked"
+        |> List.iter(fun x -> 
+            match x.CurrentValue with
+            | null ->
+                x.Text
+                |> mustReplace "</packages>" (sprintf "  %s\r\n</packages>" desiredPCRefText)
+                |> fun t -> File.WriteAllText(x.PCPath,t)
+            | cv -> 
+                x.Text 
+                |> mustReplace cv desiredPCRefText
+                |> fun t -> File.WriteAllText(x.PCPath,t)
+        )
         |> ignore
     
     ()
