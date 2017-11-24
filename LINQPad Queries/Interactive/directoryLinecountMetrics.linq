@@ -12,7 +12,7 @@ module Helpers =
         let fromBool x = if x then Some() else None
     let (|EndsWithI|_|) delim x =  x |> endsWithI delim |> Option.fromBool
     let (|StartsWithI|_|) delim x = x |> startsWithI delim |> Option.fromBool
-    let (|ContainsI|_|) delim (x:string) = x.Contains(delim, comparerCI) |> Option.fromBool
+    let (|ContainsI|_|) delim (x:string) = x.Contains(delim, ciComparer) |> Option.fromBool
     let (|ContainsIAnyOf|_|) delims (x:string) = delims |> Seq.exists(fun d -> x.Contains(d,ciComparer)) |> Option.fromBool
     let (|EqualsI|_|) delim x = equalsI delim x |> Option.fromBool
     
@@ -28,7 +28,7 @@ type CountSettings() =
         | StartsWithI "jquery-"
         | StartsWithI "AssemblyInfo"
         | EndsWithI "generated.cs"
-        | Contains "jquery"
+        | ContainsI "jquery"
         | EndsWithI ".js"
         | EqualsI "T4MVC.cs" -> true
         | _ -> false
@@ -47,7 +47,9 @@ type CountSettings() =
                 ".nuget" 
                 "packages"
                 @"\obj\"
-                @"\bin\"]
+                @"\bin\"
+                @"\$tf\"
+                @"\.vs\"]
             -> true
         | _ -> false
 

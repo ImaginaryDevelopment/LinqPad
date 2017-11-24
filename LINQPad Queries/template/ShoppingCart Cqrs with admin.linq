@@ -11,7 +11,7 @@ module Schema =
     type Id = int
     type ProductId = ProductId of Id
 //    type CartId = CartId of Id
-    type Product = {ProductId:ProductId; Name:string; Cost:decimal}
+    type Product = {ProductId:ProductId; Cost:decimal; Name:string; }
     // lets hold off on this until we have a working simple cart
     module Discounts = 
         type DiscountId = DiscountId of Id
@@ -68,7 +68,7 @@ type UserCommand =
     | Checkout
     
 type AdminCommand = 
-    | AddProduct of ProductId
+    | AddProduct of Product
     | RemoveProduct of ProductId
     
 type Command = 
@@ -106,7 +106,8 @@ let processCommand cmd ((products,cart) as startState) : Reply * State =
     | UserCmd Checkout
     | UserCmd Clear ->
         Ok, (products,{cart with Products = List.empty})
-       
+    | AdminCmd(AddProduct p) ->
+        Ok, (p::products, cart)
 [<AutoOpen>]
 module AgentHelper =
     type Agent<'T> = MailboxProcessor<'T>
@@ -140,7 +141,7 @@ let (|AddCmd|_|) =
     
 let (|RemoveCmd|_|) = 
     function
-    | RMatchI "Remove (\d+)" r -> 
+    | RMatchI @"Remove (\d+)" r -> 
         UserCommand.Remove (r.Groups.[1].Value |> int |> ProductId)
         |> Some
     | _ -> None
@@ -150,6 +151,11 @@ let (|ClearCmd|_|) =
     | RMatchI "Clear" _ ->
         UserCommand.Clear
         |> Some
+    | _ -> None
+let (|AddProduct|_|) = 
+    function
+    | RMatchI @"AddProduct (\d+),(\d+),(.*)" r -> 
+        AdminCommand.AddProduct {ProductId = r.Groups.[1].Value |> ProductId;}
     | _ -> None
     
 let rec takeInput (state:State) (s:string) : bool*State = 
