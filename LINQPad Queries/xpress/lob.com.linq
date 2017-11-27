@@ -134,7 +134,7 @@ module Templates =
     let postIt url = postIt url u String.Empty
     let deleteIt url = deleteIt url u String.Empty
     
-    type CreatedTemplate = {Id:string;Description:string;Date_Created:DateTime; Date_Modified:DateTime}
+    type CreatedTemplate = {Id:string;Description:string;Date_Created:DateTime; Date_Modified:DateTime;Html:string}
     type Template = {Id:string; Description:string}
     type TemplateList = {Data: Template[]; Count:int}
     let createTemplate description html : CreatedTemplate = 
@@ -144,6 +144,8 @@ module Templates =
         ]
         |> postIt (getUrl RequestType.CreateTemplate |> Raw)
         |> deserialize
+        |> fun x -> {x with Html = html}
+
     // WIP, not working
     let updateTemplate tmplId description html = 
         Map [
@@ -152,6 +154,7 @@ module Templates =
             yield "html",html
         ]
         |> postIt (getUrl (RequestType.UpdateTemplate tmplId) |> Raw)
+        
     let getTemplates () : Template list = 
         tryGetWithAuth u String.Empty (getUrl RequestType.GetTemplates)
         |> function
@@ -162,8 +165,10 @@ module Templates =
             | Choice2Of2 x ->
                 x.Dump()
                 failwith "Bad get response"
+                
     let deleteTemplate tmplId =
         deleteIt (getUrl (RequestType.DeleteTemplate tmplId) |> Raw)
+        
     // based on https://github.com/lob/examples/blob/master/letters/8.5x11-letter.html
     let html = """<html>
 <head>
@@ -194,6 +199,9 @@ module Templates =
     height: 10.625in;
     left: 0.1875in;
     top: 0.1875in;
+    font-size: .11in;
+    font-style: normal;
+    font-family: "Courier New", Courier, "Lucida Sans Typewriter", "Lucida Typewriter", monospace;
     background-color: rgba(0,0,0,0.2);
   }
   .text {
@@ -202,7 +210,12 @@ module Templates =
     top: 20px;
     width: 6in;
     font-family: 'Open Sans';
-    font-size: 30px;
+//    font-size: 30px;
+  }
+  .letterText{
+    position: relative;
+    left: 20px;
+    top: 20px;
   }
   #return-address-window {
     position: absolute;
@@ -246,20 +259,103 @@ module Templates =
     background-color: white;
   }
   .title {
+    font-size:20px;
+  }
+//  .rowText{
+//    font-size: 10px;
+//  }
+  .rowLabel{
+    font-weight:bold;
+  }
+  .tleft{
+    text-align:left;
+  }
+  .tright{
+    text-align:right;
+  }
+  .tcenter{
     text-align:center;
+  }
+  .bordered{
+    border: solid 1px black;
+    border-style=solid;
+    border-width=1px;
+    border-color=black;
+  }
+  .tunderline{
+    text-decoration:underline;
+  }
+  .tupper{
+    text-transform: uppercase;
+  }
+  .tpascal{
+    text-transform: capitalize;
+  }
+  table {
+    font-size: .11in;
+    table-layout:fixed;
+    min-width: 7in;
+  }
+  tr > nth-child(4){
+    text-align:right;
+  }
+  tr > nth-child(5){
+    text-align:right;
   }
 </style>
 </head>
-
 <body>
   <div class="page">
-    <div style="float:right;margin-top:.25in;margin-right:.25in">
+    <div style="float:left;margin-top:.25in;margin-left:.625in">
         <div>{{facility_name}}</div>
     </div>
-    <div class="page-content">
-      <div class="text" style="top:2.8in">
+    <div style="float:right;margin-top:.25in;margin-right:.25in">
         <div id="title">STATEMENT</div>
-        
+        <div class="rowText"><span class="rowLabel">Tax ID:</span> {{tax_id}}</div>
+        <div class="rowText"><span class="rowLabel">Patient:</span> {{patient_name}}</div>
+        <div class="rowText"><span class="rowLabel">Statement #:</span> {{statement_number}}</div>
+        <div class="rowText">{{date}}</div>
+    </div>
+    <div class="page-content" style="margin-right:.25in">
+      <div style="top:2.8in;position:relative">
+        <table>
+            <thead>
+            <tr>
+                <th class="tleft">Code</th>
+                <th class="tleft">DOS</th>
+                <th class="tleft">Provider/Note</th>
+                <th class="tleft">Payment</th>
+                <th class="tleft">Charge</th>
+            </tr>
+            <tr><td colspan="5">------------------------------------------------------------------------------------------------------</td></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td width="1in"></td>
+                    <td width="1.5in"></td>
+                    <td width="3in"></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                {{rows}}
+                <tr><td /><td /><td colspan="2">*** For Questions Call {{question_phone}} ***</td><td /></tr>
+                <tr><td colspan="5">Note: {{note}}</td></tr>
+                <tr><td colspan="5">------------------------------------------------------------------------------------------------------</td></tr>
+                <tr><td colspan="2">COLUMN TOTALS</td><td /><td>{{payment}}</td><td class="tright">{{charge}}</td></tr>
+                <tr><td colspan="5">------------------------------------------------------------------------------------------------------</td></tr>
+                <tr><td /><td /><td class="tcenter">** PAY THIS AMOUNT **</td><td /></tr>
+                <tr><td colspan="4" class="tcenter" /><td class="tupper">Balance Due</td></tr>
+                <tr><td colspan="4" class="tcenter" /><td class="bordered tright">{{balance_due}}</td>
+                <tr><td colspan="2" class="tunderline">Pay By Credit Card</td>
+                    <td colspan="2"><span class="bordered">&nbsp;&nbsp;&nbsp;</span> American Express &nbsp;&nbsp;&nbsp;<span class="bordered">&nbsp;&nbsp;&nbsp;</span>&nbsp;Master Card &nbsp;&nbsp;<span class="bordered">&nbsp;&nbsp;&nbsp;</span> &nbsp;Visa</td>
+                </tr>
+                <tr><td colspan="2">Card Number:</td><td colspan="2">________ ________ ________ ________</td><td>Enclosed Amount</td></tr>
+                <tr><td colspan="2">Expiration:</td><td>____ / ________ Card Code:________</td><td /><td rowspan="2" class="bordered"></td></tr>
+                <tr />
+                <tr><td colspan="2">Signature:</td><td>________________________________________________</td><td /><td>Post Account</td></tr>
+                <tr><td colspan="4" /><td>{{xpm}}</td></tr>
+            </tbody>
+        </table>
       </div>
     </div>
     <div id="return-address-window">
@@ -269,15 +365,12 @@ module Templates =
     </div>
     <div id="recipient-address-window">
       <div id="recipient-address-text">
-        
       </div>
     </div>
   </div>
 </body>
-
 </html>"""
 
- 
 
 let createTemplate() = 
     Templates.createTemplate "ConversionStarted" Templates.html
@@ -290,6 +383,7 @@ module Letters =
     type AddresseeType = 
         | From
         | To
+        
     type LetterType =
         //| Raw of string // needs special url encoding, let's not deal with this special case here
         | FromTemplate of string
@@ -299,7 +393,6 @@ module Letters =
             x
             |> Seq.map (|KeyValue|)
             |> Seq.map(fun (k,v) -> sprintf "%s[%s]" title k, v)
-            
             
         let toAddrKeys t name a =
             let x = 
@@ -345,12 +438,56 @@ let xpress = {  MailLocation.Id="xpress"; Description = "XpressTechnologies offi
                         Zip="32216"
                 }
             }
+            
+let formatNoDollarCurrency (x:decimal) =
+    sprintf "%.2f" x
+let formatMdy (x:DateTime) = 
+    x.ToString("MM/dd/yyyy")
+    
+type AccountLine = {Code:string; DOS:DateTime option;Provider_Note:string;Payment:decimal option;Charge:decimal option} with 
+    member x.FormattedDOS = 
+        match x.DOS with
+        | Some dos -> formatMdy dos
+        | None -> String.Empty
+    member x.FormattedCharge = 
+        match x.Charge with
+        | None -> String.Empty
+        | Some charge -> formatNoDollarCurrency charge
+    member x.FormattedPayment = 
+        match x.Payment with
+        | None -> String.Empty
+        | Some payment -> formatNoDollarCurrency payment
+
 let makeLetter tmplId =
+        
+    let makeAccountRow x = 
+        sprintf "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" x.Code x.FormattedDOS x.Provider_Note x.FormattedPayment x.FormattedCharge
+    let rows = 
+        [   {Code="A0012305";DOS=Some <| DateTime(2016,5,18);Provider_Note="06/22/16 - BADANOWSKI, RALPH"; Payment=None; Charge=Some 59m}
+            {Code="99213";DOS=Some <| DateTime(2016,7,8);Provider_Note="07/21/16 - BADANOWSKI, RALPH"; Payment=None; Charge=Some 50m}
+            {Code=null;DOS=None;Provider_Note="11/11/16"; Payment=None; Charge=Some 1m}
+            {Code=null;DOS=None;Provider_Note="11/11/16"; Payment=None; Charge=Some 0.23m}
+            {Code=null;DOS=Some <| DateTime(2016,5,16);Provider_Note="02/27/17 - BADANOWSKI, RALPH"; Payment=None; Charge=Some 7.85m}
+        ]
+    let rowText = 
+        rows
+        |> Seq.map makeAccountRow
+        |> delimit "\r\n"
     {   Description = Some "Test letter 1"; To = xpress; From = xpress
         LetterType= FromTemplate tmplId
         Color=false
         MergeVariables = Map[
-                            "name","Name mapped"
+                            "facility_name","myMachine2(R)"
+                            "tax_id", " "
+                            "patient_name", "D'IMPERIO, CONNIE"
+                            "statement_number", "XS 213"
+                            "date", DateTime.Now.ToShortDateString()
+                            "balance_due", "118.08"
+                            "payment", "0"
+                            "question_phone", "(904)867-5309"
+                            "charge", "118.08"
+                            "xpm", "XPM213"
+                            "rows", rowText
         ]
         MetaData= Map[
                     "testId","1"
@@ -361,7 +498,11 @@ let createLetter tmplId =
     makeLetter tmplId
     |> createLetter
 
-
+let renderHtml html = 
+    let path = sprintf "%s.htm" (Path.GetTempFileName())
+    File.WriteAllText(path,html)
+    Process.Start(path)
+    |> ignore
 //createTemplate() |> ignore 
 
 
@@ -388,4 +529,4 @@ let exampleTmplId = "tmpl_353f61315d79181"
 let tmpl = createTemplate()
 createLetter tmpl.Id
 |> Dump
-|> ignore        
+|> ignore
