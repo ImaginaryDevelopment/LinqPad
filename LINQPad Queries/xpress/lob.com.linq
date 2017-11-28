@@ -295,11 +295,12 @@ module Templates =
     font-size: .11in;
     table-layout:fixed;
     min-width: 7in;
+    min-height: 6.5in;
   }
-  tr > nth-child(4){
+  tr > td:nth-child(4){
     text-align:right;
   }
-  tr > nth-child(5){
+  tr > td:nth-child(5){
     text-align:right;
   }
 </style>
@@ -334,8 +335,8 @@ module Templates =
                     <td width="1in"></td>
                     <td width="1.5in"></td>
                     <td width="3in"></td>
-                    <td></td>
-                    <td></td>
+                    <td width="1in"></td>
+                    <td width="1in"></td>
                 </tr>
                 {{rows}}
                 <tr><td /><td /><td colspan="2">*** For Questions Call {{question_phone}} ***</td><td /></tr>
@@ -343,7 +344,7 @@ module Templates =
                 <tr><td colspan="5">------------------------------------------------------------------------------------------------------</td></tr>
                 <tr><td colspan="2">COLUMN TOTALS</td><td /><td>{{payment}}</td><td class="tright">{{charge}}</td></tr>
                 <tr><td colspan="5">------------------------------------------------------------------------------------------------------</td></tr>
-                <tr><td /><td /><td class="tcenter">** PAY THIS AMOUNT **</td><td /></tr>
+                <tr><td /><td /><td class="tcenter">** PAY THIS AMOUNT **</td><td/></tr>
                 <tr><td colspan="4" class="tcenter" /><td class="tupper">Balance Due</td></tr>
                 <tr><td colspan="4" class="tcenter" /><td class="bordered tright">{{balance_due}}</td>
                 <tr><td colspan="2" class="tunderline">Pay By Credit Card</td>
@@ -473,23 +474,26 @@ let makeLetter tmplId =
         rows
         |> Seq.map makeAccountRow
         |> delimit "\r\n"
+    let mergeVars = 
+        [
+            "facility_name","myMachine2(R)"
+            "tax_id", String.Empty
+            "patient_name", "D'IMPERIO, CONNIE"
+            "statement_number", "XS 213"
+            "date", DateTime.Now.ToShortDateString()
+            "balance_due", "$118.08"
+            "payment", "0"
+            "question_phone", "(904)867-5309"
+            "charge", "118.08"
+            "xpm", "XPM213"
+            "note", String.Empty
+            "rows", rowText
+        ] |> List.map(function | (k,v) when String.IsNullOrWhiteSpace v -> k, "&nbsp;" | (k,v) -> k,v)
     {   Description = Some "Test letter 1"; To = xpress; From = xpress
-        LetterType= FromTemplate tmplId
-        Color=false
-        MergeVariables = Map[
-                            "facility_name","myMachine2(R)"
-                            "tax_id", " "
-                            "patient_name", "D'IMPERIO, CONNIE"
-                            "statement_number", "XS 213"
-                            "date", DateTime.Now.ToShortDateString()
-                            "balance_due", "118.08"
-                            "payment", "0"
-                            "question_phone", "(904)867-5309"
-                            "charge", "118.08"
-                            "xpm", "XPM213"
-                            "rows", rowText
-        ]
-        MetaData= Map[
+        LetterType = FromTemplate tmplId
+        Color = false
+        MergeVariables = Map mergeVars
+        MetaData = Map[
                     "testId","1"
         ]
     }
