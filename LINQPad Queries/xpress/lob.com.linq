@@ -88,10 +88,7 @@ module Net =
             use reader = new StreamReader(stream, Encoding.UTF8)
             reader.ReadToEnd()
         match int resp.StatusCode with
-        | 200 ->
-//        | 302 -> ()
-//        | x -> failwithf "expecting a 302 instead was %i" x
-            content
+        | 200 -> content
         | _ -> 
             resp.Headers.Dump("headers")
             content.Dump("Failed content")
@@ -109,10 +106,8 @@ module Net =
         let req,url = createReq url
         req.ContentType <- "application/x-www-form-urlencoded"
         req.Headers.Add(auth,encodeAuth u p) 
-        //req.RequestUri.Dump("request uri")
         req.Method <- "POST"
         let bytes = Encoding.ASCII.GetBytes(formParams)
-        //formParams.Dump("formParams")
         
         req.ContentLength <- int64 bytes.Length
         printfn "Posting to %s" url
@@ -129,7 +124,9 @@ open Net
 
 
 
-let u = Util.GetPassword "lobTestKey"
+let u = 
+    Util.GetPassword "lobTestKey"
+    //Util.GetPassword "lobLiveKey"
 module Templates = 
     let postIt url = postIt url u String.Empty
     let deleteIt url = deleteIt url u String.Empty
@@ -507,9 +504,6 @@ let renderHtml html =
     File.WriteAllText(path,html)
     Process.Start(path)
     |> ignore
-//createTemplate() |> ignore 
-
-
 
 
 (* did not work
