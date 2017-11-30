@@ -86,14 +86,64 @@ let primaries =
 let secondaries = getRange "Secondaries!A1:A255" Secondary
 let melee = getRange "Melee!A1:A255" Melee
 let all = 
-    primaries@secondaries@melee@
-        [   {Name="Fang"; Type=Melee;Owned=false;Mastered=false}
-            {Name="Machete"; Type=Melee;Owned=false;Mastered=false}
-            {Name="Ether Reaper"; Type=Melee;Owned=false;Mastered=false}
-        ]
+    let vanillas = 
+        [   
+            "Ankyros", Melee
+            "Bo",Melee
+            "Boltace", Melee
+            "Dark Dagger", Melee
+            "Dual Cleavers", Melee
+            "Ether Reaper",Melee
+            "Fang",Melee
+            "Fragor", Melee
+            "Furax", Melee
+            "Galatine", Melee
+            "Glaive", Melee
+            "Kama", Melee
+            "Dual Kama", Melee
+            "Lecta", Melee
+            "Machete",Melee
+            "Magistar", Melee
+            "Nikana", Melee
+            "Prova", Melee
+            "Scindo", Melee
+            "Silva and Aegis", Melee
+            "Skana", Melee
+            "Sydon", Melee
+            "Venka", Melee
+            
+            "Akbronco", Secondary
+            "AkStilleto", Secondary
+            "Bronco", Secondary
+            
+            "Boltor", Primary Rifle
+            "Braton", Primary Rifle
+            "Dera", Primary Rifle
+            "Gorgon", Primary Rifle
+            "Grakata", Primary Rifle
+            "Ignis", Primary Rifle
+            "Karak", Primary Rifle
+            "Latron", Primary Rifle
+            "Simulor", Primary Rifle
+            "Soma", Primary Rifle
+            "Sybaris", Primary Rifle
+            "Supra", Primary Rifle
+            "Tetra", Primary Rifle
+            "Vandal", Primary Rifle
+            
+            "Cernos", Primary Bow
+            "Paris", Primary Bow
+            "Penta", Primary Launcher
+            "Strun", Primary Shotgun
+            "Boar", Primary Shotgun
+            "Tigris", Primary Shotgun
+        ] 
+        |> List.map (fun (n,t) -> {Name=n;Type=t;Owned=false;Mastered=false})
+    vanillas@primaries@secondaries@melee
+    |> Seq.distinct
+    |> Seq.sortBy(fun x -> x.Type, x.Name)
+    |> List.ofSeq
     |> Newtonsoft.Json.JsonConvert.SerializeObject
-
-all.Dump("all")
 
 let targetDir =
     let p = Path.GetDirectoryName(Util.CurrentQueryPath)

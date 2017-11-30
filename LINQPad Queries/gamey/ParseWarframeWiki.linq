@@ -7,14 +7,10 @@
 // pull in data on warframes and items for tracking
 open HtmlAgilityPack
 open System.Net
-let inline getAttr name (node : HtmlNode) = 
-    node.GetAttributeValue(name, "")
-let getInnerHtml (node : HtmlNode) = 
-    node.InnerHtml
-let getOuterHtml (node : HtmlNode) = 
-    node.OuterHtml
-let getName (node : HtmlNode) = 
-    node.Name
+let inline getAttr name (node : HtmlNode) = node.GetAttributeValue(name, "")
+let getInnerHtml (node : HtmlNode) = node.InnerHtml
+let getOuterHtml (node : HtmlNode) = node.OuterHtml
+let getName (node : HtmlNode) = node.Name
 let getChildren (node : HtmlNode) = 
     match node.ChildNodes with
     | null -> []
