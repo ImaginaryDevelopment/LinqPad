@@ -122,8 +122,6 @@ module Net =
 open Net
 
 
-
-
 let u = 
     Util.GetPassword "lobTestKey"
     //Util.GetPassword "lobLiveKey"
@@ -162,10 +160,10 @@ module Templates =
             | Choice2Of2 x ->
                 x.Dump()
                 failwith "Bad get response"
-                
+
     let deleteTemplate tmplId =
         deleteIt (getUrl (RequestType.DeleteTemplate tmplId) |> Raw)
-        
+
     // based on https://github.com/lob/examples/blob/master/letters/8.5x11-letter.html
     let html = """<html>
 <head>
@@ -372,6 +370,7 @@ module Templates =
 
 let createTemplate() = 
     Templates.createTemplate "ConversionStarted" Templates.html
+    
 let deleteTemplate tmplId = 
     Templates.deleteTemplate tmplId
     
