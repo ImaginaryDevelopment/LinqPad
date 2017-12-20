@@ -38,7 +38,7 @@ module PageMath =
             //printfn "DivRem(%i:count,%i:pageSize) = %A -> %i:lastPageIndex" count pageSize x result
             result
         
-    let lastPageCalcProperties pageSize count = 
+    let lastPageIndexCalcProperties pageSize count = 
         let lastPageIndex = getLastPageIndex pageSize count
         let quot = if pageSize > 0 then count / pageSize else 0
         if pageSize < 1 || count < 1 || pageSize >= count then 0 = lastPageIndex
@@ -66,7 +66,7 @@ module PageMath =
             if not result then
                 (pageSize,count, lastPageIndex).Dump("Failing")
             result
-    test "LastPageCalc" lastPageCalcProperties
+    test "LastPageIndexCalc" lastPageIndexCalcProperties
         
         
 type PaginateResult<'T> = {AllItems: 'T list; Page: Page<'T>}
@@ -135,17 +135,22 @@ module Pagination =
                 ]
         composeDep anyPageProperties f
 
-//        
-//    
-//    
+        
+    
+    
 //    let lastPageProperties pr =
-//        let total = List.length pr.AllItems
-//        let rLen = pr.Paginated.Length
-//        let lastPage = 
-//        let f pr = 
-//            [
-//            
-//            ]    
+//        let page = pr.Page
+//        let lastPageIndex = PageMath.getLastPageIndex page.PageSize pr.AllItems.Length
+//        // these only run if the composed guard(s) pass
+//        let f = 
+//            function
+//            // don't run these tests if the page isn't the last one
+//            | {Page={Index = x}} when x <> lastPageIndex -> List.empty
+//            | pr -> 
+//                let expectedItems = 
+//                    [
+//                        
+//                    ]    
     let paginatedProperties pr = 
         firstPageProperties pr
         |> propSetup pr
