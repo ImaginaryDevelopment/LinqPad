@@ -4,7 +4,7 @@
 
 // download agent from subdomain 
 
-let getUrl subdomain project =
+let getUrl (subdomain:string) (project:string) =
     sprintf "https://%s.visualstudio.com/%s/_admin/_AgentQueue?queueId=1&_a=agents" subdomain project
 // extract to c:\builds\agent
 
