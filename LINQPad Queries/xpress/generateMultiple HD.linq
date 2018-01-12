@@ -99,8 +99,9 @@ printfn "Got dte for solution %s" dte.Solution.FileName
 let doMultiFile = true
 let targetSqlProjectName = "ApplicationDatabase"
 let targetCodeProjectName = "HD.Schema"
-
-let refData : ReferenceData list = [
+let typeScriptProjectName = "HD.Service"
+let typeScriptFolderName = None //Some "src" // this isn't working correctly with f# projects
+let refData : ReferenceData list = []
             //type ReferenceData = {Schema:string; Table:string; Column:string; ValuesWithComments: IDictionary<string,string>}
 //            {   ReferenceData.FKeyId= {Table={Schema="dbo";Name="GuarantorTypes"};Column="GuarantorTypeId"}
 //                GenerateReferenceTable=false
@@ -109,7 +110,6 @@ let refData : ReferenceData list = [
 //                                        "THIRD PARTY", null
 //                                        "Insurance & Self", null ]
 //            }
-]
 
 let codeTableBlacklist = []
 
@@ -165,6 +165,11 @@ let cgsm =
         {
             TargetProjectName= targetCodeProjectName
             TargetNamespace= "HD.Schema.DataModels"
+            TypeScriptGenSettingMap= Some{
+                TargetProjectName= typeScriptProjectName
+                ColumnBlacklist = columnBlacklist
+                TargetFolderOpt = typeScriptFolderName
+            }
             CString = cString
             UseOptionTypes= false
             ColumnBlacklist= columnBlacklist
