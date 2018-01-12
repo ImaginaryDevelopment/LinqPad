@@ -115,6 +115,7 @@ let codeTableBlacklist = []
 
 let columnBlacklist = 
     [
+        "Result", Set ["isCp"]
 //        "Claims", Set ["_CurrentLevel_"; "_MaxLevel_"]
 //        "Charge", Set ["TotalAmount"]
     ]
