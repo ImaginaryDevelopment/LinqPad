@@ -21,24 +21,18 @@ module CookieCrumbles =
     let addMissing oldState serverState nextState = 
         let getNameEquality a b = getName a = getName b
         let getContainsCookie x = List.exists(getNameEquality x)
+        let toAdd = 
+            oldState
+            // filter out expired/discarded
+            |> List.filter(fun c -> (c.Expired || c.Discard) |> not)
+            // filter out items the server has sent 
+            |> List.filter(flip getContainsCookie nextState >> not)
+            // filter out items the result already has
+            |> List.filter(flip getContainsCookie serverState >> not)
+//        (nextState,toAdd).Dump("adding")
+        // add back items that remain and aren't exp/disc
         nextState
-        |> Seq.groupBy getName
-        |> Seq.map(fun (k,v) -> k, v |> Seq.head)
-        |> Map.ofSeq
-        |> fun m ->
-            let toAdd = 
-                oldState
-                // filter out items the server has sent 
-                |> List.filter(flip getContainsCookie nextState >> not)
-                |> List.filter(flip getContainsCookie serverState >> not)
-                |> List.filter(fun c -> (c.Expired || c.Discard) |> not)
-    //        (nextState,toAdd).Dump("adding")
-            // add back items that remain and aren't exp/disc
-            nextState
-            |> List.append toAdd
-                
-                
-        
+        |> List.append toAdd
         
     let replaceFromServer rc c =
     //    (getName rc, getName c).Dump("replace from server")
