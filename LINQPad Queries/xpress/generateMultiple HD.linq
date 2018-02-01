@@ -69,6 +69,7 @@ let before (delim:string) (x:string) =
 let dataModelsToGen : TableIdentifier list = [
         {TableIdentifier.Schema="dbo"; Name="Client"}
         {TableIdentifier.Schema="dbo"; Name="Event"}
+        {TableIdentifier.Schema="dbo"; Name="Participant"}
         {TableIdentifier.Schema="dbo"; Name="Result"}
     ]
     
