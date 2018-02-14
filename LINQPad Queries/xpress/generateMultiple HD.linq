@@ -150,10 +150,12 @@ let scriptFullPath = Path.Combine(__SOURCE_DIRECTORY__,__SOURCE_FILE__)
 
 let manager = 
     // if this script is in the solution it is modifying, we need the EnvDTE.ProjectItem representing it, otherwise where does the main (non sub-file) output go?
-    let templateProjectItem:EnvDTE.ProjectItem = dte.Solution.FindProjectItem(scriptFullPath)
+    let templateProjectItem:EnvDTE.ProjectItem option = dte.Solution.FindProjectItem scriptFullPath |> Option.ofUnsafeNonNullable
     printfn "Script is at %s" scriptFullPath
-    if not <| isNull templateProjectItem then
-        printfn "ProjectItem= %A" (templateProjectItem.FileNames(0s))
+    templateProjectItem
+    |> Option.iter(fun templateProjectItem ->
+        printfn "ProjectItem= %A" (templateProjectItem.FileNames 0s)
+    )
     let dteWrapper = wrapDte dte
     MultipleOutputHelper.Managers.VsManager(None, dteWrapper, sb, templateProjectItem)
 let pluralizer = 
@@ -191,7 +193,7 @@ let cgsm =
                                     "sp_renamediagram"
                                     "sp_upgraddiagrams"]; GenerateSprocInputRecords=true}
 
-            UseCliMutable= false
+            UseCliMutable= Mutability.Mutable
             GetMeasureNamepace= Some (fun _ -> "HD.Schema")
             AdditionalNamespaces= Set ["HD.Schema.BReusable"]
         }
