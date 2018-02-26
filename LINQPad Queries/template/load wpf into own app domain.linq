@@ -22,7 +22,6 @@ type MyMarshal() =
 type IChild =
     abstract member Initialize : MyMarshal -> unit
     
-    
 let startApp (mm:MyMarshal) () = 
     let a = System.Windows.Application()
     let w = Window()
@@ -37,6 +36,7 @@ let startApp (mm:MyMarshal) () =
     a.Run(w)
     |> ignore<int>
     mm.Print "Finished"
+    
 [<Serializable>]
 type Child() =
     inherit MarshalByRefObject()
@@ -90,10 +90,7 @@ let ownDomain f =
     printfn "made a baby"
     child.Initialize(mm)
     try
-        printfn "AppDomain delegates hooking"
-        let disp = makeAddHandlerDisposable ad.DomainUnload.AddHandler ad.DomainUnload.RemoveHandler (EventHandler(fun _ _ -> printfn "weee?"))
-//        ad.DoCallBack(CrossAppDomainDelegate (f mm))
-        printfn "Finished app, closing?"
+        printfn "Finished app, closing"
         AppDomain.Unload ad
         mm.Dispose()
     with ex ->
