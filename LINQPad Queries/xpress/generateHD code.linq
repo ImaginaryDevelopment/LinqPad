@@ -24,7 +24,7 @@ let gen typeName columns =
         ViewModelMatches =  
             columns
             |> List.map(fst >> fun k ->
-                sprintf "        | StringEqualsI (CMeta.%s) -> Regex.IsMatch(string item.%s, userValue)" k k )
+                sprintf "        | StringEqualsI (CMeta.%s) -> Searching.rMatcher(string item.%s) userValue" k k )
         KeyDowns =  
             columns 
             |> List.map(fst >> fun k -> 
@@ -56,9 +56,12 @@ let columns = Map[
                     "EndTime", "End Time"
                 ]
                 "Participant",[
-                    "Id","ID"
+//                    "Id","ID"
                     "LastName", "Last Name"
                     "FirstName", "First Name"
+                    "Dob", "DOB"
+                    "EmployeeNumber", "Employee Number"
+                    "MemberNumber", "Member Number"
                 ]
 ]
 let f k =
