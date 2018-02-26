@@ -22,14 +22,6 @@ type MyMarshal() =
 type IChild =
     abstract member Initialize : MyMarshal -> unit
     
-[<Serializable>]
-type Child() =
-    inherit MarshalByRefObject()
-    let mutable mm = None
-    member __.Initialize (mmToSet:MyMarshal) = 
-        mm <- Some mmToSet 
-    interface IChild with
-        member x.Initialize( mm) = x.Initialize(mm)
     
 let startApp (mm:MyMarshal) () = 
     let a = System.Windows.Application()
@@ -40,10 +32,20 @@ let startApp (mm:MyMarshal) () =
             sp.Children.Add(Label(Content="Hello world")) |> ignore
             sp
         )
-    mm.Print "starting"
+    mm.Print "I'm in a new app domain!"
+    mm.Print <| sprintf "App domain is %s" AppDomain.CurrentDomain.FriendlyName
     a.Run(w)
     |> ignore<int>
-    mm.Print "Started?"
+    mm.Print "Finished"
+[<Serializable>]
+type Child() =
+    inherit MarshalByRefObject()
+    let mutable mm = None
+    member __.Initialize (mmToSet:MyMarshal) = 
+        mm <- Some mmToSet 
+        startApp (mmToSet) ()
+    interface IChild with
+        member x.Initialize( mm) = x.Initialize(mm)
 let makeAddHandlerDisposable fAdd fRemove fDelegate =
     fAdd fDelegate
     { new IDisposable with
@@ -53,7 +55,6 @@ let makeAddHandlerDisposable fAdd fRemove fDelegate =
 let assm = lazy(System.Reflection.Assembly.GetExecutingAssembly())
 let aar:ResolveEventHandler = 
     ResolveEventHandler(fun sender e ->
-        MessageBox.Show(sprintf "trying to resolve something %s" e.Name) |> ignore
         assm.Value.GetLoadedModules()
         |> Seq.tryFind(fun m -> m.Name = e.Name)
         |> function
@@ -70,32 +71,28 @@ let ownDomain f =
     // https://stackoverflow.com/questions/4343845/could-not-load-file-or-assembly
     let ad = Util.CreateAppDomain("WpfTest", AppDomain.CurrentDomain.Evidence, AppDomain.CurrentDomain.SetupInformation)
     let disp = makeAddHandlerDisposable ad.add_AssemblyResolve ad.remove_AssemblyResolve aar
-    printfn "Starting app domain get assemblies and force load loop"
-//    assm.Value.GetReferencedAssemblies()
     AppDomain.CurrentDomain.GetAssemblies()
     |> Seq.iter(fun m ->
-        printfn "Trying to load %s" m.CodeBase
         try
             ad.Load (m.FullName) |> ignore
-            printfn "Loaded into AppDom %s" m.FullName
         with ex ->
             printfn "Failing to load %s" m.FullName
             m.Dump()
     )
     
-    printfn "Started up"
     let mm = MyMarshal()
     mm.Print "Testing mm"
     let child = 
         try
-            ad.CreateInstanceFromAndUnwrap(assm.Value.CodeBase, typeof<Child>.FullName) 
+            ad.CreateInstanceFromAndUnwrap(assm.Value.CodeBase, typeof<Child>.FullName)  :?> Child
         with _ -> 
-            reraise()
+            reraise() 
     printfn "made a baby"
+    child.Initialize(mm)
     try
         printfn "AppDomain delegates hooking"
         let disp = makeAddHandlerDisposable ad.DomainUnload.AddHandler ad.DomainUnload.RemoveHandler (EventHandler(fun _ _ -> printfn "weee?"))
-        ad.DoCallBack(CrossAppDomainDelegate (f mm))
+//        ad.DoCallBack(CrossAppDomainDelegate (f mm))
         printfn "Finished app, closing?"
         AppDomain.Unload ad
         mm.Dispose()
