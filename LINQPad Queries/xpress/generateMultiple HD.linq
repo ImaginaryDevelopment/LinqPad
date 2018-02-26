@@ -65,6 +65,7 @@ let before (delim:string) (x:string) =
     let i = x.IndexOf(delim)
     x.Substring(0, i)
     
+printfn "wee?"
 // items that we aren't generating the SQL for, but need datamodels generated from the sql db schema    
 let dataModelsToGen : TableIdentifier list = [
         {TableIdentifier.Schema="dbo"; Name="Client"}
@@ -73,9 +74,11 @@ let dataModelsToGen : TableIdentifier list = [
         {TableIdentifier.Schema="dbo"; Name="Result"}
     ]
     
+printfn "wee?"
 let dte = 
     try
         Macros.VsMacros.getWindowNames()
+        |> Dump
         |> Seq.find(fun wn -> wn.Contains("HealthDesigns"))
         |> dumpt "VisualStudioWindowName"
         |> Macros.VsMacros.getDteByWindowName
@@ -103,7 +106,7 @@ let targetCodeProjectName = "HD.Schema"
 let typeScriptProjectName = "HD.Service"
 let typeScriptFolderName = None //Some "src" // this isn't working correctly with f# projects
 let refData : ReferenceData list = []
-            //type ReferenceData = {Schema:string; Table:string; Column:string; ValuesWithComments: IDictionary<string,string>}
+//            type ReferenceData = {FKeyId:FKeyIdentifier; GenerateReferenceTable:bool; ValuesWithComment: IDictionary<string,string>}
 //            {   ReferenceData.FKeyId= {Table={Schema="dbo";Name="GuarantorTypes"};Column="GuarantorTypeId"}
 //                GenerateReferenceTable=false
 //                ValuesWithComment= dict[
@@ -112,6 +115,7 @@ let refData : ReferenceData list = []
 //                                        "Insurance & Self", null ]
 //            }
 
+printfn "wee?"
 let codeTableBlacklist = []
 
 let columnBlacklist = 
@@ -147,6 +151,7 @@ sb
 |> ignore
 
 let scriptFullPath = Path.Combine(__SOURCE_DIRECTORY__,__SOURCE_FILE__)
+printfn "wee?"
 
 let manager = 
     // if this script is in the solution it is modifying, we need the EnvDTE.ProjectItem representing it, otherwise where does the main (non sub-file) output go?
@@ -193,7 +198,7 @@ let cgsm =
                                     "sp_renamediagram"
                                     "sp_upgraddiagrams"]; GenerateSprocInputRecords=true}
 
-            UseCliMutable= Mutability.Mutable
+            Mutable= PureCodeGeneration.Mutability.Immutable
             GetMeasureNamepace= Some (fun _ -> "HD.Schema")
             AdditionalNamespaces= Set ["HD.Schema.BReusable"]
         }
@@ -212,7 +217,7 @@ sb
 |> appendLine "Main File Output"
 |> appendLine (sprintf "Started at %O" DateTime.Now)
 |> ignore
-
+printfn "wee?"
 let generatePartials = false
 
 let results = 
