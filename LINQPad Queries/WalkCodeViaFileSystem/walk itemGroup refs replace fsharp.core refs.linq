@@ -9,14 +9,14 @@
 module Settings = // to run this script targeting a different dll/package everything in Settings may need changing
     let targetRef = "FSharp.Core"
     // in this case they are the same, but they may not be
-    let packageName, targetVersion = targetRef, "4.2.3"
+    let packageName, targetVersion = targetRef, "4.3.4"
     // we don't want to assume the package subdirectories always have the version number in the folder name, or the same way
-    let desiredRefText = """<Reference Include="FSharp.Core, Version=4.4.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    let desiredRefText = """<Reference Include="FSharp.Core, Version=4.4.3.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
       <AssemblyName>FSharp.Core.dll</AssemblyName>
-      <HintPath>..\packages\FSharp.Core.4.2.3\lib\net45\FSharp.Core.dll</HintPath>
+      <HintPath>..\packages\FSharp.Core.4.3.4\lib\net45\FSharp.Core.dll</HintPath>
     </Reference>
 """
-    let desiredPCRefText = """<package id="FSharp.Core" version="4.2.3" targetFramework="net452" />"""
+    let desiredPCRefText = """<package id="FSharp.Core" version="4.3.4" targetFramework="net452" />"""
 open Settings
 module Helpers =
     type String = 
@@ -305,4 +305,3 @@ RefFixing.fixRefs false
 projs
 |> dumpReverseT
 |> Option.iter (List.map fst >> PConfigFixing.fixProjectConfigs true)
-
