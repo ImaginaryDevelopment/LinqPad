@@ -10,6 +10,7 @@ let text = """
 
 
 ReferringPhysicianID,SpecialtyID,FirstName,MiddleName,LastName,Title,Phone,Fax,Address,Address2,City,State,Zip,Email,Note
+697,70,,,River Garden,,260-0856,260-4182,11401 Old St. Augustine Rd.,,Jacksonville,FL,32258,,Geriatric Medicine
 661,54,William,,Mendenhall,MD,(352) 265-0287,(352) 265-0759,P.O. Box 100385,2000 SW Archer Road,Gainesville,FL,32610,,Radiation Oncology
 932,13,Kent,,Wehmeier,MD,633-0411,244-5650,655 West 8th Street,"ACC Building, Lower Level",Jacksonville,FL,32209,,"Endocrinology, Diabetes & Metabolism"
 661,5,William,,Mendenhall,MD,(352) 265-0287,(352) 265-0759,P.O. Box 100385,2000 SW Archer Road,Gainesville,FL,32610,,
@@ -42,9 +43,7 @@ let walkIt (s:string) =
                     else Some(quoted,null)
                     
                 elif x.[0] = ',' then
-                    if x.Length > 1 && x.[1] = ',' then
-                        Some(String.Empty,x.[2..])
-                    else Some("",x.[1..])
+                    Some("",x.[1..])
                 else 
                     let unquoted = x |> Seq.takeWhile(fun x -> x <> ',') |> Array.ofSeq |> String               
                     let r = 
@@ -82,15 +81,18 @@ let valueMap =
     | x -> x |> replace "'" "''" (* |> replace textComma "," *) |> sprintf "'%s'"
 let expectedCount = headers.Length
 
-let assertLength expected (a:_[]) =
+let assertLength expected sourceLine (a:_[]) =
     if expected <> a.Length then
-        Util.HorizontalRun(false,headers,a).Dump("failing")
+        Util.VerticalRun(false, sourceLine,  Util.HorizontalRun(false,headers,a)).Dump("failing")
         failwithf "bad data found expected %i fields, but row contained %i" expected a.Length
     a
     
 let headerText = headers |> delimit ", "
 let f = Array.map (trim >> valueMap)
 data
-|> Seq.map(walkIt >> Seq.skip 1 >> Array.ofSeq >> f >> assertLength expectedCount >> delimit ",")
+|> Seq.map(fun line ->
+    let walked = walkIt line |> Seq.skip 1 |> Array.ofSeq |> f
+    
+    assertLength expectedCount line walked |> delimit ",")
 |> Seq.map(fun x -> sprintf "insert into %s (%s) values(%s)" tableName headerText x)
 |> delimit "\r\n"
