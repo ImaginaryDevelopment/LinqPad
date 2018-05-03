@@ -12,7 +12,7 @@
 
 let toCharArray(x:string) = x.ToCharArray()
 let trimStart1 d (x:string) = x.TrimStart(d |> toCharArray)
-let (@@) subPath path = 
+let (@@) path subPath = 
     subPath 
     |> trimStart1 "\\"
     |> trimStart1 "/"
@@ -88,9 +88,10 @@ module Hack =
                     use stream = invokeMethod entryT "Open" (InstanceMethod ze) [| |] :?> Stream 
                     use destination = File.Open(target, FileMode.CreateNew, FileAccess.Write,FileShare.None)
                     stream.CopyTo destination
-                    File.SetLastWriteTime(target,lastWriteTime.DateTime)
                     printfn "Extracted %s to %s" fullName target
+                    // need the file handle closed before setting write time
                     destination.Dispose()
+                    File.SetLastWriteTime(target,lastWriteTime.DateTime)
                     target
                 with ex -> 
                     ze.Dump("failing to extract")
@@ -116,6 +117,7 @@ module Hack =
     
 let targetish = Environment.ExpandEnvironmentVariables("%droproot%")
 let targets = [ targetish; Path.GetDirectoryName targetish @@ "Pm_VsBuild_Debug_Deploy"]
+printfn "Checking in %A" targets
 let exeName = "PracticeManagement.exe"
 let subPath = @"drop\PM\" + exeName
 let (|ExeDrop|_|) d = 
@@ -125,7 +127,6 @@ let (|ExeDrop|_|) d =
     else 
         try
             let extractedP = Path.Combine(d,"drop",exeName) 
-            printfn "Checking for %s" extractedP
             if File.Exists extractedP then
                 Some extractedP
             else 
@@ -140,42 +141,52 @@ let (|ZipDrop|_|) d =
         |> Seq.tryHead
         |> function
             | Some zfp ->
-                printfn "Found a zip file! %s" zfp
+//                printfn "Found a zip file! %s" zfp
                 use zp = Hack.openRead(zfp)
                 let targetEntry = "b/PM/" + exeName
                 let targetOut = Path.Combine(zipPath,exeName)
                 zp.TryExtract targetEntry targetOut
             | None -> None
     else None
-targets
-|> Seq.collect Directory.EnumerateDirectories 
-|> Seq.choose
-    (function
-    | ExeDrop fp ->
-        Some fp
-    | ZipDrop fp ->
-        
-//        failwith "uhhh not implemented"
-        //zip.Entries.Dump()
-        Some null
-    | d ->
-            printfn "nothing found to check at %s" d
-            (Directory.GetFiles d).Dump("one of these?")
-            None
-)
-|> Seq.truncate 3
-|> Seq.sort
-|> List.ofSeq
-|> List.rev
-|> List.truncate 20
-|> List.map(fun fp ->
+let searchedButEmpty = ResizeArray()
+let findDrops p = 
+    let d =  Directory.EnumerateDirectories p |> List.ofSeq
+    printfn "Searching %i directories under %s(%i unique)" d.Length p (d |> List.distinct |> List.length)
+//    d.Dump()
+    d
+    |> Seq.filter(fun x -> Regex.IsMatch(Path.GetFileName(x), "^\d+"))
+    |> Seq.choose
+        (function
+        | ExeDrop fp ->
+            if fp.Contains("Debug") then
+                printfn "Found a exeDrop at %s" fp
+            Some fp
+        | ZipDrop fp -> 
+            printfn "Found zipDrop %s" fp
+            Some fp
+        | d ->
+                let files = Directory.GetFiles d
+                if files.Length > 0 then
+                    searchedButEmpty.Add((d, files))
+                None
+    )
+    |> Seq.sort
+    |> List.ofSeq
+    |> List.rev
+    
+let getDropInfo fp () =
+    let fi = FileInfo(fp)
+    let fvi = FileVersionInfo.GetVersionInfo fp
+    fp,fvi.FileVersion,fi.CreationTime, fi.LastWriteTime
+let cacheDropInfo path =
     try
-        let fi = FileInfo(fp)
-        let fvi = FileVersionInfo.GetVersionInfo fp
-        fp,fvi.FileVersion,fi.CreationTime, fi.LastWriteTime
+        Util.Cache(Func<_>(getDropInfo path),path)
     with ex ->
-        printfn "Failing on %s" fp
+        printfn "Failing on %s" path
         reraise()
-)
+targets
+|> List.map findDrops
+|> List.map(List.map cacheDropInfo)
 |> Dump
 |> ignore
+searchedButEmpty.Dump("maybe errors or missed items?")
