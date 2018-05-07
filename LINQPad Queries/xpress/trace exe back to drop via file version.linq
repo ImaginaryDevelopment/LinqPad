@@ -1,7 +1,6 @@
 <Query Kind="FSharpProgram">
-  <Reference>&lt;CommonApplicationData&gt;\LINQPad\Updates50\beta\LINQPad.exe</Reference>
-  <NuGetReference>System.IO.Compression</NuGetReference>
-  <NuGetReference>System.IO.Compression.ZipFile</NuGetReference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.IO.Compression.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.IO.Compression.FileSystem.dll</Reference>
   <Namespace>System.IO.Compression</Namespace>
   <DisableMyExtensions>true</DisableMyExtensions>
   <CopyLocal>true</CopyLocal>
@@ -17,104 +16,25 @@ let (@@) path subPath =
     |> trimStart1 "\\"
     |> trimStart1 "/"
     |> fun x -> Path.Combine(path,subPath)
-//Assembly.GetExecutingAssembly().Location.Dump()
-module Reflection = 
-    let cast<'t> (x:obj) = x :?> 't
-    let getType (x:obj) = x.GetType()
-    let getReferenceInfo() = 
-        AppDomain.CurrentDomain.GetAssemblies()
-        |> Array.map(fun asm -> 
-            asm.FullName
-        )
-        |> Dump
-        |> ignore
-    type Invokable = 
-        | StaticMethod
-        | InstanceMethod of obj
-        
-    let invokeMethod (t:Type) (name:string) inv = 
-        match inv with
-        | StaticMethod ->
-            null
-        | InstanceMethod x ->
-            x
-        |> fun x ->
-            let m = t.GetMethod(name)
-            fun args -> 
-                m.Invoke(x,parameters=args)
-    let invokeF t name inv =
-        invokeMethod t name inv [| |]
-    // for calling the same function passing different instances
-    let createInvokable (t:Type) name =
-        let m = t.GetMethod(name)
-        fun x ->
-            m.Invoke(x,[| |])
-            
-module Hack = 
-    open Reflection
-        
-    let createGetFullNameFun t (x:obj) = 
-        let f = Reflection.createInvokable t "get_FullName"
-        f x |> cast<string>
-    let createGetNameFun t (x:obj) = 
-        let f = Reflection.createInvokable t "get_Name"
-        f x |> cast<string>
-        
-    let getZipEntries actualT x =         
-            //getReferenceInfo()
-        let fMe = invokeMethod actualT "get_Entries" (InstanceMethod x) 
-        let entries = fMe [| |] :?> IReadOnlyCollection<obj>
-        let itemType = Seq.head entries |> getType
-        let fFullName = itemType |> createGetFullNameFun
-        let fName = itemType |> createGetNameFun
-        entries 
-        |> Seq.map(fun x ->  fName x, fFullName x,x)
-            
-    type ZipProxy(za:obj) =
-        let za = za :?> IDisposable
-        let t = za.GetType()
-        let entryT, entries = 
-            let entries = getZipEntries t za
-            entries |> Seq.map(fun (_,_,x) -> x) |> Seq.head |> getType, entries
-        let tryFind n =  entries |> Seq.tryFind (fun (_name,fn,x) -> fn = n)|> Option.map(fun (_,_,x) -> x)
-        
-        member __.TryExtract fullName (target:string) = 
-            
-            tryFind fullName
-            |> Option.map(fun ze ->
-                printfn "Extracting %s" fullName
-                try
-                    let lastWriteTime = invokeF entryT "get_LastWriteTime" (InstanceMethod ze) :?> DateTimeOffset
-                    use stream = invokeMethod entryT "Open" (InstanceMethod ze) [| |] :?> Stream 
-                    use destination = File.Open(target, FileMode.CreateNew, FileAccess.Write,FileShare.None)
-                    stream.CopyTo destination
-                    printfn "Extracted %s to %s" fullName target
-                    // need the file handle closed before setting write time
-                    destination.Dispose()
-                    File.SetLastWriteTime(target,lastWriteTime.DateTime)
-                    target
-                with ex -> 
-                    ze.Dump("failing to extract")
-                    entryT.GetMethods()
-                    |> Seq.map(fun m -> 
-                        m.Name
-                    )
-                    |> fun x -> x.Dump(entryT.Name)
-                    |> ignore
-                    reraise()
-            )
-            
-        interface IDisposable with
-            member __.Dispose() = za.Dispose()
-        
-        
-    // work around missing method exception
-    let openRead (zipPath:string) = 
-        let t = typeof<System.IO.Compression.ZipFile>
-        let m = t.GetMethod("OpenRead")
-        let x = m.Invoke(null,[| box zipPath|]) :?> IDisposable
-        new ZipProxy(x)
     
+type ZipArchive with 
+    member x.TryExtract fullName (target:string) =    
+        x.Entries
+        |> Seq.tryFind(fun ze -> 
+            ze.FullName = fullName
+        )
+        |> Option.map(fun ze ->
+            let lwt = ze.LastWriteTime
+            use stream = ze.Open()
+            use destination = File.Open(target,FileMode.CreateNew, FileAccess.Write, FileShare.None)
+            stream.CopyTo destination
+            printfn "Extracted %s to %s" fullName target
+            // need the file handle closed before setting write time
+            destination.Dispose()
+            File.SetLastWriteTime(target,lwt.DateTime)
+            target
+        )
+        
 let targetish = Environment.ExpandEnvironmentVariables("%droproot%")
 let targets = [ targetish; Path.GetDirectoryName targetish @@ "Pm_VsBuild_Debug_Deploy"]
 printfn "Checking in %A" targets
@@ -141,8 +61,7 @@ let (|ZipDrop|_|) d =
         |> Seq.tryHead
         |> function
             | Some zfp ->
-//                printfn "Found a zip file! %s" zfp
-                use zp = Hack.openRead(zfp)
+                use zp = ZipFile.OpenRead(zfp)
                 let targetEntry = "b/PM/" + exeName
                 let targetOut = Path.Combine(zipPath,exeName)
                 zp.TryExtract targetEntry targetOut
