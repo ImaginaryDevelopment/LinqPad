@@ -178,10 +178,12 @@ let scriptFullPath = Path.Combine(__SOURCE_DIRECTORY__,__SOURCE_FILE__)
 
 let manager = 
     // if this script is in the solution it is modifying, we need the EnvDTE.ProjectItem representing it, otherwise where does the main (non sub-file) output go?
-    let templateProjectItem:EnvDTE.ProjectItem = dte.Solution.FindProjectItem(scriptFullPath)
+    let templateProjectItem:EnvDTE.ProjectItem option = dte.Solution.FindProjectItem scriptFullPath |> Option.ofUnsafeNonNullable
     printfn "Script is at %s" scriptFullPath
-    if not <| isNull templateProjectItem then
-        printfn "ProjectItem= %A" (templateProjectItem.FileNames(0s))
+    templateProjectItem
+    |> Option.iter(fun templateProjectItem ->
+        printfn "ProjectItem= %A" (templateProjectItem.FileNames 0s)
+    )
     let dteWrapper = wrapDte dte
     MultipleOutputHelper.Managers.VsManager(None, dteWrapper, sb, templateProjectItem)
 let pluralizer = 
@@ -194,6 +196,12 @@ let cgsm =
         {
             TargetProjectName= targetCodeProjectName
             TargetNamespace= "Pm.Schema.DataModels"
+            TypeScriptGenSettingMap= None 
+//                {
+//                    TargetProjectName= typeScriptProjectName
+//                    ColumnBlacklist = columnBlacklist
+//                    TargetFolderOpt = typeScriptFolderName
+//                }
             CString = cString
             UseOptionTypes= false
             ColumnBlacklist= columnBlacklist
@@ -220,7 +228,7 @@ let cgsm =
                                     "sp_renamediagram"
                                     "sp_upgraddiagrams"]; GenerateSprocInputRecords=true}
 
-            UseCliMutable= false
+            Mutable= PureCodeGeneration.Mutability.Immutable
             GetMeasureNamepace= Some (fun _ -> "Pm.Schema")
             AdditionalNamespaces= Set ["Pm.Schema.BReusable"]
         }
@@ -228,6 +236,8 @@ let cgsm =
 // these are the items we will generate into a sql project
 // but currently it also expects they will already be created in the sql server =(
 let toGen : TableInput list = 
+    let facilityFKey = FKeyIdentifier {Table={Schema="dbo";Name="Facilities"};Column="FacilityID"}
+    let facilityFKeyColumn =  ColumnInput.createFKeyedInt "FacilityId" facilityFKey
     [
         TableInput(Schema="dbo", Name="EraPayment", 
             Columns=[
@@ -236,13 +246,6 @@ let toGen : TableInput list =
                 ColumnInput.create "DeliveryName" (ColumnType.StringColumn 50)
                 ColumnInput.create "Name" (ColumnType.StringColumn 50)
                 {ColumnInput.create "CreatedUtc" (ColumnType.DateTimeColumn) with DefaultValue="getutcdate()"} 
-            ]
-        )
-        TableInput(Schema="dbo", Name="EraToCharge",
-            Columns=[
-                {ColumnInput.createFKeyedInt "EraPaymentID" (FKeyIdentifier{Table={Schema="dbo"; Name="EraPayment"}; Column="EraPaymentID"}) with Nullability=PrimaryKey}
-                {ColumnInput.createFKeyedInt "ChargeID" (FKeyIdentifier{Table={Schema="dbo"; Name="Charge"}; Column=null}) with Nullability=PrimaryKey}
-                {ColumnInput.create "CreatedUtc" (ColumnType.DateTimeColumn) with DefaultValue="getutcdate()"}
             ]
         )
         TableInput(
@@ -259,7 +262,7 @@ let toGen : TableInput list =
             Columns = [
                 ColumnInput.createPKIdentity "ScanStatisticID"
                 ColumnInput.create "BarcodeCaptured" ColumnType.Bit
-                ColumnInput.createFKeyedInt "FacilityId" (FKeyIdentifier {Table={Schema="dbo";Name="Facilities"};Column="FacilityID"})
+                facilityFKeyColumn 
                 ColumnInput.createUserIdColumn null Nullability.AllowNull List.empty
                 {ColumnInput.createFKeyedInt "PatientId"(FKeyIdentifier{Table={Schema="dbo"; Name="Patients"}; Column=null}) with Nullability=AllowNull}
                 ColumnInput.create "DeviceSerialNumber" ColumnType.IntColumn
@@ -277,10 +280,10 @@ let toGen : TableInput list =
             Name="ReportJob",
             Columns = [
                 ColumnInput.createPKIdentity "ReportJobID"
-                ColumnInput.createFKey "CustomReportName" (ColumnType.StringColumn 50) (FKeyIdentifier {Table={Schema="dbo"; Name="CustomReport";};Column="Name"})
+                ColumnInput.createFKey "CustomReportName" (ColumnType.StringColumn 50) (FKeyIdentifier {Table={Schema="dbo"; Name="CustomReport"};Column="Name"})
                 ColumnInput.create "ReportJobName" (ColumnType.StringColumn 255) 
                 ColumnInput.createUserIdColumn null Nullability.AllowNull ["null to allow system inserts/adjustments that aren't done by a user"]
-                {ColumnInput.createFKeyedInt "FacilityID" (FKeyIdentifier {Table={Schema="dbo";Name="Facilities"};Column="FacilityID"}) with Nullability = AllowNull}
+                { facilityFKeyColumn with Nullability = Nullability.AllowNull}
                 {ColumnInput.create "RangeStart" ColumnType.DateTimeColumn with Nullability = Nullability.AllowNull}
                 {ColumnInput.create "RangeEnd" ColumnType.DateTimeColumn with Nullability = Nullability.AllowNull}
                 {ColumnInput.create "Status" (ColumnType.StringColumn 40) with Nullability = Nullability.AllowNull}
@@ -339,6 +342,7 @@ let toGen : TableInput list =
                     {ColumnInput.create "IsPaper" ColumnType.Bit with DefaultValue = "0"}
                     {ColumnInput.createFKeyedInt "CCItemID" (FKeyIdentifier {Table={ Schema="Accounts" ; Name="CCItem"}; Column=null})with Nullability = AllowNull} 
                     {ColumnInput.create "Comments" StringMax with Nullability = Nullability.AllowNull}
+                    {facilityFKeyColumn with Nullability = Nullability.AllowNull}
 
                             ])
         TableInput(
