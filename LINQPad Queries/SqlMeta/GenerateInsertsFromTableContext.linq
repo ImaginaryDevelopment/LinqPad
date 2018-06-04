@@ -28,9 +28,7 @@ dc.Mapping.GetTables()
 |> Dump
 |> ignore
 
-//dc.Mapping.MappingSource.GetModel(typeof<TypedDataContext>).GetMet
 
-//let tableName =  "Accidents"
 let targetTable,schemaName,tableName = 
     let tables =  dc.Mapping.GetTables()
     let tableNames = 
@@ -51,19 +49,14 @@ let targetTable,schemaName,tableName =
     else tt,"dbo",user
 Util.ClearResults()    
 printfn "Running generation for table %s.%s" schemaName tableName
-//type Target = Accidents
 
 let values = dc.GetTable(targetTable.RowType.Type) |> Seq.cast<obj>
 
-//let schema = "dbo"
-
-//let identityColumnName = "AccidentID"
-
-let t = targetTable.RowType.Type //typeof<Target>
+let t = targetTable.RowType.Type
 let joiner,isIdentity = 
     match targetTable.RowType.DataMembers |> Seq.filter(fun dm -> dm.IsPrimaryKey) |> List.ofSeq with
     | [] -> failwithf "No primary key(s) found"
-    | pk1::pk2::_ -> raise <| NotImplementedException( "Multiple primary keys not implemented")
+    | pk1::pk2::_ -> raise <| NotImplementedException "Multiple primary keys not implemented"
     | pk::[] -> pk.Name, pk.IsDbGenerated
 let target = 
 
@@ -74,14 +67,11 @@ let target =
             t.Name.Dump("Failing PersistentDataMembers")
             reraise()
         |> Seq.filter(fun pm -> 
-//            printfn "Column %s is Association? %A" pm.Name pm.IsAssociation
             not pm.IsAssociation
         )
         |> Seq.map (fun pm -> pm.Name, pm.Type, pm.CanBeNull,t.GetField(pm.Name))
         |> List.ofSeq
-        //|> Dump
-        |> Seq.map (fun (name,t, n, getter) -> name,t, n, fun x -> getter.GetValue x)
-        |> List.ofSeq
+        |> List.map (fun (name,t, n, getter) -> name,t, n, fun x -> getter.GetValue x)
     persistent
     
 [<AutoOpen>]
