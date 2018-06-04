@@ -10,17 +10,21 @@ module Helpers =
     let delimit d (items :string seq ) = String.Join(d,items |> Array.ofSeq)
     let flip f y x = f x y
 open Helpers
-
-type Target = Codes
-let t = typeof<Target>
-let values = dc.Codes
+//dc.Mapping.GetTables()
+//|> Seq.map(fun t -> t.TableName,t.RowType.Type, t.RowType.DataMembers)
+//|> Dump
+//|> ignore
+//dc.Mapping.MappingSource.GetModel(typeof<TypedDataContext>).GetMet
+type Target = Accidents
+let values = dc.Accidents
 let schema = "dbo"
-let tableName = "Codes"
-let identityColumnName = "CodeID"
+let tableName = "Accidents"
+let identityColumnName = "AccidentID"
+
+let t = typeof<Target>
 let joiner = identityColumnName
 let target = 
 
-    
     let persistent = 
         dc.Mapping.GetTable(t).RowType.PersistentDataMembers 
         |> Seq.map (fun pm -> pm.Name, pm.Type, pm.CanBeNull,t.GetField(pm.Name))
@@ -81,7 +85,7 @@ let generateInserts tableName (rowType:Type) columnBlacklist (members:#seq<strin
         
     let insert:string = insertStatement tableName columns
     
-    dc.Codes
+    values
     |> Seq.map (valuesMap members >> sprintf "%s%s)" insert)
     
 
@@ -158,10 +162,10 @@ GO"""
 ////|> Seq.map (fun l -> sprintf "Insert into
 // "dbo" "Language" "LanguageID" 
 let text = generateMerge schema tableName joiner true target 
-let rec refreshDisplay() = 
+let rec refreshLinks() = 
+    let dumpTextLimit = 2000
     Util.ClearResults()
-    [
-        "Refresh display", (fun () -> refreshDisplay(); "Refreshed")
+    [        
         "Copy to clipboard", fun () ->
             System.Windows.Forms.Clipboard.SetText text
             "Saved to clipboard"
@@ -172,8 +176,32 @@ let rec refreshDisplay() =
                 File.WriteAllText(sfd.FileName,text)
                 sprintf "Saved to file %s" sfd.FileName
             | _ -> "Save cancelled"
-        "Dump", fun () -> text
+//        "Dump", fun () -> text
+        // useful if you need the copy to clipboard link to work again, or the others
+        "Refresh this menu", (fun () -> refreshLinks(); "Refreshed")
     ] |> Seq.iter (Util.OnDemand >> Dump >> ignore)
-refreshDisplay()
-
-
+    if text.Length > dumpTextLimit then
+        printfn ""
+        printfn "Too big to dump entire output"
+        printfn ""
+    text
+    |> Seq.truncate 500
+    |> Array.ofSeq
+    |> String
+    |> Dump
+    |> ignore
+    if text.Length > 500 then
+        printfn ""
+        if text.Length < dumpTextLimit then
+            let endSnipContainer = DumpContainer()
+            let f :unit -> unit = fun () -> endSnipContainer.Content <- box ""
+            Util.OnDemand("...",fun () -> f(); text.[500..]).Dump()
+            printfn ""
+            endSnipContainer.Content <- box text.[text.Length-100..]
+            endSnipContainer.Dump()
+        else 
+            printfn "..."
+            printfn ""
+            text.[text.Length - 300 ..]
+            |> printfn "%s"
+refreshLinks()
