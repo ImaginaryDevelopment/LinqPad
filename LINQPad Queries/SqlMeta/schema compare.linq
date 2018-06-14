@@ -13,6 +13,7 @@ module Helpers =
             if Directory.Exists x then 
                 x
             else
+                printfn "Creating directory %s" x
                 Directory.CreateDirectory x |> ignore<DirectoryInfo>
                 x
     let getUF (x:'a) =
@@ -89,7 +90,7 @@ module SchemaCompare =
         )
         |> List.ofSeq
     // take a schemas' mismatches and create out the files/directories needed for a diff app to be the ui to the user
-    let prepMismatchDiff schemasPath schema (mismatches:SprocMisMatch list) : unit =
+    let prepMismatchDiff (SchemasPath schemasPath) schema (mismatches:SprocMisMatch list) : unit =
         mismatches
         |> List.fold(fun (tempDirOpt:_ option) smm ->
             
@@ -109,11 +110,19 @@ module SchemaCompare =
                 )
             // the path to this schema's temp folder for (f)ile version or (d)atabase verion
             let mmt,fr,dr = withTemp tempDirOpt
+            printfn "fr=%s,dr=%s" fr dr
             
             let frp x = fr |> Path.combine1 x |> Directory.existsOrCreate
             let drp x = dr |> Path.combine1 x |> Directory.existsOrCreate
             match smm with
-            | NotFound(name,p) -> ()
+            // not found in the db
+            | NotFound(name,path) -> 
+                let targetPath = 
+                    Path.GetFileName path 
+                    |> frp
+                printfn "Not found name=%s,path=%s, targetPath=%s" name path targetPath
+                File.Copy(path,targetPath,overwrite=true)
+                printfn "Copied %s to %s" path targetPath
             | Different tmm -> ()
                 
             Some mmt    
@@ -140,7 +149,7 @@ module SchemaCompare =
         // %path%/Schema Objects/Schemas
         // %path%/Schemas
         //path to the folder containing the individual schemas
-        let schemas =
+        let schemasPath,schemas =
             let isSchemaFolder = StringHelpers.startsWithI "Schema."
             match path with
             | DirMatch isSchemaFolder (Dir "Schema Objects" (Dir "Schemas" x)) ->
@@ -159,38 +168,24 @@ module SchemaCompare =
                 | Some x -> x
 
         schemas
-        |> List.map(fun (schemasPath,l) ->
-            schemasPath,l
-            |> List.choose(
+        |> List.choose(
                 function 
                 |Dir "Programmability" pp as x -> Some {Schema = Path.GetFileName x;ProgPath= pp}
                 | _ -> None
-            )
         )
-        |> List.map(fun (schemasPath, x) ->
-            x 
-            |> List.choose(fun sf ->
+        |> List.choose(fun sf ->
                 match sf.ProgPath with
-                | Dir "Stored Procedures" spp ->
-                    Some {Schema=sf.Schema;SPPath=spp}
-                | _ -> None
-                // don't change this to a bind, for the primary output we want to see all schema folders that were compared
-                |> Option.map(fun spp ->
+                | Dir "Stored Procedures" spp -> 
+                    let spp = {Schema=sf.Schema;SPPath=spp}
                     let x = getSprocMisMatches spp.SPPath (fGetDbText sf.Schema)
                     {SprocFolder =  spp; SprocMismatches= x}
-                )
-            )
+                    |> Some
+                | _ -> None
         )
         |> fun x -> x   
-//        |>  Option.tee(fun schemas ->
-//                        schemas
-//                        |> List.choose(
-//                            function
-//                            | _,_,[] -> 
-//                                ()
-//                        )
-//                        |> prepMismatchDiff schemasPath schema
-//        )
+        |> tee (List.iter(fun schemaCluster ->
+            prepMismatchDiff schemasPath schemaCluster.SprocFolder.Schema schemaCluster.SprocMismatches
+        ))
         
 
 open SchemaCompare
