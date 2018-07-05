@@ -173,6 +173,8 @@ type FileSummary(relativePath:string, fullPath:string,readerFunc:string->string[
     member self.Nonspaces=lazy(self.AllText.Value |> Seq.filter (fun x->Char.IsWhiteSpace(x)<>true) |> Seq.length)
     member self.DoubleQuotes=lazy(self.AllText.Value |> Seq.filter (fun x-> '"'=x) |> Seq.length)
     member self.PotentialMagicNumbers=lazy(self.AllText.Value |> rgNumber.Matches |> fun x->x.Count)
+    member self.MaxLineLength=lazy(self.AllLines.Value |> Seq.map String.length |> Seq.max)
+    member self.LongLines=lazy(self.AllLines.Value |> Seq.map String.length |> Seq.filter((>) 80) |> Seq.length)
     
 let  asSummary (files:string[]) :seq<FileSummary> =
     let uriPath (r:string)= if r.Length>1 then "~"+r.Substring(1) else String.Empty //if relPath is .
@@ -234,7 +236,7 @@ buildLimitString getHighestLinesByFile "HighestLines by file" highestLinesByFile
 
 // -------------- highest lines by folder ---------------
 
-type HighestLinesByFolderDetails = { Filename:string; LineCount:int; Nonspaces:int}
+type HighestLinesByFolderDetails = { Filename:string; LineCount:int; Nonspaces:int; MaxLineLength:int; LongLines:int}
 
 type HighestLinesByFolder = { Path:string;TotalLines:int;Details:seq<HighestLinesByFolderDetails>}
 
@@ -246,7 +248,7 @@ let getHighestLinesByFolder threshold =
     let filter (key:string,items:FileSummary seq) = 
         (getGroupLineCount items) > threshold
     summaries 
-    |> Seq.groupBy (fun x->x.RelativePath) 
+    |> Seq.groupBy (fun x-> x.RelativePath)
     |> (fun group -> if useThresholds then (Seq.filter filter group) else group )
     |> (fun group -> if useTakeLimits.IsSome then Seq.take(useTakeLimits.Value) group else group)
     |> Seq.map (fun (key,items) -> (key, items |> Seq.sumBy (fun i->i.LineCount) , items)) 
@@ -254,7 +256,15 @@ let getHighestLinesByFolder threshold =
     
     |> Seq.map (fun (key, l, items) -> 
         {Path=key;TotalLines=l;Details=
-            (items |> Seq.map (fun i ->{Filename= i.Filename;LineCount=i.LineCount;Nonspaces=i.Nonspaces.Value}))})
+            (items |> Seq.map (fun i ->
+                {
+                    Filename= i.Filename
+                    LineCount=i.LineCount
+                    Nonspaces=i.Nonspaces.Value
+                    MaxLineLength=i.MaxLineLength.Value
+                    LongLines=i.LongLines.Value
+                }
+            ))})
 
 try
     buildLimitString getHighestLinesByFolder "Highest lines by folder" highestLinesByFolderMinimum
