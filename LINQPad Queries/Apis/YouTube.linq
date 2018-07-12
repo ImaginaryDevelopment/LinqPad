@@ -139,7 +139,7 @@ open YouTubes
 
 type PlaylistItemDisplay = {Title:string; Image:obj; Position:int; PublishedAt:DateTime; ShortDescription:string; Description:obj;Raw:obj}
 let getChannels () = // includes playlists? maybe?
-    getCachedData "channels" (sprintf "/youtube/v3/channels?part=id&forUsername=%s&key=%s" username apiKey)
+    getCachedData "channels" (sprintf "/youtube/v3/channels?part=id&forUsername=%s&key=%s" userName apiKey)
     |> (fun raw -> 
         try
             raw
