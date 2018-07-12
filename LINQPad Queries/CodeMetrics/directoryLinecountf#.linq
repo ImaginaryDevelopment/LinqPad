@@ -240,7 +240,14 @@ let getHighestLinesByFile threshold =
     summaries 
     |> Seq.sortBy (fun x-> -x.LineCount - 1) 
     |> (fun fs -> if useTakeLimits.IsSome then Seq.take(useTakeLimits.Value) fs else fs)
-    |> Seq.map (fun x -> {Filename=x.Filename;LineCount=x.LineCount;Location=makeLinq x.FullPath x.RelativePath })
+    |> Seq.map (fun x -> {  Filename=x.Filename
+                            LineCount=x.LineCount
+                            Location=makeLinq x.FullPath x.RelativePath
+                            Nonspaces=x.Nonspaces.Value
+                            PotentialMagicNumbers=x.PotentialMagicNumbers.Value
+                            DoubleQuotes= x.DoubleQuotes.Value
+
+                        })
 
 buildLimitString getHighestLinesByFile "HighestLines by file" highestLinesByFileMinimum
 
