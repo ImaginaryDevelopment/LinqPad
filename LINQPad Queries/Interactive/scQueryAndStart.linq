@@ -1,194 +1,137 @@
-<Query Kind="Program" />
+<Query Kind="FSharpProgram" />
 
-void Main()
-{
+type ScQueryOutput = 
+    {
+        ServiceName:string 
+        DisplayName:string 
+        Type:string 
+        State:string 
+        Unmapped:string 
+    }
+module Seq =
+    let groupLinesBy delimiter text =
+        seq{
+            let sb = StringBuilder()
+            let empties = StringBuilder()
+            for item in text |> Seq.skipWhile String.IsNullOrWhiteSpace do
+                if item.StartsWith delimiter && sb.Length > 0 then
+                    yield sb.ToString()
+                    sb.Clear() |> ignore
+                if String.IsNullOrWhiteSpace item then
+                    empties.AppendLine item |> ignore
+                else
+                    sb.AppendLine item |> ignore
+                    empties.Clear() |> ignore
+            if sb.Length > 0 then
+                yield sb.ToString()
+        }
+    let any = Seq.exists(fun _ -> true)
+    let bufferByCount<'T> chunkSize values = 
+        seq{
+            let mutable total = 0
+            let mutable current = values
+            while (any current) do
+                yield current.Take(chunkSize)
+                total <- total + chunkSize
+                current <- current.Skip(chunkSize)
+        }
 
-	var start = "start";
-	var stop = "stop";
-	var query = "query";
-
-	var options = new[] { start, stop, query };
-	var current = Util.ReadLine("Desired action?", query, options);
-	var servers = System.Environment.GetEnvironmentVariable("servers", EnvironmentVariableTarget.User)?.Split(';');
-	var server = Util.ReadLine("Server?", servers?[0], servers);
-
-	var psi = new ProcessStartInfo("sc")
-	{
-		RedirectStandardError = true,
-		RedirectStandardOutput = true //,RedirectStandardInput=true 
-		,
-		UseShellExecute = false,
-		ErrorDialog = false,
-		CreateNoWindow = true
-	}; // WinMgmt or WMSvc?
-	IEnumerable<ScQueryOutput> queryResult;
-	var startOutput = default(MyExtensions.StreamOuts);
-	bool startHadError = false;
-	string toStart = null;
-	using (var ps = new Process())
-	{
-		ps.StartInfo = psi;
-
-		//var input=ps.StandardInput;
-		var queryOutputs = ps.RunProcessRedirected(@"\\" + server + " query state= all type= service");
-		if (queryOutputs.Errors.HasValue()) return;
-
-		queryResult = TransformScQuery(queryOutputs.Output);
-		//queryResult.Dump("all");
-		var validSvcs = queryResult;
-		if (current == start)
-			validSvcs = validSvcs.Where(r => r.State.StartsWith("4") == false);
-		else if (current == stop)
-			validSvcs = validSvcs.Where(r => r.State.StartsWith("4"));
-
-		if (validSvcs.Any() == false)
-		{
-			Util.Highlight("No valid services found to " + current).Dump();
-			queryResult.Select(q => new { q.DisplayName, State = q.State.RemoveMultipleWhitespaces() }).Dump("Found services on " + server);
-			return;
-		}
-		Util.HorizontalRun(false, validSvcs
-			.Select(r => r.ServiceName + "(" + r.State.RemoveMultipleWhitespaces().TruncateTo(12) + ")").BufferByCount(18)).Dump();
-		toStart = Util.ReadLine(current + " which service?", "WMSvc", queryResult.Select(r => r.ServiceName));
-
-		if (toStart.HasValue())
-			startOutput = ps.RunProcessRedirected(@"\\" + server + " " + current + " " + toStart);
-
-	} //ps disposed
-	if (startOutput.Errors.HasValue() || startOutput.Output.Contains("FAILED 1060:"))
-		startHadError = true;
-
-	Util.ClearResults();
-
-	Util.Highlight(startOutput.Output.Trim()).Dump("attempted to " + current + ":" + toStart);
-	if (toStart.HasValue() == false || startHadError)
-		queryResult.Dump("sc query result");
-
-	//	 Util.HorizontalRun(false, validSvcs
-	//	 	.Select (r =>r.ServiceName+"("+r.State.RemoveMultipleWhitespaces().TruncateTo(12)+")").BufferByCount(18)).Dump("services found");
-
-
-} //main
-
-public static IEnumerable<ScQueryOutput> TransformScQuery(string output)
-{
-	output.Dump();
-	var grouped = output.SplitLines().SkipWhile(o => string.IsNullOrEmpty(o)).GroupLinesBy("SERVICE_NAME");
-	foreach (var line in grouped
-				.Select(g => g.SplitLines()
-				   .Select(l => l.AfterOrSelf(": "))
-			   .ToArray()))
-	{
-
-		var serviceName = line[0];
-		serviceName.Dump();
-		yield return new ScQueryOutput()
-		{
-			ServiceName = serviceName,
-			DisplayName = line[1],
-			State = line[3] + line[4],
-			Type = line[2],
-			Unmapped = line.Skip(4).Delimit(Environment.NewLine)
-		};
-
-	}
-
-}
-
-public static IEnumerable<T> AllValues<T>()
-	where T : struct
-{
-	foreach (var item in Enum.GetNames(typeof(T)).Select(v => (T)Enum.Parse(typeof(T), v)))
-	{
-		yield return item;
-	}
-}
-#region structs
-public struct ScQueryOutput
-{
-	public string ServiceName { get; set; }
-	public string DisplayName { get; set; }
-	public string Type { get; set; }
-	public string State { get; set; }
-	public string Unmapped { get; set; }
-}
-//public struct StreamOuts
-//{
-//public string Errors{get;set;}
-//public string Output{get;set;}
-//}
-
-#endregion structs
-// Define other methods and classes here
-public static class EnumerableExtensions
-{
+let transformScQuery (output:string) = 
+//    output.Dump()
+    let grouped = output.SplitLines().SkipWhile(String.IsNullOrEmpty) |> Seq.groupLinesBy "SERVICE_NAME"
+    let lines = grouped |> Seq.map(fun g -> g.SplitLines() |> Seq.map (fun l -> l.AfterOrSelf(": ")) |> Array.ofSeq)
+    seq{
+        for line in lines do
+            let serviceName = line.[0]
+            yield 
+                {
+                    ServiceName = serviceName
+                    DisplayName = line.[1]
+                    State = line.[3] + line.[4]
+                    Type = line.[2]
+                    Unmapped = line.Skip(4).Delimit(Environment.NewLine)
+                }
+    }
+let allValues<'T when 'T : struct>() =
+    Enum.GetNames(typeof<'T>)
+    |> Seq.map (fun v -> Enum.Parse(typeof<'T>,v) :?> 'T)
+type System.String with
+    member x.TruncateTo count = 
+        match x with
+        | null -> x
+        | x when x.Length <= count -> x
+        | x -> x.Substring(0,count)
+type System.IO.StreamReader with
+    member x.ReadToEndAndDispose() =
+        use r = x
+        r.ReadToEnd()
 
 
-	public static IEnumerable<IEnumerable<T>> BufferByCount<T>(this IEnumerable<T> values, int chunkSize)
-	{
-		var total = 0;
-		var current = values;
-		while (current.Any())
-		{
-			yield return current.Take(chunkSize);
-			total += chunkSize;
-			current = current.Skip(chunkSize);
-		}
-		yield break;
-	}
+let start = "start"
+let stop = "stop"
+let query = "query"
 
+let options = [start; stop; query]
+let current = Util.ReadLine("Desired action?", query, options)
+let servers = 
+    System.Environment.GetEnvironmentVariable("servers", EnvironmentVariableTarget.User)
+    |> function
+        | ""
+        | null -> [| "localhost" |]
+        | x -> x.Split(';')
+let server = Util.ReadLine("Server?", servers.[0], servers);
 
-	public static IEnumerable<string> GroupLinesBy(this IEnumerable<string> text, string delimiter)
-	{
-		var sb = new StringBuilder();
-		var empties = new StringBuilder();
-		foreach (var item in text.SkipWhile(string.IsNullOrWhiteSpace))
-		{
-			if (item.StartsWith(delimiter) && sb.Length > 0)
-			{
-				yield return sb.ToString();
-				sb.Clear();
-			}
-			if (string.IsNullOrWhiteSpace(item))
-				empties.AppendLine(item);
-			else
-			{
-				sb.AppendLine(item);
-				empties.Clear();
-			}
+let psi = ProcessStartInfo("sc", 
+        	RedirectStandardError = true,
+        	RedirectStandardOutput = true, //,RedirectStandardInput=true 
+        	UseShellExecute = false,
+        	ErrorDialog = false,
+        	CreateNoWindow = true
+) // WinMgmt or WMSvc?
 
-		}
-		if (sb.Length > 0)
-			yield return sb.ToString();
-		yield break;
-	}
-}
+let mutable queryResult = null
+let mutable startOutput = Unchecked.defaultof<MyExtensions.StreamOuts>
+let mutable startHadError = false
+let mutable toStart = null
+type QrDisplay = {DisplayName:string; State:string;}
+using (new Process()) ( fun ps ->
+	ps.StartInfo <- psi
 
-public static class StringExtensions
-{
+	//let input=ps.StandardInput;
+	let queryOutputs = ps.RunProcessRedirected(@"\\" + server + " query state= all type= service")
+	if queryOutputs.Errors.HasValue() then
+        ()
+    else
 
-	public static string TruncateTo(this string text, byte count)
-	{
-		if (text == null || text.Length <= count)
-			return text;
-		return text.Substring(0, count);
+	queryResult <- transformScQuery queryOutputs.Output
+	//queryResult.Dump("all");
+	let mutable validSvcs = queryResult
+	if current = start then
+		validSvcs <- validSvcs.Where(fun r -> r.State.StartsWith("4") = false)
+	else if current = stop then
+		validSvcs <- validSvcs.Where(fun r -> r.State.StartsWith("4"))
 
-	}
+	if (validSvcs.Any() = false) then
+		Util.Highlight("No valid services found to " + current).Dump();
+		queryResult.Select(fun q -> { DisplayName=q.DisplayName; State = q.State.RemoveMultipleWhitespaces() }).Dump("Found services on " + server)
+	else
+	Util.HorizontalRun(false, validSvcs
+		.Select(fun r -> r.ServiceName + "(" + r.State.RemoveMultipleWhitespaces().TruncateTo(12) + ")") |> Seq.bufferByCount 18).Dump()
+	toStart <- Util.ReadLine(current + " which service?", "WMSvc", queryResult.Select(fun r -> r.ServiceName))
 
+	if toStart.HasValue() then
+		startOutput <- ps.RunProcessRedirected(@"\\" + server + " " + current + " " + toStart)
+)
+//ps disposed
 
+if startOutput.Errors.HasValue() || startOutput.Output.Contains("FAILED 1060:") then
+	startHadError <- true
 
-}
+Util.ClearResults()
 
-public static class Extensions
-{
+Util.Highlight(startOutput.Output.Trim()).Dump("attempted to " + current + ":" + toStart)
+if (toStart.HasValue() = false || startHadError) then
+	queryResult.Dump("sc query result");
 
-	public static string ReadtoEndAndDispose(this StreamReader reader)
-	{
-		using (System.IO.StreamReader r = reader)
-		{
-			return r.ReadToEnd();
-		}
-	}
-
-
-}
+//	 Util.HorizontalRun(false, validSvcs
+//	 	.Select (r =>r.ServiceName+"("+r.State.RemoveMultipleWhitespaces().TruncateTo(12)+")").BufferByCount(18)).Dump("services found");
