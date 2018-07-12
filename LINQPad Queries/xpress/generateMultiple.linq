@@ -471,8 +471,15 @@ let toGenAccounting =
                 ColumnInput.createUserIdColumn null Nullability.AllowNull ["null to allow system inserts/adjustments that aren't done by a user"]
                 ColumnInput.create "Entered" ColumnType.DateTimeColumn
                 {ColumnInput.create "Comments" StringMax with Nullability=Nullability.AllowNull}
+                { ColumnInput.create "ClaimLevel" ColumnType.IntColumn with Nullability=Nullability.AllowNull}
+                
+                // probably not needed, as manual journal entries wouldn't have a payment id or payment item id, and all system created entries that I can think of would.
+                //{ColumnInput.create "ManualEntry" ColumnType.Bit with Nullability = Nullability.AllowNull}
+                // Desired feature, an AchivedChargeID column (no fkey, used to store the chargeId that the JE used to point to before the chargeId was deleted from the system
+                //{ColumnInput.create "
             ]
         )
+
     ] 
     |> List.map (fun g ->
             GenerateAllTheThings.TableInput(Schema=g.Schema,Name=g.Name, Columns= g.Columns)
