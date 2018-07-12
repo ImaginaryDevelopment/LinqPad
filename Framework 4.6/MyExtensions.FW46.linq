@@ -182,19 +182,24 @@ public static class MyExtensions
 	{
 		return rnd.NextDouble() > 0.5;
 	}
-	//
-	//    public static My.StreamOuts RunProcessRedirected(this Process ps, string arguments)
-	//    {
-	//        ps.StartInfo.Arguments = arguments;
-	//        ps.Start();
-	//        ps.Id.Dump("processId started");
-	//        var output = ps.StandardOutput.ReadtoEndAndDispose();
-	//        var errors = ps.StandardError.ReadtoEndAndDispose();
-	//
-	//        ps.WaitForExit(2000);
-	//        if (errors.Length > 0) Util.Highlight(errors).Dump("errors");
-	//        return new My.StreamOuts() { Errors = errors, Output = output };
-	//    }
+	public class StreamOuts
+	{
+		public string Errors { get; set; }
+		public string Output { get; set; }
+	}
+
+	public static StreamOuts RunProcessRedirected(this Process ps, string arguments)
+	{
+		ps.StartInfo.Arguments = arguments;
+		ps.Start();
+		ps.Id.Dump("processId started");
+		var output = ps.StandardOutput.ReadtoEndAndDispose();
+		var errors = ps.StandardError.ReadtoEndAndDispose();
+
+		ps.WaitForExit(2000);
+		if (errors.Length > 0) Util.Highlight(errors).Dump("errors");
+		return new StreamOuts() { Errors = errors, Output = output };
+	}
 
 	#region xml related
 
