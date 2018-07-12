@@ -29,15 +29,44 @@ module Helpers =
             | Final ->
                 dcF.Content <- o
         )
+    let tryOrDump (d:obj,msg:string) f =
+        try
+            f()
+        with ex ->
+            d.Dump(msg)
+            reraise()
 open Helpers
 
 module Serialization = 
     open Newtonsoft.Json
     let deserialize (t:Type) (x:string) = JsonConvert.DeserializeObject(x,t)
     let deserializeT<'T> (x:string) = JsonConvert.DeserializeObject<'T>(x)
+    type RecordPropReplaceType = 
+        | UseOriginal
+        | Replacement of obj
+    let makeRecordWith (t:Type) (srcRecord:obj) (props:PropertyInfo list) fReplace =
+        let nextProps = 
+            props 
+            |> Seq.map(fun p -> 
+                let fx = tryOrDump (p,"Failed propertyMapping") ( fun () -> fReplace p)
+                
+                match fx with
+                | Replacement x -> box x
+                | UseOriginal -> tryOrDump(p,"Failed GetValue") (fun () ->  p.GetValue srcRecord |> box )
+            )
+            |> Array.ofSeq
+        let next = 
+            try
+                let result = FSharp.Reflection.FSharpValue.MakeRecord(t,nextProps)
+                result
+            with ex ->
+                nextProps.Dump(sprintf "Failed to make record for %s" t.Name)
+                reraise() 
+        next
     // consider this to ignore serialization of properties when the name = raw
     //type private JsonIgnoreRawResolver =
     let deserializeObjectReflectively<'T>(x:string) = 
+        printfn "Deserializing to %s" typeof<'T>.Name
         let rec deserializeR(t:Type) x = 
             let isRecord = Microsoft.FSharp.Reflection.FSharpType.IsRecord t
             let props = t.GetProperties() |> List.ofSeq
@@ -55,43 +84,29 @@ module Serialization =
                 | :? Linq.JObject as jo ->
                     
                     let raw = jo.ToString()
-                    printfn "JObject: %s" raw
+//                    printfn "JObject: %s" raw
                     let result =  raw |> deserialize t
                     
                     match props |> Seq.tryFind(fun p -> p.Name = "Raw" && p.PropertyType = typeof<string> || p.PropertyType = typeof<obj>) with
                     | Some pRaw when pRaw.PropertyType = typeof<string> -> 
                         if isRecord then
-                            printfn "Making record"
-                            let nextProps = 
-                                try
-                                    props 
-                                    |> Seq.map(fun p -> 
-                                            if p=pRaw then 
-                                                box raw
-                                            else
-                                                printfn "Attempting to deserialize to %s:%s from %A" p.Name p.PropertyType.Name raw
-                                                p.GetValue result |> box
-                                    )
-                                    |> Array.ofSeq
-                                with ex ->
-                                    printfn "Failed to get nextProps"
-                                    reraise()
-                            printfn "Properties = "
-                            try
-                                let result = FSharp.Reflection.FSharpValue.MakeRecord(t,nextProps)
-                                result
-                            with ex ->
-                                nextProps.Dump(sprintf "Failed to make record for %s" t.Name)
-                                printfn "Failed to get properties for %s from %A" t.Name nextProps
-                                reraise()
+                            //printfn "Making record"
+                            makeRecordWith t result props (fun p -> if p=pRaw then Replacement raw else UseOriginal)
                         else        
                             pRaw.SetValue(result,raw)
                             result
-                    | Some p -> 
-                        p.SetValue(result,Util.OnDemand("Raw",fun () -> raw))
-                        result
+                    | Some pRaw -> 
+                        let replacement = Util.OnDemand("Raw",fun () -> 
+                            printfn "Getting a raw!"
+                            raw
+                        )
+                        if isRecord then
+                            makeRecordWith t result props (fun p -> if p=pRaw then Replacement replacement else UseOriginal)
+                        else
+                            pRaw.SetValue(result,replacement)
+                            result
                     | None -> 
-                        result.Dump("item!")
+                        //result.Dump("item!")
                         result
             else
                 failwith "oopsies"
@@ -132,7 +147,7 @@ module YouTubes =
     
     type Resource = {Kind:string;VideoId:string}
     type PlaylistItemSnippet = {PublishedAt:DateTime; ChannelId:string; Title:string; Description:string; Thumbnails: ThumbnailContainer; Position:int; ResourceId:Resource}
-    type PlaylistItem = {Kind:string; ETag:string; Id:string; Snippet:PlaylistItemSnippet}
+    type PlaylistItem = {Kind:string; ETag:string; Id:string; Snippet:PlaylistItemSnippet;Raw:string}
     type PlaylistItemContainer = {Kind:string; ETag:string; NextPageToken:string; PageInfo:PageInfo; Items:PlaylistItem list}
     
 open YouTubes
@@ -177,24 +192,36 @@ let getWholeList listId =
         // we are ignoring the total results field expecting the nextPageToken will be empty or null on the last page
         match pState with
         | Initial -> 
-            printfn "Initial"
+            //printfn "Initial"
             getPartialList None listId
             |> Some
             
         | Progress (Some t) ->
-            printfn "Getting page"
+            //printfn "Getting page"
             getPartialList (Some t) listId
             |> Some
         | Progress None -> 
-            printfn "Stopping"
+            //printfn "Stopping"
             None
         |> Option.map(fun x ->
-            printfn "container found! %A" (x.PageInfo, x.NextPageToken)
+//            printfn "container found! %A" (x.PageInfo, x.NextPageToken)
             let toDisplay (y:PlaylistItem) = 
                 let shortened,sd = elipsize y.Snippet.Description
-                let d = if shortened then Util.OnDemand("Full Description", fun () -> y.Snippet.Description) else null
+                let d = 
+                    if shortened then 
+                        Util.OnDemand("Full Description", fun () -> y.Snippet.Description) 
+                    else 
+                        null
                 let t = if isNull <| box y.Snippet.Thumbnails then Unchecked.defaultof<_> else Util.Image(y.Snippet.Thumbnails.Default.Url)
-                {Title=y.Snippet.Title; Position=y.Snippet.Position; PublishedAt=y.Snippet.PublishedAt;Image=t; ShortDescription=sd; Description=d; Raw=Util.OnDemand("Raw", null)}
+                {
+                    Title=y.Snippet.Title
+                    Position=y.Snippet.Position
+                    PublishedAt=y.Snippet.PublishedAt
+                    Image=t
+                    ShortDescription=sd
+                    Description=d
+                    Raw=Util.OnDemand("Raw", fun () -> y.Raw)
+                }
             let itemized = 
                 x.Items
                 |> Seq.map (fun x -> 
@@ -223,9 +250,7 @@ getChannels()
 |> Seq.map(fun x -> x.Id |> getLists)
 //|> tee dumpReverse
 |> Seq.mapi(fun i x -> 
-    printfn "Deserializing object %i" i
     let r = deserializeObjectReflectively<ChannelPlaylistContainer> x
-    printfn "Finished object %i" i
     r
 )
 |> Seq.collect (fun x -> x.Items)
@@ -234,7 +259,6 @@ getChannels()
 |> List.ofSeq
 //|> tee dumpReverse
 |> Seq.map(fun (title, data, listId) -> 
-    //printfn "doing it and doing it and doing it well"
     data.Image, title, getWholeList listId )
 // without this here it looped endlessly, why?
 |> List.ofSeq
