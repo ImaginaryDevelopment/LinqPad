@@ -80,7 +80,7 @@ let asyncMap f asyncX = async {
 /// return the matching lines in a file, as an async<string list>
 let matchPattern textPattern (fi:FileInfo) = 
     // set up the regex
-    let regex = Text.RegularExpressions.Regex(pattern=textPattern)
+    let regex = Text.RegularExpressions.Regex(pattern=textPattern,options=Text.RegularExpressions.RegexOptions.IgnoreCase)
     
     // set up the function to use with "fold"
     let folder results lineNo lineText =
@@ -160,10 +160,13 @@ module IOFileSystem_Tree =
             }
         InternalNode (dirInfo,subItems)
 open IOFileSystem_Tree        
-let currentDir = fromDir (DirectoryInfo("."))  
+let targetDir = Environment.ExpandEnvironmentVariables("%devroot%")// @"."
+let currentDir = fromDir (DirectoryInfo(targetDir))  
+
+printfn "CurrentDir: %A" currentDir
 //let filePattern = """(?<!\\(obj|debug)\\)\.(cs|fs)\s*$"""
-let filePattern = """.*(vb|cs)"""
-let wordPattern = """normalize"""
+let filePattern = """.\.(vb|cs|fs|xaml)$"""
+let wordPattern = """#if"""
 currentDir
 |> grep filePattern wordPattern  // AddParameter ? // DatabaseConfig
 |> Async.RunSynchronously    
