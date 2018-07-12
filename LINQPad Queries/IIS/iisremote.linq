@@ -1,18 +1,11 @@
 <Query Kind="Statements">
-  <Reference>C:\Windows\System32\inetsrv\Microsoft.Web.Administration.dll</Reference>
+  <Reference>&lt;ProgramFilesX64&gt;\Microsoft SDKs\Azure\.NET SDK\v2.9\bin\plugins\Diagnostics\Microsoft.Web.Administration.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.Runtime.dll</Reference>
-  <NuGetReference>Rx-Main</NuGetReference>
-  <NuGetReference>Rx-Main</NuGetReference>
-  <NuGetReference>Rx-Main</NuGetReference>
-  <NuGetReference>Rx-Main</NuGetReference>
-  <NuGetReference>Rx-Main</NuGetReference>
-  <NuGetReference>Rx-Main</NuGetReference>
-  <NuGetReference>Rx-Main</NuGetReference>
   <Namespace>Microsoft.Web.Administration</Namespace>
 </Query>
 
-var servers=System.Environment.GetEnvironmentVariable("servers", EnvironmentVariableTarget.User).Split(';');
-var server= Util.ReadLine("Server?",servers[0],servers);
+var servers=System.Environment.GetEnvironmentVariable("servers", EnvironmentVariableTarget.User)?.Split(';');
+var server= Util.ReadLine("Server?",servers?[0],servers);
 var iis=ServerManager.OpenRemote(server);
 
 iis.Sites.SelectMany (ap =>
