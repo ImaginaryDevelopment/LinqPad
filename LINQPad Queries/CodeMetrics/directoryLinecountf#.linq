@@ -19,6 +19,11 @@ let highestMagicByFileMinimum = 6
 let useThresholds = true
 let useTakeLimits = Some(20)
 
+type HighestLinesByFile = {Location:Hyperlinq;Filename:string; LineCount:int;Nonspaces:int;DoubleQuotes:int;PotentialMagicNumbers:int}
+type HighestLinesByFolderDetails = { Filename:string; LineCount:int; Nonspaces:int; MaxLineLength:int; MaxLineIndex:int; LongLines:int}
+
+type HighestLinesByFolder = { Path:string;TotalLines:int;Details:seq<HighestLinesByFolderDetails>}
+
 //let after (value:string) (delimiter:string) = 
 let endsWithIgnore (test:string) (value:string) = value.EndsWith(test,StringComparison.CurrentCultureIgnoreCase)
 let startsWithIgnore (test:string) (value:string) = value.StartsWith(test,StringComparison.CurrentCultureIgnoreCase)
@@ -164,19 +169,25 @@ metaData.Dump("before line counts")
 type FileSummary(relativePath:string, fullPath:string,readerFunc:string->string[]) = 
     let rgNumber = new Regex(@"\.?[0-9]+(\.[0-9]+)?", RegexOptions.Compiled)
     let prepend="~" + if relativePath.StartsWith("\\") then "" else "\\" 
+    let lines = lazy(fullPath |> readerFunc)
+    let text = lazy(lines.Value |> String.concat String.Empty)
+    let lengthMetrics = lazy(
+        lines.Value |> Seq.mapi(fun i x -> i, String.length x)
+    )
     member self.FullPath with get() = fullPath
     member self.Filename with get() = System.IO.Path.GetFileName(self.FullPath)
     member self.RelativePath with get() = prepend+relativePath.Substring(0,relativePath.Length-self.Filename.Length)
-    member private self.AllLines=lazy(self.FullPath |> readerFunc)
-    member private self.AllText=lazy( self.AllLines.Value |> String.concat "")
-    member self.LineCount = self.AllLines.Value |> Seq.length
-    member self.Nonspaces=lazy(self.AllText.Value |> Seq.filter (fun x->Char.IsWhiteSpace(x)<>true) |> Seq.length)
-    member self.DoubleQuotes=lazy(self.AllText.Value |> Seq.filter (fun x-> '"'=x) |> Seq.length)
-    member self.PotentialMagicNumbers=lazy(self.AllText.Value |> rgNumber.Matches |> fun x->x.Count)
-    member self.MaxLineLength=lazy(self.AllLines.Value |> Seq.map String.length |> Seq.max)
-    member self.LongLines=lazy(self.AllLines.Value |> Seq.map String.length |> Seq.filter((>) 80) |> Seq.length)
     
-let  asSummary (files:string[]) :seq<FileSummary> =
+    member self.LineCount = lines.Value |> Seq.length
+    member self.Nonspaces=lazy(text.Value |> Seq.filter (fun x-> Char.IsWhiteSpace x <>true) |> Seq.length)
+    member self.DoubleQuotes=lazy(text.Value |> Seq.filter (fun x-> '"'=x) |> Seq.length)
+    member self.PotentialMagicNumbers=lazy(text.Value |> rgNumber.Matches |> fun x->x.Count)
+    member self.MaxLineLength=lazy(lengthMetrics.Value |> Seq.map snd |> Seq.max) //self.AllLines.Value |> Seq.map String.length |> Seq.max)
+    member self.MaxLineIndex=lazy(lengthMetrics.Value |> Seq.maxBy snd |> fst)
+    member self.LongLines=lazy(lengthMetrics.Value |> Seq.map snd |> Seq.filter ((>) 80) |> Seq.length) //self.AllLines.Value |> Seq.map String.length |> Seq.filter((>) 80) |> Seq.length)
+    
+    
+let asSummary (files:string[]) :seq<FileSummary> =
     let uriPath (r:string)= if r.Length>1 then "~"+r.Substring(1) else String.Empty //if relPath is .
     let reader x = System.IO.File.ReadAllLines(x)
     seq{
@@ -224,7 +235,6 @@ let buildLimitString f title threshold =
         ex.Data.Add("threshold",threshold)
         reraise ()
     
-type HighestLinesByFile = {Filename:string; LineCount:int; Location:Hyperlinq}
 
 let getHighestLinesByFile threshold = 
     summaries 
@@ -236,9 +246,7 @@ buildLimitString getHighestLinesByFile "HighestLines by file" highestLinesByFile
 
 // -------------- highest lines by folder ---------------
 
-type HighestLinesByFolderDetails = { Filename:string; LineCount:int; Nonspaces:int; MaxLineLength:int; LongLines:int}
 
-type HighestLinesByFolder = { Path:string;TotalLines:int;Details:seq<HighestLinesByFolderDetails>}
 
 let getHighestLinesByFolder threshold = 
     let getGroupLineCount (items:FileSummary seq) :int = 
@@ -263,6 +271,7 @@ let getHighestLinesByFolder threshold =
                     Nonspaces=i.Nonspaces.Value
                     MaxLineLength=i.MaxLineLength.Value
                     LongLines=i.LongLines.Value
+                    MaxLineIndex=i.MaxLineIndex.Value
                 }
             ))})
 
@@ -310,7 +319,7 @@ let getHighestByFileBase threshold =
     summaries
     |> Seq.filter (fun f -> f.Filename.Contains("."))
     |> Seq.groupBy (fun f-> f.Filename.Substring(0,f.Filename.IndexOf('.'))) //before '.'
-    |> (fun group -> if useThresholds then (Seq.filter filter group) else group )
+    |> (fun group -> if useThresholds then (Seq.filter filter group) else group)
     |> Seq.map asFilenameGrouping
     |> Seq.sortBy (fun f-> -f.Lines)
     |> (fun group -> if useTakeLimits.IsSome then Seq.take(useTakeLimits.Value) group else group)
