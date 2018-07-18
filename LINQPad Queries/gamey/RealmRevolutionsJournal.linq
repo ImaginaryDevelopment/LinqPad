@@ -48,10 +48,11 @@ type Building =
     | Farm
     | FairyTree
     | Well
-    | Craftsman
+    | Workshop
     | Stonehenge
     | Stable
     | MasterHouse
+    | TownHall
     | Warehouse
     | Homestead
     | Castle
@@ -60,16 +61,40 @@ type Building =
     | IronMine
     | Throne
     | Fountain
-    
-type BuildingState = {Building:Building;Units:float;Level:int; Happiness:float}
-type State = { Buildings:BuildingState list; Resources:Resource list; } with
+type Tier = int
+// position indicates tier
+type Happiness = float list
+type BuildingState = {Building:Building;Units:float;Level:int}
+type State = { Buildings:BuildingState list; Happiness:Happiness; Resources:Resource list; } with
     static member Initial = {Buildings=List.empty; Resources=List.empty}
+let (|ListItem|_|) i x = if List.length x < i then Some x.[i] else None
+module Hap =
+    let getBuildingTier =
+        function
+        | Farm
+        | FairyTree -> Some 0
+        | Workshop
+        | StoneHenge
+        | Well -> Some 1
+        | Stable -> Some 2
+        | MasterHouse -> Some 3
+        | TownHall -> Some 4
+        
+    let getHappiness tier =
+        function
+        | {Happiness=ListItem tier x} ->
+            x
+        | _ -> 0.0
+    let setHappiness =
+        function
+        | {Happiness=ListItem tier }
+
 
 type JournalEntry =
     // Assimilated, record data for reference
     | Assim of string * DateTime * State
     | Save of string * DateTime * State
-
+    | Revolution of string * DateTime * State
 
 type Command = 
     |HelloWorld of string
@@ -100,6 +125,9 @@ let processCommand cmd initialState : Reply*State =
     match cmd with
     | HelloWorld x ->
         msg initialState x
+    | SetHappiness(b,x) ->
+        
+        msg {initialState with Happiness} "Set"
     | Save (saveTitle,state) ->
         let previousSaves = 
             if File.Exists fileLocation then
