@@ -9,13 +9,13 @@
 [<Measure>] type hr
 [<Measure>] type day
 
-let bpOwned = 9.61e16<Bp>
-let bpRate =  1.92e15<Bp/s> // 1.51e12<Bp/s> // 2.17e11<Bp> / 1.0<s>
+let bpOwned = 1.54e17<Bp>
+let bpRate =  5.69e15<Bp/s> // 1.51e12<Bp/s> // 2.17e11<Bp> / 1.0<s>
 // 37 cows from next homestead, homestead 9, farm 12, well 15
 // 5.34e7<F> / 1.0<s> 
 let foodRate =  4.93e7<F/s>
 let foodOwned = 0.00e1<F>
-let gRate = 4.73e31<G/s> // 1.95e27<G/s> //3.80e26<G> / 1.0<s>
+let gRate = 1.16e32<G/s> // 4.73e31<G/s> // 1.95e27<G/s> //3.80e26<G> / 1.0<s>
 let gOwned = 6.00e29<G>
 let sToMin (x:float<s>):float<min> = x / 60.0<s/min>
 let minToHr (x:float<min>):float<hr> = x / 60.0<min/hr>
@@ -51,7 +51,7 @@ let inline displayIteration<[<Measure>]'T> (i,x,c,t:float<'T>, ttt) = (i,x,c,flo
 
     
 module Dru =
-    let i,nextCost = 43, 8.79e13<Bp>
+    let i,nextCost = 58, 2.88e18<Bp>
 
     let costs = 
         iterateToTarget "dru" i 65 nextCost bpRate bpOwned
@@ -59,14 +59,16 @@ module Dru =
 module Elf =
     let runCost name i nextCost target = name,iterateToTarget name i target nextCost bpRate bpOwned
     let mudCube = runCost "elfMud" 44 5.93e17<Bp> 48
-    let forestEle = runCost "elfEle" 36 3.47e16<Bp> 38
-    //let devilFly = runCost "elfDev" 17 9.95e11<Bp> 28
+    let forestEle = runCost "elfEle" 18 1.32e11<Bp> 49
+    let devilFly = runCost "elfDev" 14 1.24e11<Bp> 39
+    let devilSpid = runCost "elfSpid" 16 7.46e12<Bp> 29
     
     let cost = 
         let individual = 
-            [   mudCube
+            [   //mudCube
                 forestEle
-//                devilFly
+                devilFly
+                devilSpid
             ]
             |> List.map (fun (n,x) -> 
                 n,
@@ -85,7 +87,7 @@ module Elf =
         
 module Gold =     
     module Gar =
-        let i, nextCost = 20, 1.04e30<G>
+        let i, nextCost = 30, 1.07e33<G>
         let nextUpgrade = if i % 10 = 0 then i + 10 else int (Math.Ceiling(float i / 10.0) * 10.0)
         let costs =
             iterateToTarget "gar" i nextUpgrade nextCost gRate gOwned
