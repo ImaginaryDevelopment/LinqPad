@@ -9,13 +9,13 @@
 [<Measure>] type hr
 [<Measure>] type day
 
-let bpOwned = 1.54e17<Bp>
-let bpRate =  5.69e15<Bp/s> // 1.51e12<Bp/s> // 2.17e11<Bp> / 1.0<s>
+let bpOwned = 5.08e19<Bp>
+let bpRate =  6.31e16<Bp/s> // 1.51e12<Bp/s> // 2.17e11<Bp> / 1.0<s>
 // 37 cows from next homestead, homestead 9, farm 12, well 15
 // 5.34e7<F> / 1.0<s> 
-let foodRate =  4.93e7<F/s>
+let foodRate =  6.69e8<F/s>
 let foodOwned = 0.00e1<F>
-let gRate = 1.16e32<G/s> // 4.73e31<G/s> // 1.95e27<G/s> //3.80e26<G> / 1.0<s>
+let gRate = 5.44e33<G/s> //1.16e32<G/s> // 4.73e31<G/s> // 1.95e27<G/s> //3.80e26<G> / 1.0<s>
 let gOwned = 6.00e29<G>
 let sToMin (x:float<s>):float<min> = x / 60.0<s/min>
 let minToHr (x:float<min>):float<hr> = x / 60.0<min/hr>
@@ -51,7 +51,7 @@ let inline displayIteration<[<Measure>]'T> (i,x,c,t:float<'T>, ttt) = (i,x,c,flo
 
     
 module Dru =
-    let i,nextCost = 58, 2.88e18<Bp>
+    let i,nextCost = 63, 9.22e19<Bp>
 
     let costs = 
         iterateToTarget "dru" i 65 nextCost bpRate bpOwned
@@ -85,7 +85,7 @@ module Elf =
         total, (individual |> List.map(fun (n,(x,t)) -> n, float x |> sci,formatTime t))
         //|> (fun (x,t) -> float x |> sci, formatTime t)
         
-module Gold =     
+module Gold =
     module Gar =
         let i, nextCost = 30, 1.07e33<G>
         let nextUpgrade = if i % 10 = 0 then i + 10 else int (Math.Ceiling(float i / 10.0) * 10.0)
@@ -114,7 +114,7 @@ module Food =
 let displayTimeToTarget (x:DateTime) =
      Math.Round(decimal x.Hour + decimal x.Minute / 60.0m,2)
 
-
+// Masters 7.36e11 -> 1.01e7% (from 35983)
 (Dru.costs |> List.map displayIteration).Dump("To Druid Assim 1<Bp>")     
 (Elf.cost).Dump("To Elf 4 1<Bp>")
 (Gold.Gar.costs |> List.map displayIteration).Dump(sprintf "Garrisons<G>")  
