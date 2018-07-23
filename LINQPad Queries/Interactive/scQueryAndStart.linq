@@ -102,25 +102,24 @@ using (new Process()) ( fun ps ->
 	if queryOutputs.Errors.HasValue() then
         ()
     else
-
-	queryResult <- transformScQuery queryOutputs.Output
-	//queryResult.Dump("all");
-	let mutable validSvcs = queryResult
-	if current = start then
-		validSvcs <- validSvcs.Where(fun r -> r.State.StartsWith("4") = false)
-	else if current = stop then
-		validSvcs <- validSvcs.Where(fun r -> r.State.StartsWith("4"))
-
-	if (validSvcs.Any() = false) then
-		Util.Highlight("No valid services found to " + current).Dump();
-		queryResult.Select(fun q -> { DisplayName=q.DisplayName; State = q.State.RemoveMultipleWhitespaces() }).Dump("Found services on " + server)
-	else
-	Util.HorizontalRun(false, validSvcs
-		.Select(fun r -> r.ServiceName + "(" + r.State.RemoveMultipleWhitespaces().TruncateTo(12) + ")") |> Seq.bufferByCount 18).Dump()
-	toStart <- Util.ReadLine(current + " which service?", "WMSvc", queryResult.Select(fun r -> r.ServiceName))
-
-	if toStart.HasValue() then
-		startOutput <- ps.RunProcessRedirected(@"\\" + server + " " + current + " " + toStart)
+    	queryResult <- transformScQuery queryOutputs.Output
+    	//queryResult.Dump("all");
+    	let mutable validSvcs = queryResult
+    	if current = start then
+    		validSvcs <- validSvcs.Where(fun r -> r.State.StartsWith "4" = false)
+    	else if current = stop then
+    		validSvcs <- validSvcs.Where(fun r -> r.State.StartsWith "4")
+    
+    	if (validSvcs.Any() = false) then
+    		Util.Highlight("No valid services found to " + current).Dump();
+    		queryResult.Select(fun q -> { DisplayName=q.DisplayName; State = q.State.RemoveMultipleWhitespaces() }).Dump("Found services on " + server)
+    	else
+        	Util.HorizontalRun(false, validSvcs
+        		.Select(fun r -> r.ServiceName + "(" + r.State.RemoveMultipleWhitespaces().TruncateTo(12) + ")") |> Seq.bufferByCount 18).Dump()
+        	toStart <- Util.ReadLine(current + " which service?", "WMSvc", queryResult.Select(fun r -> r.ServiceName))
+        
+        	if toStart.HasValue() then
+        		startOutput <- ps.RunProcessRedirected(@"\\" + server + " " + current + " " + toStart)
 )
 //ps disposed
 

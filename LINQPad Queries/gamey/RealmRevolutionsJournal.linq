@@ -85,8 +85,8 @@ module Hap =
     let getHappiness tier =
         function
         | {Happiness=ListItem tier x} ->
-            x
-        | _ -> 0.0
+            Some x
+        | _ -> None
     let setHappiness building value state =
         match getBuildingTier building with
         | Some tier -> 
@@ -215,4 +215,4 @@ msgPump initialState |> dumpt "final state" |> ignore
 printfn "msgPump finished, waiting for any key to exit"
 #if Interactive
 readLine () |> ignore<string>
-#endif        
+#endif

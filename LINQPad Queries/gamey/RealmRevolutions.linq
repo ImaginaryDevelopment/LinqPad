@@ -56,7 +56,7 @@ type Iteration<[<Measure>]'t> = {IterationIndex:int; ItemIndex:int; Cost: float<
 
 and IterationDisplay = {IterationIndex:int; ItemIndex:int; Cost: string; Total:string; Wait:string;Time:string}
 
-let inline iterateToTarget<[<Measure>]'T> name i targetI (nextCost:float<'T>) (rate:float<'T/s>) (owned:float<'T>) =
+let inline iterateToTarget<[<Measure>]'T> name (rate:float<'T/s>) (owned:float<'T>) i targetI (nextCost:float<'T>,factor) =
     let countDown = i > targetI
     if countDown then
         [targetI..i]
@@ -64,14 +64,14 @@ let inline iterateToTarget<[<Measure>]'T> name i targetI (nextCost:float<'T>) (r
         [i+1..targetI]        
     
     |> Seq.mapi(fun i x ->
-        i, x, nextCost * Math.Pow(2.0,if countDown then float -i else float i)
+        i, x, nextCost * Math.Pow(factor,if countDown then float -i else float i)
     )
     |> Seq.scan (fun (items,total) ((i,x,cost)) ->
         let discountOwned = 
             // never take out the amount owned if you are doing a countdown
             if i = 0 && not countDown then 
                 owned 
-            else 
+            else
                 0.0<_>
                 
         let tc = 
@@ -97,28 +97,64 @@ let inline iterateToTarget<[<Measure>]'T> name i targetI (nextCost:float<'T>) (r
     |> Seq.map fst
     |> Seq.last
     |> List.rev
+    
+// math to countdown to an item's base cost
+let countDownSample() = // name (rate:float<'T/s>) (owned:float<'T>) i targetI (nextCost:float<'T>,factor) 
+    iterateToTarget "mosq" bpRate bpOwned 10 0 (10240.<Bp>,2.0)
+    |> List.map(fun x -> x.ToDisplay())
+    |> dumpt "mosq"
+    |> ignore
+    ()
         
 module Monsters =
-    // math to countdown to an item's base cost
-    let countDownSample() = 
-        iterateToTarget "mosq" 10 0 10240.<Bp> bpRate bpOwned
-        |> List.map(fun x -> x.ToDisplay())
-        |> dumpt "mosq"
-        |> ignore
-        ()
-    iterateToTarget "cobra" 47 50 3.16e17<Bp> bpRate bpOwned
-    |> List.map (fun x -> x.ToDisplay())
-    |> dumpt "cobra"
-    |> ignore
-    type Monster = 
+    type ForestMonster = 
         | Mosquito
         | Spider
+    type PlainsMonster =
+        | Rat
+        | Scorpio
+        | Lizard
+        | Eagle
+        | Turtle
+        | Griffin
+        | RoyalGriffin
+        | BattleElephant // 1.79e9
+        | MonsterOfPlains // [2]
         
+    type Monster = 
+        | Forest of ForestMonster
+        | Plains of PlainsMonster
+    
     let getMonsterBaseCost =
         function
-        | Mosquito -> 1<Bp>
-        | Spider -> 0<Bp>
+        | Forest Mosquito -> 1.0
+        | Forest Spider -> 0.0
+        | Plains BattleElephant -> 1.70e9
+        | Plains MonsterOfPlains -> 2.56e10
+        >> (*) 1.0<Bp>
+        
+    let getScaleFactor =
+        function
+        | Forest _ -> 2.0
+        | Plains _ -> 2.3
+    let getCostScale x =  getMonsterBaseCost x, getScaleFactor x
+open Monsters
+
+let iterateMonster i targetI x = //name (rate:float<'T/s>) (owned:float<'T>) i targetI (nextCost:float<'T>,factor) 
+    let name = printfn "%A" x
+    let mInputs = getCostScale x
+    iterateToTarget name bpRate bpOwned i targetI mInputs
     
+// should return 2.84e12
+
+Monster.Plains BattleElephant 
+|> iterateMonster 0 10
+|> List.map(fun x -> x.ToDisplay())
+|> dumpt "Battle Elephant"
+|> ignore
+
+
+
 module Dru =
     let i,nextCost = 60, 1.15e19<Bp>
 
@@ -163,7 +199,8 @@ module Gold =
     module Thrones =
         let i, nextCost = 0, 3.17e35<G>
         let costs = iterateToTarget "thr" i 1 nextCost gRate gOwned
-(Gold.Thrones.costs |> List.map (fun x -> x.ToDisplay())).Dump("thrones")        
+        
+(Gold.Thrones.costs |> List.map (fun x -> x.ToDisplay())).Dump("thrones")
 type Building = 
     | Farm
     | Well
