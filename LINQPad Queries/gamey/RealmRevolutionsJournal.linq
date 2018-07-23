@@ -83,11 +83,16 @@ module Hap =
     let getHappiness tier =
         function
         | {Happiness=ListItem tier x} ->
-            x
-        | _ -> 0.0
-    let setHappiness =
+            Some x
+        | _ -> None
+    let setHappiness b x =
         function
-        | {Happiness=ListItem tier }
+        | {Happiness= h} as s ->
+            match List.length h, getBuildingTier b with
+            | _,Some t when t < 0 -> invalidOp "Tier can't be negative"
+            | 0, Some 0 -> {s with Happiness = [x]}
+            | 1, Some 1 -> List.
+            
 
 
 type JournalEntry =
@@ -203,4 +208,4 @@ msgPump initialState |> dumpt "final state" |> ignore
 printfn "msgPump finished, waiting for any key to exit"
 #if Interactive
 readLine () |> ignore<string>
-#endif        
+#endif
