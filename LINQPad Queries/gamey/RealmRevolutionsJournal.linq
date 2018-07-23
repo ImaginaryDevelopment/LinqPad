@@ -51,7 +51,7 @@ type Building =
     | Workshop
     | Stonehenge
     | Stable
-    | MasterHouse
+    | MastersHouse
     | TownHall
     | Warehouse
     | Homestead
@@ -66,29 +66,40 @@ type Tier = int
 type Happiness = float list
 type BuildingState = {Building:Building;Units:float;Level:int}
 type State = { Buildings:BuildingState list; Happiness:Happiness; Resources:Resource list; } with
-    static member Initial = {Buildings=List.empty; Resources=List.empty}
+    static member Initial = {Buildings=List.empty; Resources=List.empty; Happiness=List.empty}
 let (|ListItem|_|) i x = if List.length x < i then Some x.[i] else None
+
 module Hap =
     let getBuildingTier =
         function
         | Farm
         | FairyTree -> Some 0
+        | Well 
         | Workshop
-        | StoneHenge
-        | Well -> Some 1
+        | Stonehenge -> Some 1
         | Stable -> Some 2
-        | MasterHouse -> Some 3
-        | TownHall -> Some 4
+        | MastersHouse -> Some 3
+        | TownHall 
+        | Warehouse -> Some 4
         
     let getHappiness tier =
         function
         | {Happiness=ListItem tier x} ->
             x
         | _ -> 0.0
-    let setHappiness =
-        function
-        | {Happiness=ListItem tier }
-
+    let setHappiness building value state =
+        match getBuildingTier building with
+        | Some tier -> 
+            if state.Happiness.Length > tier then
+                {state with Happiness = state.Happiness |> List.mapi(fun i x -> if i = tier then value else x)}
+            else 
+                let hap = [0..tier] |> List.mapi (fun i x -> if i = tier then value elif i <= state.Happiness.Length then state.Happiness.[tier] else 0.)
+                {state with 
+                            Happiness = hap
+                }
+            |> Some
+        | None ->         
+            None
 
 type JournalEntry =
     // Assimilated, record data for reference
@@ -126,8 +137,9 @@ let processCommand cmd initialState : Reply*State =
     | HelloWorld x ->
         msg initialState x
     | SetHappiness(b,x) ->
-        
-        msg {initialState with Happiness} "Set"
+        match Hap.setHappiness b x initialState with 
+        | Some state -> msg state "Set"
+        | None -> msg initialState "Failed to set state"
     | Save (saveTitle,state) ->
         let previousSaves = 
             if File.Exists fileLocation then
