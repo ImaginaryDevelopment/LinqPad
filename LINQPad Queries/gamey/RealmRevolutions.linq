@@ -61,7 +61,50 @@ let inline getNCost factor targetI (i,cost:float<'t>) =
     else 
         let countDown = i > targetI
         cost * Math.Pow(factor,if countDown then float -i else float i)
-        
+
+ 
+let inline iterateToTarget'<[<Measure>]'T> name (rate:float<'T/s>) (owned:float<'T>) i targetI (nextCost:float<'T>,factor) =
+    let countDown = i > targetI
+    if countDown then
+        [targetI..i]
+    else
+        [i+1..targetI]        
+     
+    |> Seq.mapi(fun i x ->
+        i, x, nextCost * Math.Pow(factor,if countDown then float -i else float i)
+    )
+    |> Seq.scan (fun (items,total) ((i,x,cost)) ->
+        let discountOwned = 
+            // never take out the amount owned if you are doing a countdown
+            if i = 0 && not countDown then 
+                owned 
+            else
+                0.0<_>
+                 
+        let tc = 
+            fTry "tcCalc" (cost,total,"cost,total") (fun () ->
+             
+                if countDown then LanguagePrimitives.GenericZero else (cost + total - discountOwned)
+            ) ()
+        let ttt= 
+            fTry "tttCalc" (rate,tc,"rate,tc") (fun () ->
+                timeToTarget rate LanguagePrimitives.GenericZero tc
+            ) ()
+        let result = 
+                {
+                    IterationIndex=i
+                    ItemIndex=x
+                    Cost=cost
+                    TotalCost= tc
+                    TimeToTarget= ttt
+                }
+        //(i,x,cost,cost + total - discountOwned)::items, cost + total - discountOwned
+        result::items, cost + total - discountOwned
+    ) (List.Empty,0.<_>)
+    |> Seq.map fst
+    |> Seq.last
+    |> List.rev
+        )
 let inline iterateToTarget<[<Measure>]'T> name (rate:float<'T/s>) (owned:float<'T>) i targetI (baseCost:float<'T>,factor) =
     let countDown = i > targetI
     printfn "Iteration is countdown? %A" countDown
@@ -110,13 +153,20 @@ let inline iterateToTarget<[<Measure>]'T> name (rate:float<'T/s>) (owned:float<'
     |> List.rev
     
 // math to countdown to an item's base cost
+// not sure this works right
 let countDownSample() = // name (rate:float<'T/s>) (owned:float<'T>) i targetI (nextCost:float<'T>,factor) 
-    iterateToTarget "mosq" bpRate bpOwned 10 0 (10240.<Bp>,2.0)
+    iterateToTarget "turtle" bpRate bpOwned 48 0 (1.48e21<Bp>,2.0)
     |> List.map(fun x -> x.ToDisplay())
-    |> dumpt "mosq"
+    |> dumpt "turtle"
     |> ignore
     ()
-        
+    
+//let inline iterateToTarget'<[<Measure>]'T> name i targetI (nextCost:float<'T>) (rate:float<'T/s>) (owned:float<'T>) =        
+iterateToTarget' "turtle" 48 54 1.48e21<Bp> bpRate bpOwned
+|> List.map(fun x -> x.ToDisplay())
+|> dumpt "turtle"
+|> ignore
+
 module Monsters =
     type ForestMonster = 
         | Mosquito
@@ -151,6 +201,7 @@ module Monsters =
     let getCostScale x =  getMonsterBaseCost x, getScaleFactor x
 open Monsters
 
+    
 let iterateMonster i targetI x = //name (rate:float<'T/s>) (owned:float<'T>) i targetI (nextCost:float<'T>,factor) 
     let name = sprintf "%A" x
     let mInputs = getCostScale x
