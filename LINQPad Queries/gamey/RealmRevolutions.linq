@@ -11,6 +11,7 @@
 // wagon build https://www.reddit.com/r/realmrevolutions/comments/8u2evy/wagon_run_guide/ / https://steamcommunity.com/sharedfiles/filedetails/?id=1413968805
 // assim costs https://realm-revolutions.wikia.com/wiki/Prestige_(Revolution_%26_Assimilation)
 // https://realm-revolutions.wikia.com/wiki/Realm_Revolutions_Wiki:Community_Portal
+
 let inline fTryOrF (f:'t -> 'tResult) (fCatch:exn -> 'tResult) (arg:'t) =
     try
         f arg
@@ -28,7 +29,7 @@ let fTry' title relevance f =
     fTry title relevance f ()
         
 let bpOwned = 1.08e18<Bp>
-let bpRate =  1.62e20<Bp/s>
+let bpRate =  1.13e20<Bp/s>
 let foodRate =  6.69e8<F/s>
 let foodOwned = 0.00e1<F>
 let gRate = 1.75e37<G/s> 
@@ -105,7 +106,7 @@ let inline iterateToTarget'<[<Measure>]'T> name (rate:float<'T/s>) (owned:float<
     |> Seq.map fst
     |> Seq.last
     |> List.rev
-        )
+        
 let inline iterateToTarget<[<Measure>]'T> name (rate:float<'T/s>) (owned:float<'T>) i targetI (baseCost:float<'T>,factor) =
     let countDown = i > targetI
     printfn "Iteration is countdown? %A" countDown
@@ -163,9 +164,9 @@ let countDownSample() = // name (rate:float<'T/s>) (owned:float<'T>) i targetI (
     ()
     
 //let inline iterateToTarget'<[<Measure>]'T> name i targetI (nextCost:float<'T>) (rate:float<'T/s>) (owned:float<'T>) =        
-iterateToTarget' "turtle" 48 54 1.48e21<Bp> bpRate bpOwned
+iterateToTarget' "eagle" bpRate bpOwned 58 60 (1.64e23<Bp>,2.1)
 |> List.map(fun x -> x.ToDisplay())
-|> dumpt "turtle"
+|> dumpt "eagle"
 |> ignore
 
 module Monsters =
@@ -198,7 +199,7 @@ module Monsters =
     let getScaleFactor =
         function
         | Forest _ -> 2.0
-        | Plains _ -> 2.3
+        | Plains _ -> 2.1
     let getCostScale x =  getMonsterBaseCost x, getScaleFactor x
 open Monsters
 
