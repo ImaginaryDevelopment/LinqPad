@@ -43,6 +43,19 @@ let sci = float >> fun x -> x.ToString("0.##e-0")
 let inline timeToTarget rate owned target = 
     (target - owned) / rate
 let rec formatTime (x:float<s>) = TimeSpan(0,0,int x).ToString()
+
+let displayTimeMagnitude() = 
+    // 1 sec to get 1 of the current rate
+    // 10 sec to get e+1
+    // 100 sec to get e+2 ~1min 40s
+    // 1000 sec to get e+3 ~16min 40s
+    [0..9]
+    |> Seq.map (fun x -> 
+        x, Math.Pow(10.,float x)
+    )
+    |> Seq.map(fun (i,x) -> 
+        i,x,formatTime x
+    )
 type Iteration<[<Measure>]'t> = {IterationIndex:int; ItemIndex:int; Cost: float<'t>; TotalCost:float<'t>; TimeToTarget:float<s>}
     with 
         member x.ToDisplay() =
