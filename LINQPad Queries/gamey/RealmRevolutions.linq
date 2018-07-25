@@ -10,6 +10,7 @@
 [<Measure>] type day
 // wagon build https://www.reddit.com/r/realmrevolutions/comments/8u2evy/wagon_run_guide/ / https://steamcommunity.com/sharedfiles/filedetails/?id=1413968805
 // assim costs https://realm-revolutions.wikia.com/wiki/Prestige_(Revolution_%26_Assimilation)
+// https://realm-revolutions.wikia.com/wiki/Realm_Revolutions_Wiki:Community_Portal
 let inline fTryOrF (f:'t -> 'tResult) (fCatch:exn -> 'tResult) (arg:'t) =
     try
         f arg
