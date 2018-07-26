@@ -164,9 +164,9 @@ let countDownSample() = // name (rate:float<'T/s>) (owned:float<'T>) i targetI (
     ()
     
 //let inline iterateToTarget'<[<Measure>]'T> name i targetI (nextCost:float<'T>) (rate:float<'T/s>) (owned:float<'T>) =        
-iterateToTarget' "eagle" bpRate bpOwned 58 60 (1.64e23<Bp>,2.1)
+iterateToTarget' "turtle" bpRate bpOwned 47 55 (7.05e20<Bp>,2.1)
 |> List.map(fun x -> x.ToDisplay())
-|> dumpt "eagle"
+|> dumpt "turtle"
 |> ignore
 
 module Monsters =
@@ -182,24 +182,33 @@ module Monsters =
         | Griffin
         | RoyalGriffin
         | BattleElephant // 1.79e9
-        | MonsterOfPlains // [2]
-        
+        | MonsterOfPlains2 // [2]
+        | MonsterOfPlains3
+    type MountainsMonster =
+        |MountainScorpion
+    type Area = 
+        | ForestZone
+        | PlainsZone
+        | MountainsZone
     type Monster = 
         | Forest of ForestMonster
         | Plains of PlainsMonster
+        | Mountains of MountainsMonster
     
     let getMonsterBaseCost =
         function
         | Forest Mosquito -> 10.0
         | Forest Spider -> 0.0
         | Plains BattleElephant -> 1.70e9
-        | Plains MonsterOfPlains -> 2.56e10
+        | Plains MonsterOfPlains2 -> 2.56e10
+        | Mountains MountainsScorpion -> 10.0
         >> (*) 1.0<Bp>
         
     let getScaleFactor =
         function
         | Forest _ -> 2.0
         | Plains _ -> 2.1
+        | Mountains _ -> 3
     let getCostScale x =  getMonsterBaseCost x, getScaleFactor x
 open Monsters
 
