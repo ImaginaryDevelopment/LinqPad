@@ -139,6 +139,7 @@ let inline iterateToTarget<[<Measure>]'T> name (rate:float<'T/s>) (owned:float<'
             fTry "tttCalc" (rate,tc,"rate,tc") (fun () ->
                 timeToTarget rate LanguagePrimitives.GenericZero tc
             ) ()
+        
         let result = 
                 {
                     IterationIndex=i
@@ -148,6 +149,7 @@ let inline iterateToTarget<[<Measure>]'T> name (rate:float<'T/s>) (owned:float<'
                     TimeToTarget= ttt
                 }
         //(i,x,cost,cost + total - discountOwned)::items, cost + total - discountOwned
+        
         result::items, cost + total - discountOwned
     ) (List.Empty,0.<_>)
     |> Seq.map fst
@@ -164,15 +166,16 @@ let countDownSample() = // name (rate:float<'T/s>) (owned:float<'T>) i targetI (
     ()
     
 //let inline iterateToTarget'<[<Measure>]'T> name i targetI (nextCost:float<'T>) (rate:float<'T/s>) (owned:float<'T>) =        
-iterateToTarget' "turtle" bpRate bpOwned 47 55 (7.05e20<Bp>,2.1)
+iterateToTarget' "mosq" bpRate bpOwned 0 40 (10.0<Bp>,2.0)
 |> List.map(fun x -> x.ToDisplay())
-|> dumpt "turtle"
+|> dumpt "mosq"
 |> ignore
 
 module Monsters =
     type ForestMonster = 
         | Mosquito
         | Spider
+        | Cobra
     type PlainsMonster =
         | Rat
         | Scorpio
@@ -198,17 +201,18 @@ module Monsters =
     let getMonsterBaseCost =
         function
         | Forest Mosquito -> 10.0
-        | Forest Spider -> 0.0
+        | Forest Spider -> 150.0
+        | Forest Cobra -> 2250.0
         | Plains BattleElephant -> 1.70e9
         | Plains MonsterOfPlains2 -> 2.56e10
-        | Mountains MountainsScorpion -> 10.0
+        | Mountains MountainScorpion -> 10.0
         >> (*) 1.0<Bp>
         
     let getScaleFactor =
         function
         | Forest _ -> 2.0
         | Plains _ -> 2.1
-        | Mountains _ -> 3
+        | Mountains _ -> 3.0
     let getCostScale x =  getMonsterBaseCost x, getScaleFactor x
 open Monsters
 
