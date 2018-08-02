@@ -11,6 +11,7 @@
 // wagon build https://www.reddit.com/r/realmrevolutions/comments/8u2evy/wagon_run_guide/ / https://steamcommunity.com/sharedfiles/filedetails/?id=1413968805
 // assim costs https://realm-revolutions.wikia.com/wiki/Prestige_(Revolution_%26_Assimilation)
 // https://realm-revolutions.wikia.com/wiki/Realm_Revolutions_Wiki:Community_Portal
+
 let inline fTryOrF (f:'t -> 'tResult) (fCatch:exn -> 'tResult) (arg:'t) =
     try
         f arg
@@ -28,7 +29,7 @@ let fTry' title relevance f =
     fTry title relevance f ()
         
 let bpOwned = 1.08e18<Bp>
-let bpRate =  1.62e20<Bp/s>
+let bpRate =  1.13e20<Bp/s>
 let foodRate =  6.69e8<F/s>
 let foodOwned = 0.00e1<F>
 let gRate = 1.75e37<G/s> 
@@ -75,6 +76,49 @@ let inline getNCost factor targetI (i,cost:float<'t>) =
     else 
         let countDown = i > targetI
         cost * Math.Pow(factor,if countDown then float -i else float i)
+
+ 
+let inline iterateToTarget'<[<Measure>]'T> name (rate:float<'T/s>) (owned:float<'T>) i targetI (nextCost:float<'T>,factor) =
+    let countDown = i > targetI
+    if countDown then
+        [targetI..i]
+    else
+        [i+1..targetI]        
+     
+    |> Seq.mapi(fun i x ->
+        i, x, nextCost * Math.Pow(factor,if countDown then float -i else float i)
+    )
+    |> Seq.scan (fun (items,total) ((i,x,cost)) ->
+        let discountOwned = 
+            // never take out the amount owned if you are doing a countdown
+            if i = 0 && not countDown then 
+                owned 
+            else
+                0.0<_>
+                 
+        let tc = 
+            fTry "tcCalc" (cost,total,"cost,total") (fun () ->
+             
+                if countDown then LanguagePrimitives.GenericZero else (cost + total - discountOwned)
+            ) ()
+        let ttt= 
+            fTry "tttCalc" (rate,tc,"rate,tc") (fun () ->
+                timeToTarget rate LanguagePrimitives.GenericZero tc
+            ) ()
+        let result = 
+                {
+                    IterationIndex=i
+                    ItemIndex=x
+                    Cost=cost
+                    TotalCost= tc
+                    TimeToTarget= ttt
+                }
+        //(i,x,cost,cost + total - discountOwned)::items, cost + total - discountOwned
+        result::items, cost + total - discountOwned
+    ) (List.Empty,0.<_>)
+    |> Seq.map fst
+    |> Seq.last
+    |> List.rev
         
 let inline iterateToTarget<[<Measure>]'T> name (rate:float<'T/s>) (owned:float<'T>) i targetI (baseCost:float<'T>,factor) =
     let countDown = i > targetI
@@ -108,6 +152,7 @@ let inline iterateToTarget<[<Measure>]'T> name (rate:float<'T/s>) (owned:float<'
             fTry "tttCalc" (rate,tc,"rate,tc") (fun () ->
                 timeToTarget rate LanguagePrimitives.GenericZero tc
             ) ()
+        
         let result = 
                 {
                     IterationIndex=i
@@ -117,6 +162,7 @@ let inline iterateToTarget<[<Measure>]'T> name (rate:float<'T/s>) (owned:float<'
                     TimeToTarget= ttt
                 }
         //(i,x,cost,cost + total - discountOwned)::items, cost + total - discountOwned
+        
         result::items, cost + total - discountOwned
     ) (List.Empty,0.<_>)
     |> Seq.map fst
@@ -124,17 +170,25 @@ let inline iterateToTarget<[<Measure>]'T> name (rate:float<'T/s>) (owned:float<'
     |> List.rev
     
 // math to countdown to an item's base cost
+// not sure this works right
 let countDownSample() = // name (rate:float<'T/s>) (owned:float<'T>) i targetI (nextCost:float<'T>,factor) 
-    iterateToTarget "mosq" bpRate bpOwned 10 0 (10240.<Bp>,2.0)
+    iterateToTarget "turtle" bpRate bpOwned 48 0 (1.48e21<Bp>,2.0)
     |> List.map(fun x -> x.ToDisplay())
-    |> dumpt "mosq"
+    |> dumpt "turtle"
     |> ignore
     ()
-        
+    
+//let inline iterateToTarget'<[<Measure>]'T> name i targetI (nextCost:float<'T>) (rate:float<'T/s>) (owned:float<'T>) =        
+iterateToTarget' "mosq" bpRate bpOwned 0 40 (10.0<Bp>,2.0)
+|> List.map(fun x -> x.ToDisplay())
+|> dumpt "mosq"
+|> ignore
+
 module Monsters =
     type ForestMonster = 
         | Mosquito
         | Spider
+        | Cobra
     type PlainsMonster =
         | Rat
         | Scorpio
@@ -144,27 +198,38 @@ module Monsters =
         | Griffin
         | RoyalGriffin
         | BattleElephant // 1.79e9
-        | MonsterOfPlains // [2]
-        
+        | MonsterOfPlains2 // [2]
+        | MonsterOfPlains3
+    type MountainsMonster =
+        |MountainScorpion
+    type Area = 
+        | ForestZone
+        | PlainsZone
+        | MountainsZone
     type Monster = 
         | Forest of ForestMonster
         | Plains of PlainsMonster
+        | Mountains of MountainsMonster
     
     let getMonsterBaseCost =
         function
         | Forest Mosquito -> 10.0
-        | Forest Spider -> 0.0
+        | Forest Spider -> 150.0
+        | Forest Cobra -> 2250.0
         | Plains BattleElephant -> 1.70e9
-        | Plains MonsterOfPlains -> 2.56e10
+        | Plains MonsterOfPlains2 -> 2.56e10
+        | Mountains MountainScorpion -> 10.0
         >> (*) 1.0<Bp>
         
     let getScaleFactor =
         function
         | Forest _ -> 2.0
-        | Plains _ -> 2.3
+        | Plains _ -> 2.1
+        | Mountains _ -> 3.0
     let getCostScale x =  getMonsterBaseCost x, getScaleFactor x
 open Monsters
 
+    
 let iterateMonster i targetI x = //name (rate:float<'T/s>) (owned:float<'T>) i targetI (nextCost:float<'T>,factor) 
     let name = sprintf "%A" x
     let mInputs = getCostScale x
