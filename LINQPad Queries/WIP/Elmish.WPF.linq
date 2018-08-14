@@ -8,6 +8,7 @@
 </Query>
 
 open System.Windows
+open System.Windows.Controls
 open System.ComponentModel
 open System.Dynamic
 
@@ -34,7 +35,6 @@ let clockUpdate (msg:ClockMsg) (model:ClockModel) =
     | Tick t -> { model with Time = t }
 
 let update (msg:Msg) (model:Model) =
-    printfn "Updating %A" msg
     match msg with
     | Increment -> { model with Count = model.Count + model.StepSize }
     | Decrement -> { model with Count = model.Count - model.StepSize }
@@ -173,7 +173,7 @@ let view _ _ =
             printfn "Decrement"
             Msg.Decrement) (fun _ m -> 
             m.StepSize = 1)
-          "Count" |> Binding.oneWay (fun m _ -> m.Count)
+          "Count" |> Binding.oneWay (fun m -> m.Count)
           "StepSize" |> Binding.twoWay (fun m -> (double m.StepSize)) (fun v m -> v |> int |> SetStepSize)
           "Clock" |> Binding.model (fun m -> m.Clock) clockViewBinding ClockMsg ]
 
@@ -335,8 +335,26 @@ let private _run debug (window:Window) (programRun:Program<'t, 'model, 'msg, Vie
 /// Starts both Elmish and WPF dispatch loops.
 let runWindow window program = _run false window Elmish.Program.run program
 
+let parse<'t> x =  System.Windows.Markup.XamlReader.Parse x :?> 't
 let window = //x:Class="Elmish.CounterViews.MainWindow"
 // xmlns:local="clr-namespace:Elmish.Views"
+    let clock = 
+        """<UserControl
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             mc:Ignorable="d" 
+             d:DesignHeight="300" d:DesignWidth="300">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <TextBlock Text="{Binding Time, StringFormat=yyyy-MM-dd HH:mm:ss:fff}"/>
+    </Grid>
+</UserControl>"""
+        |> parse<UserControl>
     """<Window 
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -362,13 +380,18 @@ let window = //x:Class="Elmish.CounterViews.MainWindow"
                 Maximum="10" Minimum="1" IsSnapToTickEnabled="True"
                 Value="{Binding StepSize}"/>
         <TextBlock Grid.Row="3" Text="{Binding StepSize}"/>
-        <Grid Grid.Row="5" HorizontalAlignment="Center">
+        <Grid Name="grdClock" Grid.Row="5" HorizontalAlignment="Center">
             <!-- <local:Clock DataContext="{Binding Clock}"/> -->
         </Grid>
     </Grid>
 </Window>"""
-    |>System.Windows.Markup.XamlReader.Parse
-    |> fun x -> x :?> Window
+    //|>System.Windows.Markup.XamlReader.Parse
+//    |> fun x -> x :?> Window
+    |> parse<Window>
+    |> fun x -> 
+        x.FindName "grdClock" :?> Grid
+        |> fun grd -> grd.Children.Add clock
+        x
 
 Program.mkSimple init update view
 //        |> Program.withConsoleTrace
