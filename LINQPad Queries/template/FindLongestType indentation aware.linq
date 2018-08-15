@@ -57,27 +57,31 @@ let (|TypeDeclaration|Line|) =
         Line m.Groups.[1].Length
     | x -> failwithf "bad pattern? %s" x
 
-type TypeInfo = {TypeStartIndentation:int;Lines:int;TypeDeclarationText:string}
+type TypeInfo = {TypeStartIndentation:int;Lines:int;TypeDeclarationText:string; TypeStartLine:int}
 type LineWalkState =
     | NotInAType
     | InAType of TypeInfo
     
-let getOptMax x =
-    function
-    | Some y -> max x y
-    | None -> x
-    >> Some
     
 let lines =  
     test.SplitLines()
-    |> Seq.choose (|ValueString|_|)
+    |> Seq.mapi(fun i x ->
+        i,x
+    )
+    |> Seq.choose (fun (i,x) -> match x with |ValueString x -> Some (i,x) | _ -> None)
     |> List.ofSeq
-let startType (li,typeText) =
+type LongestInfo = {LineIndex:int;Length:int}    
+let getOptMax (li,x) =
+    let def = {LineIndex=li; Length=x}
+    function
+    | Some y -> if y.Length > x then y else def
+    | None -> def
+    >> Some
+let startType (lineIndex,li,typeText) =
     printfn "Starting type %s" typeText
-    InAType {TypeStartIndentation=li; Lines=1;TypeDeclarationText=typeText}
+    InAType {TypeStartIndentation=li; Lines=1;TypeDeclarationText=typeText;TypeStartLine=lineIndex}
     
-lines
-|> Seq.fold(fun (currentState:LineWalkState,longestOpt: int option) (line:string) -> 
+let foldLines (currentState:LineWalkState,longestOpt: LongestInfo option) (lineIndex,line) = 
     // if we aren't in a type then just carry longest type length option forward
     // if we are starting a type then 
     match currentState,line with
@@ -85,32 +89,35 @@ lines
         printfn "skipping line %s" line
         NotInAType, longestOpt
     | NotInAType, TypeDeclaration (ti,x) ->
-        startType (ti,x), getOptMax 1 longestOpt
+        startType (lineIndex,ti,x), getOptMax (lineIndex,1) longestOpt
     | InAType ti, Line li ->
         if li <= ti.TypeStartIndentation then // type definition is over
             printfn "Ending type(%s) with line %s" ti.TypeDeclarationText line
-            NotInAType, getOptMax ti.Lines longestOpt
+            NotInAType, getOptMax (ti.TypeStartLine,ti.Lines) longestOpt
         else
             printfn "Continuing type %s" line
             let x = ti.Lines + 1
-            InAType {ti with Lines = x}, getOptMax x longestOpt
+            InAType {ti with Lines = x}, getOptMax (lineIndex,x) longestOpt
     
     | InAType ti, TypeDeclaration (li,x) ->
         // what to do when the indentation = type's indentation or is less, but there's no text? that doesn't end a type
         if li <= ti.TypeStartIndentation then // type definition is over
             printfn "Ending type(%s) with line %s" ti.TypeDeclarationText line
-            startType (li,x), getOptMax ti.Lines longestOpt
+            startType (lineIndex,li,x), getOptMax (ti.TypeStartLine,ti.Lines) longestOpt
         else
             printfn "Continuing type %s" line
             let x = ti.Lines + 1
-            InAType {ti with Lines = x}, getOptMax x longestOpt
+            InAType {ti with Lines = x}, getOptMax (ti.TypeStartLine,x) longestOpt
 //    | x,y -> (x,y).Dump("fail"); invalidOp (sprintf "%A" x)
     
 
-) (NotInAType, None)
+let getLongestType = Seq.fold foldLines (NotInAType, None)
+    
+lines
+|> getLongestType 
 |> function
     |InAType ti, longestOpt ->
-        getOptMax ti.Lines longestOpt
+        getOptMax (ti.TypeStartLine,ti.Lines) longestOpt
     | NotInAType, longestOpt -> 
         longestOpt 
 |> Dump
