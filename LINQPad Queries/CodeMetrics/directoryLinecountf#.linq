@@ -97,6 +97,7 @@ module BrowseFileDialogReflection =
 //    |> Dump
 //    |> ignore
         
+    
 //instance of above type
 let currentSettings:CountSettings=	{
     Path=
@@ -122,6 +123,103 @@ let currentSettings:CountSettings=	{
     PathExclude=pathExclude
     }
     
+module Helpers =
+    let (|RMatch|_|) p x = 
+        let m = Regex.Match(x,p)
+        if m.Success then
+            Some m
+        else None
+       
+    let (|ValueString|_|) =
+        function
+        | null | "" -> None
+        | x when String.IsNullOrWhiteSpace x -> None
+        | x -> Some <| ValueString x
+        
+    let (|Whitespace|_|) = 
+        function
+        | null | "" -> None
+        | x when String.IsNullOrWhiteSpace x -> Some Whitespace
+        | _ -> None
+        
+open Helpers
+
+module LongestType = 
+    let (|TypeDeclaration|Line|) =
+        function
+        | null | "" | Whitespace -> Line 0
+        | RMatch "^(\s*)(type (.+)\(.*\)\s*=)?" m ->
+            match m.Groups.[2].Value with
+            | "" 
+            | null -> Line m.Groups.[1].Length
+            | _ -> 
+                TypeDeclaration (m.Groups.[1].Length,m.Groups.[3].Value)
+        // match on anything that's not an empty line or a comment line
+        | RMatch "^(\s*)[^/]+" m ->
+            Line m.Groups.[1].Length
+        | x -> failwithf "bad pattern? %s" x
+    
+    type TypeInfo = {TypeStartIndentation:int;Lines:int;TypeDeclarationText:string; TypeStartLine:int}
+    type LineWalkState =
+        | NotInAType
+        | InAType of TypeInfo
+        
+        
+    type LongestInfo = {LineIndex:int;Length:int;EndLineIndex:int}    
+    let getOptMax (li,typeLength, eLi) =
+        let def = {LineIndex=li; Length=typeLength;EndLineIndex=eLi}
+        function
+        | Some y -> if y.Length > typeLength then y else def
+        | None -> def
+        >> Some
+    let startType debug (lineIndex,lineIndent,typeText,typeEndIndex) =
+        if debug then
+            printfn "Starting type %s" typeText
+        InAType {TypeStartIndentation=lineIndent; Lines=1;TypeDeclarationText=typeText;TypeStartLine=lineIndex}
+        
+    let foldLines debug (currentState:LineWalkState,longestOpt: LongestInfo option) (lineIndex,line) = 
+        // if we aren't in a type then just carry longest type length option forward
+        // if we are starting a type then 
+        match currentState,line with
+        | NotInAType, Line lineIndentation ->
+            if debug then 
+                printfn "skipping line %s" line
+            NotInAType, longestOpt
+        | NotInAType, TypeDeclaration (ti,x) ->
+            startType debug (lineIndex,ti,x,lineIndex), getOptMax (lineIndex,1, lineIndex) longestOpt
+        | InAType ti, Line lineIndentation ->
+            if lineIndentation <= ti.TypeStartIndentation then // type definition is over
+                if debug then
+                    printfn "Ending type(%s) on line %i with line %s" ti.TypeDeclarationText lineIndex line
+                NotInAType, getOptMax (ti.TypeStartLine,ti.Lines,lineIndex) longestOpt
+            else
+                if debug then
+                    printfn "Continuing type %s" line
+                let x = ti.Lines + 1
+                InAType {ti with Lines = x}, getOptMax (ti.TypeStartLine,x,lineIndex) longestOpt
+        
+        | InAType ti, TypeDeclaration (li,x) ->
+            // what to do when the indentation = type's indentation or is less, but there's no text? that doesn't end a type
+            if li <= ti.TypeStartIndentation then // type definition is over
+                if debug then
+                    printfn "Ending type(%s) with line %s" ti.TypeDeclarationText line
+                startType debug (lineIndex,li,x,lineIndex), getOptMax (ti.TypeStartLine,ti.Lines,lineIndex) longestOpt
+            else
+                if debug then
+                    printfn "Continuing type %s" line
+                let x = ti.Lines + 1
+                InAType {ti with Lines = x}, getOptMax (ti.TypeStartLine,x, lineIndex) longestOpt
+    //    | x,y -> (x,y).Dump("fail"); invalidOp (sprintf "%A" x)
+        
+    
+    let getLongestType debug maxLineIndex = 
+        Seq.fold (foldLines debug) (NotInAType, None)
+        >> function
+            |InAType ti, longestOpt ->
+                getOptMax (ti.TypeStartLine,ti.Lines,maxLineIndex) longestOpt
+            | NotInAType, longestOpt -> 
+                longestOpt 
+                
 //set cwd (not a functional call, imperative?)
 System.Environment.CurrentDirectory <- currentSettings.Path
 
@@ -178,13 +276,23 @@ type FileSummary(relativePath:string, fullPath:string,readerFunc:string->string[
     member self.Filename with get() = System.IO.Path.GetFileName(self.FullPath)
     member self.RelativePath with get() = prepend+relativePath.Substring(0,relativePath.Length-self.Filename.Length)
     
-    member self.LineCount = lines.Value |> Seq.length
+    member self.LineCount = 
+        let x = lines.Value |> Seq.length
+        if x <= 1 then printfn "Bad line count %i for %s" x fullPath
+        x
     member self.Nonspaces=lazy(text.Value |> Seq.filter (fun x-> Char.IsWhiteSpace x <>true) |> Seq.length)
     member self.DoubleQuotes=lazy(text.Value |> Seq.filter (fun x-> '"'=x) |> Seq.length)
     member self.PotentialMagicNumbers=lazy(text.Value |> rgNumber.Matches |> fun x->x.Count)
+    // the longestLine's length
     member self.MaxLineLength=lazy(lengthMetrics.Value |> Seq.map snd |> Seq.max) //self.AllLines.Value |> Seq.map String.length |> Seq.max)
+    // the longestLine's index
     member self.MaxLineIndex=lazy(lengthMetrics.Value |> Seq.maxBy snd |> fst)
     member self.LongLines=lazy(lengthMetrics.Value |> Seq.map snd |> Seq.filter ((>) 80) |> Seq.length) //self.AllLines.Value |> Seq.map String.length |> Seq.filter((>) 80) |> Seq.length)
+    // only doing F# for now, especially since it is the one more likely to have many classes in the same file
+    member self.LongestType = lazy(
+            printfn "LineCount is %i" self.LineCount
+            lines.Value |> Seq.mapi(fun i x -> (i,x)) |> LongestType.getLongestType false (self.LineCount - 1)
+        )
     
     
 let asSummary (files:string[]) :seq<FileSummary> =
@@ -250,6 +358,23 @@ let getHighestLinesByFile threshold =
                         })
 
 buildLimitString getHighestLinesByFile "HighestLines by file" highestLinesByFileMinimum
+
+// -------------- highest type length file --------------
+
+summaries
+|> Seq.filter(fun x -> x.Filename.EndsWith(".fs"))
+|> Seq.map(fun x -> 
+    let l,li,eli = 
+        match x.LongestType.Value with
+        | Some x-> x.Length, x.LineIndex, x.EndLineIndex
+        | None -> 0,0,0
+    x.Filename, l, sprintf "%i..%i" li eli
+)
+|> Seq.sortBy(fun (_,l,_) -> -l)
+|> Seq.truncate 20
+|> List.ofSeq
+|> fun x -> x.Dump("highest type length fs file")
+|> ignore
 
 // -------------- highest lines by folder ---------------
 

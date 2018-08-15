@@ -35,7 +35,8 @@ let tests =
         5
         
     """
-    ; //File.ReadAllText @"C:\ExpenseItHomeViewModel.fs"
+    // this guy fails, to read last index
+    //; File.ReadAllText @"DataManager.fs"
     ]
 module Helpers =
     let (|RMatch|_|) p x = 
@@ -95,22 +96,22 @@ module LongestType =
         // if we aren't in a type then just carry longest type length option forward
         // if we are starting a type then 
         match currentState,line with
-        | NotInAType, Line li ->
+        | NotInAType, Line lineIndentation ->
             if debug then 
                 printfn "skipping line %s" line
             NotInAType, longestOpt
         | NotInAType, TypeDeclaration (ti,x) ->
             startType debug (lineIndex,ti,x,lineIndex), getOptMax (lineIndex,1, lineIndex) longestOpt
-        | InAType ti, Line li ->
-            if li <= ti.TypeStartIndentation then // type definition is over
+        | InAType ti, Line lineIndentation ->
+            if lineIndentation <= ti.TypeStartIndentation then // type definition is over
                 if debug then
-                    printfn "Ending type(%s) with line %s" ti.TypeDeclarationText line
-                NotInAType, getOptMax (ti.TypeStartLine,ti.Lines,li) longestOpt
+                    printfn "Ending type(%s) on line %i with line %s" ti.TypeDeclarationText lineIndex line
+                NotInAType, getOptMax (ti.TypeStartLine,ti.Lines,lineIndex) longestOpt
             else
                 if debug then
                     printfn "Continuing type %s" line
                 let x = ti.Lines + 1
-                InAType {ti with Lines = x}, getOptMax (ti.TypeStartLine,x,li) longestOpt
+                InAType {ti with Lines = x}, getOptMax (ti.TypeStartLine,x,lineIndex) longestOpt
         
         | InAType ti, TypeDeclaration (li,x) ->
             // what to do when the indentation = type's indentation or is less, but there's no text? that doesn't end a type
