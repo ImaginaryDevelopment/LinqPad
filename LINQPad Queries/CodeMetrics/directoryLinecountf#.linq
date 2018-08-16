@@ -278,7 +278,6 @@ type FileSummary(relativePath:string, fullPath:string,readerFunc:string->string[
     
     member self.LineCount = 
         let x = lines.Value |> Seq.length
-        if x <= 1 then printfn "Bad line count %i for %s" x fullPath
         x
     member self.Nonspaces=lazy(text.Value |> Seq.filter (fun x-> Char.IsWhiteSpace x <>true) |> Seq.length)
     member self.DoubleQuotes=lazy(text.Value |> Seq.filter (fun x-> '"'=x) |> Seq.length)
