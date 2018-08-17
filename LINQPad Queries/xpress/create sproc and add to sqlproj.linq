@@ -68,13 +68,14 @@ let addSprocToSqlProj sqlProjText relPath sqlProj =
                     {fs with AccruedLines = x.Line::fs.AccruedLines}
                 else 
                     x.Dump("Inserting before")
+                    // this must be in reverse order since the fold is accruing in reverse
                     let newText = [
                         sprintf "    <Build Include=\"%s\">" relPath
                         "      <SubType>Code</SubType>"
                         "      <AnsiNulls>On</AnsiNulls>"
                         "      <QuotedIdentifier>On</QuotedIdentifier>"
                         "    </Build>"
-                    ]
+                    ] List.rev
                     newText.Dump("new sproc include text")
                     {InsertDone=true; AccruedLines = x.Line :: newText@fs.AccruedLines}
         ) {InsertDone=false;AccruedLines=List.empty}
