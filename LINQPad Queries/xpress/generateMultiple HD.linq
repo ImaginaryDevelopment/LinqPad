@@ -1,9 +1,9 @@
 <Query Kind="FSharpProgram">
   <Reference Relative="..\..\..\FsInteractive\MacroRunner\CodeGeneration\bin\Debug\CodeGeneration.dll">C:\projects\FsInteractive\MacroRunner\CodeGeneration\bin\Debug\CodeGeneration.dll</Reference>
-  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio\2017\Enterprise\Common7\IDE\PublicAssemblies\envdte.dll</Reference>
-  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio\2017\Enterprise\Common7\IDE\PublicAssemblies\envdte80.dll</Reference>
   <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\MacroRunner.exe">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\MacroRunner.exe</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.Data.Entity.Design.dll</Reference>
+  <GACReference>EnvDTE, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
+  <GACReference>EnvDTE90, Version=9.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
   <GACReference>Microsoft.VisualStudio.TextTemplating.Interfaces.10.0, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
   <NuGetReference>FSharp.Core</NuGetReference>
 </Query>
@@ -175,22 +175,22 @@ let cgsm =
             TargetNamespace= "HD.Schema.DataModels"
             TypeScriptGenSettingMap= Some{
                 TargetProjectName= typeScriptProjectName
-                ColumnBlacklist = columnBlacklist
+                ColumnNolist = columnBlacklist
                 TargetFolderOpt = typeScriptFolderName
             }
             CString = cString
             UseOptionTypes= false
-            ColumnBlacklist= columnBlacklist
+            ColumnNolist= columnBlacklist
             Measures= measureList |> Set.ofSeq
-            MeasuresBlacklist= measureBlacklist |> Set.ofSeq
+            MeasuresNolist= measureBlacklist |> Set.ofSeq
             IncludeNonDboSchemaInNamespace= true
             Pluralize=pluralizer.Pluralize
             Singularize=pluralizer.Singularize
-            TypeGenerationBlacklist = Set []
+            TypeGenerationNolist = Set []
             GenerateValueRecords= false
             SprocSettingMap= Some {
-                SprocInputMapBlacklist = Set [  ]
-                SprocBlacklist=Set ["sp_alterdiagram"
+                SprocInputMapNolist = Set [  ]
+                SprocNolist=Set [   "sp_alterdiagram"
                                     "sp_creatediagram"
                                     "sp_dropdiagram"
                                     "sp_helpdiagramdefinition"
@@ -200,7 +200,7 @@ let cgsm =
 
             Mutable= PureCodeGeneration.Mutability.Immutable
             GetMeasureNamepace= Some (fun _ -> "HD.Schema")
-            AdditionalNamespaces= Set ["HD.Schema.BReusable"]
+            AdditionalNamespaces= Set ["Schema.BReusable"]
         }
         
 // these are the items we will generate into a sql project
@@ -225,7 +225,7 @@ let results =
     //    type TableGenerationInfo = {Schema:string; Name:string; GenerateFull:bool}
     let iDte = GenerateAllTheThings.DteGenWrapper(dte)
     GenerateAllTheThings.runGeneration  
-        (sprintf "%s.linq" Util.CurrentQuery.Name) sb iDte manager cgsm [toGen2] dataModelsToGen
+        (sprintf "%s.linq" Util.CurrentQuery.Name) sb iDte manager cgsm [toGen2] dataModelsToGen (fun _ -> {SettersCheckInequality=false;AllowPropertyChangeOverride=false})
     let r = manager.Process doMultiFile
     r
 // not important, just nice to have, clean up of opened documents in VS
