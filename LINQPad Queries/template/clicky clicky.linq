@@ -61,21 +61,17 @@ module Simulator =
     //is.Mouse.MoveMouseBy(100,100)
     //is.Mouse
     //is.Mouse.RightButtonClick()
-    let clickCenterOfRightScreen () =
+    let move pt =
         //is.Mouse.MoveMouseTo(2687. , 504. )
-        WinForm.setMousePosition 2687 504 
-        is.Mouse.LeftButtonClick()
-    let moveMouseToCenterRightOfRightScreen() =
-        WinForm.setMousePosition 3124 504
+        WinForm.setMousePosition pt.X pt.Y
+    
     let keepFing delay f = 
         while not <| is.InputDeviceState.IsKeyDown WindowsInput.Native.VirtualKeyCode.CONTROL do
             f()
             sleep delay
             
-    let keepClicking delay =
-        keepFing delay ( clickCenterOfRightScreen >> ignore)
     // keep clicking center, but move mouse around some to pick things up?
-    let run watchPosition delay relativity (funs: (unit -> unit) list) =
+    let run watchPosition delay (funs: (unit -> unit) list) =
         let toDo = 
             let mutable i = 0
             let fillDc = 
@@ -83,7 +79,6 @@ module Simulator =
                 let fillDc() = 
                     dc.Content <- 
                         WinForm.getMousePosition() 
-                        |> mapAbsPoint relativity
                         |> box
                 fillDc()
                 //dc.Dump
@@ -97,46 +92,12 @@ module Simulator =
                 i <- (i + 1) % options.Length
             )
         keepFing delay toDo
-        
-module CotLi = 
-    let topLeftCorner = point 1990 125
-    let setMouseRelative x y = WinForm.setMousePosition (x + topLeftCorner.X) (y + topLeftCorner.Y)
-        
-    let clickCrusadersTab () = 
-        
-        setMouseRelative 940 640
-        
-        Simulator.click() |> ignore
-        ()
-    let sweepPickupArea() = ()
-        //WinForm.setMousePosition 
-    // 1    2   3
-    // 4    5   6
-    let ClickLevelUp currentViewSlot =
-        let centerToCenterX = 400
-        let centerToCenterY = 120
-        let x1 = 380
-        let y1 = 690
-        
-        sleep 400
-        let calcPos slotX slotY = 
-            (x1 + centerToCenterX * slotX), (y1 + centerToCenterY * slotY)
-        match currentViewSlot with
-        | 1 -> calcPos 0 0 |> Some
-        | 2 -> calcPos 1 0 |> Some
-        | 3 -> calcPos 2 0 |> Some
-        | 4 -> calcPos 0 1 |> Some
-        | 5 -> calcPos 1 1 |> Some
-        | 6 -> calcPos 2 1 |> Some
-        | _ -> None
-        |> Option.iter (curry setMouseRelative)
-        Simulator.is.Mouse.LeftButtonClick() |> ignore
-        ()
 
-WinForm.getMousePosition()
-|> mapAbsPoint CotLi.topLeftCorner
-|> Dump
-|> ignore
+let target = 
+    Util.ReadLine("Position mouse over preferred formation area") |> ignore
+    let pt = WinForm.getMousePosition()
+    {X=pt.X; Y=pt.Y}
+    
 //CotLi.ClickLevelUp 3
 ////Process.GetProcesses()
 ////|> Seq.filter(fun p -> p.ProcessName = "chrome")
@@ -146,15 +107,16 @@ WinForm.getMousePosition()
 //|> Dump
 //|> ignore
 let funs = 
-    CotLi.clickCrusadersTab ()
     [
         //fun() -> ()
-        fun () -> Simulator.clickCenterOfRightScreen() |> ignore
-        fun () -> Simulator.is.Mouse.LeftButtonClick() |> ignore
-        fun () -> CotLi.ClickLevelUp 3
+        fun () -> 
+            Simulator.move target
+            Simulator.click ()
+            ()
+            
         //fun () -> moveMouseToCenterRightOfRightScreen()
     ]
 let delay = 10
 let watchPosition = false
-Simulator.run watchPosition 500 CotLi.topLeftCorner funs
+Simulator.run watchPosition 500 funs
 //CotLi.clickCrusadersTab()
