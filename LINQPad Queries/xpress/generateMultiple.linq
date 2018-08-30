@@ -1,9 +1,11 @@
 <Query Kind="FSharpProgram">
   <Reference Relative="..\..\..\FsInteractive\MacroRunner\CodeGeneration\bin\Debug\CodeGeneration.dll">C:\projects\FsInteractive\MacroRunner\CodeGeneration\bin\Debug\CodeGeneration.dll</Reference>
-  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio\2017\Enterprise\Common7\IDE\PublicAssemblies\envdte.dll</Reference>
-  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio\2017\Enterprise\Common7\IDE\PublicAssemblies\envdte80.dll</Reference>
+  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio\2017\Community\Common7\IDE\PublicAssemblies\envdte.dll</Reference>
+  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio\2017\Community\Common7\IDE\PublicAssemblies\envdte80.dll</Reference>
   <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\MacroRunner.exe">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\MacroRunner.exe</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Data.Entity.Design.dll</Reference>
   <GACReference>Microsoft.VisualStudio.TextTemplating.Interfaces.10.0, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
+  <NuGetReference>FSharp.Core</NuGetReference>
 </Query>
 
 // this thing works fine via linqpad (translating reference paths only)
@@ -130,9 +132,9 @@ let refData : ReferenceData list = [
             }
 ]
 
-let codeTableBlacklist = ["Payments"; "ScanStatistic"]
+let codeTableNolist = ["Payments"; "ScanStatistic"]
 
-let columnBlacklist = 
+let columnNolist = 
     [
         "Claims", Set ["_CurrentLevel_"; "_MaxLevel_"]
         "Charge", Set ["TotalAmount"]
@@ -154,7 +156,7 @@ let measureList =
         "PayerProfileInfoId"
         "UserId"
     ]
-let measureBlacklist =
+let measureNolist =
     [
         "PatientIdentificationID"
     ]
@@ -199,28 +201,28 @@ let cgsm =
             TypeScriptGenSettingMap= None 
 //                {
 //                    TargetProjectName= typeScriptProjectName
-//                    ColumnBlacklist = columnBlacklist
+//                    ColumnNolist = columnNolist
 //                    TargetFolderOpt = typeScriptFolderName
 //                }
             CString = cString
             UseOptionTypes= false
-            ColumnBlacklist= columnBlacklist
+            ColumnNolist= columnNolist
             Measures= measureList |> Set.ofSeq
-            MeasuresBlacklist= measureBlacklist |> Set.ofSeq
+            MeasuresNolist= measureNolist |> Set.ofSeq
             IncludeNonDboSchemaInNamespace= true
             Pluralize=pluralizer.Pluralize
             Singularize=pluralizer.Singularize
-            TypeGenerationBlacklist = Set [
+            TypeGenerationNolist = Set [
                                         "PaymentReversal"
             ]
             GenerateValueRecords= false
             SprocSettingMap= Some {
-                SprocInputMapBlacklist = Set [  "uspAppointmentInsWithClaim"
+                SprocInputMapNolist = Set [     "uspAppointmentInsWithClaim"
                                                 "uspClaimsInsUpdInput"
                                                 "uspGuarantorProfileInfoInsUpd"
                                                 "uspPatientsInfoInsUpd"
                 ]
-                SprocBlacklist=Set ["sp_alterdiagram"
+                SprocNolist=Set [   "sp_alterdiagram"
                                     "sp_creatediagram"
                                     "sp_dropdiagram"
                                     "sp_helpdiagramdefinition"
@@ -230,7 +232,7 @@ let cgsm =
 
             Mutable= PureCodeGeneration.Mutability.Immutable
             GetMeasureNamepace= Some (fun _ -> "Pm.Schema")
-            AdditionalNamespaces= Set ["Pm.Schema.BReusable"]
+            AdditionalNamespaces= Set ["Schema.BReusable"]
         }
         
 // these are the items we will generate into a sql project
@@ -502,12 +504,18 @@ let toGen2 =
         |> fun items -> { SqlGenerationConfig.SqlItems = items; TargetSqlProjectName= targetSqlProjectName; InsertionConfig = Some {InsertsGenerationConfig.InsertTitling = "SqlGenerator"; TargetInsertRelativePath= @"Scripts\Post-Deployment\TableInserts\Accounting1.5\AccountingInserts.sql"; AdditionalReferenceData= refData}}
         toGenAccounting
     ]
+    
+open PureCodeGeneration
+let fGetNotifyOptions (ti:TableIdentifier) : NotifyClassOptions =
+    if ti.Name= "PatientsInfo" then
+        {SettersCheckInequality=true;AllowPropertyChangeOverride=false}
+    else {SettersCheckInequality=false;AllowPropertyChangeOverride=false}
 let results = 
     //runFullGeneration scriptFullPath generatePartials toGen addlCodeTables |> Map.ofDictionary
     //    type TableGenerationInfo = {Schema:string; Name:string; GenerateFull:bool}
     let iDte = GenerateAllTheThings.DteGenWrapper(dte)
     GenerateAllTheThings.runGeneration  
-        (sprintf "%s.linq" Util.CurrentQuery.Name) sb iDte manager cgsm toGen2 dataModelsToGen
+        (sprintf "%s.linq" Util.CurrentQuery.Name) sb iDte manager cgsm toGen2 dataModelsToGen fGetNotifyOptions
     let r = manager.Process doMultiFile
     r
 // not important, just nice to have, clean up of opened documents in VS

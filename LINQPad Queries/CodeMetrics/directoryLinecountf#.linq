@@ -10,6 +10,7 @@ open System
 //open System.Diagnostics
 open System.IO
 //open System.Windows.Forms
+// TODO: add highest using/open counts
 
 let doTestFileExclude = false
 let highestLinesByFileMinimum = 550
