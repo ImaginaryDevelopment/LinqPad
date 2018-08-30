@@ -1,6 +1,6 @@
 <Query Kind="FSharpProgram" />
 
-let target = "G:\steamlibrary/steamapps/common"
+let targets = ["G:\steamlibrary/steamapps/common"]
 type ByteMeasure = 
     | Bytes
     | KB // proper casing for measure is kB ?
@@ -32,9 +32,14 @@ let rec getSize x =
         |> Seq.sum
     ]
     |> Seq.sum
-Directory.GetDirectories target
-|> Seq.map (fun x -> Path.GetFileName x, getSize x,getSize x |> decimal |> cleanDisplay Bytes)
-|> Seq.sortBy (fun (_,sz,_) -> -1L * sz)
-|> Seq.map (fun (n,_,disp) -> n, sprintf "%A" (fst disp))
+let getSizes x = 
+    x 
+    |> Seq.map (fun x -> Path.GetFileName x, getSize x,getSize x |> decimal |> cleanDisplay Bytes)
+    |> Seq.sortBy (fun (_,sz,_) -> -1L * sz)
+    
+targets
+|> Seq.map(fun t -> LINQPad.Hyperlinq(t, Path.GetPathRoot t), Directory.GetDirectories t |> getSizes)
+
+//|> Seq.map (fun (n,_,disp) -> n, sprintf "%A" (fst disp))
 |> Dump
 |> ignore
