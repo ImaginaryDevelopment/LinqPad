@@ -37,7 +37,7 @@ let fileExclude	(a:string):bool =
     endsWithIgnore "generated.fs" a
     
     
-let pathExcludeEndings = ["obj"; "Debug";".sonar";"ServerObjects";"Service References";"Web References";"PackageTmp";"TestResults";"packages";"$tf";".git";"bin" ]
+let pathExcludeEndings = ["obj"; "Debug";"node_modules";".sonar";"ServerObjects";"Service References";"Web References";"PackageTmp";"TestResults";"packages";"$tf";".git";"bin" ]
 
 let pathExclude (a:string) :bool =
     List.exists ( fun elem -> endsWithIgnore elem a) pathExcludeEndings ||
