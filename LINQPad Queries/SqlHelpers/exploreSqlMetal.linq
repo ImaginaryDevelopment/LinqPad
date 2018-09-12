@@ -1,60 +1,139 @@
-<Query Kind="Program">
-  
-</Query>
+<Query Kind="FSharpProgram" />
 
-void Main()
-{
-	// explore sqlmetal
-	var interestedItem = "UspPaymentsGet";
-	var interestedType = "Function"; // Table or Function
-	var targetPath = Path.Combine( Path.GetTempPath(),"linqpad_sqlmetal");
-	Directory.CreateDirectory(targetPath);
-	Environment.CurrentDirectory = targetPath;
-	Environment.CurrentDirectory.Dump("cwd");
-	var searchPath = Path.Combine(Environment.GetFolderPath( System.Environment.SpecialFolder.ProgramFilesX86), "Microsoft SDKs","Windows");
-	var sqlMetals = System.IO.Directory.EnumerateFiles(searchPath,"sqlmetal.exe", SearchOption.AllDirectories).Dump();
-	var sqlMetal = sqlMetals.First();
-	
-	var entireOutput = Util.Cmd(sqlMetal,"/conn:\""+ this.Connection.ConnectionString + "\" /sprocs",quiet:true);
+// explore sqlmetal
+let interestedItem = "UspPaymentsGet"
+let interestedType = "Function" // Table or Function
 
-	try
-	{
-		var doc = XDocument.Parse(string.Join(Environment.NewLine, entireOutput.SkipWhile(s => s.StartsWith("<") == false)));
-		doc.DumpFormatted();
-		switch (interestedType)
-		{
-			case "Function":
-				var fun = doc.Root.Elements(doc.Root.Name.Namespace + "Function")
-					//.Dump("functions")
-					.FirstOrDefault(r => r.Attribute("Name").Value.EndsWith(interestedItem, StringComparison.InvariantCultureIgnoreCase)).Dump();
-				if(fun != null)
-					sys.sp_helptext(fun.Attribute("Name").Value).Dump();
-			break;
-		}
-	}
-	catch (Exception ex)
-	{
-		ex.Dump();
-	}
-	finally 
-	{
-		entireOutput.Where(l=> l.Contains("Warning") || l.Contains(interestedItem)).OrderByDescending(l => l.Contains(interestedItem)).Dump("interesting");
-	}
-	
-	
-	Directory.EnumerateFiles(Environment.CurrentDirectory).Dump("files in target dir");
-	entireOutput.SkipWhile(s=>s.StartsWith("<")==false).SkipWhile(s=>s.Contains("<")).Dump("after doc output");
-	GetCommandOptions(sqlMetal);
-}
+let delimit (d:string) (items: string seq) = String.Join(d, items)
+let(|ValueString|NonValueString|) = 
+    function
+    | "" | null -> NonValueString
+    | x when String.IsNullOrWhiteSpace x -> NonValueString
+    | x -> ValueString x
+    
+
+let dc = new TypedDataContext()
+type OutputType =
+    |E of string
+    |O of string
+let runIt cmd args = 
+    let psi = ProcessStartInfo(cmd,args)
+    psi.RedirectStandardError <- true
+    psi.RedirectStandardOutput <- true
+    psi.UseShellExecute <- false
+    psi.RedirectStandardInput <- true
+//    psi.CreateNoWindow <- true
+    use p = new Process()
+    p.EnableRaisingEvents <- true
+    p.StartInfo <- psi
+    let output = ResizeArray()
+    let disp = p.ErrorDataReceived.Subscribe(fun ed -> output.Add(E ed.Data))
+    let disp2 = p.OutputDataReceived.Subscribe(fun d -> output.Add(O d.Data))
+    let ec = 
+        try
+            try
+                p.Start() |> ignore<bool>
+                p.BeginOutputReadLine()
+                p.BeginErrorReadLine()
+                p.WaitForExit()
+                p.ExitCode |> Some
+            with ex -> 
+                ex.Dump()
+                None
+        finally
+            disp.Dispose()
+            disp2.Dispose()
+    (ec,output)
+    
+module Option=
+    let getOrDefault x = 
+        function
+        | Some x -> x
+        | None -> x
+    let ofValueString =
+        function
+        | "" | null -> None
+        | x when String.IsNullOrWhiteSpace x -> None
+        | x -> Some x
+        
+let getAttribValue name (x:XElement) : string =
+    let xn = XName.op_Implicit name
+    x.Attribute(xn)
+    |> Option.ofObj
+    |> Option.map(fun x -> x.Value)
+    |> Option.getOrDefault null
 
 // Define other methods and classes here
-void GetCommandOptions(string commandPath){
-	
-	try{
-		Util.Cmd(commandPath,"/?");
-	}
-	catch (CommandExecutionException ex )
-	{
-		ex.Dump();	
-	}
-}
+let getCommandOptions(commandPath:string) =
+	try
+		Util.Cmd(commandPath,"/?")
+    with | :? CommandExecutionException as ex -> 
+        ex.Dump()
+        reraise()
+    
+let targetPath = Path.Combine( Path.GetTempPath(),"linqpad_sqlmetal")
+Directory.CreateDirectory(targetPath) |> ignore
+Environment.CurrentDirectory <- targetPath
+Environment.CurrentDirectory.Dump("cwd")
+let searchPath = Path.Combine(Environment.GetFolderPath( System.Environment.SpecialFolder.ProgramFilesX86), "Microsoft SDKs","Windows")
+let sqlMetals = System.IO.Directory.EnumerateFiles(searchPath,"sqlmetal.exe", SearchOption.AllDirectories) |> Array.ofSeq
+sqlMetals.Dump()
+sqlMetals
+|> Seq.iter(fun sqlMetal ->
+    sqlMetal.Dump("selected")
+
+    //let entireOutput = Util.Cmd(sqlMetal,"/conn:\""+ dc.Connection.ConnectionString + "\" /sprocs",quiet=true);
+    let ec,text = runIt sqlMetal ("/conn:\""+ dc.Connection.ConnectionString + "\" /sprocs")
+    let notXml (s:string) = not (isNull s) && s.StartsWith("<") = false
+    let data = text |> Seq.map(function |E x -> x | O x -> x) |> List.ofSeq
+    let xml = data |> Seq.skipWhile notXml |> List.ofSeq
+    match ec, xml with
+    | Some 0,ValueString _::_ -> None
+    | Some x,_ -> Some()
+    | None,_ -> printfn "exception?";None
+    |> Option.iter(fun _ -> 
+        (sqlMetal,ec, data).Dump()
+    )
+    
+    xml
+    |> delimit Environment.NewLine |> Option.ofValueString
+    |> Option.iter(fun xml ->
+        printfn "processing xml for %s" sqlMetal
+        try
+            match xml with
+            | null | "" -> printfn "Exit code was %A" ec
+            | xml ->
+                try
+                	let doc = XDocument.Parse(xml)
+                	doc.DumpFormatted() |> ignore
+                	match interestedType with
+                    | "Function" ->
+            		    let es = doc.Root.Elements(doc.Root.Name.Namespace + "Function")
+            		    es
+            			//.Dump("functions")
+                        |> Seq.tryFind(fun r ->
+            			    let a = getAttribValue "Name" r
+                            a.EndsWith(interestedItem, StringComparison.InvariantCultureIgnoreCase)
+                        )
+                        |> Option.iter(fun (fElem:XElement) ->
+                            fElem.Dump()
+            			    let a:string= getAttribValue "Name" fElem
+            				dc.sys.sp_helptext(a,null).Dump()
+            				|> ignore
+                	    )
+                        ()
+                    | _ -> ()
+                with ex -> ex.Dump()
+        finally 
+        	data.Where(fun l -> l.Contains("Warning") || l.Contains(interestedItem)).OrderByDescending(fun l -> l.Contains(interestedItem)).Dump("interesting")
+        	()
+            
+            Directory.EnumerateFiles(Environment.CurrentDirectory).Dump("files in target dir");
+            data
+                .SkipWhile(fun s-> s.StartsWith("<") = false)
+                .SkipWhile(fun s -> s.Contains("<"))
+                .Dump("after doc output")
+        getCommandOptions(sqlMetal).Dump("cmd options")
+    )
+)       
+
