@@ -13,6 +13,8 @@ let(|ValueString|NonValueString|) =
     
 
 let dc = new TypedDataContext()
+// buffer this, it gets wiped out at some point later
+let cs = dc.Connection.ConnectionString
 type OutputType =
     |E of string
     |O of string
@@ -43,7 +45,7 @@ let runIt cmd args =
         finally
             disp.Dispose()
             disp2.Dispose()
-    (ec,output)
+    (ec,output :> _ seq)
     
 module Option=
     let getOrDefault x = 
@@ -65,8 +67,8 @@ let getAttribValue name (x:XElement) : string =
 
 // Define other methods and classes here
 let getCommandOptions(commandPath:string) =
-	try
-		Util.Cmd(commandPath,"/?")
+    try
+        Util.Cmd(commandPath,"/?")
     with | :? CommandExecutionException as ex -> 
         ex.Dump()
         reraise()
@@ -83,9 +85,13 @@ sqlMetals
     sqlMetal.Dump("selected")
 
     //let entireOutput = Util.Cmd(sqlMetal,"/conn:\""+ dc.Connection.ConnectionString + "\" /sprocs",quiet=true);
-    let ec,text = runIt sqlMetal ("/conn:\""+ dc.Connection.ConnectionString + "\" /sprocs")
+    
+    let ec,text = 
+        try
+            runIt sqlMetal ("/conn:\""+ cs + "\" /sprocs")
+        with ex -> ex.Dump("failed to run");(None,Seq.empty)
     let notXml (s:string) = not (isNull s) && s.StartsWith("<") = false
-    let data = text |> Seq.map(function |E x -> x | O x -> x) |> List.ofSeq
+    let data = text |> Seq.map(function |E x -> x | O x -> x) |> Seq.choose(Option.ofValueString) |> List.ofSeq
     let xml = data |> Seq.skipWhile notXml |> List.ofSeq
     match ec, xml with
     | Some 0,ValueString _::_ -> None
@@ -133,7 +139,8 @@ sqlMetals
                 .SkipWhile(fun s-> s.StartsWith("<") = false)
                 .SkipWhile(fun s -> s.Contains("<"))
                 .Dump("after doc output")
-        getCommandOptions(sqlMetal).Dump("cmd options")
+        try
+            getCommandOptions(sqlMetal).Dump("cmd options")
+        with ex -> (sqlMetal,ex).Dump("could not get cmd options")
     )
-)       
-
+)
