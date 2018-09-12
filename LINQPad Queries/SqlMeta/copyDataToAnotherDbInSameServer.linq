@@ -28,7 +28,9 @@ module Meta =
         member val IsIdentity:int = -1 with get,set
         
     let tables:(TableInfo) seq = exeT "select schema_name(schema_id) schemaName,name from sys.tables"
-    let getTableInfo schema tName : ColumnInfo seq = exeT <| sprintf "select *,COLUMNPROPERTY(object_id(TABLE_SCHEMA+'.'+TABLE_NAME), COLUMN_NAME, 'IsIdentity') IsIdentity from information_schema.columns where table_name='%s' and table_schema='%s'" tName schema
+    let getTableInfo db schema tName : ColumnInfo seq = 
+         sprintf "select *,COLUMNPROPERTY(object_id(TABLE_SCHEMA+'.'+TABLE_NAME), COLUMN_NAME, 'IsIdentity') IsIdentity from %s.information_schema.columns where table_name='%s' and table_schema='%s'" db tName schema
+         |> exeT
     let count target: int = sprintf "select count(1) from %s" target |> exe1 |> Option.get
     let identStatement(t:TableInfo) toOn = sprintf "set identity_insert %s.%s %s" t.SchemaName t.Name (if toOn then "on" else "off")
     let generateNonIdentityInsertStatement(t:TableInfo) =  sprintf "insert into %s.%s select * from %s.%s.%s" t.SchemaName t.Name sourceDb t.SchemaName t.Name
@@ -45,6 +47,7 @@ type ColumnInfo with
 let mutable errorCount = 0
 let mutable skipCount = 0
 let mutable moveCount = 0
+let failTexts = ResizeArray()
 let fWork = 
     let dc = DumpContainer()
     dc.Dump("status")
@@ -60,26 +63,32 @@ tables
     // check for data already in destination
     if rowCount = 0 then
         printfn "%A,%A items in %s" srcCount rowCount t.Name
-        let columns = getTableInfo t.SchemaName t.Name |> List.ofSeq
+        let columns = getTableInfo dc.Connection.Database t.SchemaName t.Name |> List.ofSeq
         let hasIdentity = columns |> Seq.exists(fun c -> c.IsIdentity = 1)
+        let text = 
+            if hasIdentity then
+            
+                generateIdentInsertStatement t columns
+            else generateNonIdentityInsertStatement t
         try
-            let valuesMoved = 
-                if hasIdentity then
-                    generateIdentInsertStatement t columns
-                else generateNonIdentityInsertStatement t
-                |> exeNonQuery
-        
+            let valuesMoved = exeNonQuery text
             moveCount <- moveCount + 1
             printfn "moved %i values to %s.%s" valuesMoved t.SchemaName t.Name
-        with ex -> 
+        with 
+        | ex when ex.Message = "The select list for the INSERT statement contains fewer items than the insert list. The number of SELECT values must match the number of INSERT columns." ->
+            let srcColumns = getTableInfo sourceDb t.SchemaName t.Name
+            (srcColumns,columns).Dump("less columns than target?")
+            ()
+        
+        |ex -> 
             errorCount <- errorCount + 1
-            printfn "failed to move: %s" ex.Message
-    else 
+            failTexts.Add(sprintf "%s\r\n%s" text ex.Message)
+    else
         skipCount <- skipCount + 1
         
 )
 
-(moveCount,skipCount,errorCount)
-
+(moveCount,skipCount,errorCount).Dump()
+failTexts
 |> Dump
 |> ignore
