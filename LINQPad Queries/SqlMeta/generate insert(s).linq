@@ -4,9 +4,15 @@ let dc = new TypedDataContext()
 
 // begin input
 
+let patientId = 1 // 1360
+let patientAccountId = dc.Patients.Where(fun p -> p.PatientID = patientId).Select(fun p -> p.AccountID).First().GetValueOrDefault()
 //let target = dc.Statements.First(fun s -> s.StatementID = 231)
-let target = dc.Charges.First()
-let identityIncluded = true
+type TargetType<'T> =
+    |Single of 'T
+    |Multiple of 'T list
+    
+let target = dc.JournalEntries.Where(fun je -> je.CreditAccountID = patientAccountId || je.DebitAccountID = patientAccountId) |> List.ofSeq |> Multiple
+let identityIncluded = false
 let debug = false
 
 
@@ -58,6 +64,9 @@ type TypeMeta = {TableName:string;HasIdentity:bool; ToGen: FieldMeta list}
 
 // exclude Computed
 let getMeta (x:'T) : TypeMeta =
+    match box x with 
+    | :? IEnumerable -> failwithf "Get meta expects a single value"
+    | _ -> ()
     let t = typeof<'T>
     let fields = typeof<'T>.GetFields()
     let fields = fields |> Seq.map(fun f -> f,getFieldAttr f) |> List.ofSeq
@@ -87,10 +96,16 @@ let generateInserts identityIncluded items =
     else inserts
     
     
-let meta = getMeta target
-let f = if identityIncluded then wrapIdentity meta.TableName else id
-generateInsert identityIncluded meta target
-|> f
+match target with
+| Single x ->
+    let meta = getMeta x
+    let f = if identityIncluded then wrapIdentity meta.TableName else id
+    generateInsert identityIncluded meta target
+    |> f
+|Multiple items ->
+    let meta = getMeta items.[0]
+    generateInserts identityIncluded items
+    
 |> Dump
 |> ignore
 
