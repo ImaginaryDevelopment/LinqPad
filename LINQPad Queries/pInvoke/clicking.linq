@@ -2,16 +2,84 @@
   <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.dll</Reference>
 </Query>
 
+// click something without having the mouse move at all, so you can keep working while another app gets desired clicks
+// not working so far
 open System.Drawing
+module Option = 
+    let getOrDefault y = 
+        function
+        | Some x -> x
+        | None -> y
+        
 module PInvoke =
     open System.Runtime.InteropServices
     
+//    [<Struct>]
+//    [<type:StructLayout(LayoutKind.Sequential)>]
+//    type PPoint =
+//        val mutable X:int
+//        val mutable Y:int
+//        new(x,y) = {X=x; Y=y}
+    [<Struct>]
+    type PPoint =
+        val mutable x:int
+        val mutable y:int
     [<DllImport("user32.dll")>]
-    extern IntPtr private SendMessage(IntPtr hWnd, int Msg,IntPtr wParam, IntPtr lParam);
+    extern nativeint private SendMessage(nativeint hWnd, int Msg,nativeint wParam, nativeint lParam);
 
     [<DllImport("user32.dll", EntryPoint = "WindowFromPoint",CharSet = CharSet.Auto, ExactSpelling = true)>]
-    extern IntPtr private WindowFromPoint(Point point);
+    extern nativeint private WindowFromPoint(Point point);
+    [<DllImport("user32.dll", EntryPoint = "GetWindowThreadProcessId",CharSet = CharSet.Auto, ExactSpelling = true)>]
+    extern unativeint GetWindowThreadProcessId(nativeint hWnd, unativeint& lpdwProcessId);
+    [<DllImport("user32.dll", EntryPoint = "GetCursorPos",CharSet = CharSet.Auto, ExactSpelling = true)>]
+    extern bool GetCursorPos(PPoint& lpPoint);
+//    [return: MarshalAs(UnmanagedType.Bool)]
+    [<DllImport("user32.dll", SetLastError = true)>]
+    extern bool PostMessage(nativeint h, unativeint msg, nativeint wParam, nativeint lParam);
+    [<DllImport("user32.dll", EntryPoint="PostMessage", SetLastError = true)>]
+    extern bool PostMessage2(HandleRef hWnd, unativeint msg, nativeint wParam, nativeint lParam);
+    let postMessage h msg wParam lParam =
+        PostMessage (h, msg,wParam,lParam)
+    let postMessageKey h (wParam:char) =
+        postMessage h (unativeint 0x102) (nativeint wParam) Unchecked.defaultof<_>
+    let getWindowThreadProcessId h = 
+        let mutable pId : unativeint = UIntPtr.Zero
+        let threadId = GetWindowThreadProcessId(h, &pId)
+        if pId <> UIntPtr.Zero then
+            Some pId
+        else None
+        
     
+    
+    module MouseEvent = // https://www.pinvoke.net/default.aspx/user32.mouse_event
+        type UInt = System.UInt64
+        let MOUSEEVENTF_ABSOLUTE : UInt = 0x8000UL
+        let MOUSEEVENTF_LEFTDOWN : UInt = 0x0002UL
+        let MOUSEEVENTF_LEFTUP : UInt = 0x0004UL
+        let MOUSEEVENTF_MIDDLEDOWN : UInt = 0x0020UL
+        let MOUSEEVENTF_MIDDLEUP : UInt = 0x0040UL
+        let MOUSEEVENTF_MOVE : UInt = 0x0001UL
+        let MOUSEEVENTF_RIGHTDOWN : UInt = 0x0008UL
+        let MOUSEEVENTF_RIGHTUP : UInt = 0x0010UL
+        let MOUSEEVENTF_XDOWN : UInt = 0x0080UL
+        let MOUSEEVENTF_XUP : UInt = 0x0100UL
+        let MOUSEEVENTF_WHEEL : UInt = 0x0800UL
+        let MOUSEEVENTF_HWHEEL : UInt = 0x01000UL
+        [<DllImport("user32.dll", CharSet = CharSet.Auto, CallingConvention = CallingConvention.StdCall)>]
+        extern void mouse_event(System.UInt64 dwFlags, System.UInt64 dx, System.UInt64 dy, System.UInt64 cButtons, UIntPtr dwExtraInfo);
+        type MouseEvent =
+            | LeftDown
+            | LeftUp
+        let mouseEvent dwFlags dx dy cButtons dwExtraInfo = 
+            mouse_event(dwFlags, dx, dy, cButtons,dwExtraInfo)
+        let sendMouseEvent =
+            function
+            | LeftDown ->
+                MOUSEEVENTF_LEFTDOWN
+            | LeftUp ->
+                MOUSEEVENTF_LEFTUP
+            >> fun me -> mouse_event(me,0UL,0UL,0UL,UIntPtr.Zero)
+        
     module WindowsMessages = // from https://www.pinvoke.net/default.aspx/Enums/WindowsMessages.html
 
         /// Windows Messages
@@ -994,11 +1062,11 @@ module PInvoke =
         let WM_LBUTTONUP = 0x0202
     
     open Constants
-//    Function MakeDWord(ByVal LoWord As Integer, ByVal HiWord As Integer) As Long
-//        MakeDWord = (HiWord * &H10000) Or (LoWord And &HFFFF&)
-//    End Function
+    // https://social.msdn.microsoft.com/Forums/en-US/cd34e77f-f421-4a87-a577-aa187695a756/sendmessage-and-wmmousemovewmlbuttondown-no-result-at-all?forum=vbgeneral
     let makeDWord loWord hiWord =
         hiWord <<< 16 ||| (loWord &&& 65535)
+        |> nativeint
+    let ptToParam (pt:Point) = nativeint (pt.Y <<< 16 ||| pt.X)    
     // https://msdn.microsoft.com/en-us/library/windows/desktop/ms645608(v=vs.85).aspx
     type WParamModifiers =
         |Ctrl
@@ -1013,6 +1081,13 @@ module PInvoke =
         |BmClick // does not allow params
         |LButtonDown of Point*WParamModifiers list
         |LButtonUp of Point*WParamModifiers list
+    let getCursorPos () = 
+        let mutable pp:PPoint = Unchecked.defaultof<_>
+        let result = GetCursorPos(&pp) 
+        (pp,result).Dump("pp?")
+        if GetCursorPos(&pp) then
+            Some pp
+        else None
     let windowFromPoint pt =
         WindowFromPoint(pt)
     let sendMessage' hWnd msg wParam lParam =
@@ -1021,17 +1096,20 @@ module PInvoke =
     let sendMessage h =
         function
         | BmClick ->
-            SendMessage(h, BM_CLICK, IntPtr.Zero, IntPtr.Zero)
+            SendMessage(h, BM_CLICK, IntPtr.Zero, IntPtr.Zero) |> ignore<IntPtr>
         | LButtonDown (pt,wParams) ->
             // relative to the window it seems per http://www.jasinskionline.com/windowsapi/ref/w/wm_lbuttondown.html
             /// The low-order word specifies the x-coordinate of the cursor. The coordinate is relative to the upper-left corner of the client area.
             /// The high-order word specifies the y-coordinate of the cursor. The coordinate is relative to the upper-left corner of the client area.
-            let lParam = makeDWord pt.X pt.Y
+//            let lParam = makeDWord pt.X pt.Y
+            let lParam = ptToParam pt
             
             SendMessage(h, BM_CLICK, IntPtr.Zero, lParam)
+            |> ignore<IntPtr>
         | LButtonUp (pt,wParams) ->
             ()
-let loopSendMessageValues () =
+            
+let loopSendMessageValues positionOfInterest =
     // iterate messages, searching for something useful
     let LeClick pt =
         // Get a handle
@@ -1053,61 +1131,57 @@ let loopSendMessageValues () =
     
     
     
-    let positionOfInterest = Util.Cache(fun () ->
-        Util.ReadLine("Put mouse over click target") |> ignore<string>
-        System.Windows.Forms.Cursor.Position
-    )
-    System.Threading.Thread.Sleep(2000)
-    positionOfInterest.Dump("Clicking at")
+
     LeClick(positionOfInterest)
+    
+let manualClick h (pos:Point) = 
+    let lParam = lazy(PInvoke.makeDWord pos.X pos.Y)//PInvoke.ptToParam pos)
+    let inline pm (x:int) = 
+        PInvoke.postMessage h (unativeint x) Unchecked.defaultof<_> lParam.Value |> ignore<bool>
+    let sendMessageVersion () = 
+        let msg = PInvoke.Message.LButtonDown(pos,List.empty)
+        PInvoke.sendMessage h msg
+        let msg = PInvoke.Message.LButtonUp(pos,List.empty)
+        PInvoke.sendMessage h msg   
+    let postMessageVersion () = 
+        pm PInvoke.Constants.WM_LBUTTONDOWN
+        System.Threading.Thread.Sleep(400)
+        pm PInvoke.Constants.WM_LBUTTONUP 
+    let hybrid1 () = 
+        pm PInvoke.Constants.WM_LBUTTONDOWN
+        let msg = PInvoke.Message.LButtonDown(pos,List.empty)
+        PInvoke.sendMessage h msg
+        pm PInvoke.Constants.WM_LBUTTONUP
+        let msg = PInvoke.Message.LButtonUp(pos,List.empty)
+        PInvoke.sendMessage h msg   
+     
+        
+    sendMessageVersion()
+    postMessageVersion()
+    hybrid1()
+//    hybrid2()
+    
+let positionOfInterest = Util.Cache(fun () ->
+    Util.ReadLine("Put mouse over click target") |> ignore<string>
+    System.Windows.Forms.Cursor.Position
+)
+let h = PInvoke.windowFromPoint positionOfInterest
+if h = IntPtr.Zero then
+    failwithf "Failed to find window at %A" positionOfInterest
+let getProcInfo h = 
+    let pId = PInvoke.getWindowThreadProcessId h
+    let p = pId |> Option.map int |> Option.map Process.GetProcessById
+    pId |> Option.toNullable,p |> Option.map (fun p -> p.ProcessName) |> Option.getOrDefault null
+(getProcInfo h).Dump("processId of h")
 
+System.Threading.Thread.Sleep(2000)
+positionOfInterest.Dump("Clicking")
+PInvoke.getCursorPos().Dump("Position by pinvoke")
 
+PInvoke.postMessageKey h 'u' |> ignore
 
-// succeeded in sending a 2 message at least, whatever that is
-//
-//void Main()
-//{
-//    var positionOfInterest = Util.Cache(() =>
-//    {
-//        Util.ReadLine("Put mouse over click target");
-//        return Cursor.Position;
-//    });
-//    System.Threading.Thread.Sleep(2000);
-//    positionOfInterest.Dump("Clicking at");
-//    LeClick(positionOfInterest);
-//
-//}
-//
-//// Define other methods and classes here
-//[DllImport("user32.dll")]
-//private static extern IntPtr SendMessage(IntPtr hWnd, int Msg,
-//       IntPtr wParam, IntPtr lParam);
-//
-//[DllImport("user32.dll", EntryPoint = "WindowFromPoint",
-//    CharSet = CharSet.Auto, ExactSpelling = true)]
-//public static extern IntPtr WindowFromPoint(Point point);
-///// This message causes the button to receive the WM_LBUTTONDOWN and WM_LBUTTONUP messages, and the button's parent window to receive a BN_CLICKED notification code.
-//const int BM_CLICK = 0x00F5; // simulates button click sending a WM Down and WM  UP
-//const int WM_LBUTTONDOWN = 0x0201;
-//const int WM_LBUTTONUP = 0x0202;
-//const int Close = 0x0002;
-//
-//
-//void LeClick(Point point)
-//{
-//    // Get a handle
-//    var handle = WindowFromPoint(point);
-//    // Send the click message
-//    if (handle != IntPtr.Zero)
-//    {
-//        for(var i = 0x0000; i < 0x00F8; i++){
-//            Console.WriteLine("Sending a " + i);
-//            SendMessage(handle, i, IntPtr.Zero, IntPtr.Zero);	
-//            System.Threading.Thread.Sleep(1500);
-//        }
-//        
-//    }
-//    else Console.WriteLine("Failed to get window from point");
-//}
-//
-//
+manualClick h positionOfInterest
+manualClick h positionOfInterest
+manualClick h positionOfInterest
+System.Windows.Forms.Cursor.Position <- positionOfInterest
+PInvoke.getCursorPos().Dump("Position by pinvoke")
