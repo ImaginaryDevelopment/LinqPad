@@ -13,7 +13,7 @@ module Settings =
     let allowUnzipping = true
     let debug = false
     let exeName = "PracticeManagement.exe"
-    let subPath = @"drop\PM\" + exeName
+    let exeSubPath = @"drop\PM\" + exeName
     let targetish = 
         let env =Environment.ExpandEnvironmentVariables("%droproot%")
         if String.IsNullOrWhiteSpace env then
@@ -74,52 +74,107 @@ module Helpers =
                 File.SetLastWriteTime(target,lwt.DateTime)
                 target
             )
+    module File =
+        let tryReadLines f =
+            if File.Exists f then
+                File.ReadAllLines f |> Some
+            else None
+        let writeLines p (contents:string seq) =
+            File.WriteAllLines(p,contents)
+    ()
+()    
+        
 open Helpers
 
-type BuildTrace = {Path:string;FileVersion:string;Creation:DateTime Nullable; MetaType:string}
-// if there is a build.txt and it has VersionInfo then this one should win
-let (|BuildTxtDrop|_|) d =
-    let fp = Path.Combine(d,"drop","build.txt")
-    let findFileVersion =
-        function 
-        |RMatchGroup ("FileVersion: (.*)",1) v -> Some v
-        | _ -> None
-    let getCreation =
-        function
-        |RMatchGroup (@"^\w+ (\d{1,2}/\d{1,2}/\d{4}.*)",1) (ParseDateTime dt) -> Some dt
-        | _ -> None
-    let findCreation =
-        Seq.choose getCreation
-        >> Seq.tryHead
-    if File.Exists fp then
-        let text = File.ReadAllLines fp
-        text
-        |> Seq.choose findFileVersion
-        |> Seq.tryHead
-        |> Option.map(fun x -> {Path=fp;FileVersion = x;Creation = findCreation text|> Option.toNullable;MetaType="BuildTxt"})
-    else None
+module BuildMetaText =
+    type BuildTrace = {Path:string;FileVersion:string;Creation:DateTime Nullable; MetaType:string}
+    let getBuildTextPath d = Path.Combine(d,"drop","build.txt")
+    let (|FileVersionInfo|_|) text =
+        let matchFileVersion =
+            function 
+            |RMatchGroup ("FileVersion: (.*)",1) v -> Some v
+            | _ -> None
+        let tryFindMatch f =
+            text
+            |> Seq.choose f
+            |> Seq.tryHead
+        tryFindMatch matchFileVersion
     
+    let insertMetaText fp bt =
+        if not <| String.IsNullOrWhiteSpace bt.FileVersion then
+            let fvTxt = sprintf "FileVersion: %s" bt.FileVersion 
+            File.tryReadLines fp
+            |> function
+                |Some (FileVersionInfo _) ->
+                    None
+                | Some lines ->
+                    Some <| List.ofArray lines
+                | None -> Some []
+            |> Option.iter(
+                function
+                | h::tl -> h :: fvTxt :: tl
+                | [] -> [fvTxt]
+                >> File.writeLines fp
+                >> (fun () -> printfn "Updated or created (%s) %s" fvTxt fp)
+            )
+                
+                
+            
+            
+        
+    let (|ParseBuildText|_|) text =
+        let matchFileVersion =
+            function 
+            |RMatchGroup ("FileVersion: (.*)",1) v -> Some v
+            | _ -> None
+        let matchCreation =
+            function
+            |RMatchGroup (@"^\w+ (\d{1,2}/\d{1,2}/\d{4}.*)",1) (ParseDateTime dt) -> Some dt
+            | _ -> None
+        let tryFindMatch f =
+            text
+            |> Seq.choose f
+            |> Seq.tryHead
+        tryFindMatch matchFileVersion
+        |> Option.map(fun x -> x,tryFindMatch matchCreation)
+        
     // if there is a build.txt and it has VersionInfo then this one should win
+    let (|BuildTxtDrop|_|) d =
+        let fp = getBuildTextPath d
+        match File.tryReadLines fp with
+        | Some (ParseBuildText (fv,creation)) ->
+            Some {Path=fp;FileVersion = fv;Creation = creation|> Option.toNullable;MetaType="BuildTxt"}
+        | Some bp ->
+//            printfn "No version info or unreadable buildTxt:%s" fp
+            None
+        |None -> None
+    ()
+    
+open BuildMetaText    
+
 module LegacyDrops =
+    type LegacyDrop = {DropRoot:string;ExePath:string}
+        
     let getDropInfo (fp,typ) () =
         let fi = FileInfo(fp)
         let fvi = FileVersionInfo.GetVersionInfo fp
         {Path=fp;FileVersion=fvi.FileVersion;Creation=Nullable fi.CreationTime;MetaType=typ}
         
     let (|ExeDrop|_|) d = 
-        let fp = Path.Combine(d,subPath)
+        let fp = Path.Combine(d,exeSubPath)
         if File.Exists fp then
-            Some fp
+            Some {DropRoot=d;ExePath=fp}
         else 
             try
                 let extractedP = Path.Combine(d,"drop",exeName) 
                 if File.Exists extractedP then
-                    Some extractedP
+                    Some {DropRoot=d;ExePath=extractedP}
                 else 
                     None
             with ex ->
                 printfn "EXE Drop failing"
                 reraise()
+    // assertion: zip drops should theoretically only ever be future style where unzipping shouldn't be needed
     let (|ZipDrop|_|) d =
         let zipPath = Path.Combine(d,"drop")
         if Directory.Exists zipPath && allowUnzipping then
@@ -138,7 +193,7 @@ let searchedButEmpty = ResizeArray()
         
 type DropType =
     |BuildText of BuildTrace
-    |BuildPath of string*matchType:string
+    |BuildPath of LegacyDrop*matchType:string
 
 let findDrops p = 
     let d =  Directory.EnumerateDirectories p |> List.ofSeq
@@ -152,38 +207,32 @@ let findDrops p =
                 printfn "Found a buildTxtDrop at %s %A" x.Path x
             Some <| BuildText x
         | ExeDrop fp ->
-//            if fp.Contains("Debug") then
-//                printfn "Found a exeDrop at %s" fp
             Some <| BuildPath (fp,"exe")
-        // we need to account for the possibility that buildTxt came out, but doesn't have what we need
+        | ZipDrop fp as d ->
             if debug then
                 printfn "Found zipDrop %s" fp
-            Some <| BuildPath (fp,"zip")
+            Some <| BuildPath ({DropRoot=d;ExePath=fp},"zip")
         | d ->
                 let files = Directory.GetFiles d
                 if files.Length > 0 then
                     searchedButEmpty.Add((d, files))
                 None
     )
-//    |> Seq.sortBy(fun x -> x.Creation)
     |> List.ofSeq
-//    |> fun x ->
-//        "done with listing now to reverse"
-//        |> Msg
-//        |> showProgress
-//        x
-//    |> List.rev
     
 let cacheDropInfo i =
-//    showProgress <| sprintf "getting cache info for item %i" i
     function
     | BuildText x -> x
-    | BuildPath (path,meta) ->
+    | BuildPath ({DropRoot=d;ExePath=exePath},meta) ->
         try
-            Util.Cache(Func<_>(getDropInfo (path,meta)),path)
+            Util.Cache(Func<_>(getDropInfo (exePath,meta)),exePath)
         with ex ->
-            printfn "Failing on %s" path
+            printfn "Failing on %s" exePath
             reraise()
+        |> fun bt ->
+            let metaPath = getBuildTextPath d
+            insertMetaText metaPath bt
+            bt
         
 let targets = targetSubDirectories |> List.map(fun s -> targetish @@ s)
 printfn "Checking in %A" targets
