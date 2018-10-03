@@ -1,7 +1,19 @@
 <Query Kind="FSharpProgram">
   <Reference>C:\tfs\practicemanagement\trunk\bin\Pm.Dal.dll</Reference>
   <Reference>C:\tfs\practicemanagement\trunk\bin\Pm.Schema.dll</Reference>
+  <NuGetReference>FSharp.Core</NuGetReference>
 </Query>
+
+// take a sqlproj/dbproj read all the sprocs/tables and compare them
+// basic functionality appears to work!
+// incomplete feature: external diff enabling
+//      design:comparison is copying all the files and db-reflected info into a temp folder
+//      problem: external diff enabling temp dir isn't copying completely
+
+let dc = new TypedDataContext()
+let debug = false
+let inline dprintn x = if debug then printfn "%s" x
+let dDump x = if debug then Dump x; x
 
 module Helpers = 
     let tee f x = f x; x
@@ -13,7 +25,8 @@ module Helpers =
             if Directory.Exists x then 
                 x
             else
-                printfn "Creating directory %s" x
+                dprintn <| sprintf "Creating directory %s" x
+                if x.EndsWith(".sql") then invalidOp "this appears to be a file not a directory"
                 Directory.CreateDirectory x |> ignore<DirectoryInfo>
                 x
     let getUF (x:'a) =
@@ -58,7 +71,7 @@ type SprocMisMatch =
         override x.ToString() = 
             getUF x
             |> fun (case,f) -> sprintf "%s:%A" case.Name f
-open Pm.Schema.BReusable
+open Schema.BReusable
 module SchemaCompare =
     open System.IO
     
@@ -81,7 +94,6 @@ module SchemaCompare =
                         None
                     else 
                         let x = {TextPath=fp;Text=text; DbText=dbText}
-                        //x.Dump("diff?")
                         x
                         |> Different 
                         |> Some
@@ -94,15 +106,17 @@ module SchemaCompare =
         mismatches
         |> List.fold(fun (tempDirOpt:_ option) smm ->
             
-            
             let withTemp =
                 // create a subfolder for the schema in a temp path
                 let existsOrCreateSchemaSubDir = 
-                    Path.combine1 schema
-                    >> Directory.existsOrCreate
+                    try
+                        Path.combine1 schema
+                        >> Directory.existsOrCreate
+                    with _ -> 
+                        eprintfn "Failing existsOrCreateSchemaSubDir"
+                        reraise()
                 function
                 | None -> 
-                    Util.ClearResults()
                     makeTemp()
                 | Some mmt -> mmt
                 >> (fun x ->
@@ -110,19 +124,41 @@ module SchemaCompare =
                 )
             // the path to this schema's temp folder for (f)ile version or (d)atabase verion
             let mmt,fr,dr = withTemp tempDirOpt
-            printfn "fr=%s,dr=%s" fr dr
+            dprintn <| sprintf "fr=%s,dr=%s" fr dr
             
-            let frp x = fr |> Path.combine1 x |> Directory.existsOrCreate
+            // if the dbProj version doesn't exist, create the file
+            let frp x = 
+                let path = fr |> Path.combine1 x
+                try
+                    File.WriteAllText(path,"")
+                with _ ->
+                    eprintfn "Bad frp:%s" path
+                    reraise()
+                path
+            // if the db reflection doesn't exist?
             let drp x = dr |> Path.combine1 x |> Directory.existsOrCreate
             match smm with
             // not found in the db
+            // create empty file in db reflect (drp)
+            // copy dbProj file
             | NotFound(name,path) -> 
                 let targetPath = 
-                    Path.GetFileName path 
-                    |> frp
-                printfn "Not found name=%s,path=%s, targetPath=%s" name path targetPath
-                File.Copy(path,targetPath,overwrite=true)
-                printfn "Copied %s to %s" path targetPath
+                    let filename =
+                        path
+                        |> Path.GetFileName
+                    try
+                        filename
+                        |> frp
+                    with _ ->
+                        eprintfn "TargetPath is bad:%s, (%s,%s)" filename name path
+                        reraise()
+                dprintn <| sprintf "Not found name=%s,path=%s, targetPath=%s" name path targetPath
+                try
+                    File.Copy(path,targetPath,overwrite=true)
+                with _ ->
+                    (name,path,targetPath).Dump("copy failed")
+                    reraise()
+                dprintn <| sprintf "Copied %s to %s" path targetPath
             | Different tmm -> ()
                 
             Some mmt    
@@ -182,7 +218,10 @@ module SchemaCompare =
                     |> Some
                 | _ -> None
         )
-        |> fun x -> x   
+        |> fun x -> 
+            // clear all the diagnostic db noise
+            Util.ClearResults()
+            x   
         |> tee (List.iter(fun schemaCluster ->
             prepMismatchDiff schemasPath schemaCluster.SprocFolder.Schema schemaCluster.SprocMismatches
         ))
@@ -203,8 +242,9 @@ module SchemaDb =
                 null
         )
         |> StringHelpers.delimit Environment.NewLine
-
-Util.Cache((fun () -> Util.ReadLine("Path ?")),"schema folder path")
+let schemaPath =
+    Util.GetPassword("Schema folder path")
+schemaPath
 |> validateSqlSchema (fun schema name -> sprintf "%s.%s" schema name |> SchemaDb.fGetDbText )
 |> Dump
 |> ignore

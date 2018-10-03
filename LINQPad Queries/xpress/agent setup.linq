@@ -16,6 +16,14 @@ let createConfigCmd subdomain patToken agentName domain user password =
 
 let patToken = Util.GetPassword("patToken")
 
-createConfigCmd "..." patToken "..." "..." "..." String.Empty
+(* primarily so that none of the details are in source control *)
+
+let vsDomain = Util.GetPassword("vs.com subdomain?")
+let agentName = Util.GetPassword "AgentName?"
+let loginDomain = Util.GetPassword "login domain?"
+let login = Util.GetPassword("xdom username")
+let pwd = Util.GetPassword("pwd")
+
+createConfigCmd vsDomain patToken agentName loginDomain login pwd
 |> Dump
 |> ignore

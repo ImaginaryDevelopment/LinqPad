@@ -77,7 +77,7 @@ let dataModelsToGen : TableIdentifier list = [
         {Schema="dbo"; Name="DocumentTypes"}
         {Schema="dbo"; Name="PayerProfileInfo"}
         // we need to have the GuarantorId field on this be mapped to measure PatientId
-        {Schema="dbo"; Name="PatientsInfo"}
+        {Schema="dbo"; Name="PatientInfo"}
         {Schema="dbo"; Name="Patients"}
         {Schema="dbo"; Name="Charge"}
         {Schema="dbo"; Name="CodeChargeMappings"}
@@ -220,7 +220,7 @@ let cgsm =
                 SprocInputMapNolist = Set [     "uspAppointmentInsWithClaim"
                                                 "uspClaimsInsUpdInput"
                                                 "uspGuarantorProfileInfoInsUpd"
-                                                "uspPatientsInfoInsUpd"
+                                                "uspPatientInfoInsUpd"
                 ]
                 SprocNolist=Set [   "sp_alterdiagram"
                                     "sp_creatediagram"
@@ -507,7 +507,7 @@ let toGen2 =
     
 open PureCodeGeneration
 let fGetNotifyOptions (ti:TableIdentifier) : NotifyClassOptions =
-    if ti.Name= "PatientsInfo" then
+    if ti.Name= "PatientInfo" then
         {SettersCheckInequality=true;AllowPropertyChangeOverride=false}
     else {SettersCheckInequality=false;AllowPropertyChangeOverride=false}
 let results = 

@@ -8,6 +8,8 @@
 
 // iterate a build drop structure, getting a specific file's version info
 // consider: adding the ability to query changeset number
+let allowUnzipping = true
+let debug = false
 
 let toCharArray(x:string) = x.ToCharArray()
 let trimStart1 d (x:string) = x.TrimStart(d |> toCharArray)
@@ -16,6 +18,24 @@ let (@@) path subPath =
     |> trimStart1 "\\"
     |> trimStart1 "/"
     |> fun x -> Path.Combine(path,subPath)
+let (|RMatch|_|) p x=
+    let m = Regex.Match(x,p)
+    if m.Success then Some m else None
+let inline (|Parse|_|) f x =
+    match f x with
+    | true, x -> Some x
+    | false, _ -> None
+let (|ParseDateTime|_|) =
+    function
+    | null | "" -> None
+    | Parse DateTime.TryParse dt -> Some dt
+    | _ -> None
+
+    
+let (|RMatchGroup|_|) (p,i:int) =
+    function
+    | RMatch p m -> Some m.Groups.[i].Value
+    | _ -> None
     
 type ZipArchive with 
     member x.TryExtract fullName (target:string) =    
@@ -35,10 +55,36 @@ type ZipArchive with
             target
         )
         
+//Environment.SetEnvironmentVariable("droproot",Path.GetDirectoryName <| Environment.ExpandEnvironmentVariables("%droproot%"),EnvironmentVariableTarget.User)
 let targetish = Environment.ExpandEnvironmentVariables("%droproot%")
-let targets = [ targetish; Path.GetDirectoryName targetish @@ "Pm_VsBuild_Debug_Deploy"]
+printfn "Targetish: %s" targetish
+let targets = [ targetish @@ "Pm_VsBuild_Release_Deploy";targetish@@ "Pm_VsBuild_Deploy" @@ "release" ]
 printfn "Checking in %A" targets
 let exeName = "PracticeManagement.exe"
+type BuildTrace = {Path:string;FileVersion:string;Creation:DateTime Nullable; MetaType:string}
+// if there is a build.txt and it has VersionInfo then this one should win
+let (|BuildTxtDrop|_|) d =
+    let fp = Path.Combine(d,"drop","build.txt")
+    let findFileVersion =
+        function 
+        |RMatchGroup ("FileVersion: (.*)",1) v -> Some v
+        | _ -> None
+    let getCreation =
+        function
+        |RMatchGroup (@"^\w+ (\d{1,2}/\d{1,2}/\d{4}.*)",1) (ParseDateTime dt) -> Some dt
+        | _ -> None
+    let findCreation =
+        Seq.choose getCreation
+        >> Seq.tryHead
+    if File.Exists fp then
+        let text = File.ReadAllLines fp
+        text
+        |> Seq.choose findFileVersion
+        |> Seq.tryHead
+        |> Option.map(fun x -> {Path=fp;FileVersion = x;Creation = findCreation text|> Option.toNullable;MetaType="BuildTxt"})
+//        |> Option.map (fun x -> {Path=fp;FileVersion=x})
+    else None
+    
 let subPath = @"drop\PM\" + exeName
 let (|ExeDrop|_|) d = 
     let fp = Path.Combine(d,subPath)
@@ -56,7 +102,7 @@ let (|ExeDrop|_|) d =
             reraise()
 let (|ZipDrop|_|) d =
     let zipPath = Path.Combine(d,"drop")
-    if Directory.Exists zipPath then
+    if Directory.Exists zipPath && allowUnzipping then
         Directory.GetFiles(zipPath,"*.zip") 
         |> Seq.tryHead
         |> function
@@ -68,44 +114,107 @@ let (|ZipDrop|_|) d =
             | None -> None
     else None
 let searchedButEmpty = ResizeArray()
+type ProgressType =
+    |Msg of string
+    |Item of BuildTrace
+let showProgress =
+    let dc = DumpContainer()
+    dc.Dump("progress tracker")
+    let mutable content = null,List.empty
+    function
+    | Msg msg ->
+        match content with
+        | _,items ->
+            content <- msg,items
+    | Item bt ->
+        match content with
+        | msg,items ->
+            content <- msg, bt::items
+    >> fun () -> 
+        dc.Content <- content
+        
+type DropType =
+    |BuildText of BuildTrace
+    |BuildPath of string*matchType:string
+
 let findDrops p = 
     let d =  Directory.EnumerateDirectories p |> List.ofSeq
-    printfn "Searching %i directories under %s(%i unique)" d.Length p (d |> List.distinct |> List.length)
-//    d.Dump()
+    printfn "Searching %i directories under %s (%i unique)" d.Length p (d |> List.distinct |> List.length)
     d
-    |> Seq.filter(fun x -> Regex.IsMatch(Path.GetFileName(x), "^\d+"))
+    |> List.filter(fun x -> Regex.IsMatch(Path.GetFileName(x), "^\d+"))
+    |> fun l -> 
+        sprintf "checking %i possible matches" l.Length
+        |> Msg
+        |> showProgress
+        l
     |> Seq.choose
         (function
+        |BuildTxtDrop x ->
+            if debug then
+                printfn "Found a buildTxtDrop at %s %A" x.Path x
+            Some <| BuildText x
         | ExeDrop fp ->
-            if fp.Contains("Debug") then
-                printfn "Found a exeDrop at %s" fp
-            Some fp
+//            if fp.Contains("Debug") then
+//                printfn "Found a exeDrop at %s" fp
+            Some <| BuildPath (fp,"exe")
         | ZipDrop fp -> 
-            printfn "Found zipDrop %s" fp
-            Some fp
+            if debug then
+                printfn "Found zipDrop %s" fp
+            Some <| BuildPath (fp,"zip")
         | d ->
                 let files = Directory.GetFiles d
                 if files.Length > 0 then
                     searchedButEmpty.Add((d, files))
                 None
     )
-    |> Seq.sort
+//    |> Seq.sortBy(fun x -> x.Creation)
     |> List.ofSeq
-    |> List.rev
+//    |> fun x ->
+//        "done with listing now to reverse"
+//        |> Msg
+//        |> showProgress
+//        x
+//    |> List.rev
     
-let getDropInfo fp () =
+let getDropInfo (fp,typ) () =
     let fi = FileInfo(fp)
     let fvi = FileVersionInfo.GetVersionInfo fp
-    fp,fvi.FileVersion,fi.CreationTime, fi.LastWriteTime
-let cacheDropInfo path =
-    try
-        Util.Cache(Func<_>(getDropInfo path),path)
-    with ex ->
-        printfn "Failing on %s" path
-        reraise()
+    
+//    fp,fvi.FileVersion,fi.CreationTime, fi.LastWriteTime
+    {Path=fp;FileVersion=fvi.FileVersion;Creation=Nullable fi.CreationTime;MetaType=typ}
+let cacheDropInfo i =
+//    showProgress <| sprintf "getting cache info for item %i" i
+    function
+    | BuildText x -> x
+    | BuildPath (path,meta) ->
+        try
+            Util.Cache(Func<_>(getDropInfo (path,meta)),path)
+        with ex ->
+            printfn "Failing on %s" path
+            reraise()
+    >> fun x ->
+        if debug then
+            Item x
+            |> showProgress
+        x
+        
 targets
 |> List.map findDrops
-|> List.map(List.map cacheDropInfo)
+|> fun x ->
+    x
+    |> List.sumBy(List.choose(function | BuildPath _ -> Some () | _ -> None) >> List.length) 
+    |> sprintf "done finding drops %i to process"
+    |> Msg
+    |> showProgress
+    if debug then 
+        List.map(List.truncate 20) x
+    else 
+        x
+|> List.map(List.mapi cacheDropInfo)
+|> List.map(List.sortByDescending(fun x -> x.Creation.GetValueOrDefault() ))
+|> fun x ->
+    showProgress <| Msg "done getting cache info"
+    x
 |> Dump
 |> ignore
 searchedButEmpty.Dump("maybe errors or missed items?")
