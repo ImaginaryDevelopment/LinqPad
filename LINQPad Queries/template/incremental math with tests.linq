@@ -1,5 +1,6 @@
 <Query Kind="FSharpExpression">
   <NuGetReference>Expecto</NuGetReference>
+  <NuGetReference>Expecto.FsCheck</NuGetReference>
   <NuGetReference>FSharp.Core</NuGetReference>
   <Namespace>Expecto</Namespace>
 </Query>
@@ -50,11 +51,18 @@ let tests =
         ]
         testList "Idle" [
         // fsCheck
-//            testProperty "Level 1 should identity the baseCost" <|
-//                fun multiplier baseRate price ->
-//                    let expected = price
-//                    let actual = getPrice multiplier price baseRate 1L
-//                    Expect.equal actual expected "not an identity"
+            testProperty "Level 1 should identity the baseCost" <|
+                fun (FsCheck.NormalFloat multiplier) (FsCheck.NormalFloat baseRate) (FsCheck.NormalFloat price) ->
+                    // large numbers will overflow
+                    if price = 0.0 || multiplier = 0.0 || System.Double.IsInfinity price || System.Double.IsNaN price || multiplier > 1e300 || System.Double.IsNaN multiplier then
+                        ()
+                    else
+                        let multiplier = abs multiplier / 4.0
+                        let baseRate = abs multiplier / 4.0
+                        let price = abs price / 4.0
+                        let expected = price
+                        let actual = getPrice multiplier price baseRate 1L
+                        Expect.floatClose Accuracy.veryHigh actual expected "identity fail"
 //                    ()
             testCase "1" <|
                 fun () ->
