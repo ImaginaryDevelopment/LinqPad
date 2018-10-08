@@ -28,6 +28,11 @@ module Settings =
 open Settings    
 
 module Helpers =
+    let (|NullableValue|NullableNull|) (x:_ Nullable) =
+        if x.HasValue then
+            NullableValue x.Value
+        else NullableNull
+        
     let dprintfn f =
         Printf.kprintf( fun s -> if debug then printfn "%s" s) f
         
@@ -81,14 +86,61 @@ module Helpers =
             else None
         let writeLines p (contents:string seq) =
             File.WriteAllLines(p,contents)
+    let (|FileExists|_|) filePath =
+        if File.Exists filePath then
+            Some filePath
+        else None
+    let (|CombineFileExists|_|) subPath parentPath =
+        match Path.Combine(parentPath,subPath) with
+        | FileExists x -> Some x
+        | x -> 
+            printfn "NotFound:%s" x
+            None
     ()
 ()    
         
 open Helpers
 
 module BuildMetaText =
-    type BuildTrace = {Path:string;FileVersion:string;Creation:DateTime Nullable; MetaType:string}
+    type BuildTrace = {Path:string;FileVersion:string;DropRoot:string;Creation:DateTime Nullable; MetaType:string}
     let getBuildTextPath d = Path.Combine(d,"drop","build.txt")
+    let tryGetCreationDate text =
+        let matchFileVersion =
+            function 
+            //  Tue 10/02/2018 14:55:44.07 
+            |RMatchGroup (@"^\w+ (\d{1,2}/\d{1,2}/\d{4}.*)",1) (ParseDateTime dt) -> Some dt
+            | _ -> None
+        let tryFindMatch f =
+            text
+            |> Seq.choose f
+            |> Seq.tryHead
+        tryFindMatch matchFileVersion
+    
+    let (|CreationInfo|_|) text = tryGetCreationDate text
+    
+    let tryInsertCreationDate (buildTextPath:string) (creationDate:DateTime) =
+        if not <| buildTextPath.EndsWith("build.txt",StringComparison.InvariantCultureIgnoreCase) then failwithf "insertion called on wrong file type '%s'" buildTextPath
+        // matches what is already standard in build text files
+        let cTxt = creationDate.ToString("ddd MM/dd/yyyy HH:mm:ss.ff")
+        // this isn't checking one already exists?
+        File.tryReadLines buildTextPath
+        |> function
+            |Some (CreationInfo _ ) ->
+                None
+            |Some lines ->
+                Some <| List.ofArray lines
+            |None -> Some []
+        |> Option.iter(
+            function
+            | fv::pv::sv::d::tl ->
+                fv::pv::sv::d::cTxt::tl
+            | [] -> [cTxt]
+            | l -> List.append l [cTxt]
+            >> File.writeLines buildTextPath
+            >> (fun () -> printfn "Updated or created (%s) %s" cTxt buildTextPath)
+        )
+                
+    
     let (|FileVersionInfo|_|) text =
         let matchFileVersion =
             function 
@@ -100,6 +152,7 @@ module BuildMetaText =
             |> Seq.tryHead
         tryFindMatch matchFileVersion
     
+    // would have been nice to include Creation (assuming the extraction's dt info is accurate)
     let insertMetaText fp bt =
         if not <| String.IsNullOrWhiteSpace bt.FileVersion then
             let fvTxt = sprintf "FileVersion: %s" bt.FileVersion 
@@ -117,10 +170,6 @@ module BuildMetaText =
                 >> File.writeLines fp
                 >> (fun () -> printfn "Updated or created (%s) %s" fvTxt fp)
             )
-                
-                
-            
-            
         
     let (|ParseBuildText|_|) text =
         let matchFileVersion =
@@ -143,7 +192,7 @@ module BuildMetaText =
         let fp = getBuildTextPath d
         match File.tryReadLines fp with
         | Some (ParseBuildText (fv,creation)) ->
-            Some {Path=fp;FileVersion = fv;Creation = creation|> Option.toNullable;MetaType="BuildTxt"}
+            Some {Path=fp;DropRoot=d;FileVersion = fv;Creation = creation|> Option.toNullable;MetaType="BuildTxt"}
         | Some bp ->
 //            printfn "No version info or unreadable buildTxt:%s" fp
             None
@@ -155,10 +204,19 @@ open BuildMetaText
 module LegacyDrops =
     type LegacyDrop = {DropRoot:string;ExePath:string}
         
-    let getDropInfo (fp,typ) () =
+    let getDropInfo (fp,typ,d) () =
         let fi = FileInfo(fp)
         let fvi = FileVersionInfo.GetVersionInfo fp
-        {Path=fp;FileVersion=fvi.FileVersion;Creation=Nullable fi.CreationTime;MetaType=typ}
+        {Path=fp;DropRoot=d;FileVersion=fvi.FileVersion;Creation=Nullable fi.CreationTime;MetaType=typ}
+    // search around
+    let tryFindExe d metaDirectory =
+        match d with
+        | CombineFileExists exeSubPath fp ->
+            Some {DropRoot=d;ExePath=fp}
+        | CombineFileExists (sprintf "drop/%s" exeName) fp ->
+            Some {DropRoot=d;ExePath=fp}
+        | _ ->
+            failwithf "uhoh! %s was drop root" d
         
     let (|ExeDrop|_|) d = 
         let fp = Path.Combine(d,exeSubPath)
@@ -225,7 +283,7 @@ let cacheDropInfo i =
     | BuildText x -> x
     | BuildPath ({DropRoot=d;ExePath=exePath},meta) ->
         try
-            Util.Cache(Func<_>(getDropInfo (exePath,meta)),exePath)
+            Util.Cache(Func<_>(getDropInfo (exePath,meta,d)),exePath)
         with ex ->
             printfn "Failing on %s" exePath
             reraise()
@@ -233,6 +291,24 @@ let cacheDropInfo i =
             let metaPath = getBuildTextPath d
             insertMetaText metaPath bt
             bt
+    >> fun bt ->
+        let metaPath = getBuildTextPath bt.DropRoot
+        match bt.Creation, File.tryReadLines metaPath |> Option.bind BuildMetaText.tryGetCreationDate with
+        | NullableValue creation,None -> Some creation
+        // no creation date, search around for an extracted exe or flat drop
+        | NullableNull,None ->
+            Path.GetDirectoryName metaPath
+            |> tryFindExe bt.DropRoot
+            |> Option.bind(fun ld -> 
+                let di = getDropInfo(ld.ExePath,"creationism",ld.DropRoot) ()
+                di.Creation
+                |> Option.ofNullable
+            )
+            
+        | _ -> None
+        |> Option.iter(tryInsertCreationDate metaPath)
+        bt
+            
         
 let targets = targetSubDirectories |> List.map(fun s -> targetish @@ s)
 printfn "Checking in %A" targets
