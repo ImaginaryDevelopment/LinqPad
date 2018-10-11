@@ -8,6 +8,7 @@
 // WIP : get pixel color
 // not accounting for dual monitor yet
 // maybe eventually do screen OCR?
+// some guidance from https://stackoverflow.com/questions/1163761/capture-screenshot-of-active-window
 
 let snip (bounds:Rectangle) = 
     let bm = new Bitmap(bounds.Width, bounds.Height)
