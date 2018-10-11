@@ -128,6 +128,21 @@ module Ops =
             with _ -> printfn "Failed sample2 get"; reraise()
         sprintf "Pub:%s,Pri:%s" v1 v2
         
+module DynamicComposition =
+    let runSample() =
+        let makePropAccess (flags:BindingFlags) =
+            let (?) (this : 'Source) (prop : string) : 'Result =
+                let t = this.GetType()
+                if isNull t then failwithf "bad getType"
+                let p = t.GetProperty(prop,flags)
+                if isNull p then failwithf"could not find prop %s" prop
+                p.GetValue(this, null) :?> 'Result
+            (?)
+            
+        let (?) = makePropAccess (BindingFlags.Public ||| BindingFlags.Instance) 
+        let x = Test("Code")    
+        x?Code
+        
 [
     "PublicGet",PublicPropertyAccess.runGetSample()
     "PublicSet",PublicPropertyAccess.runSetSample()
@@ -140,6 +155,7 @@ module Ops =
     "DictGet",DictionaryAccess.runGetSample()
     "IndexSetGet", Indexing.runIndexSample()
     "MyOps", Ops.runSample()
+    "DynamicComposition", sprintf "Composed: %s" <| DynamicComposition.runSample()
 ] // |> List.map (fun (s,x) -> sprintf "%s:%s" s x)
 //    x.GetType().GetProperties(PrivatePropertyAccess.flags)
 |> Dump
