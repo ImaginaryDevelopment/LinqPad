@@ -6,28 +6,43 @@
 
 //var input=LINQPad.Util.ReadLine<string>("What shall we encode?");
 let input=System.Windows.Forms.Clipboard.GetText()
-    
-let dumpt title x = x.Dump(description = title); x
-let trimEnd (delim:char) (x:string) = 
-    x.TrimEnd(delim)
-// works but won't compile if we don't have a usage for it
-//let dumpLen x = (^T:(member Length:int) x).Dump("length"); x
-let addLeadingSpaceIfValue s = 
-    match s with 
-    | null
-    | "" -> s
-    | x -> sprintf " %s" x
-let prependIfValue prep s = 
-    match s with
-    | null
-    | "" -> s
-    | x -> sprintf "%s%s" prep s
-let appendIfValue postfix s = 
-    match s with
-    | null
-    | "" -> s
-    | x -> sprintf "%s%s" s postfix
-    
+module Helpers =
+    let delimit (delimiter:string) (items:#seq<string>) = String.Join(delimiter,items)
+    let after (delimiter:string) (x:string) =
+        match x.IndexOf delimiter with
+        | i when i < 0 -> failwithf "after called without matching substring in '%s'(%s)" x delimiter
+        | i -> x.[i + delimiter.Length ..]
+    let replace (target:string) (replacement) (str:string) = if String.IsNullOrEmpty target then invalidOp "bad target" else str.Replace(target,replacement)
+        
+    let dumpt title x = x.Dump(description = title); x
+    let trimEnd (delim:char) (x:string) = 
+        x.TrimEnd(delim)
+    let splitLines(x:string) = x.Split([| "\r\n";"\n"|], StringSplitOptions.None)
+    module Option =
+        let getOrDefault y =
+            function
+            | Some x -> x
+            | None -> y
+
+    // works but won't compile if we don't have a usage for it
+    //let dumpLen x = (^T:(member Length:int) x).Dump("length"); x
+    let addLeadingSpaceIfValue s = 
+        match s with 
+        | null
+        | "" -> s
+        | x -> sprintf " %s" x
+    let prependIfValue prep s = 
+        match s with
+        | null
+        | "" -> s
+        | x -> sprintf "%s%s" prep s
+    let appendIfValue postfix s = 
+        match s with
+        | null
+        | "" -> s
+        | x -> sprintf "%s%s" s postfix
+open Helpers     
+
 module Scriptify = 
     let getScriptRefText srcType src = 
         sprintf """<script src="%s"%s></script>""" src (srcType |> prependIfValue " type=\"" |> appendIfValue "\"")
@@ -111,7 +126,7 @@ module Copying =
         //value |> string |> (fun x-> x.Dump("raw toHtmlString value")) |> ignore
         // if there are tags surrounding the element escape them
         let reencoded = encoder value
-        sprintf """<div><span id="%s">%s</span>%s</div>""" id' reencoded (makeCopyButton (Id id'))
+        sprintf """<div><pre id="%s">%s</pre>%s</div>""" id' reencoded (makeCopyButton (Id id'))
     let dumpCopyable id' (x:obj) = 
         getCopyableHtml System.Net.WebUtility.HtmlEncode id' x
         |> Util.RawHtml
@@ -125,12 +140,12 @@ module Copying =
 input.Dump("Raw input from clipboard");
 input
 |> Seq.map (fun x -> x,int x)
-|> Dump
+|> fun x -> x.Dump("Chars",maximumDepth=Nullable 0); x
 |> ignore
 let modern rawInput = // would be nice to move this to using a table of copyables
     printfn "starting main block ----------------------------\r\n\r\n"
     let tableCopyable tagId encodedInput = Copying.getCopyableHtml System.Net.WebUtility.HtmlEncode tagId encodedInput
-    let htmlEncodedPre x = sprintf "%s%s%s" "<pre class='brush: csharp'>"(System.Net.WebUtility.HtmlEncode x) "</pre>"
+    let htmlEncodedPre x = sprintf "%s%s%s" "<pre class='brush: csharp'>\r\n"(System.Net.WebUtility.HtmlEncode x) "\r\n</pre>\r\n"
     let htmlEncodedCode x = sprintf "%s%s%s" "<code>"(System.Net.WebUtility.HtmlEncode x) "</code>"
     let xHtmlEncode x = 
         use sw = new StringWriter()
@@ -168,7 +183,7 @@ let modern rawInput = // would be nice to move this to using a table of copyable
         "LiteralString", replace "\"" "\\\"" >> sprintf "\"%s\"", None
         // limitations, string can not start with triple-quotes already, and can't end with a quote or double quote
         "FString", sprintf "\"\"\"%s\"\"\"", None
-        "FStripLead", (fun s -> s |> String.split [ "\r\n"; "\n"; "\r"] |> delimit "\\\r\n" |> sprintf "\"\"\"%s\"\"\""), None
+        "FStripLead", (fun s -> s |> splitLines |> delimit "\\\r\n" |> sprintf "\"\"\"%s\"\"\""), None
     ]
     |> Seq.map (fun (nameId,f, nameOverrideOpt) ->
         
