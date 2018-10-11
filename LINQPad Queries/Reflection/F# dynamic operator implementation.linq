@@ -2,10 +2,13 @@
 
 // demonstrate F#'s dynamic operator
 // usage examples reimplemented from http://codebetter.com/matthewpodwysocki/2010/02/05/using-and-abusing-the-f-dynamic-lookup-operator/
+type Nest(value:string) =
+    member val Value = value with get,set
 type Test(code:string) = 
     let mutable code = code
     member val Code = code with get,set
     member val private Code2 = code with get,set
+    member val Nest= Nest(code) with get
     member private __.Code3
         with get()= code
         and set v = code <- v
@@ -139,10 +142,25 @@ module DynamicComposition =
                 p.GetValue(this, null) :?> 'Result
             (?)
             
-        let (?) = makePropAccess (BindingFlags.Public ||| BindingFlags.Instance) 
+        let inline (?) this key = 
+            let (?) = makePropAccess (BindingFlags.Public ||| BindingFlags.Instance) 
+            // parens are required for key to be what comes in, instead of looking for a prop named 'key'
+            this?(key)
         let x = Test("Code")    
-        x?Code
-        
+        let result = x?Code
+        // alternative access method demonstrated, only the x?Code syntax allows the Magic 'string' access
+        (?) x "Code" |> ignore<string>
+        result
+module Nesting =
+    let (?) this key =
+        let (?) = PublicPropertyAccess.(?)
+        // parens are required for key to be what comes in, instead of looking for a prop named 'key'
+        this?(key)
+    let runSample() =
+        let x:obj= upcast Test "Nesting"
+        let n = x?Nest
+        let v = n?Value
+        v
 [
     "PublicGet",PublicPropertyAccess.runGetSample()
     "PublicSet",PublicPropertyAccess.runSetSample()
@@ -156,6 +174,7 @@ module DynamicComposition =
     "IndexSetGet", Indexing.runIndexSample()
     "MyOps", Ops.runSample()
     "DynamicComposition", sprintf "Composed: %s" <| DynamicComposition.runSample()
+    "Nested", sprintf "Nested: %s" <| Nesting.runSample()
 ] // |> List.map (fun (s,x) -> sprintf "%s:%s" s x)
 //    x.GetType().GetProperties(PrivatePropertyAccess.flags)
 |> Dump
