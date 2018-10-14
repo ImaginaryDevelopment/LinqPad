@@ -1,10 +1,12 @@
 <Query Kind="FSharpProgram">
+  <Reference>&lt;RuntimeDirectory&gt;\System.Net.Http.dll</Reference>
   <NuGetReference>FSharp.Core</NuGetReference>
   <NuGetReference>HtmlAgilityPack</NuGetReference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
   <Namespace>HtmlAgilityPack</Namespace>
   <Namespace>Microsoft.FSharp.Core</Namespace>
   <Namespace>System.Net.Http</Namespace>
+  <DisableMyExtensions>true</DisableMyExtensions>
 </Query>
 
 let debug = false
@@ -162,9 +164,9 @@ let extractBuilds (Class classLink) txt : ClassBuildContainer=
     let guides =
         let titleFilter =
             if classLink.Title.EndsWith(" builds",StringComparison.InvariantCultureIgnoreCase) then
-                classLink.Title.Before(" builds")
+                classLink.Title |> String.beforeI " builds"
             else classLink.Title
-            |> fun x -> if x |> String.contains " " then x.Replace(' ','-') else x
+            |> fun x -> if x |> String.containsI " " then x.Replace(' ','-') else x
         links
         |> List.filter(fun l -> String.containsI titleFilter l.Link)
         |> List.filter(fun l -> not <| l.Title.EndsWith "builds")
@@ -178,13 +180,13 @@ let extractBuilds (Class classLink) txt : ClassBuildContainer=
     ClassBuildContainer(Class classLink,guides)
     
 let processBuildsLink (Class classLink as cl) =
-    let target = classLink.Link |> after "/d3"
+    let target = classLink.Link |> String.after "/d3"
     let result = fetchCache target
     result
     |> extractBuilds cl
 //type Build = {Title:string;Link:string;Items:Item list}
 let getGuideItems (Guide g) =
-    let target = g.Link |> after "/d3"
+    let target = g.Link |> String.after "/d3"
     let result = fetchCache target
     let items =
         result
