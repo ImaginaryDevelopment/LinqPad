@@ -9,6 +9,7 @@
 //  get tfs online build logs with help from : http://stackoverflow.com/questions/39715860/get-zipped-tfs-2015-vnext-build-output-logs-through-powershell-just-like-the
 
 let doWinForms = true
+let text = Util.Cache((fun () -> System.Windows.Forms.Clipboard.GetText()), "clipText")
     
 type SaferString = | Escaped of string | Plain of string
 [<AutoOpen>]
@@ -84,7 +85,6 @@ module Colored =
             appendLine rt text color
         else ()
 
-let text = Util.Cache((fun () -> System.Windows.Forms.Clipboard.GetText()), "clipText")
 
 type BuildLine = 
     | LogLine of DateTime * string
