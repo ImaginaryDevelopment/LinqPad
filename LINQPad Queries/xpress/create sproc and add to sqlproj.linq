@@ -4,16 +4,24 @@
 </Query>
 
 // add a sproc to the project without visual studio
+// original. duplicated partially by CodeUtilities\InsertNewSqlProjItem.linq that one has some other extra functionality
+// also adds it to TFS
+// did not work properly in last test. decided the sproc file name should be (Schema + '.proc.sql')
 let dc = new TypedDataContext()
 module Helpers = 
     let dumpt t x = x.Dump(description=t); x
     let replace (d:string) r (x:string) = x.Replace(d,r)
     let delimit d (x:string seq) = String.Join(d,x)
-    let (|RMatch|_|) p x=
-        let m = Regex.Match(x,p)
+    let rMatch (m:Match) = 
         if m.Success then
             Some m
         else None
+    let (|RMatch|_|) p x=
+        let m = Regex.Match(x,p)
+        rMatch m
+    let (|RMatchI|_|) p x =
+        let m = Regex.Match(x,p,RegexOptions.IgnoreCase)
+        rMatch m
     
     module Option =
         let getOrDefault d = function | Some x -> x | None -> d
@@ -35,7 +43,7 @@ let sprocText = Util.Cache(Func<_>(System.Windows.Forms.Clipboard.GetText), "spr
 sprocText .Dump("sproc text")
 let sprocName = 
     match sprocText with
-    |RMatch "procedure (\[?dbo\]\.)?\[?(\w+)\]?" m -> m.Groups.[2].Value
+    |RMatchI "procedure (\[?dbo\]\.)?\[?(\w+)\]?" m -> m.Groups.[2].Value
     | _ -> failwithf "could not find sproc name in cache or in clipboard. Found:%s" sprocText
 let createOrAlter () =
     let sprocText = sprocText //|> replace "create" "create or alter"
@@ -69,13 +77,13 @@ let addSprocToSqlProj sqlProjText relPath sqlProj =
                 else 
                     x.Dump("Inserting before")
                     // this must be in reverse order since the fold is accruing in reverse
-                    let newText = [
-                        sprintf "    <Build Include=\"%s\">" relPath
-                        "      <SubType>Code</SubType>"
-                        "      <AnsiNulls>On</AnsiNulls>"
-                        "      <QuotedIdentifier>On</QuotedIdentifier>"
-                        "    </Build>"
-                    ] List.rev
+                    let newText = List.rev [
+                                    sprintf "    <Build Include=\"%s\">" relPath
+                                    "      <SubType>Code</SubType>"
+                                    "      <AnsiNulls>On</AnsiNulls>"
+                                    "      <QuotedIdentifier>On</QuotedIdentifier>"
+                                    "    </Build>"
+                    ] 
                     newText.Dump("new sproc include text")
                     {InsertDone=true; AccruedLines = x.Line :: newText@fs.AccruedLines}
         ) {InsertDone=false;AccruedLines=List.empty}

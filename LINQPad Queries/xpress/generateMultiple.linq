@@ -1,5 +1,9 @@
 <Query Kind="FSharpProgram">
+  <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\BCore.ADO.dll">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\BCore.ADO.dll</Reference>
+  <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\BCore.dll">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\BCore.dll</Reference>
   <Reference Relative="..\..\..\FsInteractive\MacroRunner\CodeGeneration\bin\Debug\CodeGeneration.dll">C:\projects\FsInteractive\MacroRunner\CodeGeneration\bin\Debug\CodeGeneration.dll</Reference>
+  <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\CodeGeneration.Sql.dll">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\CodeGeneration.Sql.dll</Reference>
+  <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\CodeGeneration.VS.dll">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\CodeGeneration.VS.dll</Reference>
   <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio\2017\Community\Common7\IDE\PublicAssemblies\envdte.dll</Reference>
   <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio\2017\Community\Common7\IDE\PublicAssemblies\envdte80.dll</Reference>
   <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\MacroRunner.exe">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\MacroRunner.exe</Reference>
@@ -37,16 +41,19 @@ open System.Diagnostics
 open Microsoft.VisualStudio.TextTemplating
 
 open CodeGeneration
+open CodeGeneration.VS
 open CodeGeneration.DataModelToF
 open CodeGeneration.SqlMeta
-open CodeGeneration.SqlMeta.ColumnTyping
+open BCore.CodeGeneration.SqlWrapCore
+open BCore.CodeGeneration.SqlWrapCore.ColumnTyping
 open CodeGeneration.GenerateAllTheThings
 
 open MacroRunner
-open MacroRunner.DteWrap
-open MacroRunner.MultipleOutputHelper.Managers
+open CodeGeneration.VS.DteWrap
+open CodeGeneration.VS.MultipleOutputHelper.Managers
 open Macros.SqlMacros
 
+let debug = false
 
 let failing s = 
     if Debugger.IsAttached then
@@ -187,7 +194,7 @@ let manager =
         printfn "ProjectItem= %A" (templateProjectItem.FileNames 0s)
     )
     let dteWrapper = wrapDte dte
-    MultipleOutputHelper.Managers.VsManager(None, dteWrapper, sb, templateProjectItem)
+    VsManager(None, dteWrapper, sb, templateProjectItem,debug)
 let pluralizer = 
     Macros.VsMacros.createPluralizer()
     |> function
@@ -511,11 +518,13 @@ let fGetNotifyOptions (ti:TableIdentifier) : NotifyClassOptions =
         {SettersCheckInequality=true;AllowPropertyChangeOverride=false}
     else {SettersCheckInequality=false;AllowPropertyChangeOverride=false}
 let results = 
+    let cn = BCore.ADO.AdoHelper.Connector.CreateCString cString
     //runFullGeneration scriptFullPath generatePartials toGen addlCodeTables |> Map.ofDictionary
     //    type TableGenerationInfo = {Schema:string; Name:string; GenerateFull:bool}
-    let iDte = GenerateAllTheThings.DteGenWrapper(dte)
-    GenerateAllTheThings.runGeneration  
-        (sprintf "%s.linq" Util.CurrentQuery.Name) sb iDte manager cgsm toGen2 dataModelsToGen fGetNotifyOptions
+    let iDte = DteGenWrapper(dte)
+    let ga = {GetSqlMeta= CodeGeneration.SqlMeta.getSqlMeta;SqlSprocs= getSqlSprocs cn;MapSqlSprocParams=mapSprocParams cn}
+    GenerateAllTheThings.runGeneration
+        (sprintf "%s.linq" Util.CurrentQuery.Name) debug sb iDte manager cgsm toGen2 dataModelsToGen ga fGetNotifyOptions
     let r = manager.Process doMultiFile
     r
 // not important, just nice to have, clean up of opened documents in VS
