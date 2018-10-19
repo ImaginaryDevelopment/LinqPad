@@ -24,8 +24,12 @@ type System.String with
     
         
 type Link = {Title:string; Link:string}
-//    with member x.ToDump() = LINQPad.Hyperlinq(x.Link,x.Title)
-    with member x.ToDump() = sprintf "%s - %s" x.Title x.Link
+    with member x.ToDump() =
+            let link = if x.Link.StartsWith"//" then sprintf"http:%s" x.Link else x.Link
+            LINQPad.Hyperlinq(link,x.Title)
+//    with member x.ToDump() = 
+//        if x.Link.StartsWith"//" then sprintf"http:%s" x.Link else x.Link
+//        |> sprintf "%s - %s" x.Title
 type Item = Link
 module Map =
     let addListItem (k:'key) (v:'v) (m:Map<_,'v list>) =
@@ -106,7 +110,7 @@ module Fetch =
         printfn "waited"
         let doc = new HtmlAgilityPack.HtmlDocument()
         doc.LoadHtml(response)
-        printfn "loaded html? %A" (not <| isNull doc.Text)
+//        printfn "loaded html? %A" (not <| isNull doc.Text)
         // #nav must be javascript loaded after the fact
         match doc.GetElementbyId("footer") with
         | null -> 
@@ -233,7 +237,7 @@ let mutable command = null
 let getNextCommand () =
     let cmd = Util.ReadLine("Item?",null,autoComplete)
     command <- cmd
-    if isNull cmd or cmd = "" then
+    if isNull cmd || cmd = "" then
         false
     else true
     
@@ -247,6 +251,3 @@ while getNextCommand() do
         let users = itemMap.[k]
         dumpResult (k,users)
     else dumpResult (sprintf "Could not find item %s" command)
-        
-        
-    
