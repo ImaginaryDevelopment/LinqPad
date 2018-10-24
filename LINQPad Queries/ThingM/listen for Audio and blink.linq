@@ -10,6 +10,9 @@
 // by imaginarydevelopment.blogspot.com
 // twitter @maslowjax
 
+// needs https://www.nuget.org/packages/Rx-Main/ which is now unlisted
+
+
 //history 
 //  http://share.linqpad.net/6vvje5.linq
 let getBlink() = 
