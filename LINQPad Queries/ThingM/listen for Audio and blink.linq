@@ -44,7 +44,7 @@ let listen fUntil =
         blink.Item.Blink( Drawing.Color.Red, TimeSpan.FromSeconds 1. , 2us) |> ignore
         (DateTime.Now,evArgs).Dump()
     
-    use _subscription = waveIn.DataAvailable.Where(fun evArgs -> evArgs.Buffer |> Seq.exists(fun b -> b <> 0uy)).Sample(sampleThrottle).Subscribe( onAudio )
+    use _subscription = waveIn.DataAvailable.Where(fun evArgs -> evArgs.Buffer |> Seq.exists(fun b -> b <> 0uy) && evArgs.BytesRecorded > 1 ).Sample(sampleThrottle).Subscribe( onAudio )
 
     waveIn.WaveFormat.Dump()
     waveIn.StartRecording()
