@@ -100,10 +100,13 @@ module Helpers =
 ()    
         
 open Helpers
+type DropRoot = |DropRoot of string with
+    override x.ToString() = match x with | DropRoot x -> x
+    member private x.ToDump() = x.ToString()
 
 module BuildMetaText =
-    type BuildTrace = {Path:string;FileVersion:string;DropRoot:string;Creation:DateTime Nullable; MetaType:string}
-    let getBuildTextPath d = Path.Combine(d,"drop","build.txt")
+    type BuildTrace = {Path:string;FileVersion:string;DropRoot:DropRoot;Creation:DateTime Nullable; MetaType:string}
+    let getBuildTextPath (DropRoot d) = Path.Combine(d,"drop","build.txt")
     let tryGetCreationDate text =
         let matchFileVersion =
             function 
@@ -153,10 +156,11 @@ module BuildMetaText =
         tryFindMatch matchFileVersion
     
     // would have been nice to include Creation (assuming the extraction's dt info is accurate)
-    let insertMetaText fp bt =
+    let insertMetaText (DropRoot d) bt =
+        let fp = getBuildTextPath (DropRoot d)
         if not <| String.IsNullOrWhiteSpace bt.FileVersion then
             let fvTxt = sprintf "FileVersion: %s" bt.FileVersion 
-            File.tryReadLines fp
+            File.tryReadLines d
             |> function
                 |Some (FileVersionInfo _) ->
                     None
@@ -202,38 +206,38 @@ module BuildMetaText =
 open BuildMetaText    
 
 module LegacyDrops =
-    type LegacyDrop = {DropRoot:string;ExePath:string}
+    type LegacyDrop = {DropRoot:DropRoot;ExePath:string}
         
     let getDropInfo (fp,typ,d) () =
         let fi = FileInfo(fp)
         let fvi = FileVersionInfo.GetVersionInfo fp
         {Path=fp;DropRoot=d;FileVersion=fvi.FileVersion;Creation=Nullable fi.CreationTime;MetaType=typ}
     // search around
-    let tryFindExe d metaDirectory =
+    let tryFindExe (DropRoot d) metaDirectory =
         match d with
         | CombineFileExists exeSubPath fp ->
-            Some {DropRoot=d;ExePath=fp}
+            Some {DropRoot=DropRoot d;ExePath=fp}
         | CombineFileExists (sprintf "drop/%s" exeName) fp ->
-            Some {DropRoot=d;ExePath=fp}
+            Some {DropRoot=DropRoot d;ExePath=fp}
         | _ ->
             failwithf "uhoh! %s was drop root" d
         
-    let (|ExeDrop|_|) d = 
+    let (|ExeDrop|_|) (DropRoot d) = 
         let fp = Path.Combine(d,exeSubPath)
         if File.Exists fp then
-            Some {DropRoot=d;ExePath=fp}
+            Some {DropRoot=DropRoot d;ExePath=fp}
         else 
             try
                 let extractedP = Path.Combine(d,"drop",exeName) 
                 if File.Exists extractedP then
-                    Some {DropRoot=d;ExePath=extractedP}
+                    Some {DropRoot=DropRoot d;ExePath=extractedP}
                 else 
                     None
             with ex ->
                 printfn "EXE Drop failing"
                 reraise()
     // assertion: zip drops should theoretically only ever be future style where unzipping shouldn't be needed
-    let (|ZipDrop|_|) d =
+    let (|ZipDrop|_|) (DropRoot d) =
         let zipPath = Path.Combine(d,"drop")
         if Directory.Exists zipPath && allowUnzipping then
             Directory.GetFiles(zipPath,"*.zip") 
@@ -258,6 +262,7 @@ let findDrops p =
     printfn "Searching %i directories under %s (%i unique)" d.Length p (d |> List.distinct |> List.length)
     d
     |> List.filter(fun x -> Regex.IsMatch(Path.GetFileName(x), "^\d+"))
+    |> List.map (DropRoot)
     |> Seq.choose
         (function
         |BuildTxtDrop x ->
@@ -270,7 +275,7 @@ let findDrops p =
             if debug then
                 printfn "Found zipDrop %s" fp
             Some <| BuildPath ({DropRoot=d;ExePath=fp},"zip")
-        | d ->
+        | DropRoot d ->
                 let files = Directory.GetFiles d
                 if files.Length > 0 then
                     searchedButEmpty.Add((d, files))
@@ -288,10 +293,11 @@ let cacheDropInfo i =
             printfn "Failing on %s" exePath
             reraise()
         |> fun bt ->
-            let metaPath = getBuildTextPath d
-            insertMetaText metaPath bt
+            insertMetaText d bt
             bt
     >> fun bt ->
+        // we need this path to actually pipe bt through
+        // so if a creation is found/updated, bt is rebuilt with the new information, instead of having to run this script again
         let metaPath = getBuildTextPath bt.DropRoot
         match bt.Creation, File.tryReadLines metaPath |> Option.bind BuildMetaText.tryGetCreationDate with
         | NullableValue creation,None -> Some creation
