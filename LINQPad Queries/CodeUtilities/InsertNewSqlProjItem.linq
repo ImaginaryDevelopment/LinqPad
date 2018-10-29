@@ -47,6 +47,13 @@ let areDirEqual x y =
     | "",_ | null,_ | _,"" | _, null -> false
     | _ -> x.TrimEnd('\\') = y.TrimEnd('\\')
     
+
+module Tfs = 
+    let path = @"C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\TF.exe"
+    let add p =
+        let args = sprintf "add \"%s\"" p
+        Util.Cmd(path, args,true)
+
 type ProjectFullPath = |ProjectFullPath of string with member x.Value = match x with |ProjectFullPath y -> y
 type BuildItemFullPath = | BuildItemFullPath of string with member x.Value = match x with |BuildItemFullPath y -> y
 
@@ -128,6 +135,17 @@ let getDefaultFunText schema name =
         "  select @Id=id from somewhere"
         "return @Id"
     |]
+let getDefaultSprocText schema name =
+    [|
+        sprintf "CREATE  PROCEDURE [%s].[%s]" schema name
+        "    @payerID varchar(10),"
+        "    @AppointmentFacilityID int"
+        "AS"
+        String.Empty
+        "BEGIN"
+        "    select * from blah"
+        "END"
+    |]
 // does not auto-correct casing
 let schemaTarget = Util.ReadLine("Schema?","dbo", suggestions= ["dbo";"Accounts";"Diags"])   
 let isFunction = Util.ReadLine("isFunction?",false)
@@ -147,8 +165,9 @@ text
 |> fun x ->
     File.WriteAllLines(projPath.Value, Array.ofList x)
     if not <| File.Exists biFullPath.Value then
-        
-        File.WriteAllLines(biFullPath.Value,getDefaultFunText schemaTarget name)
+        File.WriteAllLines(biFullPath.Value,if isFunction then getDefaultFunText schemaTarget name else getDefaultSprocText schemaTarget name)
         printfn "Created file at %s" biFullPath.Value
-//|> Dump
-|> ignore<unit>
+        Tfs.add biFullPath.Value
+    else Array.empty
+|> Dump
+|> ignore

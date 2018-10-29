@@ -6,6 +6,9 @@
 // add a sproc to the project without visual studio
 // original. duplicated partially by CodeUtilities\InsertNewSqlProjItem.linq that one has some other extra functionality
 // also adds it to TFS
+
+// assumes sproc text is in clipboard
+
 // did not work properly in last test. decided the sproc file name should be (Schema + '.proc.sql')
 let dc = new TypedDataContext()
 module Helpers = 
