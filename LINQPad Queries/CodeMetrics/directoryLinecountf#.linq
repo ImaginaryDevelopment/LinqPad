@@ -11,6 +11,8 @@ open System
 open System.IO
 //open System.Windows.Forms
 // TODO: add highest using/open counts
+// highest type length fs file is incorrect it stops before the type ends, any blank line stop the counting
+
 
 let doTestFileExclude = false
 let highestLinesByFileMinimum = 550
@@ -290,7 +292,7 @@ type FileSummary(relativePath:string, fullPath:string,readerFunc:string->string[
     member self.LongLines=lazy(lengthMetrics.Value |> Seq.map snd |> Seq.filter ((>) 80) |> Seq.length) //self.AllLines.Value |> Seq.map String.length |> Seq.filter((>) 80) |> Seq.length)
     // only doing F# for now, especially since it is the one more likely to have many classes in the same file
     member self.LongestType = lazy(
-            printfn "LineCount is %i" self.LineCount
+//            printfn "LineCount is %i" self.LineCount
             lines.Value |> Seq.mapi(fun i x -> (i,x)) |> LongestType.getLongestType false (self.LineCount - 1)
         )
     
