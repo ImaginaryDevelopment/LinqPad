@@ -27,7 +27,7 @@ let (|RMatch|_|) p x =
     
 module SuperSerial =
     let serialize : obj -> string = JsonConvert.SerializeObject
-    let deserialize: string -> 't = JsonConvert.DeserializeObject
+    let inline deserialize (x:string) = JsonConvert.DeserializeObject x
 let text = 
     let f () =
         use hc = new HttpClient()
@@ -68,11 +68,22 @@ let (|GemNode|_|) (x:HtmlAgilityPack.HtmlNode) =
                 | x -> 
                     eprintfn "%s-%s" lvlNode.Name lvlNode.InnerText
                     -2
-            
-        let y = ()
+        let almostThere =     
+                x.ParentNode
+                    .SelectSingleNode(".//span[@class='item-box -gem']")
+        let description = 
+            try
+                        almostThere.SelectNodes(".//span[contains(@class,'group') and contains(@class, 'tc')]")
+                        |> Seq.map(fun x -> x.InnerHtml)
+                        |> List.ofSeq
+            with _ ->
+                printfn "Failed on %A" name
+                almostThere.InnerHtml.Dump()
+                reraise()
         match name with
         | Some name ->
-            Some {Name=name;Level=lvl; Description=[]}
+            Some {  Name=name;Level=lvl
+                    Description= description}
         | None -> None
     else None
     
@@ -100,13 +111,12 @@ let getActiveSkills ot =
                     |> Seq.map(sprintf "'%s',")
                     |> delimit Environment.NewLine
                 | Full ->
-                    x 
-                    //                     |> Seq.map (fun (x,y) ->  x |> replace "'" "\\'", y)
-
-                    |> Seq.map (fun g ->  g.Name, g)
-                    
-//                    |> Seq.map(fun (x,y) -> sprintf "'%s',%i" x y)
-                    |> Map.ofSeq
+                    let d =
+                        x 
+                        |> Seq.map (fun g ->  g.Name, g)
+                        |> Map.ofSeq
+                    d.Dump()
+                    d
                     |> SuperSerial.serialize
     //        |> Seq.map(fun x -> x.InnerHtml)
     span
