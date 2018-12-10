@@ -1,6 +1,8 @@
 <Query Kind="FSharpProgram">
   <Reference>&lt;RuntimeDirectory&gt;\System.Net.Http.dll</Reference>
   <NuGetReference>HtmlAgilityPack</NuGetReference>
+  <NuGetReference>Newtonsoft.Json</NuGetReference>
+  <Namespace>Newtonsoft.Json</Namespace>
   <Namespace>System.Net</Namespace>
   <Namespace>System.Net.Http</Namespace>
 </Query>
@@ -23,6 +25,9 @@ let (|RMatch|_|) p x =
         Some m
     else None
     
+module SuperSerial =
+    let serialize : obj -> string = JsonConvert.SerializeObject
+    let deserialize: string -> 't = JsonConvert.DeserializeObject
 let text = 
     let f () =
         use hc = new HttpClient()
@@ -46,6 +51,7 @@ let parsed =
 //let hoverableSpan = "//span[@class='c-item-hoverbox' and .//span[starts-with(@class,'active')]]"
 //let hoverableSpan = "//span[@class='c-item-hoverbox' and .//span[@class='item-box -gem']]//span[@class=header -single]"
 let hoverableSpan = "//span[@class='c-item-hoverbox' and .//span[@class='item-box -gem']]"
+type Gem = {Name:string; Level:int; Description:string list}
 let (|GemNode|_|) (x:HtmlAgilityPack.HtmlNode) =
 //    x.NodeType = HtmlAgilityPack.HtmlNodeType.Element
     if x.Name="span" && x.ParentNode.ParentNode.Name = "tr"
@@ -66,13 +72,13 @@ let (|GemNode|_|) (x:HtmlAgilityPack.HtmlNode) =
         let y = ()
         match name with
         | Some name ->
-            Some(name,lvl)
+            Some {Name=name;Level=lvl; Description=[]}
         | None -> None
     else None
     
 type OuputType =
     | Names
-//    | Full
+    | Full
 let getActiveSkills ot =
     if isNull parsed then failwithf "bad parse?"
     if isNull parsed.DocumentNode then failwithf "bad doc?"
@@ -90,18 +96,21 @@ let getActiveSkills ot =
                 | Names ->
                     x
                     |> Seq.sort
-                    |> Seq.map (fst >> replace "'" "\\'")
+                    |> Seq.map (fun g -> g.Name |> replace "'" "\\'")
                     |> Seq.map(sprintf "'%s',")
                     |> delimit Environment.NewLine
-    //            | Full ->
-    //                x 
-//                    |> Seq.map (fun (x,y) ->  x |> replace "'" "\\'", y)
+                | Full ->
+                    x 
+                    //                     |> Seq.map (fun (x,y) ->  x |> replace "'" "\\'", y)
+
+                    |> Seq.map (fun g ->  g.Name, g)
+                    
 //                    |> Seq.map(fun (x,y) -> sprintf "'%s',%i" x y)
-    //                |> Map.ofSeq
-    //                |> serialize
+                    |> Map.ofSeq
+                    |> SuperSerial.serialize
     //        |> Seq.map(fun x -> x.InnerHtml)
     span
-getActiveSkills Names
+getActiveSkills Full
 |> Dump
 |> ignore
 //text
