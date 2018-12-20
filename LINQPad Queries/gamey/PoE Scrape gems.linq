@@ -1,5 +1,6 @@
 <Query Kind="FSharpProgram">
   <Reference>&lt;RuntimeDirectory&gt;\System.Net.Http.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.dll</Reference>
   <NuGetReference>HtmlAgilityPack</NuGetReference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
   <Namespace>Newtonsoft.Json</Namespace>
@@ -88,8 +89,9 @@ let (|GemNode|_|) (x:HtmlAgilityPack.HtmlNode) =
     else None
     
 type OuputType =
-    | Names
+    | Fiddle
     | Full
+type Skill = {Name:string; ReqLvl:int Nullable}
 let getActiveSkills ot =
     if isNull parsed then failwithf "bad parse?"
     if isNull parsed.DocumentNode then failwithf "bad doc?"
@@ -104,23 +106,23 @@ let getActiveSkills ot =
             |> Seq.distinct
             |> fun x ->
                 match ot with
-                | Names ->
+                | Fiddle -> // https://jsfiddle.net/Maslow/e02ts1jy/show
                     x
-                    |> Seq.sort
-                    |> Seq.map (fun g -> g.Name |> replace "'" "\\'")
-                    |> Seq.map(sprintf "'%s',")
-                    |> delimit Environment.NewLine
+                    |> Seq.map(fun x -> {Name=x.Name; ReqLvl=Nullable x.Level})
+                    |> Seq.sortBy(fun x -> x.Name)
+                    |> SuperSerial.serialize
                 | Full ->
                     let d =
                         x 
-                        |> Seq.map (fun g ->  g.Name, g)
-                        |> Map.ofSeq
+//                        |> Seq.map (fun g ->  g.Name, g)
+//                        |> Map.ofSeq
                     d.Dump()
                     d
                     |> SuperSerial.serialize
     //        |> Seq.map(fun x -> x.InnerHtml)
     span
-getActiveSkills Full
+getActiveSkills Fiddle
+|> fun x -> System.Windows.Forms.Clipboard.SetText x
 |> Dump
 |> ignore
 //text
