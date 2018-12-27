@@ -62,12 +62,21 @@ module IO =
     let combine' items x = x::items |> Array.ofList |> Path.Combine
 module Html =
     open HtmlAgilityPack
-    let getHasClass n (x:HtmlNode) =
-        x.HasClass n
-    let getChildren (x:HtmlNode) =
-        x.ChildNodes
-        |> Seq.cast<HtmlNode>
-        |> List.ofSeq
+    type NodeFunc<'t> = HtmlNode -> 't
+    let getHasClass n: NodeFunc<_> =
+        fun x -> x.HasClass n
+    let getChildren : NodeFunc<_> =
+        fun x ->
+            x.ChildNodes
+            |> Seq.cast<HtmlNode>
+            |> List.ofSeq
+    let getInnerText (x:HtmlNode) =
+        x.InnerText
+    let anyChildWithClass className :NodeFunc<_> =
+        fun x ->
+            sprintf ".//*[contains(@class,'%s')]" className
+            |> x.SelectSingleNode
+            |> Option.ofObj
     let prettify (x:HtmlNode) =
         let toRemove = ResizeArray()
         x.DescendantsAndSelf()
@@ -245,7 +254,7 @@ type ModType =
     |Suffix
     with member private x.ToDump() = sprintf "%A" x
 // text field should exactly match what would go into PoB I think?
-type Mod = {Attrib:string;Value:string;ModType:ModType option;Text:string;Raw:string}
+type Mod = {Attrib:string;Value:string;ModType:ModType option;AffixInfo:string;Text:string;Raw:string}
 let getItemMods=
     Html.getChildren
     >> List.choose(fun td -> td.Descendants() |> Seq.tryFind(fun n -> n.Name="ul" && n.HasClass "item-mods"))
@@ -260,7 +269,7 @@ let getItemMods=
             match modType with
             |Some mt -> Some mt
             | None ->
-                let affixSpan = x.SelectSingleNode("*[contains(@class,'item-affix')]") |> Option.ofObj
+                let affixSpan = x |> Html.anyChildWithClass "item-affix"
                 let mt = affixSpan |> Option.bind(fun x ->
                             if x.HasClass "item-affix-S" then Some Suffix
                             elif x.HasClass "item-affix-P" then Some Prefix
@@ -271,6 +280,9 @@ let getItemMods=
                 let attrib = Html.getAttrValue "data-name" x
                 let raw = x.OuterHtml
                 let v = x.ChildNodes |> Seq.tryFind(fun cn -> cn.Name = "b") |> Option.map(fun cn -> cn.InnerText) |> Option.defaultValue null
+                let affixInfo = x.SelectSingleNode(".//span[@class='affix-info-short']") |> Option.ofObj |> Option.map (fun x-> x.InnerText)
+                if Option.isNone affixInfo && raw.Contains("affix-info-short") then
+                    x.OuterHtml.Dump("eh?")
                 // trim displayText by way of mutation
                 let text = 
                     x.ChildNodes
@@ -279,7 +291,7 @@ let getItemMods=
                     |> List.iter(fun cn -> cn.Remove())
                     x.InnerText
                 
-                {ModType=mt;Attrib=attrib;Value=v;Text=text;Raw=raw}
+                {ModType=mt;Attrib=attrib;Value=v;AffixInfo=affixInfo |> Option.defaultValue null;Text=text;Raw=raw}
         )
     )
 type Item = {Name:string;Base:string;ItemQ:string;Mods:Mod list; Meta:string; Rows:string list;Raw:string}
@@ -312,7 +324,7 @@ let toPoB {Name=n;Base=b;Mods=mods} =
     let getModText {Text=t}=
         t
     let modded = mods |> List.map getModText |> List.map trim
-    let notes = modded |> List.filter(fun x -> startsWith "total:" x || startsWith "pseudo:" x)
+    let notes = mods |> List.map(fun m -> sprintf "%s%s" (getModText m |> trim) (if String.IsNullOrWhiteSpace m.AffixInfo then null else sprintf " %s" m.AffixInfo))
     [ n;b;]@modded
     |> List.filter(startsWith "total:" >> not)
     |> List.filter(startsWith "pseudo:" >> not)
@@ -329,6 +341,7 @@ Html.getDocOrMunge()
 |> getItems
 |> List.ofSeq
 |> List.map mapItem
+|> Dump
 //    |> Seq.map(fun x -> x.OuterHtml)
 //|> Dump
 |> List.map toPoB
