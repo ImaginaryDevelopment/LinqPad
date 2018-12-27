@@ -16,6 +16,10 @@ module Helpers =
         function
         | null | "" as x -> x
         | x -> x.Replace(d,r)
+    let trim =
+        function
+        | null | "" as x -> x
+        | x -> x.Trim()
     let rReplace (d:string) (r:string) =
         function
         | null | "" as x -> x
@@ -307,9 +311,13 @@ let toPoB {Name=n;Base=b;Mods=mods} =
 //    type Mod = {Attrib:string;Value:string;ModType:ModType option;Text:string;Raw:string}
     let getModText {Text=t}=
         t
-        
-    [ n;b;]@(mods |> List.map getModText)
+    let modded = mods |> List.map getModText |> List.map trim
+    let notes = modded |> List.filter(fun x -> startsWith "total:" x || startsWith "pseudo:" x)
+    [ n;b;]@modded
+    |> List.filter(startsWith "total:" >> not)
+    |> List.filter(startsWith "pseudo:" >> not)
     |> delimit "\r\n"
+    |> fun x -> x,notes |> delimit"\r\n"
 if not <| File.Exists Html.Impl.rawPath.Value then
     Util.ReadLine("copy html to the clipboard and hit enter here")
     |> ignore
