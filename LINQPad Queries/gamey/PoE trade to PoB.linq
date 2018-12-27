@@ -1,4 +1,5 @@
 <Query Kind="FSharpProgram">
+  <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.dll</Reference>
   <NuGetReference>FSharp.Core</NuGetReference>
   <NuGetReference>HtmlAgilityPack</NuGetReference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
@@ -122,6 +123,8 @@ module Html =
         let mungedPath = lazy(getMungePath targetFolder)
         if debug then printfn "made lazy cachie"
     open Impl
+    let writeCachie contents = 
+        File.WriteAllText(rawPath.Value,contents)
     let munge() =
         let cachie= rawPath.Value
         cachie.Dump("target file")
@@ -163,7 +166,9 @@ module Html =
             reraise()
             
         doc
-    let clearMunge() = mungedPath.Value |> File.Delete
+    let clearMunge() = 
+        let mp = mungedPath.Value
+        if File.Exists mp then mp |> File.Delete
     let getDocOrMunge() =
         let doc = 
             if File.Exists mungedPath.Value |> not then
@@ -191,10 +196,9 @@ module Html =
         |> Seq.tryFind(fun x -> x.Name=name)
         |> Option.map(fun x -> x.Value)
         |> Option.defaultValue null
-Html.clearMunge()
 let (|Words|_|) =
     function
-    | RMatches "(\w+)" m ->
+    | RMatches "([\w-]+)" m ->
         Some m
     | _ -> None
 
@@ -306,7 +310,13 @@ let toPoB {Name=n;Base=b;Mods=mods} =
         
     [ n;b;]@(mods |> List.map getModText)
     |> delimit "\r\n"
-    
+if not <| File.Exists Html.Impl.rawPath.Value then
+    Util.ReadLine("copy html to the clipboard and hit enter here")
+    |> ignore
+    System.Windows.Forms.Clipboard.GetText()
+    |> Html.writeCachie
+
+Html.clearMunge()
 Html.getDocOrMunge()
 |> getItems
 |> List.ofSeq
