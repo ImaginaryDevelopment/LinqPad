@@ -1,4 +1,5 @@
 <Query Kind="FSharpProgram">
+  <Reference>&lt;RuntimeDirectory&gt;\System.Net.Http.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.dll</Reference>
   <NuGetReference>FSharp.Core</NuGetReference>
   <NuGetReference>HtmlAgilityPack</NuGetReference>
@@ -54,12 +55,66 @@ module Helpers =
         elif m.Groups.Count >= i then m.Groups.[i].Value |> Some
         else None
     let delimit (d:string) items = String.Join(d,value=Array.ofList items)
-        
+    let startsWith d =
+        function
+        | null | "" -> false
+        | x -> x.StartsWith(d)
+    let (|EqualsI|_|) d =
+        function
+        | null |"" -> None
+        | x -> if String.Equals(x,d,StringComparison.InvariantCultureIgnoreCase) then Some () else None
+    let (|StartsWith|_|) d =
+        function
+        | null |"" -> None
+        | x -> if x.StartsWith(d) then Some() else None
+    let getClipboardText () =
+        let mutable x:string = null
+        let mutable ex:exn = null
+        let sta = new Thread(fun () ->
+            try
+                x <- System.Windows.Forms.Clipboard.GetText()
+            with ex' -> ex <- ex'
+        )
+        sta.SetApartmentState ApartmentState.STA
+        sta.Start()
+        sta.Join()
+        if isNull ex then x
+        else raise ex
 open Helpers
+module Http =
+    open System.Net.Http
+    let getUriText (url:string) =
+        async{
+            let handler = new HttpClientHandler()
+            handler.AutomaticDecompression <- Net.DecompressionMethods.GZip ||| Net.DecompressionMethods.Deflate
+            use hc = new System.Net.Http.HttpClient(handler)
+            let! result = Async.AwaitTask(hc.GetStringAsync(url))
+            return result
+        }
 module IO =
     let combine y x =
         Path.Combine(x,y)
     let combine' items x = x::items |> Array.ofList |> Path.Combine
+module Mailbox =
+    let createCommandAgent f =
+        let mp = MailboxProcessor.Start(fun inbox ->
+            let rec messageLoop() = async{
+                let! msg = inbox.Receive()
+                let keepGoing =
+                    match msg with
+                    | null | "" -> false
+                    | x -> f x
+                if keepGoing then
+                    return! messageLoop()
+                else
+                    ()
+            
+            }
+            messageLoop()
+        )
+        mp
+        
+        
 module Html =
     open HtmlAgilityPack
     type NodeFunc<'t> = HtmlNode -> 't
@@ -319,6 +374,7 @@ let mapItem x=
         ()
         let mods = getItemMods rows.[0]// |> List.sortBy(fun x -> )
         {Name=n;Base=b;ItemQ=iq;Mods=mods;Meta=metaRow.OuterHtml;Rows=rows |> List.map(fun x -> x.OuterHtml);Raw=x.OuterHtml}
+        
 let toPoB {Name=n;Base=b;Mods=mods} =
 //    type Mod = {Attrib:string;Value:string;ModType:ModType option;Text:string;Raw:string}
     let getModText {Text=t}=
@@ -330,20 +386,105 @@ let toPoB {Name=n;Base=b;Mods=mods} =
     |> List.filter(startsWith "pseudo:" >> not)
     |> delimit "\r\n"
     |> fun x -> x,notes |> delimit"\r\n"
-if not <| File.Exists Html.Impl.rawPath.Value then
-    Util.ReadLine("copy html to the clipboard and hit enter here")
-    |> ignore
-    System.Windows.Forms.Clipboard.GetText()
-    |> Html.writeCachie
-
-Html.clearMunge()
-Html.getDocOrMunge()
-|> getItems
-|> List.ofSeq
-|> List.map mapItem
-|> Dump
+let dumpCommandOutput,reDump =
+    let dc = DumpContainer()
+    dc.Dump("Command output")
+    (fun (x:obj) ->
+        dc.Content <- null
+        dc.Content <- x), fun () -> dc.Dump("Command output")
+    
+        
+module ScriptMailbox =
+    type ScriptCommand =
+        |ReadClipboard
+        
+    module Impl =
+        let parseCommand =
+            function
+            | null|"" -> None
+            | EqualsI "clipboard" ->
+                ReadClipboard
+                |> Some
+            | _ -> None
+        let getRawInput prompt default' suggestions =
+            Util.ReadLine(prompt,defaultValue=default',suggestions=Array.ofList suggestions)
+    let runCommand =
+        function
+        |ReadClipboard ->
+            printfn "preparing to read clipboard"
+            let processContents contents =
+                contents
+                |> Html.writeCachie
+                Html.clearMunge()
+                let rawish =
+                    Html.getDocOrMunge()
+                    |> getItems
+                    |> List.ofSeq
+                    |> List.map mapItem
+                try 
+                    rawish
+                    |> List.map toPoB
+                    |> dumpCommandOutput
+                    |> ignore
+                finally
+                    if debug then Dump rawish else rawish
+                    |> ignore
+            let rawclip = 
+                let r = getClipboardText()
+                r
+            match rawclip |> trim with
+            | null | "" -> eprintfn "No text found"
+            | StartsWith "http:" as url ->
+                let raw =
+                    Http.getUriText url
+                    |> Async.RunSynchronously
+                raw
+                |> processContents
+            | x -> processContents x
+            
+            
+    let run () =
+        let mp =
+            Mailbox.createCommandAgent(
+                function
+                | "quit" -> false
+                | x -> 
+                    Impl.parseCommand x
+                    |> function
+                        | Some cmd ->
+                            if not debug then Util.ClearResults(); reDump()
+                            printfn "Running command %A" cmd
+                            runCommand cmd
+                            true
+                        | None -> eprintfn "what?"; true
+        )
+        mp
+        
+    
+let defaultProcess() =
+    
+    if not <| File.Exists Html.Impl.rawPath.Value then
+        Util.ReadLine("copy html to the clipboard and hit enter here")
+        |> ignore
+        System.Windows.Forms.Clipboard.GetText()
+        |> Html.writeCachie
+    
+    Html.clearMunge()
+    Html.getDocOrMunge()
+    |> getItems
+    |> List.ofSeq
+    |> List.map mapItem
+    |> Dump
 //    |> Seq.map(fun x -> x.OuterHtml)
 //|> Dump
-|> List.map toPoB
-|> Dump
-|> ignore
+    |> List.map toPoB
+    |> Dump
+    |> ignore
+let agent = ScriptMailbox.run()
+let getRawInput()= ScriptMailbox.Impl.getRawInput "Command?" "clipboard" ["clipboard"]
+let mutable input = getRawInput()
+while not <| String.IsNullOrWhiteSpace input do
+    agent.Post input
+    input <- getRawInput()
+    printfn "Input is %s" input
+    
