@@ -10,8 +10,9 @@
 // purpose: take a poe.trade page and make items that can be pasted into the create custom of poe.trade
 // wip: start with weapons
 // getting first 6 rows, not all items?
-
-let debug = false
+let urlLink title location=
+    LINQPad.Hyperlinq(uriOrPath=location,text=title)
+let debug = true
 module Helpers =
     let replace (d:string) r =
         function
@@ -89,6 +90,12 @@ module Helpers =
             if i > 0 then
                 x.[0..x.IndexOf(d) - 1] |> Some
             else None
+    let after (d:string) =
+        function
+        | null | "" -> null
+        | x ->
+            let i = x.IndexOf d
+            x.[i+d.Length..]
     let (|After|_|) (d:string) =
         function
         | null | "" -> None
@@ -301,8 +308,8 @@ let (|FullName|Contracted|Twosie|NoName|) =
             Contracted (name, (bp,bs))
         | MValue prefix :: MValue suffix :: MValue basePrefix :: MValue baseSuffix::[] ->
             FullName ((prefix,suffix),(basePrefix,baseSuffix))
-        | MValue fn :: MValue bs::[] ->
-            Twosie(fn,bs)
+        | MValue bp :: MValue bs::[] ->
+            Twosie(bp,bs)
         | _ -> NoName
     | _ -> NoName
     
@@ -328,6 +335,7 @@ let (|NameBase|) =
         ;   "Estoc"
         ;   "Longsword"
         ;   "Pagan Wand"
+        ;   "Ambusher"
         ]
         |> getHasAnyBase
 //    let (|Helmet|_|) = // https://pathofexile.gamepedia.com/Helmets
@@ -354,7 +362,7 @@ let (|NameBase|) =
         sprintf "%s %s" p s, sprintf "%s %s" bp bs
     | Contracted (n,(bp,bs)) ->
         n, sprintf "%s %s" bp bs
-    | Twosie (n,b) -> n,b
+    | Twosie (bs,bp) -> null, sprintf "%s %s" bs bp
     | x ->
         eprintfn "No name? %s" x
         null,null
@@ -418,7 +426,7 @@ let getItemMods=
                 {ModType=mt;Attrib=attrib;Value=v;AffixInfo=affixInfo |> Option.defaultValue null;Text=text;Raw=raw}
         )
     )
-type Item = {Name:string;Base:string;ItemQ:string;Mods:Mod list; Meta:string; Rows:string list;Raw:string}
+type Item = {Name:string;Base:string;ItemQ:string;Price:string;AccountName:string;CharacterName:string;Mods:Mod list; Meta:string; Rows:string list;Raw:string}
 
 let mapItem x=
     match Html.getAttrValue "data-name" x with
@@ -442,19 +450,29 @@ let mapItem x=
             | td -> Html.getAttrValue "data-value" td
         ()
         let mods = getItemMods rows.[0]// |> List.sortBy(fun x -> )
-        {Name=n;Base=b;ItemQ=iq;Mods=mods;Meta=metaRow.OuterHtml;Rows=rows |> List.map(fun x -> x.OuterHtml);Raw=x.OuterHtml}
+        let price = metaRow.SelectSingleNode".//span[@title]" |> Html.getAttrValue "title"
+        let accountName = metaRow.SelectSingleNode ".//a[starts-with(@href, 'https://www.pathofexile.com')]" |> Html.getAttrValue "href" |> after "https://www.pathofexile.com/account/view-profile/"
+        let charName =
+            metaRow.Descendants()
+            |> Seq.filter(fun x -> x.Name="span")
+            |> Seq.last
+            |> Html.getInnerText
+
+        {Name=n;Base=b;ItemQ=iq;Price=price;AccountName=accountName;CharacterName=charName;Mods=mods;Meta=metaRow.OuterHtml;Rows=rows |> List.map(fun x -> x.OuterHtml);Raw=x.OuterHtml}
         
-let toPoB {Name=n;Base=b;Mods=mods} =
+let toPoB {Name=n;Base=b;Price=p;AccountName=an;CharacterName=cn;Mods=mods} =
 //    type Mod = {Attrib:string;Value:string;ModType:ModType option;Text:string;Raw:string}
     let getModText {Text=t}=
         t
     let modded = mods |> List.map getModText |> List.map trim
     let notes = mods |> List.map(fun m -> sprintf "%s%s" (getModText m |> trim) (if String.IsNullOrWhiteSpace m.AffixInfo then null else sprintf " %s" m.AffixInfo))
+    let notes = p::notes
+    let linkTitle = if String.IsNullOrWhiteSpace cn then an else sprintf "%s - %s" an cn
     [ n;b;]@modded
     |> List.filter(startsWith "total:" >> not)
     |> List.filter(startsWith "pseudo:" >> not)
     |> delimit "\r\n"
-    |> fun x -> x,notes |> delimit"\r\n"
+    |> fun x -> x,notes |> delimit"\r\n",urlLink linkTitle <| sprintf "https://www.pathofexile.com/account/view-profile/%s" an
 let dumpCommandOutput,reDump =
     let dc = DumpContainer()
     dc.Dump("Command output")
@@ -555,6 +573,7 @@ let nameTests() =
         "Abberath's Horn", "Goat's Horn"
         "Redbeak", "Rusted Sword"
         null,"Pagan Wand"
+        "The Princess", "Sabre"
         
     ]
     |> List.map(fun (n',b') ->
