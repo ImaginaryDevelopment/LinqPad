@@ -461,14 +461,23 @@ let mapItem x=
 
         {Name=n;Base=b;ItemQ=iq;Price=price;AccountName=accountName;CharacterName=charName;Mods=mods;Meta=metaRow.OuterHtml;Rows=rows |> List.map(fun x -> x.OuterHtml);Raw=x.OuterHtml}
         
+let getModText {Text=t}=
+    t
+let mapModNote m =
+    let txt = getModText m
+    let affix = if String.IsNullOrWhiteSpace m.AffixInfo then null else sprintf " %s" m.AffixInfo
+    sprintf "%s%s" (getModText m |> trim) affix
 let toPoB {Name=n;Base=b;Price=p;AccountName=an;CharacterName=cn;Mods=mods} =
 //    type Mod = {Attrib:string;Value:string;ModType:ModType option;Text:string;Raw:string}
-    let getModText {Text=t}=
-        t
     let modded = mods |> List.map getModText |> List.map trim
-    let notes = mods |> List.map(fun m -> sprintf "%s%s" (getModText m |> trim) (if String.IsNullOrWhiteSpace m.AffixInfo then null else sprintf " %s" m.AffixInfo))
+    // get the count of affixes if there aren't any crafted affixes
+    // WIP: I don't think we are currently grabbing the crafted or not info
+    let nonImplicitCount =
+        mods |> List.choose(function |{ModType=Some Implicit} -> None| x -> Some x) |> List.length
+    let notes = mods |> List.map mapModNote
     let notes = notes |> List.filter(flip List.contains modded>> not)
-    let notes = p::notes
+    let affixCount = if nonImplicitCount > 5 then null else sprintf "Only %i affixes" nonImplicitCount
+    let notes = p::affixCount::notes
     let linkTitle = if String.IsNullOrWhiteSpace cn then an else sprintf "%s - %s" an cn
     [ n;b;]@modded
     |> List.filter(startsWith "total:" >> not)
