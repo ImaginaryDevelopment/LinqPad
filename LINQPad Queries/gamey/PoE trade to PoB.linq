@@ -80,6 +80,27 @@ module Helpers =
         sta.Join()
         if isNull ex then x
         else raise ex
+    let (|Before|_|) (d:string) =
+        function
+        | null | "" ->
+            None
+        | x -> 
+            let i = x.IndexOf(d)
+            if i > 0 then
+                x.[0..x.IndexOf(d) - 1] |> Some
+            else None
+    let (|After|_|) (d:string) =
+        function
+        | null | "" -> None
+        | x ->
+            let i = x.IndexOf(d)
+            if i >= 0 then x.[i+d.Length..] |> Some
+            else None
+    let (|Equals|_|) d =
+        function
+        | null | "" as x -> if d = x then Some() else None
+        | x -> if d = x then Some() else None
+
 open Helpers
 module Http =
     open System.Net.Http
@@ -266,32 +287,80 @@ module Html =
         |> Option.defaultValue null
 let (|Words|_|) =
     function
-    | RMatches "([\w-]+)" m ->
+    | RMatches "([\w-',]+)" m ->
         Some m
     | _ -> None
 
-let (|FullName|Contracted|NoName|) =
+let (|FullName|Contracted|Twosie|NoName|) =
     function
     | Words words ->
         match words with
-        | MValue prefix :: MValue suffix :: MValue baseName::[] ->
-            Contracted ((prefix,suffix),baseName)
+//        | MValue prefix :: MValue suffix :: MValue baseName::[] ->
+        // assumes if there are 3 words, that the first is the name and last 2 are the base
+        | MValue name :: MValue bp :: MValue bs::[] ->
+            Contracted (name, (bp,bs))
         | MValue prefix :: MValue suffix :: MValue basePrefix :: MValue baseSuffix::[] ->
             FullName ((prefix,suffix),(basePrefix,baseSuffix))
+        | MValue fn :: MValue bs::[] ->
+            Twosie(fn,bs)
         | _ -> NoName
     | _ -> NoName
     
+// some names are multiple words, some bases are 2 words and some are 1
 let (|NameBase|) =
+    let getHasBase baseType =
+        function
+        | Before baseType n -> Some (n.Trim(),baseType.Trim())
+        | Equals baseType -> Some(null,baseType)
+        | _ -> None
+    let getHasAnyBase bases x =
+        bases
+        |> Seq.choose(fun b -> getHasBase b x)
+        |> Seq.tryHead
+    // while we don't have all the known bases typed out, let's capture the known exceptions
+    let (|Other|_|) =
+        [   "Sabre"
+        ;   "Cutlass"
+        ;   "Baselard"
+        ;   "Grappler"
+        ;   "Gladius"
+        ;   "Smallsword"
+        ;   "Estoc"
+        ;   "Longsword"
+        ;   "Pagan Wand"
+        ]
+        |> getHasAnyBase
+//    let (|Helmet|_|) = // https://pathofexile.gamepedia.com/Helmets
+//        [
+//            "Iron Hat"
+//            "Cone Helmet"
+//            "Barbute Helmet"
+//        ]
+//        |> getHasAnyBase
+        
+    let (|KnownBase|_|) =
+        function
+        |Other (n,b) -> Some(n,b)
+        | _ -> None
     function
+    | null | "" -> null
+    | After "Superior " x -> x
+    | x -> x
+    >> function
     | null | "" -> null,null
+    | KnownBase (n,b) -> n,b
     // "Woe Barb Jewelled Foil"
     | FullName ((p,s),(bp,bs)) ->
         sprintf "%s %s" p s, sprintf "%s %s" bp bs
-    | Contracted ((p,s),bn) ->
-        sprintf "%s %s" p s, bn
+    | Contracted (n,(bp,bs)) ->
+        n, sprintf "%s %s" bp bs
+    | Twosie (n,b) -> n,b
     | x ->
         eprintfn "No name? %s" x
         null,null
+        
+            
+        
 let printCount title x =
     printfn "%s has %i item(s)" title (Seq.length x)
     x
@@ -411,7 +480,6 @@ module ScriptMailbox =
     let runCommand =
         function
         |ReadClipboard ->
-            printfn "preparing to read clipboard"
             let processContents contents =
                 contents
                 |> Html.writeCachie
@@ -435,6 +503,7 @@ module ScriptMailbox =
             match rawclip |> trim with
             | null | "" -> eprintfn "No text found"
             | StartsWith "http:" as url ->
+                printfn "getting %s" url
                 let raw =
                     Http.getUriText url
                     |> Async.RunSynchronously
@@ -480,6 +549,22 @@ let defaultProcess() =
     |> List.map toPoB
     |> Dump
     |> ignore
+let nameTests() =
+    [
+        "Taproot","Ambusher"
+        "Abberath's Horn", "Goat's Horn"
+        "Redbeak", "Rusted Sword"
+        null,"Pagan Wand"
+        
+    ]
+    |> List.map(fun (n',b') ->
+        match sprintf "%s %s" n' b' with
+        | NameBase (n,b) ->
+            n,n',b,b'
+    )
+nameTests()
+|> Dump
+|> ignore
 let agent = ScriptMailbox.run()
 let getRawInput()= ScriptMailbox.Impl.getRawInput "Command?" "clipboard" ["clipboard"]
 let mutable input = getRawInput()
@@ -487,4 +572,3 @@ while not <| String.IsNullOrWhiteSpace input do
     agent.Post input
     input <- getRawInput()
     printfn "Input is %s" input
-    
