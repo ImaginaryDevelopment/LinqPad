@@ -14,6 +14,7 @@ let urlLink title location=
     LINQPad.Hyperlinq(uriOrPath=location,text=title)
 let debug = true
 module Helpers =
+    let flip f x y = f y x
     let replace (d:string) r =
         function
         | null | "" as x -> x
@@ -412,7 +413,7 @@ let getItemMods=
                 let attrib = Html.getAttrValue "data-name" x
                 let raw = x.OuterHtml
                 let v = x.ChildNodes |> Seq.tryFind(fun cn -> cn.Name = "b") |> Option.map(fun cn -> cn.InnerText) |> Option.defaultValue null
-                let affixInfo = x.SelectSingleNode(".//span[@class='affix-info-short']") |> Option.ofObj |> Option.map (fun x-> x.InnerText)
+                let affixInfo = x.SelectSingleNode(".//span[@class='affix-info-short']") |> Option.ofObj |> Option.map (fun x-> x.InnerText) |> Option.bind (function |"??" -> None | x -> Some x) 
                 if Option.isNone affixInfo && raw.Contains("affix-info-short") then
                     x.OuterHtml.Dump("eh?")
                 // trim displayText by way of mutation
@@ -466,6 +467,7 @@ let toPoB {Name=n;Base=b;Price=p;AccountName=an;CharacterName=cn;Mods=mods} =
         t
     let modded = mods |> List.map getModText |> List.map trim
     let notes = mods |> List.map(fun m -> sprintf "%s%s" (getModText m |> trim) (if String.IsNullOrWhiteSpace m.AffixInfo then null else sprintf " %s" m.AffixInfo))
+    let notes = notes |> List.filter(flip List.contains modded>> not)
     let notes = p::notes
     let linkTitle = if String.IsNullOrWhiteSpace cn then an else sprintf "%s - %s" an cn
     [ n;b;]@modded
