@@ -528,13 +528,14 @@ let getItemMods =
                 let affixInfo = x.SelectSingleNode(".//span[@class='affix-info-short']") |> Option.ofObj |> Option.map Html.getInnerText
                 if Option.isNone affixInfo && raw.Contains("affix-info-short") then
                     x.OuterHtml.Dump("eh?")
-                // trim displayText by way of mutation
                 let text = 
-                    x.ChildNodes
+                    let clone = x.Clone()
+                    clone
+                    |> Html.getChildren
                     |> Seq.filter(fun cn -> cn.Name="span")
                     |> List.ofSeq
                     |> List.iter(fun cn -> cn.Remove())
-                    x.InnerText
+                    clone.InnerText
                 let mod' = { ModType=mt|>Option.map(fun x -> x,Validity.PoeTrade);Attrib=attrib;Value=v;AffixInfo=affixInfo |> killUnknown |> Option.defaultValue null;Text=text;Raw=raw}
                 match mt with
                     |Some _ -> mod'
@@ -681,10 +682,27 @@ module ScriptMailbox =
                 |> List.ofSeq
                 |> List.map (Tuple2.replicate)
                 |> List.map (Tuple2.mapSnd (tryDumpRelevant Html.getOuterHtml mapItem))
+            let itemCellOrSelf x =
+                Html.anyChildWithClass "item-cell" x
+                |> function
+                    |Some v -> 
+                        // clone it and make it a span instead of a td, for linqpad dumping
+                        let ic = v.Clone()
+                        ic.Name <- "span"
+                        ic
+                        
+                        
+                    | None ->
+                        eprintfn "Having a hard time with an item-cell"
+                        x
+                    |> Html.getOuterHtml
+                    |> Linqpad.rawHtml
+                
+                
             try 
                 rawish
                 |> List.map (Tuple2.mapSnd (toPoB>>fun (_,y,z) ->y,z))
-                |> List.map(Tuple2.mapFst (Html.anyChildWithClass "item-cell" >> Option.map (Html.getOuterHtml>>Linqpad.rawHtml)))
+                |> List.map(Tuple2.mapFst itemCellOrSelf)
                 |> dumpCommandOutput
                 |> ignore
             finally
