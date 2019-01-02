@@ -867,7 +867,11 @@ module ScriptMailbox =
                 |> List.map(Tuple2.mapFst itemCellOrSelf)
                 |> List.mapi(fun i (raw,(forPoB,notes,sellerInfo,item)) ->
                     let whisperButton = Copying.toCopyable (sprintf "whisper%i" i) (makeWhisper item.CharacterName item.Name item.Price item.League item.Stash)
-                    Util.HorizontalRun(true,raw,Copying.toCopyable (sprintf "pob%i" i) forPoB,notes,Util.HorizontalRun(true,sellerInfo,whisperButton)))
+//                    Util.HorizontalRun(true,raw,Copying.toCopyable (sprintf "pob%i" i) forPoB,notes,Util.HorizontalRun(true,sellerInfo,whisperButton)))
+                    let myMetas =Util.HorizontalRun(true,raw,Copying.toCopyable (sprintf "pob%i" i) forPoB,notes,Util.VerticalRun(sellerInfo,whisperButton))
+                    myMetas
+                )
+
 //                    Util.HorizontalRun(true,raw,Copying.toCopyable (sprintf "pob%i" i) forPoB,notes,sellerInfo))
                 |> dumpCommandOutput
                 |> ignore
