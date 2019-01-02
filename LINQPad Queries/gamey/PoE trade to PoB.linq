@@ -12,15 +12,16 @@
 // getting first 6 rows, not all items?
 let debug = false
 
-let urlLink title location=
-    LINQPad.Hyperlinq(uriOrPath=location,text=title)
-let inline withStyle style x = Util.WithStyle(x,style)
-let spanClass classes text =
-    let cls = String.Join(" ",value=  Array.ofSeq classes)
-    sprintf "<span class='%s'>%s</span>" cls text
-    |> Dump
-    |> Util.RawHtml
-let createStyleSheetLink x = Util.RawHtml(sprintf "<link rel='stylesheet' href='%s'/>" x)
+module Linqpad=
+    let urlLink title location=
+        LINQPad.Hyperlinq(uriOrPath=location,text=title)
+    let inline withStyle style x = Util.WithStyle(x,style)
+    let rawHtml (x:string) = Util.RawHtml x
+    let spanClass classes text =
+        let cls = String.Join(" ",value=  Array.ofSeq classes)
+        sprintf "<span class='%s'>%s</span>" cls text
+        |> rawHtml
+    let createStyleSheetLink x = sprintf "<link rel='stylesheet' href='%s'/>" x |> rawHtml
 module Helpers =
     let flip f x y = f y x
     let replace (d:string) r =
@@ -424,7 +425,7 @@ let dumpCommandOutput,addUnMatched,reDump =
     let unMatched=HashSet<string>()
     let dc = DumpContainer()
     let dumpContent () =
-        createStyleSheetLink "http://poe.trade/static/gen/packed_dark.1d8b01d7.css" |> Dump |> ignore
+        Linqpad.createStyleSheetLink "http://poe.trade/static/gen/packed_dark.1d8b01d7.css" |> Dump |> ignore
         dc.Dump("Command output")
     dumpContent()
     (fun (x:obj) ->
@@ -437,6 +438,11 @@ let dumpCommandOutput,addUnMatched,reDump =
     dumpContent
 
 module Mods =
+    module Display =
+        let wrapImplicit x =
+            sprintf "<ul class='mods withline'><li>%s</li></ul>" x
+            |> Linqpad.rawHtml
+            
     let (|Influence|_|) =
         function
         |EqualsI "elder"
@@ -590,13 +596,17 @@ let mapModNote m =
     sprintf "%s%s" txt affix
 let styleNote =
     let currency ct amount =
-        Util.RawHtml(sprintf "<span class='currency currency-%s'>%s×</span>" ct amount)
+        sprintf "<span class='currency currency-%s'>%s×</span>" ct amount
+        |> Linqpad.rawHtml
         
     function
     | null | "" as x -> box x
+    | RMatchI "\dI/\dP/\dS/" _
     | RMatch @"^pseudo:" _
     | RMatch @"^total:" _ as x ->
-        spanClass ["pseudo"] x
+        Linqpad.spanClass ["pseudo"] x
+    | RMatch @"(.*) implicit" m ->
+        Mods.Display.wrapImplicit m.Groups.[1].Value
     
     | RMatch @"(\d+) chaos" m ->
         m.Groups.[1].Value |> currency "chaos"
@@ -637,7 +647,7 @@ let toPoB {Name=n;Base=b;Price=p;AccountName=an;CharacterName=cn;Mods=mods} =
     [n;b]@modded
     |> Util.VerticalRun
 //    |> delimit "\r\n"
-    |> fun x -> x,notes |> Util.VerticalRun,urlLink linkTitle <| sprintf "https://www.pathofexile.com/account/view-profile/%s" an
+    |> fun x -> x,notes |> Util.VerticalRun,Linqpad.urlLink linkTitle <| sprintf "https://www.pathofexile.com/account/view-profile/%s" an
     
     
         
