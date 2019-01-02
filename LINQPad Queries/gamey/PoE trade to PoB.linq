@@ -1,5 +1,6 @@
 <Query Kind="FSharpProgram">
   <Reference>&lt;RuntimeDirectory&gt;\System.Net.Http.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Web.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.dll</Reference>
   <NuGetReference>FSharp.Core</NuGetReference>
   <NuGetReference>HtmlAgilityPack</NuGetReference>
@@ -8,8 +9,7 @@
 </Query>
 
 // purpose: take a poe.trade page and make items that can be pasted into the create custom of poe.trade
-// wip: start with weapons
-// getting first 6 rows, not all items?
+
 let debug = false
 
 module Linqpad=
@@ -68,7 +68,6 @@ module Helpers =
         elif i = 0 then m.Value |> Some
         elif m.Groups.Count >= i then m.Groups.[i].Value |> Some
         else None
-    let delimit (d:string) items = String.Join(d,value=Array.ofList items)
     let startsWith d =
         function
         | null | "" -> false
@@ -125,7 +124,135 @@ module Helpers =
         function
         | null | "" as x -> if d = x then Some() else None
         | x -> if d = x then Some() else None
-open Helpers
+    let delimit (delimiter:string) (items:#seq<string>) = String.Join(delimiter,items)
+        
+    let dumpt title x = x.Dump(description = title); x
+    let trimEnd (delim:char) (x:string) = 
+        x.TrimEnd(delim)
+    let splitLines(x:string) = x.Split([| "\r\n";"\n"|], StringSplitOptions.None)
+    module Option =
+        let getOrDefault y =
+            function
+            | Some x -> x
+            | None -> y
+
+    // works but won't compile if we don't have a usage for it
+    //let dumpLen x = (^T:(member Length:int) x).Dump("length"); x
+    let addLeadingSpaceIfValue s = 
+        match s with 
+        | null
+        | "" -> s
+        | x -> sprintf " %s" x
+    let prependIfValue prep s = 
+        match s with
+        | null
+        | "" -> s
+        | x -> sprintf "%s%s" prep s
+    let appendIfValue postfix s = 
+        match s with
+        | null
+        | "" -> s
+        | x -> sprintf "%s%s" s postfix
+open Helpers     
+
+module Scriptify = 
+    let getScriptRefText srcType src = 
+        sprintf """<script src="%s"%s></script>""" src (srcType |> prependIfValue " type=\"" |> appendIfValue "\"")
+        
+module Scripting = 
+
+    let clipInjectText = Scriptify.getScriptRefText "text/javascript" "https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/1.6.1/clipboard.min.js"
+    // cdata tags were necessary
+    let useClipText ="""
+        <script type="text/javascript">
+            //<![CDATA[
+          Clipboard && new Clipboard('.btn');
+          
+          //]]>
+        </script>"""
+module RawHtml = 
+
+    type TagClosure = 
+        |Content of string
+        |SelfClose
+        |NoSelfClose
+        |EitherClosing
+        // Input tag isn't supposed to be closed as it is a 'void' element, but we're going to close it here, browser is ok with it
+        // |NoClosingAllowed
+    // not really for direct exposure to other modules, but not making private
+    
+    let htmlElement name attributeMap closing = 
+        attributeMap
+        |> Map.toSeq
+        |> Seq.map(fun (k,v) -> sprintf "%s=\"%s\"" k (System.Web.HttpUtility.HtmlAttributeEncode v))
+        |> delimit " "
+        |> prependIfValue " "
+        |> (fun a ->
+            match closing with
+            | NoSelfClose -> sprintf "<%s%s></%s>" name a name
+            | EitherClosing | SelfClose -> sprintf "<%s%s/>" name a
+            | Content c -> sprintf "<%s%s>%s</%s>" name a c name
+        )
+    let button attribMap content = 
+        Content content 
+        |> htmlElement "button" attribMap
+    // if html should we be encoding it?
+    let headerify title textOrHtml = 
+        sprintf """<table class="headingpresenter">
+            <tr>
+                <th class="headingpresenter">%s</th>
+            </tr>
+            <tr>
+                <td class="headingpresenter">%s</td>
+            </tr>
+        </table>""" 
+        <|title 
+        <|textOrHtml        
+module Copying = 
+    
+    type CopyButtonTargeting = 
+        | Id of string
+        | DataAttrib of string
+        | Other
+    let makeCopyButton targeting = 
+        match targeting with
+        | Id x -> 
+            Map[
+                "class","btn"
+                "data-clipboard-target", sprintf "#%s" x
+            ]
+            |> fun m -> RawHtml.button m "Copy to clipboard"
+        | DataAttrib text -> 
+            sprintf """<button class="btn" data-clipboard-text="%s">Copy to clipboard</button>"""
+            <| System.Web.HttpUtility.HtmlAttributeEncode text
+        | Other ->
+            sprintf """<button class="btn">Copy to clipboard</button>"""
+    let getCopyableHtml encoder id' (x:obj) = 
+        let value = 
+            match x with
+            | :? string as s -> s
+            | x -> Util.ToHtmlString(true, noHeader=true, objectsToDump = [| box x|])
+        
+        //value |> string |> (fun x-> x.Dump("raw toHtmlString value")) |> ignore
+        // if there are tags surrounding the element escape them
+        let reencoded = encoder value
+        sprintf """<div><pre id="%s">%s</pre>%s</div>""" id' reencoded (makeCopyButton (Id id'))
+    let toCopyable id' (x:obj) =
+        getCopyableHtml System.Net.WebUtility.HtmlEncode id' x
+        |> Util.RawHtml
+        
+    let dumpCopyable id' (x:obj) = 
+        getCopyableHtml System.Net.WebUtility.HtmlEncode id' x
+        |> Util.RawHtml
+        |> Dump
+        |> ignore
+    let dumpCopyableHighlighted titling id' (x:obj) = 
+        let innerHtml = getCopyableHtml System.Net.WebUtility.HtmlEncode id' x |> string
+        //innerHtml.Dump("getCopyableHighlighted")
+        Util.RawHtml(RawHtml.headerify titling innerHtml).Dump()
+       
+       
+       
 module Tuple2 =
     let inline replicate x = (x,x)
     let inline mapFst f (x,y) = f x,y 
@@ -430,6 +557,8 @@ let dumpCommandOutput,addUnMatched,reDump =
     let dc = DumpContainer()
     let dumpContent () =
         Linqpad.createStyleSheetLink "http://poe.trade/static/gen/packed_dark.1d8b01d7.css" |> Dump |> ignore
+        Scripting.clipInjectText |> Linqpad.rawHtml |> Dump |> ignore
+        Scripting.useClipText |> Linqpad.rawHtml |> Dump |> ignore
         dc.Dump("Command output")
     dumpContent()
     (fun (x:obj) ->
@@ -649,13 +778,10 @@ let toPoB {Name=n;Base=b;Price=p;AccountName=an;CharacterName=cn;Mods=mods} =
             (countOrQ Option.isNone)
     let notes = p::affixSummary::notes |> List.filter(String.IsNullOrWhiteSpace>>not) |> List.map styleNote
     let linkTitle = if String.IsNullOrWhiteSpace cn then an else sprintf "%s - %s" an cn
-    [n;b]@modded
-    |> Util.VerticalRun
+    let forPoB = [n;b]@modded |> delimit "\r\n"
 //    |> delimit "\r\n"
-    |> fun x -> x,notes |> Util.VerticalRun,Linqpad.urlLink linkTitle <| sprintf "https://www.pathofexile.com/account/view-profile/%s" an
+    forPoB,notes |> Util.VerticalRun,Linqpad.urlLink linkTitle <| sprintf "https://www.pathofexile.com/account/view-profile/%s" an
     
-    
-        
 module ScriptMailbox =
     type ScriptCommand =
         |ReadClipboard
@@ -703,7 +829,7 @@ module ScriptMailbox =
                 rawish
                 |> List.map (Tuple2.mapSnd toPoB)
                 |> List.map(Tuple2.mapFst itemCellOrSelf)
-                |> List.map(fun (raw,(forPoB,notes,sellerInfo)) -> Util.HorizontalRun(true,raw,forPoB,notes,sellerInfo))
+                |> List.mapi(fun i (raw,(forPoB,notes,sellerInfo)) -> Util.HorizontalRun(true,raw,Copying.toCopyable (sprintf "pob%i" i) forPoB,notes,sellerInfo))
                 |> dumpCommandOutput
                 |> ignore
             finally
