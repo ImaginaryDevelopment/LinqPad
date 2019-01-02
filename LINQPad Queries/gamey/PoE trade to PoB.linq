@@ -11,7 +11,7 @@
 // purpose: take a poe.trade page and make items that can be pasted into the create custom of poe.trade
 // wip want whisper text copy button
 
-let debug =false
+let debug = false
 
 module Linqpad=
     let urlLink title location=
@@ -708,7 +708,7 @@ let mapItem x =
     match Html.getAttrValue "data-name" x with
     | null -> x.OuterHtml.Dump("failing"); failwithf "Bad item"
     | NameBase (n,b) ->
-        let tab,itemXPos,itemYPos = Html.getAttrValue "data-tab" x, Html.getAttrValue "data-x" x |> parseInt, Html.getAttrValue "data-y" x |> parseInt
+        let league,tab,itemXPos,itemYPos = Html.getAttrValue "data-league" x,Html.getAttrValue "data-tab" x, Html.getAttrValue "data-x" x |> parseInt, Html.getAttrValue "data-y" x |> parseInt
         let rows = Html.getChildren x
         let metaRow = rows.[1]
         // this stuff is for dps, phy dps, armour, energy shield, etc...
@@ -736,7 +736,7 @@ let mapItem x =
             |> Html.getInnerText
 
         {   Name=n;Base=b;ItemQ=iq;Price=price;AccountName=accountName;CharacterName=charName
-            League=null
+            League=league
             Stash={TabName=tab;X=itemXPos;Y=itemYPos}
             Mods=mods;Meta=metaRow.OuterHtml;Rows=rows |> List.map(fun x -> x.OuterHtml);Raw=x.OuterHtml}
         
@@ -747,6 +747,7 @@ let makeWhisper charName itemName price league (stashInfo:StashLocation) =
         match price with
         | ValueString price -> price |> sprintf " listed for %s"
         | _ -> null
+    let league = match league with | ValueString _ -> sprintf " in %s" league | _ -> null
     let si = sprintf " (stash tab \"%s\"; position: left %A, top %A)" stashInfo.TabName stashInfo.X stashInfo.Y
         
     sprintf "@%s Hi, I would like to buy your %s%s%s%s" charName itemName league p si
@@ -788,20 +789,13 @@ let toPoB ({Name=n;Base=b;Price=p;AccountName=an;CharacterName=cn;Mods=mods} as 
         |> List.map(fun m -> {m with Text=trim m.Text})
         |> List.filter(getModText>>startsWith "total:" >> not)
         |> List.filter(getModText>>startsWith "pseudo:" >> not)
-    // get the count of affixes if there aren't any crafted affixes
     // WIP: I don't think we are currently grabbing the crafted or not info
     let affixMap=
         modded
         |> List.filter(fun m -> m.Text |> equalsI "elder" |> not && m.Text |> equalsI "shaped" |> not )
-//        |> fun x -> x.Dump(sprintf "non implicits for %s" n); x |> List.length
-//        |> List.map(function
-//                    |{ModType=None} as m ->
-//                        {m with ModType=assumeAffix m.Text}
-//                    |m -> m)
         |> List.groupBy (function |{ModType=None} -> None | {ModType=Some(mt,_)} -> Some mt)
         |> Map.ofList
     let getAffixCount f = Map.tryFindKey(fun k _ -> f k) affixMap |> Option.map (fun x -> affixMap.Item(x)) |> Option.map List.length
-//    let nonImplicitCount = getAffixCount (function |Some Implicit,_ -> true | _ -> false) //affixCounts |> List.tryFind
     let modded = modded |> List.map getModText
     let notes = mods |> List.map mapModNote
     let notes = notes |> List.filter(flip List.contains modded>> not)
@@ -848,6 +842,8 @@ module ScriptMailbox =
                 Html.anyChildWithClass "item-cell" x
                 |> function
                     |Some v -> 
+                        // add class was not working
+                        v.SetAttributeValue("class", v.GetClasses() |> Seq.append ["item"] |> delimit " ") |> ignore
                         // clone it and make it a span instead of a td, for linqpad dumping
                         let ic = v.Clone()
                         ic.Name <- "span"
