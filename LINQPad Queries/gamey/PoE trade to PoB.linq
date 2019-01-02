@@ -9,8 +9,9 @@
 </Query>
 
 // purpose: take a poe.trade page and make items that can be pasted into the create custom of poe.trade
+// wip want whisper text copy button
 
-let debug = false
+let debug =false
 
 module Linqpad=
     let urlLink title location=
@@ -24,6 +25,16 @@ module Linqpad=
     let createStyleSheetLink x = sprintf "<link rel='stylesheet' href='%s'/>" x |> rawHtml
 module Helpers =
     let flip f x y = f y x
+    let parseInt x =
+        match Int32.TryParse x with
+        |true, i -> Some i
+        | _ -> None
+        
+        
+    let (|ValueString|NonValueString|) x =
+        if String.IsNullOrWhiteSpace x then
+            NonValueString
+        else ValueString x
     let replace (d:string) r =
         function
         | null | "" as x -> x
@@ -441,7 +452,8 @@ module Html =
     let getAttrValue name (x:HtmlNode) =
         x.Attributes
         |> Seq.tryFind(fun x -> x.Name=name)
-        |> Option.map(fun x -> x.Value)
+        |> Option.map(fun x -> x.Value|> System.Web.HttpUtility.HtmlDecode)
+        
         |> Option.defaultValue null
 let (|Words|_|) =
     function
@@ -465,7 +477,7 @@ let (|FullName|Contracted|Twosie|NoName|) =
     | _ -> NoName
     
 // some names are multiple words, some bases are 2 words and some are 1
-let (|NameBase|) =
+let (|NameBase|) (fullName:string) =
     let getHasBase baseType =
         function
         | Before baseType n -> Some (n.Trim(),baseType.Trim())
@@ -487,6 +499,9 @@ let (|NameBase|) =
         ;   "Longsword"
         ;   "Pagan Wand"
         ;   "Ambusher"
+        ;   "Polished Spiked Shield"
+        ;   "Elegant Round Shield"
+        ;   "Etched Kite Shield"
         ]
         |> getHasAnyBase
 //    let (|Helmet|_|) = // https://pathofexile.gamepedia.com/Helmets
@@ -501,23 +516,29 @@ let (|NameBase|) =
         function
         |Other (n,b) -> Some(n,b)
         | _ -> None
-    function
-    | null | "" -> null
-    | After "Superior " x -> x
-    | x -> x
-    >> function
-    | null | "" -> null,null
-    | KnownBase (n,b) -> n,b
-    // "Woe Barb Jewelled Foil"
-    | FullName ((p,s),(bp,bs)) ->
-        sprintf "%s %s" p s, sprintf "%s %s" bp bs
-    | Contracted (n,(bp,bs)) ->
-        n, sprintf "%s %s" bp bs
-    | Twosie (bs,bp) -> null, sprintf "%s %s" bs bp
-    | x ->
-        eprintfn "No name? %s" x
-        null,null
-        
+    let baseName:string=
+        match fullName with
+        | null | "" -> null
+        | After "Superior " x -> x
+        | x -> x
+        |> function
+        | null | "" -> null
+        | KnownBase (_,b) -> b
+        //"Guatelitzi's Widowsilk Robe of the Worthy"
+        | Before " of the " (FullName((_,_),(bp,bs))) ->
+            sprintf "%s %s" bp bs
+        | Before " of the " (Contracted (_,(bp,bs))) ->
+            sprintf "%s %s" bp bs
+        // "Woe Barb Jewelled Foil"
+        | FullName (_,(bp,bs)) ->
+            sprintf "%s %s" bp bs
+        | Contracted (n,(bp,bs)) ->
+            sprintf "%s %s" bp bs
+        | Twosie (bs,bp) -> sprintf "%s %s" bs bp
+        | x ->
+            eprintfn "No base name? %s" x
+            null
+    fullName, baseName    
             
         
 let printCount title x =
@@ -673,7 +694,9 @@ let getItemMods =
                     
         )
     )
-type Item = {Name:string;Base:string;ItemQ:string;Price:string;AccountName:string;CharacterName:string;Mods:Mod list; Meta:string; Rows:string list;Raw:string}
+
+type StashLocation = {TabName:string;X:int Option;Y:int Option}
+type Item = {Name:string;Base:string;ItemQ:string;Price:string;AccountName:string;CharacterName:string;Stash:StashLocation;League:string; Mods:Mod list; Meta:string; Rows:string list;Raw:string}
 
 let tryDumpRelevant fDisplay f x =
     try
@@ -685,6 +708,7 @@ let mapItem x =
     match Html.getAttrValue "data-name" x with
     | null -> x.OuterHtml.Dump("failing"); failwithf "Bad item"
     | NameBase (n,b) ->
+        let tab,itemXPos,itemYPos = Html.getAttrValue "data-tab" x, Html.getAttrValue "data-x" x |> parseInt, Html.getAttrValue "data-y" x |> parseInt
         let rows = Html.getChildren x
         let metaRow = rows.[1]
         // this stuff is for dps, phy dps, armour, energy shield, etc...
@@ -711,9 +735,21 @@ let mapItem x =
             |> Seq.last
             |> Html.getInnerText
 
-        {Name=n;Base=b;ItemQ=iq;Price=price;AccountName=accountName;CharacterName=charName;Mods=mods;Meta=metaRow.OuterHtml;Rows=rows |> List.map(fun x -> x.OuterHtml);Raw=x.OuterHtml}
+        {   Name=n;Base=b;ItemQ=iq;Price=price;AccountName=accountName;CharacterName=charName
+            League=null
+            Stash={TabName=tab;X=itemXPos;Y=itemYPos}
+            Mods=mods;Meta=metaRow.OuterHtml;Rows=rows |> List.map(fun x -> x.OuterHtml);Raw=x.OuterHtml}
         
-    
+//@ColdOrbOnHead Hi, I would like to buy your Fencoil Gnarled Branch listed for 1 chance in Betrayal (stash tab "SHOP"; position: left 3, top 3)  
+// assumes there is a price given
+let makeWhisper charName itemName price league (stashInfo:StashLocation) =
+    let p =
+        match price with
+        | ValueString price -> price |> sprintf " listed for %s"
+        | _ -> null
+    let si = sprintf " (stash tab \"%s\"; position: left %A, top %A)" stashInfo.TabName stashInfo.X stashInfo.Y
+        
+    sprintf "@%s Hi, I would like to buy your %s%s%s%s" charName itemName league p si
 let getModText {Text=t} = t
 let mapModNote m =
     let txt = getModText m |> trim
@@ -745,7 +781,7 @@ let styleNote =
     | RMatch @"(\d+) chaos" m ->
         m.Groups.[1].Value |> currency "chaos"
     | x -> box x
-let toPoB {Name=n;Base=b;Price=p;AccountName=an;CharacterName=cn;Mods=mods} =
+let toPoB ({Name=n;Base=b;Price=p;AccountName=an;CharacterName=cn;Mods=mods} as x) =
 //    type Mod = {Attrib:string;Value:string;ModType:ModType option;Text:string;Raw:string}
     let modded =
         mods
@@ -780,7 +816,7 @@ let toPoB {Name=n;Base=b;Price=p;AccountName=an;CharacterName=cn;Mods=mods} =
     let linkTitle = if String.IsNullOrWhiteSpace cn then an else sprintf "%s - %s" an cn
     let forPoB = [n;b]@modded |> delimit "\r\n"
 //    |> delimit "\r\n"
-    forPoB,notes |> Util.VerticalRun,Linqpad.urlLink linkTitle <| sprintf "https://www.pathofexile.com/account/view-profile/%s" an
+    forPoB,notes |> Util.VerticalRun,Linqpad.urlLink linkTitle <| sprintf "https://www.pathofexile.com/account/view-profile/%s" an, x
     
 module ScriptMailbox =
     type ScriptCommand =
@@ -829,12 +865,18 @@ module ScriptMailbox =
                 rawish
                 |> List.map (Tuple2.mapSnd toPoB)
                 |> List.map(Tuple2.mapFst itemCellOrSelf)
-                |> List.mapi(fun i (raw,(forPoB,notes,sellerInfo)) -> Util.HorizontalRun(true,raw,Copying.toCopyable (sprintf "pob%i" i) forPoB,notes,sellerInfo))
+                |> List.mapi(fun i (raw,(forPoB,notes,sellerInfo,item)) ->
+                    let whisperButton = Copying.toCopyable (sprintf "whisper%i" i) (makeWhisper item.CharacterName item.Name item.Price item.League item.Stash)
+                    Util.HorizontalRun(true,raw,Copying.toCopyable (sprintf "pob%i" i) forPoB,notes,Util.HorizontalRun(true,sellerInfo,whisperButton)))
+//                    Util.HorizontalRun(true,raw,Copying.toCopyable (sprintf "pob%i" i) forPoB,notes,sellerInfo))
                 |> dumpCommandOutput
                 |> ignore
             finally
-                if debug then Dump rawish else rawish
-                |> ignore
+                if debug then
+                    rawish
+                    |> List.map(fun (n,x) -> x,Html.getOuterHtml n)
+                    |> Dump
+                    |> ignore
         function
         |ReRead ->
             read()
