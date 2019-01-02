@@ -10,9 +10,17 @@
 // purpose: take a poe.trade page and make items that can be pasted into the create custom of poe.trade
 // wip: start with weapons
 // getting first 6 rows, not all items?
+let debug = false
+
 let urlLink title location=
     LINQPad.Hyperlinq(uriOrPath=location,text=title)
-let debug = true
+let inline withStyle style x = Util.WithStyle(x,style)
+let spanClass classes text =
+    let cls = String.Join(" ",value=  Array.ofSeq classes)
+    sprintf "<span class='%s'>%s</span>" cls text
+    |> Dump
+    |> Util.RawHtml
+let createStyleSheetLink x = Util.RawHtml(sprintf "<link rel='stylesheet' href='%s'/>" x)
 module Helpers =
     let flip f x y = f y x
     let replace (d:string) r =
@@ -47,6 +55,9 @@ module Helpers =
             |> List.ofSeq
             |> Some
         else None
+    let (|RMatchI|_|) p x =
+        let m = Regex.Match(x,pattern=p,options=RegexOptions.IgnoreCase)
+        if m.Success then Some m else None
     let (|RsValue|_|) (i:int) (m:MatchCollection) =
         if m.Count>i then
             m.[i].Value |> Some
@@ -61,26 +72,31 @@ module Helpers =
         function
         | null | "" -> false
         | x -> x.StartsWith(d)
-    let (|EqualsI|_|) d =
+        
+    let equalsI d =
         function
-        | null |"" -> None
-        | x -> if String.Equals(x,d,StringComparison.InvariantCultureIgnoreCase) then Some () else None
+        | null |"" -> false
+        | x -> if String.Equals(x,d,StringComparison.InvariantCultureIgnoreCase) then true else false
+        
+    let (|EqualsI|_|) d =
+        equalsI d
+        >> fun x -> if x then Some() else None
     let (|StartsWith|_|) d =
         function
         | null |"" -> None
         | x -> if x.StartsWith(d) then Some() else None
     let getClipboardText () =
-        let mutable x:string = null
+        let x= ref null
         let mutable ex:exn = null
         let sta = new Thread(fun () ->
             try
-                x <- System.Windows.Forms.Clipboard.GetText()
+                x := System.Windows.Forms.Clipboard.GetText()
             with ex' -> ex <- ex'
         )
         sta.SetApartmentState ApartmentState.STA
         sta.Start()
         sta.Join()
-        if isNull ex then x
+        if isNull ex then !x
         else raise ex
     let (|Before|_|) (d:string) =
         function
@@ -156,6 +172,8 @@ module Html =
             |> List.ofSeq
     let getInnerText (x:HtmlNode) =
         x.InnerText
+    let getOuterHtml (x:HtmlNode) =
+        x.OuterHtml
     let anyChildWithClass className :NodeFunc<_> =
         fun x ->
             sprintf ".//*[contains(@class,'%s')]" className
@@ -236,7 +254,7 @@ module Html =
             getAll doc "iframe" |> removeNodes "iframe"
             doc.DocumentNode.SelectSingleNode("//div[@id='dynamic']")
             |> function
-                |null -> printfn "dynamic not found"
+                |null -> eprintfn "dynamic not found"
                 |x -> x.Remove()
             doc.DocumentNode.SelectNodes("//comment()")
             |> Seq.iter(fun x -> x.Remove())
@@ -272,7 +290,7 @@ module Html =
                 munge()
             else mungedPath.Value |> File.ReadAllText |> getDoc
         if debug then 
-            Process.Start mungedPath.Value |> ignore
+//            Process.Start mungedPath.Value |> ignore
             doc
             |> fun x -> x.DocumentNode
             |> removeComments
@@ -374,46 +392,130 @@ let printCount title x =
     printfn "%s has %i item(s)" title (Seq.length x)
     x
 let getItems (doc:HtmlAgilityPack.HtmlDocument) =
-    doc.DocumentNode.Descendants()
-    |> printCount "Desc"
-    |> Seq.filter(fun x -> x.Name = "table")
-    |> printCount "tables"
-    |> Seq.filter(Html.getAttrValue "id" >> contains "search-results")
-    |> Seq.collect(Html.getChildren >> List.filter(fun cn -> cn.Name="tbody"))
+    let result =
+        doc.DocumentNode.Descendants()
+        |> printCount "Desc"
+        |> Seq.filter(fun x -> x.Name = "table")
+        |> printCount "tables"
+        |> Seq.filter(Html.getAttrValue "id" >> contains "search-results")
+        |> Seq.collect(Html.getChildren >> List.filter(fun cn -> cn.Name="tbody"))
+    result
+    |> List.ofSeq
     
 type ModType =
     |Implicit
     |Prefix
     |Suffix
-    with member private x.ToDump() = sprintf "%A" x
+    with
+        member private x.ToDump() = sprintf "%A" x
+        static member getIsImplicit = function | Implicit -> true | _ -> false
+        static member getIsPrefix = function | Prefix _ -> true | _ -> false
+        static member getIsSuffix = function | Suffix _ -> true | _ -> false
+        
+type Validity =
+    |PoeTrade
+    // because we are making a sweeping generalization that something that is a prefix is always a prefix for all gear types
+    |ScriptAssumption
+    
 // text field should exactly match what would go into PoB I think?
-type Mod = {Attrib:string;Value:string;ModType:ModType option;AffixInfo:string;Text:string;Raw:string}
-let getItemMods=
+type Mod = {Attrib:string;Value:string;ModType:(ModType*Validity) option;AffixInfo:string;Text:string;Raw:string}
+    
+let dumpCommandOutput,addUnMatched,reDump =
+    let unMatched=HashSet<string>()
+    let dc = DumpContainer()
+    let dumpContent () =
+        createStyleSheetLink "http://poe.trade/static/gen/packed_dark.1d8b01d7.css" |> Dump |> ignore
+        dc.Dump("Command output")
+    dumpContent()
+    (fun (x:obj) ->
+        dc.Content <- null
+        match x with
+        | null -> eprintfn "bad command output, null"
+        | _ -> printfn "Found some command output"
+        dc.Content <- Util.VerticalRun(x,box unMatched)),
+    unMatched.Add>>ignore,
+    dumpContent
+
+module Mods =
+    let (|Influence|_|) =
+        function
+        |EqualsI "elder"
+        |EqualsI "shaped" as x -> Some x
+        | _ -> None
+    let (|Meta|_|) =
+        function
+        |StartsWith "psuedo:"
+        |StartsWith "total:" as x -> Some x
+        | _ -> None
+
+
+    let isMod =
+        function
+        | null | "" -> false
+        | StartsWith "pseudo:" -> false
+        | StartsWith "total:" -> false
+        | x -> String.IsNullOrWhiteSpace x |> not
+    
+    let assumeAffix =
+        let prefixPatterns =
+            [
+                // 3-5 delve
+                // 5-12 elder
+                "% increased maximum Life"
+                @"\d+% increased Attributes"
+                // for crafted max life affix that doesn't show up on poe.trade
+                @"\+\d+ to maximum life"
+                @"Grants Level \d+ Enduring Cry Skill"
+            ]
+        let suffixPatterns =
+            [
+                @"\+\d+% to \w+ and \w+ Resistances"
+                @"\d+ Life Regenerated per second"
+                @"\d+% increased Life Recovery rate"
+                @"^\+\d+% to all elemental resistances$"
+                @"\+\d+% to Chaos Resistance during any Flask Effect"
+                @"\d+% increased Projectile Attack Damage during any Flask Effect"
+            ]
+        let anyPatternI ps x =
+            ps
+            |> Seq.tryFind(fun p -> match x with | null | "" -> false | RMatchI p _ -> true | _ -> false)
+            |> function | Some _ -> Some() | _ -> None
+        let (|Prefix|_|) = prefixPatterns |> anyPatternI
+        let (|Suffix|_|) = suffixPatterns |> anyPatternI
+           
+        function
+        | null | "" -> None
+        | Influence _
+        | Meta _ -> None
+        | Prefix _ -> Some(Prefix,ScriptAssumption)
+        | Suffix _ -> Some(Suffix,ScriptAssumption)
+        | x ->
+            addUnMatched x
+            None
+let getItemMods =
     Html.getChildren
     >> List.choose(fun td -> td.Descendants() |> Seq.tryFind(fun n -> n.Name="ul" && n.HasClass "item-mods"))
     >> List.collect Html.getChildren
     >> List.collect Html.getChildren
     >> List.collect (fun ul ->
         if not <| Html.getHasClass "mods" ul then failwithf"bad node %s" ul.OuterHtml
-        let modType = if Html.getHasClass "withline" ul then Some Implicit else None
+        let isImplicit = Html.getHasClass "withline" ul
         ul
         |> Html.getChildren
         |> List.map(fun x ->
-            match modType with
-            |Some mt -> Some mt
-            | None ->
-                let affixSpan = x |> Html.anyChildWithClass "item-affix"
-                let mt = affixSpan |> Option.bind(fun x ->
-                            if x.HasClass "item-affix-S" then Some Suffix
-                            elif x.HasClass "item-affix-P" then Some Prefix
-                            else None
-                        )
-                mt
+            if isImplicit then
+                Some Implicit
+            else
+                match x |> Html.anyChildWithClass "item-affix" with
+                | Some cn when cn.HasClass "item-affix-S" -> Some Suffix
+                | Some cn when cn.HasClass "item-affix-P" -> Some Prefix
+                | _ -> None
             |> fun mt ->
                 let attrib = Html.getAttrValue "data-name" x
                 let raw = x.OuterHtml
-                let v = x.ChildNodes |> Seq.tryFind(fun cn -> cn.Name = "b") |> Option.map(fun cn -> cn.InnerText) |> Option.defaultValue null
-                let affixInfo = x.SelectSingleNode(".//span[@class='affix-info-short']") |> Option.ofObj |> Option.map (fun x-> x.InnerText) |> Option.bind (function |"??" -> None | x -> Some x) 
+                let killUnknown = Option.bind (function |"??" -> None | x -> Some x) 
+                let v = x.ChildNodes |> Seq.tryFind(fun cn -> cn.Name = "b") |> Option.map Html.getInnerText |> Option.defaultValue null
+                let affixInfo = x.SelectSingleNode(".//span[@class='affix-info-short']") |> Option.ofObj |> Option.map Html.getInnerText
                 if Option.isNone affixInfo && raw.Contains("affix-info-short") then
                     x.OuterHtml.Dump("eh?")
                 // trim displayText by way of mutation
@@ -423,12 +525,22 @@ let getItemMods=
                     |> List.ofSeq
                     |> List.iter(fun cn -> cn.Remove())
                     x.InnerText
-                
-                {ModType=mt;Attrib=attrib;Value=v;AffixInfo=affixInfo |> Option.defaultValue null;Text=text;Raw=raw}
+                let mod' = { ModType=mt|>Option.map(fun x -> x,Validity.PoeTrade);Attrib=attrib;Value=v;AffixInfo=affixInfo |> killUnknown |> Option.defaultValue null;Text=text;Raw=raw}
+                match mt with
+                    |Some _ -> mod'
+                    |None when Mods.isMod mod'.Text -> {mod' with ModType = Mods.assumeAffix mod'.Text}
+                    | None -> mod'
+                    
         )
     )
 type Item = {Name:string;Base:string;ItemQ:string;Price:string;AccountName:string;CharacterName:string;Mods:Mod list; Meta:string; Rows:string list;Raw:string}
 
+let tryDumpRelevant fDisplay f x =
+    try
+        f x
+    with ex ->
+        (fDisplay x,ex).Dump("Failing")
+        reraise()
 let mapItem x=
     match Html.getAttrValue "data-name" x with
     | null -> x.OuterHtml.Dump("failing"); failwithf "Bad item"
@@ -451,7 +563,7 @@ let mapItem x=
             | td -> Html.getAttrValue "data-value" td
         ()
         let mods = getItemMods rows.[0]// |> List.sortBy(fun x -> )
-        let price = metaRow.SelectSingleNode".//span[@title]" |> Html.getAttrValue "title"
+        let price = metaRow.SelectSingleNode".//span[@title]" |> Option.ofObj |> Option.map (Html.getAttrValue "title") |> Option.defaultValue null
         let accountName = metaRow.SelectSingleNode ".//a[starts-with(@href, 'https://www.pathofexile.com')]" |> Html.getAttrValue "href" |> after "https://www.pathofexile.com/account/view-profile/"
         let charName =
             metaRow.Descendants()
@@ -461,45 +573,85 @@ let mapItem x=
 
         {Name=n;Base=b;ItemQ=iq;Price=price;AccountName=accountName;CharacterName=charName;Mods=mods;Meta=metaRow.OuterHtml;Rows=rows |> List.map(fun x -> x.OuterHtml);Raw=x.OuterHtml}
         
-let getModText {Text=t}=
-    t
+    
+let getModText {Text=t} = t
 let mapModNote m =
-    let txt = getModText m
-    let affix = if String.IsNullOrWhiteSpace m.AffixInfo then null else sprintf " %s" m.AffixInfo
-    sprintf "%s%s" (getModText m |> trim) affix
+    let txt = getModText m |> trim
+    let spaceIt = sprintf " %s"
+    let affix =
+        if String.IsNullOrWhiteSpace m.AffixInfo then 
+            match m.ModType with
+            | Some(Prefix,Validity.ScriptAssumption) -> spaceIt "p?"
+            | Some(Suffix,Validity.ScriptAssumption) -> spaceIt "s?"
+            | Some(Implicit,Validity.PoeTrade) -> spaceIt "implicit"
+            | Some mt -> mt.Dump("how did this happen?"); null
+            | None -> null
+        else spaceIt m.AffixInfo
+    sprintf "%s%s" txt affix
+let styleNote =
+    let currency ct amount =
+        Util.RawHtml(sprintf "<span class='currency currency-%s'>%s×</span>" ct amount)
+        
+    function
+    | null | "" as x -> box x
+    | RMatch @"^pseudo:" _
+    | RMatch @"^total:" _ as x ->
+        spanClass ["pseudo"] x
+    
+    | RMatch @"(\d+) chaos" m ->
+        m.Groups.[1].Value |> currency "chaos"
+    | x -> box x
 let toPoB {Name=n;Base=b;Price=p;AccountName=an;CharacterName=cn;Mods=mods} =
 //    type Mod = {Attrib:string;Value:string;ModType:ModType option;Text:string;Raw:string}
-    let modded = mods |> List.map getModText |> List.map trim
+    let modded =
+        mods
+        |> List.map(fun m -> {m with Text=trim m.Text})
+        |> List.filter(getModText>>startsWith "total:" >> not)
+        |> List.filter(getModText>>startsWith "pseudo:" >> not)
     // get the count of affixes if there aren't any crafted affixes
     // WIP: I don't think we are currently grabbing the crafted or not info
-    let nonImplicitCount =
-        mods |> List.choose(function |{ModType=Some Implicit} -> None| x -> Some x) |> List.length
+    let affixMap=
+        modded
+        |> List.filter(fun m -> m.Text |> equalsI "elder" |> not && m.Text |> equalsI "shaped" |> not )
+//        |> fun x -> x.Dump(sprintf "non implicits for %s" n); x |> List.length
+//        |> List.map(function
+//                    |{ModType=None} as m ->
+//                        {m with ModType=assumeAffix m.Text}
+//                    |m -> m)
+        |> List.groupBy (function |{ModType=None} -> None | {ModType=Some(mt,_)} -> Some mt)
+        |> Map.ofList
+    let getAffixCount f = Map.tryFindKey(fun k _ -> f k) affixMap |> Option.map (fun x -> affixMap.Item(x)) |> Option.map List.length
+//    let nonImplicitCount = getAffixCount (function |Some Implicit,_ -> true | _ -> false) //affixCounts |> List.tryFind
+    let modded = modded |> List.map getModText
     let notes = mods |> List.map mapModNote
     let notes = notes |> List.filter(flip List.contains modded>> not)
-    let affixCount = if nonImplicitCount > 5 then null else sprintf "Only %i affixes" nonImplicitCount
-    let notes = p::affixCount::notes
+    let countOrQ f = getAffixCount f |> Option.map string |> Option.defaultValue "?"
+    let affixSummary =
+        sprintf "%sI/%sP/%sS/%s?"
+            (countOrQ (function | None -> false | Some t -> ModType.getIsImplicit t))
+            (countOrQ (function | None -> false | Some t -> ModType.getIsPrefix t))
+            (countOrQ (function | None -> false | Some t -> ModType.getIsSuffix t))
+            (countOrQ Option.isNone)
+    let notes = p::affixSummary::notes |> List.filter(String.IsNullOrWhiteSpace>>not) |> List.map styleNote
     let linkTitle = if String.IsNullOrWhiteSpace cn then an else sprintf "%s - %s" an cn
-    [ n;b;]@modded
-    |> List.filter(startsWith "total:" >> not)
-    |> List.filter(startsWith "pseudo:" >> not)
-    |> delimit "\r\n"
-    |> fun x -> x,notes |> delimit"\r\n",urlLink linkTitle <| sprintf "https://www.pathofexile.com/account/view-profile/%s" an
-let dumpCommandOutput,reDump =
-    let dc = DumpContainer()
-    dc.Dump("Command output")
-    (fun (x:obj) ->
-        dc.Content <- null
-        dc.Content <- x), fun () -> dc.Dump("Command output")
+    [n;b]@modded
+    |> Util.VerticalRun
+//    |> delimit "\r\n"
+    |> fun x -> x,notes |> Util.VerticalRun,urlLink linkTitle <| sprintf "https://www.pathofexile.com/account/view-profile/%s" an
+    
     
         
 module ScriptMailbox =
     type ScriptCommand =
         |ReadClipboard
+        // used for debugging, when I want to test changes to the interpretation/parsing
+        |ReRead
         
     module Impl =
         let parseCommand =
             function
             | null|"" -> None
+            | EqualsI "reread" -> ReRead |> Some
             | EqualsI "clipboard" ->
                 ReadClipboard
                 |> Some
@@ -507,25 +659,31 @@ module ScriptMailbox =
         let getRawInput prompt default' suggestions =
             Util.ReadLine(prompt,defaultValue=default',suggestions=Array.ofList suggestions)
     let runCommand =
+        let read () =
+            printfn "Reading"
+            let rawish =
+                Html.getDocOrMunge()
+                |> getItems
+                |> List.ofSeq
+                |> List.map (tryDumpRelevant (Html.getOuterHtml) mapItem)
+            try 
+                rawish
+                |> List.map toPoB
+                |> dumpCommandOutput
+                |> ignore
+            finally
+                if debug then Dump rawish else rawish
+                |> ignore
         function
+        |ReRead ->
+            read()
         |ReadClipboard ->
+            // take new raw html
             let processContents contents =
                 contents
                 |> Html.writeCachie
                 Html.clearMunge()
-                let rawish =
-                    Html.getDocOrMunge()
-                    |> getItems
-                    |> List.ofSeq
-                    |> List.map mapItem
-                try 
-                    rawish
-                    |> List.map toPoB
-                    |> dumpCommandOutput
-                    |> ignore
-                finally
-                    if debug then Dump rawish else rawish
-                    |> ignore
+            read()
             let rawclip = 
                 let r = getClipboardText()
                 r
@@ -547,14 +705,16 @@ module ScriptMailbox =
                 function
                 | "quit" -> false
                 | x -> 
-                    Impl.parseCommand x
-                    |> function
-                        | Some cmd ->
-                            if not debug then Util.ClearResults(); reDump()
-                            printfn "Running command %A" cmd
-                            runCommand cmd
-                            true
-                        | None -> eprintfn "what?"; true
+                    try
+                        Impl.parseCommand x
+                        |> function
+                            | Some cmd ->
+                                if not debug then Util.ClearResults();printfn"cleared"; reDump()
+                                printfn "Running command %A" cmd
+                                runCommand cmd
+                                true
+                            | None -> eprintfn "what?"; true
+                    with ex -> ex.Dump("uncaught ex"); false
         )
         mp
         
@@ -596,7 +756,7 @@ nameTests()
 |> Dump
 |> ignore
 let agent = ScriptMailbox.run()
-let getRawInput()= ScriptMailbox.Impl.getRawInput "Command?" "clipboard" ["clipboard"]
+let getRawInput()= ScriptMailbox.Impl.getRawInput "Command?" "clipboard" ["clipboard";"reread"]
 let mutable input = getRawInput()
 while not <| String.IsNullOrWhiteSpace input do
     agent.Post input
