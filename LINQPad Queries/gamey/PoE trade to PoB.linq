@@ -587,7 +587,10 @@ let dumpCommandOutput,addUnMatched,reDump =
         match x with
         | null -> eprintfn "bad command output, null"
         | _ -> printfn "Found some command output"
-        dc.Content <- Util.VerticalRun(x,box unMatched)),
+        if debug then
+            dc.Content <- Util.VerticalRun(x,box unMatched)
+        else dc.Content <- x
+    ),
     unMatched.Add>>ignore,
     dumpContent
 
