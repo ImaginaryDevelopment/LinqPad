@@ -701,8 +701,9 @@ module ScriptMailbox =
                 
             try 
                 rawish
-                |> List.map (Tuple2.mapSnd (toPoB>>fun (_,y,z) ->y,z))
+                |> List.map (Tuple2.mapSnd toPoB)
                 |> List.map(Tuple2.mapFst itemCellOrSelf)
+                |> List.map(fun (raw,(forPoB,notes,sellerInfo)) -> Util.HorizontalRun(true,raw,forPoB,notes,sellerInfo))
                 |> dumpCommandOutput
                 |> ignore
             finally
