@@ -125,8 +125,13 @@ module Helpers =
         function
         | null | "" as x -> if d = x then Some() else None
         | x -> if d = x then Some() else None
-
 open Helpers
+module Tuple2 =
+    let inline replicate x = (x,x)
+    let inline mapFst f (x,y) = f x,y 
+    let inline mapSnd f (x,y) = x, f y
+        
+    // implies the incoming is the key
 module Http =
     open System.Net.Http
     let getUriText (url:string) =
@@ -171,10 +176,9 @@ module Html =
             x.ChildNodes
             |> Seq.cast<HtmlNode>
             |> List.ofSeq
-    let getInnerText (x:HtmlNode) =
-        x.InnerText
-    let getOuterHtml (x:HtmlNode) =
-        x.OuterHtml
+    let getInnerText (x:HtmlNode) = x.InnerText
+    let getOuterHtml (x:HtmlNode) = x.OuterHtml
+    let getInnerHtml (x:HtmlNode) = x.InnerHtml
     let anyChildWithClass className :NodeFunc<_> =
         fun x ->
             sprintf ".//*[contains(@class,'%s')]" className
@@ -547,7 +551,7 @@ let tryDumpRelevant fDisplay f x =
     with ex ->
         (fDisplay x,ex).Dump("Failing")
         reraise()
-let mapItem x=
+let mapItem x =
     match Html.getAttrValue "data-name" x with
     | null -> x.OuterHtml.Dump("failing"); failwithf "Bad item"
     | NameBase (n,b) ->
@@ -675,10 +679,12 @@ module ScriptMailbox =
                 Html.getDocOrMunge()
                 |> getItems
                 |> List.ofSeq
-                |> List.map (tryDumpRelevant (Html.getOuterHtml) mapItem)
+                |> List.map (Tuple2.replicate)
+                |> List.map (Tuple2.mapSnd (tryDumpRelevant Html.getOuterHtml mapItem))
             try 
                 rawish
-                |> List.map toPoB
+                |> List.map (Tuple2.mapSnd (toPoB>>fun (_,y,z) ->y,z))
+                |> List.map(Tuple2.mapFst (Html.anyChildWithClass "item-cell" >> Option.map (Html.getOuterHtml>>Linqpad.rawHtml)))
                 |> dumpCommandOutput
                 |> ignore
             finally
