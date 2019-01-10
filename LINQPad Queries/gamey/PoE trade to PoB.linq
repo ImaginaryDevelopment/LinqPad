@@ -889,7 +889,6 @@ module ScriptMailbox =
                 contents
                 |> Html.writeCachie
                 Html.clearMunge()
-            read()
             let rawclip = 
                 let r = getClipboardText()
                 r
@@ -903,7 +902,7 @@ module ScriptMailbox =
                 raw
                 |> processContents
             | x -> processContents x
-            
+            read()
             
     let run () =
         let mp =
