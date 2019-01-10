@@ -175,6 +175,22 @@ let blogItems =
         because the item has two mods that combine that stat. This is also the case for physical and spell damage on
         weapons, maybe more. Thanks for all the support."""
         ]
+        DateTime(2017,12,11), %"Added new Shaped/Elder mods, updated the ilvl requirements of the Abyss jewels, and fixed some mods GGG updated."
+        DateTime(2017,12,8), %"Added new Abyss jewel mods. In process of updating Shaper/Elder mods along with anything else that has changed. The ilvl of the jewel mods are incorrect atm."
+        DateTime(2017,8,9), %"Added new jewel and map mods, updated energy shield essences. Fixed some helmet enchants not showing"
+        DateTime(2017,8,4), %"""This update changed the mod values to the new 3.0 values (Beta wave 4). I did not include legacy values like
+            before because there are too many of them with this update (Sorry standard players). Updates to Essences,
+            jewels, and anything else changed after beta wave 4 will be addressed later this week. Thanks for all the
+            support."""
+        DateTime(2017,5,12),%"""This update is to add multi-mod viewing and further improve the layout of mods. It should be a little easier to
+        identify what can be crafted on each item. I will be making a more thorough update in the near future, possibly
+        even converting it to be mobile friendly. I have not cross checked every mod value, but they seem to be mostly
+        correct from what short time I spent looking. I have disabled the Helmet enchant page. I haven't had time to
+        get to it yet. Any missing or incorrect information should be reported to poeaffix@gmail.com. 3.0 information
+        will be updated after the beta balance changes are final. I would also like to add a crafting guide section,
+        you can email me any crafting techniques that you think should be included. I would like to thank all the
+        people that have shown support for this site. Special shout out to Twitch streamers that have continually
+        promoted the site."""
     ]
     |> List.map blogItem
 let body =
