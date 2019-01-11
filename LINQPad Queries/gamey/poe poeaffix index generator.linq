@@ -28,7 +28,8 @@ module Link =
 module Script =
     let asyncScript src = script ["async"%="";A.src src] []
     let text txt = script [] %(txt)
-    let src src = script [A.src src;"type"%="text/javascript"][]
+    // the type attribute is unnecessary for js resources
+    let src src = script [A.src src][]
     
 let comment text = elem "!--" [] %(text)
 
@@ -58,9 +59,10 @@ module Google =
 // let (~%) s = [Text(s.ToString())]
 let head = 
     head [] [
-        meta ["charset" %= "uft-8"]
+        meta ["charset" %= "utf-8"]
         Link.css "css/my.css"
         Link.css "css/menu.css"
+        title [] %"PoeAffix"
         script [] %(Google.gaScript)
     ]
 let navItem title pageMap =
@@ -207,7 +209,7 @@ let body =
             ]
             div[A.id "paypal"] [
                 a[A.href "https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=S6L2QZULXFK7E"][
-                    img [A.src "images/paypal.png"] []
+                    img [A.src "images/paypal.png";"alt"%="paypal"] []
                 ]
             ]
             div[A.id "pageinfo"][
@@ -255,5 +257,10 @@ html [] [
 |> replace "async=\"\"" "async"
 |> replace "<!-->" "<!-- "
 |> replace "</!-->" " -->"
+|> replace "></meta>" "/>"
+|> replace "></link>" "/>"
+|> replace "></img>" "/>"
+|> replace "<br></br>" "<br />"
+|> sprintf "<!DOCTYPE html>\r\n%s"
 |> Dump
 |> ignore
