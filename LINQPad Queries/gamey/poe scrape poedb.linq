@@ -7,13 +7,22 @@
 // scrape poedb.tw
 open System.Net.Http
 open HtmlAgilityPack
+
+let delimit d items = String.Join(d,value=Array.ofSeq items)
     
+module Seq =
+    let tryTail items =
+        items
+        |> Seq.mapi(fun i x -> if i = 0 then None else Some x)
+        |> Seq.choose id
+        
 [<NoComparison>]
 type Wrap = private {node:HtmlNode}
     with
 //            static member Wrap n = {node=n}
         member x.Value:HtmlNode option= Option.ofObj x.node
         static member internal getValue (w:Wrap):HtmlNode option = w.Value
+        member x.ToDump() = x.Value |> Option.map(fun x -> x.OuterHtml)
 module Html =
     let wrap x = {node=x}
     let map f =
@@ -43,8 +52,11 @@ module Html =
     let getFirstChild = mapNode (fun x -> x.FirstChild)
     let getOuterHtml = mapNull(fun x -> x.OuterHtml)
     let getParentNode = mapNode(fun x -> x.ParentNode)
-    let selectNodes (xpath:string)= map(fun x -> x.SelectNodes(xpath) |> Seq.map wrap)
+    let selectNodes (xpath:string)= bind(fun x -> x.SelectNodes(xpath) |> Option.ofObj |> Option.map (Seq.map wrap))
     let getChildNodes = map(fun x -> x.ChildNodes |> Seq.cast<HtmlNode> |> Seq.map wrap) >> Option.defaultValue Seq.empty
+    let getNextSibling = map(fun x -> x.NextSibling |> wrap)
+    let getNodeType nt = map(fun x -> x.NodeType = nt) >> Option.defaultValue false
+    let collectHtml x = x |> Seq.map getOuterHtml |> delimit String.Empty
 
 open Html
         
@@ -65,16 +77,22 @@ let parse x =
     let hd = HtmlDocument()
     hd.LoadHtml x
     hd
+type MungedAffix={Display:string;FossilMods:string list}
 let mungeAffix titleNode =
-    let fossilCategory = titleNode |> getFirstChild |> Option.map getOuterHtml |> Option.defaultValue null
-    fossilCategory, titleNode |> getOuterHtml
+    let fossilCategory = 
+            titleNode |> selectNodes(".//*[contains(@class,'badge')]") |> Option.defaultValue Seq.empty |> Seq.choose getInnerText |> List.ofSeq
+    // title node has (dummy whitespace text node, x badge nodes, marked up text
+    {FossilMods=fossilCategory;Display= titleNode |> getChildNodes |> Seq.skipWhile (getNodeType HtmlNodeType.Element>>not) |> Seq.tryTail |> collectHtml} //, titleNode|> getOuterHtml
+
 let mungeModCategory headerNode =
-    let category = getInnerText headerNode
+    let category = getInnerText headerNode |> Option.defaultValue null
     category ,
         getParentNode headerNode
         |> Option.bind (selectNodes(".//*[@class='mod-title']"))
-        |> Option.map (Seq.map mungeAffix)
-    
+        |> Option.defaultValue Seq.empty
+        |> Seq.map mungeAffix
+let (>&>) f1 f2 x = f1 x && f2 x
+
 let munge (hd:HtmlDocument) =
     hd.DocumentNode
     |> wrap
@@ -82,13 +100,12 @@ let munge (hd:HtmlDocument) =
     |> Option.map(
         Seq.filter(fun x ->
             x |> getAttrValueOrNull "id" |> isNull
-            && getChildNodes x |> Seq.exists(fun cn -> cn.NodeType <> HtmlNodeType.Text)) |> not)
-    )
+            && getChildNodes x |> Seq.exists(Wrap.getValue>> Option.isSome >&> getNodeType HtmlNodeType.Text>>not))
     
-    |> Seq.map mungeModCategory
-    |> Seq.truncate 2
-    |> Seq.map(fun (x,y) -> x, y |> Seq.truncate 2)
-//    |> Seq.map(fun x -> x.OuterHtml)
+        >> Seq.map mungeModCategory
+//    |> Seq.truncate 2
+//    |> Seq.map(fun (x,y) -> x, y |> Seq.truncate 2)
+    )
     
 cacheFetch "http://poedb.tw/us/mod.php?cn=Amulet"
 |> parse
