@@ -97,22 +97,16 @@ let parse x =
     let hd = HtmlDocument()
     hd.LoadHtml x
     hd
-type TieredAffix={Range:string;Tier:string;Source:string}
-type MungedAffix={Display:string;FossilMods:string list;Tiers:TieredAffix list}
-let mungeSubCatPair (subCatNode,detailNode) =
-    let subId = subCatNode |> getAttrValueOrNull "id" |> afterOrSelf "accordion"
-    let detailId = detailNode|> getAttrValueOrNull "id" |> afterOrSelf "collapseOne"
-    if String.IsNullOrWhiteSpace subId || subId <> detailId then
-        (subId,detailId,subCatNode,detailNode).Dump("fail")
-        failwith "failing failed frotteurism"
-    let fossilCategories =
-            subCatNode |> selectNodes(".//*[contains(@class,'badge')]") |> Seq.choose getInnerText |> List.ofSeq
-    let affixName = subCatNode|> getChildNodes |> Seq.skipWhile(hasText >> not) |> Seq.tryTail |> collectHtml
-    let detailTable = detailNode |> selectNode ".//table"
-    let detailHead = detailTable |> selectNodes ".//thead/tr" |> Seq.tryHead |> wrapOpt
-    // the tbody is coming back as not directly in the table :sad face:
-    let detailBody = detailTable |> selectNodes ".//tbody/tr"
-    affixName,fossilCategories, detailHead,detailBody, detailNode
+        
+let (>&>) f1 f2 x = f1 x && f2 x
+
+let munge (hd:HtmlDocument) =
+    hd.DocumentNode
+    |> wrap
+    |> selectNodes("//div/h4")
+    |> Seq.filter(fun x ->
+            x |> getAttrValueOrNull "id" |> isNull
+            && getChildNodes x |> Seq.exists(Wrap.getValue>> Option.isSome >&> getNodeType HtmlNodeType.Text>>not))
 let mungeAffix titleNode =
     match titleNode |> selectNodes "h4" |> Seq.tryHead |> Option.bind getInnerText with
     | None -> None
@@ -126,11 +120,26 @@ let mungeAffix titleNode =
             |> Seq.filter (getInnerText >> Option.defaultValue null >>String.IsNullOrWhiteSpace>>not)
             |> Seq.pairwise
             |> Seq.filter(fst>>getHasClass "mod-title")
-            |> Seq.map mungeSubCatPair
+            |> List.ofSeq
         // title node has (dummy whitespace text node, x badge nodes, marked up text
 //        (effixType,subCategories).Dump("tryTail")
          
         Some(trim effixType,subCategories)
+    
+let mungeSubCatPair (subCatNode,detailNode) =
+    let subId = subCatNode |> getAttrValueOrNull "id" |> afterOrSelf "accordion"
+    let detailId = detailNode|> getAttrValueOrNull "id" |> afterOrSelf "collapseOne"
+    if String.IsNullOrWhiteSpace subId || subId <> detailId then
+        (subId,detailId,subCatNode,detailNode).Dump("fail")
+        failwith "failing failed frotteurism"
+    let fossilCategories =
+            subCatNode |> selectNodes(".//*[contains(@class,'badge')]") |> Seq.choose getInnerText |> List.ofSeq
+    let affixName = subCatNode|> getChildNodes |> Seq.skipWhile(hasText >> not) |> Seq.tryTail |> collectHtml
+    let detailTable = detailNode |> selectNode ".//table"
+//    let detailHead = detailTable |> selectNodes ".//thead/tr" |> Seq.tryHead |> wrapOpt
+    // the tbody is coming back as not directly in the table :sad face:
+    let detailBody = detailTable |> selectNodes ".//tbody/tr"
+    affixName,fossilCategories, detailBody
         
 // repair the elder and shaper things not having a prefix/suffix attached to the names
 let fixUpEffixCategories x =
@@ -143,31 +152,24 @@ let fixUpEffixCategories x =
         )
         |> Seq.distinctBy fst
         |> Seq.filter(fst>>fun x -> x.Contains("suffix",StringComparison.InvariantCultureIgnoreCase) || x.Contains("prefix", StringComparison.InvariantCultureIgnoreCase))
+type EffixCategory<'t> = {EffixBucket:string;Children:'t list}
 // headerNode is (H4 Amulets... but should be Prefix;Suffix;...)
 let mungeModCategory headerNode =
-    headerNode.Dump("header")
+//    headerNode.Dump("header")
     let category = getInnerText headerNode |> Option.defaultValue null |> trim
-    category , 
-        getFollowingSiblings headerNode
-        |> Seq.choose mungeAffix
-        
-let (>&>) f1 f2 x = f1 x && f2 x
-
-let munge (hd:HtmlDocument) =
-    hd.DocumentNode
-    |> wrap
-    |> selectNodes("//div/h4")
-    |> Seq.filter(fun x ->
-            x |> getAttrValueOrNull "id" |> isNull
-            && getChildNodes x |> Seq.exists(Wrap.getValue>> Option.isSome >&> getNodeType HtmlNodeType.Text>>not))
+    printfn "munging %s" category
+    getFollowingSiblings headerNode |> List.ofSeq
     
-    |> Seq.map (mungeModCategory>>(fun (x,y) -> x, fixUpEffixCategories y))
-    |> Seq.truncate 2
-//    |> Seq.map(fun (x,y) -> x, y |> Seq.truncate 2)
-    
+type TieredAffix={Range:string;Tier:string;Source:string}
+type MungedAffix={Display:string;FossilMods:string list;Tiers:TieredAffix list}
 cacheFetch "http://poedb.tw/us/mod.php?cn=Amulet"
 |> parse
 |> munge
-|> Seq.collect snd
+|> Seq.collect (mungeModCategory)
+|> List.ofSeq
+|> List.choose mungeAffix
+|> List.map(fun (x,y) ->x, y |> List.map mungeSubCatPair)
+|> fixUpEffixCategories
+|> List.ofSeq
 |> Dump
 |> ignore
