@@ -128,20 +128,13 @@ let mungeAffix titleNode =
             |> Seq.filter(fst>>getHasClass "mod-title")
             |> Seq.map mungeSubCatPair
         // title node has (dummy whitespace text node, x badge nodes, marked up text
-        (effixType,subCategories).Dump("tryTail")
-        failwith "stop"
+//        (effixType,subCategories).Dump("tryTail")
          
-//        Some(trim fixType,{FossilMods=fossilCategory;Display= subCategories})
+        Some(trim effixType,subCategories)
         
-
-// headerNode is (H4 Amulets... but should be Prefix;Suffix;...)
-let mungeModCategory headerNode =
-    headerNode.Dump("header")
-    let category = getInnerText headerNode |> Option.defaultValue null |> trim
-    category , 
-        getFollowingSiblings headerNode
-        |> Seq.choose mungeAffix
-        // repair the elder and shaper things not having a prefix/suffix attached to the names
+// repair the elder and shaper things not having a prefix/suffix attached to the names
+let fixUpEffixCategories x =
+        x
         |> Seq.pairwise
         |> Seq.collect(fun ((prevTitle,x),(title,y)) ->
             if prevTitle = title && not <| String.IsNullOrWhiteSpace title then
@@ -150,6 +143,13 @@ let mungeModCategory headerNode =
         )
         |> Seq.distinctBy fst
         |> Seq.filter(fst>>fun x -> x.Contains("suffix",StringComparison.InvariantCultureIgnoreCase) || x.Contains("prefix", StringComparison.InvariantCultureIgnoreCase))
+// headerNode is (H4 Amulets... but should be Prefix;Suffix;...)
+let mungeModCategory headerNode =
+    headerNode.Dump("header")
+    let category = getInnerText headerNode |> Option.defaultValue null |> trim
+    category , 
+        getFollowingSiblings headerNode
+        |> Seq.choose mungeAffix
         
 let (>&>) f1 f2 x = f1 x && f2 x
 
@@ -161,7 +161,7 @@ let munge (hd:HtmlDocument) =
             x |> getAttrValueOrNull "id" |> isNull
             && getChildNodes x |> Seq.exists(Wrap.getValue>> Option.isSome >&> getNodeType HtmlNodeType.Text>>not))
     
-    |> Seq.map mungeModCategory
+    |> Seq.map (mungeModCategory>>(fun (x,y) -> x, fixUpEffixCategories y))
     |> Seq.truncate 2
 //    |> Seq.map(fun (x,y) -> x, y |> Seq.truncate 2)
     
