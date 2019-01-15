@@ -164,7 +164,7 @@ let blogItems =
             div[A.className "affix index"] x
         ]
     [
-        DateTime(2019,9,1),[center [] %"Working on new betrayal affixes"]
+        DateTime(2019,1,9),[center [] %"Working on new betrayal affixes"]
         DateTime(2018,8,4),[    center[] [
                                     Text "Incorrect or missing information should be reported at" 
                                     u [] [a[A.href "https://github.com/poeaffix/poeaffix.github.io"] %"github.com/poeaffix"]
