@@ -139,7 +139,10 @@ let generateAffix i (item:AffixTierContainer<TieredAffix>) =
     let generateAffixBlock {ILvl=ilvl;DisplayHtml=innerHtml;Tier=tier;Meta=meta} =
         let meta = cleanMeta meta
         let tier = tier |> replace "Tier " "T"
-        li [] %(sprintf "iLvl %i: %s (%s)%s" ilvl (cleanAffixDisplay innerHtml) meta tier)
+        let attrs = [
+            "data-ilvl"%=string ilvl
+        ]
+        li attrs %(sprintf "iLvl %i: %s (%s)%s" ilvl (cleanAffixDisplay innerHtml) meta tier)
     
     div [A.className "modWrapper"][
         generateAffixHead item.Display
@@ -205,7 +208,7 @@ let processOne =
         }
     let toHtmlModBucket (x:FixDivisor<AffixContainer<Element>>) =
         let makeSideBucket (x:AffixContainer<Element>) =
-            div [A.className "modContainer"][
+            div [A.className "modContainer";"data-bucket"=x.EffixType][
                 yield br []
                 yield div [A.className "seperator"][
                     strong [] %(x.EffixType)
@@ -230,8 +233,6 @@ let processOne =
             {   Main=[h2[] %("Prefix")]
                 Main2=[h2[] %(item)]
                 Main3=[h2[] %("Suffix")]
-//                          <div id="item"><a href="#openModal1000" onMouseOver="this.style.color='#06ef89'"
-//   onMouseOut="this.style.color='#000'">Talisman</a>
                 Corruption=corruption
                 Left=left
                 Right=right
@@ -257,7 +258,7 @@ let wrapProcess (cn,pg,corr) =
             y.Data.Add("cn",box cn)
             y.Data.Add("pg",box pg)
             y)
-let runAll() =
+let runAffixes() =
     targets
     |> List.map wrapProcess
     |> Async.Parallel
@@ -274,4 +275,5 @@ let generateIndex() =
     |> toString
     |> sprintf "<!doctype html>\r\n%s"
     |> fun x -> File.WriteAllText(sprintf @"C:\projects\poeaffix.github.io\%s.html" "index",x)
-generateIndex()
+//generateIndex()
+runAffixes()
