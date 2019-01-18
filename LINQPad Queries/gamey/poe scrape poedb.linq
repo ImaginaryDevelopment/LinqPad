@@ -1,235 +1,277 @@
 <Query Kind="FSharpProgram">
+  <Reference Relative="..\..\..\PathOfSupporting\PoS\lib\net462\PathOfSupporting.dll">C:\projects\PathOfSupporting\PoS\lib\net462\PathOfSupporting.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.Net.Http.dll</Reference>
   <NuGetReference>FSharp.Core</NuGetReference>
   <NuGetReference>HtmlAgilityPack</NuGetReference>
+  <Namespace>PathOfSupporting</Namespace>
 </Query>
 
 // scrape poedb.tw
+let waitForAttach = false
 open System.Net.Http
 open HtmlAgilityPack
+open PathOfSupporting.Parsing.Html
+open PathOfSupporting.Parsing.Html.Impl.Html
+open PathOfSupporting.Parsing.Html.PoeDb.Tw
+open PathOfSupporting.Parsing.Html.PoeDb.Tw.Impl.Munge
 
 module Helpers =
-    let delimit d items = String.Join(d,value=Array.ofSeq items)
-    let valueStringMap f = function | null | "" as x -> x | x -> f x
-    let trim = valueStringMap (fun x -> x.Trim())
-    let afterOrSelf d = valueStringMap(fun x ->
-        let i = x.IndexOf(d:string)
-        if i < 0 then x
-        else x.[i+d.Length..]
-        )
-    let (|ParseInt|_|) x = 
-        match Int32.TryParse(x:string) with
-        | true,i -> Some i
-        | _ -> None
+    let delimit d x = String.Join(d,value=Array.ofSeq x)
+    let fValString f = function | null | "" -> None | x -> f x |> Some
+    let fValueString f = function | null | "" as x -> x | x -> f x
+    let fMultiString f = fValueString (fun x ->
+        x.Split([| "\r\n";"\n";"\r" |], StringSplitOptions.None)
+        |> Seq.map f
+        |> delimit "\r\n"
+    )
+    let indent = fMultiString (sprintf "  %s")
+    let replace (d:string) r = fValueString(fun x -> x.Replace(d,r))
+    let remove d = replace d String.Empty
+    let rReplace dp rp = fValueString(fun x -> Regex.Replace(x,pattern=dp,replacement=rp))
+    let rRemove dp = rReplace dp String.Empty
+    let trim = fValueString(fun x -> x.Trim())
+    let afterOrSelf (d:string) (x:string) =
+        let i = x.IndexOf d
+        if i >= 0 then 
+            x.[i+d.Length..]
+        else x
+    let beforeOrSelf (d:string) (x:string) =
+        let i = x.IndexOf d
+        if i >= 0 then
+            x.[0..i - 1]
+        else x
+    let after (d:string) (x:string) =
+        let i = x.IndexOf d
+        x.[i+d.Length..]
+    let before (d:string) (x:string) =
+        let i = x.IndexOf d
+        x.[0..i - 1]
+    let containsI y =
+        fValString(fun x -> x.Contains(y,StringComparison.InvariantCultureIgnoreCase)) >> Option.defaultValue false
+    module Tuple2 =
+        let mapSnd f (x,y) = x, f y
+        
         
 open Helpers
-module Tuple2 =
-    let mapSnd f (x,y) = x, f y
-module Seq =
-    let tryTail items =
-        items
-        |> Seq.mapi(fun i x -> if i = 0 then None else Some x)
-        |> Seq.choose id
-        
-[<NoComparison>]
-type Wrap = private {node:HtmlNode}
-    with
-//            static member Wrap n = {node=n}
-        member x.Value:HtmlNode option= Option.ofObj x.node
-        static member internal getValue (w:Wrap):HtmlNode option = w.Value
-        member x.ToDump() = x.Value |> Option.map(fun x -> x.OuterHtml)
-module Html =
-    let wrap x = {node=x}
-    let wrapOpt = Option.defaultValue {node=null}
-    let map f =
-        Wrap.getValue
-        >> Option.map f
-    let mapNode f =
-        Wrap.getValue
-        >> Option.map (f>>wrap)
-        >> Option.defaultValue {node=null}
-    let mapNull f =
-        Wrap.getValue
-        >> Option.map f
-        >> Option.defaultValue null
-    let bind f =
-        Wrap.getValue
-        >> Option.bind f
-    
-    let getAttr name =
-        Wrap.getValue
-        >> Option.bind(fun w -> w.Attributes |> Seq.tryFind(fun xa -> xa.Name = name))
-    let getAttrValue name =
-        getAttr name
-        >> Option.map(fun x -> x.Value)
-    let getAttrValueOrNull name =
-        getAttrValue name
-        >> Option.defaultValue null
-    let getInnerText = Wrap.getValue >> Option.map (fun x -> x.InnerText)
-    let getInnerHtml = Wrap.getValue >> Option.map(fun x -> x.InnerHtml)
-    let getFirstChild = mapNode (fun x -> x.FirstChild)
-    let getOuterHtml = mapNull(fun x -> x.OuterHtml)
-    let getParentNode = mapNode(fun x -> x.ParentNode)
-    let selectNodes (xpath:string)= bind(fun x -> x.SelectNodes(xpath) |> Option.ofObj |> Option.map (Seq.map wrap)) >> Option.defaultValue Seq.empty
-    let selectNode (xpath:string) = mapNode(fun x -> x.SelectSingleNode xpath)
-    let getChildNodes = map(fun x -> x.ChildNodes |> Seq.cast<HtmlNode> |> Seq.map wrap) >> Option.defaultValue Seq.empty
-    let getNextSibling = map(fun x -> x.NextSibling |> wrap)
-    let getNodeType = map(fun x -> x.NodeType)
-    let getName = mapNull(fun x -> x.Name)
-    let getIsNodeType nt = map(fun x -> x.NodeType = nt) >> Option.defaultValue false
-    let collectHtml x = x |> Seq.map getOuterHtml |> delimit String.Empty
-    let getHasClass cls = map(fun x -> x.HasClass cls) >> Option.defaultValue false
-    let getFollowingSiblings = 
-        Seq.unfold(getNextSibling >>
-                function
-                | None -> None
-                | Some sibling -> Some(sibling,sibling)
-            )
-    let hasText = map(fun x -> x.InnerText |> String.IsNullOrWhiteSpace |> not) >> Option.defaultValue false
-
-open Html
-        
-let fetch (target:string) =
-    async{
-        use hc = new HttpClient()
-        return! Async.AwaitTask(hc.GetStringAsync target)
+module Async =
+    let map f x =
+        async{
+            let! result = x
+            return f result
         }
-let cache key f =
-    Util.Cache(Func<_>(f),key=key)
-let cacheFetch key =
-    cache key (fun () ->
-        fetch key
-        |> Async.RunSynchronously
-    )
-    
-let parse x =
-    let hd = HtmlDocument()
-    hd.LoadHtml x
-    hd
+    let bind f x =
+        async{
+            let! result = x
+            return! f result
+        }
+open PathOfSupporting.Parsing.Impl.FsHtml
+let targets =
+    let openModalDiv i ident style =
+        div [A.id <| sprintf "openModal%i" i;A.className "modalDialog"][
+                div[][
+                    a[A.href"#close";A.title "Close";A.className "close"] %("x")
+                    div[yield A.id ident; if String.IsNullOrWhiteSpace style then () else yield "style"%=style ] %" Content "
+                ]
+            ]
+    let genStandardCorruption ident =
+        [div [A.id "item"] [    a [A.href "#openModal1000"] %("Corruption")
+                                openModalDiv 1000 ident String.Empty
+            ]]
+    let setThisColor c = sprintf "this.style.color='%s'" c
+    let complex = [
+        {cn="Body Armour";an="str_armour"},"ch-ar", genStandardCorruption"chestcorr"
+        {cn="Body Armour";an="dex_armour"},"ch-ev", genStandardCorruption"chestcorr"
+        {cn="Body Armour";an="int_armour"},"ch-es", genStandardCorruption"chestcorr"
+    ]
+    [
+        // poedb name, local file name, corruption element
+        "Amulet","ac-amulet", 
+                            [   div [A.id "item"] [
+                                    a [A.href "#openModal1000";"onMouseOver"%= setThisColor "#06ef89";"onMouseOut"%=setThisColor"#000"] %("Talisman")
+                                    openModalDiv 1000 "talismanimplicit" "text-align:left; line-height:20px; font-size:17px"
+                                    a [A.href "#openModal0"] %("Corruption")
+                                    openModalDiv 0 "corrammy" "text-align:left" ]]
+        "Bow","2h-bow", genStandardCorruption "bowcorr"
+        "Claw","1h-claw",genStandardCorruption "clawcorr"
+        "Dagger","1h-dagger",genStandardCorruption "daggcorr"
+        "FishingRod","2h-fish",genStandardCorruption "fishcorr"
+        "One Hand Axe","1h-axe",genStandardCorruption "1haxecorr"
+        "One Hand Mace","1h-mace",genStandardCorruption "1hmacecorr"
+        "One Hand Sword","1h-sword",genStandardCorruption "1hswordcorr"
+        "Ring","ac-ring",genStandardCorruption "corrring"
+        "Sceptre","1h-sceptre",genStandardCorruption "sceptrecorr"
+        "Staff","2h-staff",genStandardCorruption "staffcorr"
+        "Two Hand Axe", "2h-axe",genStandardCorruption "2haxecorr"
+        "Two Hand Mace","2h-mace",genStandardCorruption "2hmacecorr"
+        "Two Hand Sword", "2h-sword", genStandardCorruption "2hswordcorr"
+        "Wand","1h-wand", genStandardCorruption "wandcorr"
+    ]
+    |> List.map(fun (x,pg,corr) -> {cn=x;an=null},pg,corr)
+    |> List.append complex
+    // just get the one for now
+open PathOfSupporting.Parsing.Html.PoeAffix
+let getIds x=
+    let rec getIt x =
+        match x with
+        | Text _ -> []
+        | Comment _ -> []
+        | Element (_,attrs,children) ->
+            [
+                let idAttrs= attrs |> Seq.choose (fun (Attr(name,v)) -> if name = "id" then Some v else None)
+                yield! idAttrs
+                yield! List.collect getIt children
+            ]
         
-let (>&>) f1 f2 x = f1 x && f2 x
-
-let munge (hd:HtmlDocument) =
-    hd.DocumentNode
-    |> wrap
-    |> selectNodes("//div/h4")
-    |> Seq.filter(fun x ->
-            x |> getAttrValueOrNull "id" |> isNull
-            && getChildNodes x |> Seq.exists(Wrap.getValue>> Option.isSome >&> getIsNodeType HtmlNodeType.Text>>not)
-    )
+    
+    getIt x
+let generateAffix i (item:AffixTierContainer<TieredAffix>) =
+    let cleanAffixDisplay =
+        // unwrap values
+        rReplace @"\+\((\d+&ndash;\d+)\)" "$1"
+        >> afterOrSelf "Adds"
+    let cleanMeta = 
+        rReplace ".*\d" "<strong>$0</strong>"
+    let generateAffixHead title =
+        div[A.className "mod";"onclick"%= sprintf "toggle('mod%i')" i] [
+            a[A.href "#/";"type"%="changecolor"] %(title)
+        ]
             
-type ItemAffixContainer<'t> = {Item:string;Children:'t list} with
-    static member mapChildren f (x:ItemAffixContainer<_>) = {Item=x.Item;Children=List.map f x.Children}
-    static member chooseChildren f (x:ItemAffixContainer<_>) = {Item=x.Item; Children = List.choose f x.Children}
+    let generateAffixBlock {ILvl=ilvl;DisplayHtml=innerHtml;Tier=tier;Meta=meta} =
+        let meta = cleanMeta meta
+        let tier = tier |> replace "Tier " "T"
+        li [] %(sprintf "iLvl %i: %s (%s)%s" ilvl (cleanAffixDisplay innerHtml) meta tier)
     
-// headerNode is (H4 Amulets... but should be Prefix;Suffix;...)
-let mungeModCategory headerNode =
-//    headerNode.Dump("header")
-    let category = getInnerText headerNode |> Option.defaultValue null |> trim
-    printfn "munging %s" category
-    {Item=category;Children=getFollowingSiblings headerNode |> List.ofSeq}
-type AffixContainer<'t> = {EffixType:string;Children:'t list}
-module AffixContainer =
-    let mapChildren f x = {EffixType=x.EffixType;Children=f x.Children}
-    let inline unwrap x = x.EffixType,x.Children
-    let inline wrap (x,y) = {EffixType=x;Children=List.ofSeq y}
-    let mapRaw f x = unwrap x |> f |> wrap
+    div [A.className "modWrapper"][
+        generateAffixHead item.Display
+        div [A.id <| sprintf "mod%i" i;A.className "VAL"]
+            [
+                br[]
+                ol [] (item.Children |> List.map generateAffixBlock)
+            ]
+            
+    
+    ]
+type FixDivisor<'t> = {Prefixes:'t list;Suffixes:'t list} with
+    static member map f x = {Prefixes = f x.Prefixes;Suffixes=f x.Suffixes}
+    static member mapi f x = 
+        let foldIx f (i:int) items =
+            ((i,List.empty),items)
+            ||> List.fold(fun (i,ixes) ix ->
+                let (j,ix) = f i ix
+                if j < i then invalidOp <| sprintf "i should have been greater or equal (%i, %i)" j i
+                (j,ix :: ixes)
+            )
+            |> fun (i,items) -> i,List.rev items
+            
+        let i,prefixes = foldIx f 0 x.Prefixes
+        let i,suffixes = foldIx f i x.Suffixes
+        printfn "Finished mapi index Count=%i" i
+        {Prefixes = prefixes;Suffixes=suffixes}
+    static member ofContainers x =
+        let isPre x = x.EffixType |> containsI "prefix"
+        let result = {Prefixes=List.filter isPre x;Suffixes=List.filter (isPre>>not) x}
+//        (result.Prefixes.Length,result.Suffixes.Length).Dump("pref,suff")
+        if result.Prefixes.Length = x.Length then invalidOp "bad filter"
+        if result.Suffixes.Length = x.Length then invalidOp "bad filter"
+        result
+let guardIds title x =
+    let allIds = getIds x
+    let badSeeds =
+        allIds
+        |> Seq.groupBy id
+        |> Seq.map (fun (x,y) -> x, Seq.length y)
+        |> Seq.filter(fun (_,y) -> y > 1)
+        |> List.ofSeq
+    
+    if Seq.exists(fun _ -> true) badSeeds then
+        badSeeds.Dump(sprintf "%s is bad" title)
+        (toString x).Dump()
+        invalidOp "duplicate"
+    x
+let processOne =
+    let generateAffixChild i (x:AffixContainer<AffixTierContainer<TieredAffix>>) =
+        let j,children =
+            ((i,List.empty),x.Children)
+            ||> List.fold(fun (i,items) ix ->
+                    let child = generateAffix i ix
+                    i+1,child::items
+                    
+            )
+            |> Tuple2.mapSnd List.rev
+            
+        j,{   EffixType = x.EffixType
+              Children = children
+                    
+        }
+    let toHtmlModBucket (x:FixDivisor<AffixContainer<Element>>) =
+        let makeSideBucket (x:AffixContainer<Element>) =
+            div [A.className "modContainer"][
+                yield br []
+                yield div [A.className "seperator"][
+                    strong [] %(x.EffixType)
+                ]
+                yield div [A.className "affix"] x.Children
+            ]
+        let left = x.Prefixes |> List.map makeSideBucket
+        guardIds "left" (element "bah" [] left) |> ignore
+        let right = x.Suffixes |> List.map makeSideBucket
+        guardIds "right" (element "bah" [] right) |> ignore
+        br [] :: left,br [] :: right
+    let mapItemAffixContainer pg corruption {ItemType=item;Children=children} =
+        if waitForAttach then
+            printfn "doing item %s,%i" item <| System.Diagnostics.Process.GetCurrentProcess().Id
+            Util.ReadLine() |> ignore
+        let left,right =
+            children
+                |> FixDivisor<_>.ofContainers
+                |> FixDivisor<_>.mapi (generateAffixChild )
+                |> toHtmlModBucket
+        generateAffixPage item 
+            {   Main=[h2[] %("Prefix")]
+                Main2=[h2[] %(item)]
+                Main3=[h2[] %("Suffix")]
+//                          <div id="item"><a href="#openModal1000" onMouseOver="this.style.color='#06ef89'"
+//   onMouseOut="this.style.color='#000'">Talisman</a>
+                Corruption=corruption
+                Left=left
+                Right=right
+            }
+        |> guardIds "fin"
+        |> toString
+        |> sprintf "<!doctype html>\r\n%s"
+        |> fun x -> File.WriteAllText(sprintf @"C:\projects\poeaffix.github.io\%s.html" pg,x)
+                            
+    fun (anCn,pg, corruption) ->
+        anCn 
+        |> parseModPhp
+        |> Async.map(
+            Result.map(List.map (mapItemAffixContainer pg corruption))
+    )
+let wrapProcess (cn,pg,corr) =
+    processOne (cn,pg,corr)
+    |> Async.Catch
+    |> Async.map(
+        function
+        |Choice1Of2 _x -> null
+        |Choice2Of2 y -> 
+            y.Data.Add("cn",box cn)
+            y.Data.Add("pg",box pg)
+            y)
+let runAll() =
+    targets
+    |> List.map wrapProcess
+    |> Async.Parallel
+    |> Async.RunSynchronously
+    |> Dump
+    |> ignore
 
-let mungeAffix titleNode =
-    match titleNode |> selectNodes "h4" |> Seq.tryHead |> Option.bind getInnerText with
-    | None -> None
-    // an affix or suffix
-    | Some effixType ->
-        let subCategories =
-            titleNode
-            |> getChildNodes
-            |> Seq.skipWhile (getIsNodeType HtmlNodeType.Element>>not)
-            |> Seq.tryTail
-            |> Seq.filter (getInnerText >> Option.defaultValue null >>String.IsNullOrWhiteSpace>>not)
-            |> Seq.pairwise
-            |> Seq.filter(fst>>getHasClass "mod-title")
-            |> List.ofSeq
-        // title node has (dummy whitespace text node, x badge nodes, marked up text
-//        (effixType,subCategories).Dump("tryTail")
-         
-        Some {EffixType=trim effixType;Children=subCategories}
-    
-type AffixTierContainer<'t> = {Display:string;FossilCategories:string list;Children:'t list}
-let mungeSubCatPair (subCatNode,detailNode) =
-    let subId = subCatNode |> getAttrValueOrNull "id" |> afterOrSelf "accordion"
-    let detailId = detailNode|> getAttrValueOrNull "id" |> afterOrSelf "collapseOne"
-    if String.IsNullOrWhiteSpace subId || subId <> detailId then
-        (subId,detailId,subCatNode,detailNode).Dump("fail")
-        failwith "failing failed frotteurism"
-    let fossilCategories =
-            subCatNode |> selectNodes(".//*[contains(@class,'badge')]") |> Seq.choose getInnerText |> List.ofSeq
-    let affixName = subCatNode|> getChildNodes |> Seq.skipWhile(hasText >> not) |> Seq.tryTail |> collectHtml
-    let detailTable = detailNode |> selectNode ".//table"
-//    let detailHead = detailTable |> selectNodes ".//thead/tr" |> Seq.tryHead |> wrapOpt
-    // the tbody is coming back as not directly in the table :sad face:
-    let detailBody = detailTable |> selectNodes ".//tbody/tr"
-    {Display=affixName;FossilCategories=fossilCategories;Children= List.ofSeq detailBody}
-        
-// repair the elder and shaper things not having a prefix/suffix attached to the names
-let fixUpEffixCategories x =
-        x
-        |> Seq.pairwise
-        |> Seq.collect(fun ((prevTitle,x),(title,y)) ->
-            if prevTitle = title && not <| String.IsNullOrWhiteSpace title then
-                [(sprintf "%s Prefix" prevTitle,x);(sprintf "%s Suffix" title,y)]
-            else [prevTitle,x;title,y]
-        )
-        |> Seq.distinctBy fst
-        |> Seq.filter(fst>>fun x -> x.Contains("suffix",StringComparison.InvariantCultureIgnoreCase) || x.Contains("prefix", StringComparison.InvariantCultureIgnoreCase))
-    
-type TieredAffix={Tier:string;Meta:string;ILvl:int;DisplayHtml:string;Chance:string}
-type MungedAffix={Display:string;FossilMods:string list;Tiers:TieredAffix list}
-
-let mungeDetails (x:AffixTierContainer<_>) =
-    let children=
-        x.Children
-        |> List.map (selectNodes "td" >> List.ofSeq)
-        |> List.map(List.map (getInnerHtml >> Option.defaultValue null))
-        |> List.map(fun l ->
-            match l with
-            // shaper/vaal/elder
-            | ParseInt ilvl::fullDisplay::[] -> {Tier=null;Meta=null;ILvl=ilvl;DisplayHtml=fullDisplay;Chance=null}
-            // delve/essence/masters
-            | meta::ParseInt ilvl::fullDisplay::[] -> {Tier=null;Meta=meta;ILvl=ilvl;DisplayHtml=fullDisplay;Chance=null}
-            // generic rolled
-            | tier::name::ParseInt ilvl::fullDisplay::chance::[] ->{Tier=tier;Meta=name;ILvl=ilvl;DisplayHtml=fullDisplay;Chance=chance}
-            | bad::_ -> (l.Length,x).Dump("fail"); failwith "full of fail"
-        )
-    {Display=x.Display;FossilCategories=x.FossilCategories;Children=children}
-let capture f x=
-    try
-        f x
-    with _ ->
-        eprintfn "failing with %A" x
-        reraise()
-cacheFetch "http://poedb.tw/us/mod.php?cn=Amulet"
-|> parse
-|> munge
-|> List.ofSeq
-|> List.map (mungeModCategory)
-|> List.map (fun ({Children=children} as x) ->
-    {   Item=x.Item
-        Children=
-            let almostThere =
-                children
-                |> List.choose mungeAffix
-                |> List.map (AffixContainer.mapChildren (List.map mungeSubCatPair))
-                |> List.map AffixContainer.unwrap
-                |> fixUpEffixCategories
-                |> Seq.map AffixContainer.wrap
-                |> List.ofSeq
-            try
-                almostThere
-                |> List.map(capture (AffixContainer.mapChildren(List.map mungeDetails)))
-            with _ ->
-                eprintfn "Failing in %s" x.Item
-                reraise()
-    }
-)
-|> Dump
-|> ignore
+let generateIndex() =
+    html [] [
+        PathOfSupporting.Parsing.Html.PoeAffix.generateHead "PoE Affix" []
+        PathOfSupporting.Parsing.Html.PoeAffix.Index.generateIndexBody []
+    ]
+    |> guardIds "fin"
+    |> toString
+    |> sprintf "<!doctype html>\r\n%s"
+    |> fun x -> File.WriteAllText(sprintf @"C:\projects\poeaffix.github.io\%s.html" "index",x)
+generateIndex()
