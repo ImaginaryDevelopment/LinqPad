@@ -29,6 +29,10 @@ module Helpers =
     let remove d = replace d String.Empty
     let rReplace dp rp = fValueString(fun x -> Regex.Replace(x,pattern=dp,replacement=rp))
     let rRemove dp = rReplace dp String.Empty
+    let (|RMatch|_|) p x =
+        let m = Regex.Match(x,p)
+        if m.Success then Some m
+        else None
     let trim = fValueString(fun x -> x.Trim())
     let afterOrSelf (d:string) (x:string) =
         let i = x.IndexOf d
@@ -53,6 +57,11 @@ module Helpers =
         
         
 open Helpers
+let parseNodeForChildren =
+    sprintf "<span>%s</span>"
+    >> HtmlAgilityPack.HtmlNode.CreateNode
+    >> wrap 
+    >> getChildNodes
 module Async =
     let map f x =
         async{
@@ -126,9 +135,18 @@ let getIds x=
     getIt x
 let generateAffix i (item:AffixTierContainer<TieredAffix>) =
     let cleanAffixDisplay =
+        let pattern = @"data-tooltip=""(<[^""]+)"" " 
         // unwrap values
         rReplace @"\+\((\d+&ndash;\d+)\)" "$1"
         >> afterOrSelf "Adds"
+        >> fun x ->
+            let fossilInfo =
+                match x with
+                |RMatch pattern m ->
+                    m.Groups.[1].Value
+                    |> Some
+                | _ -> None
+            fossilInfo, rReplace pattern String.Empty x
     let cleanMeta = 
         rReplace ".*\d" "<strong>$0</strong>"
     let generateAffixHead title =
@@ -139,12 +157,24 @@ let generateAffix i (item:AffixTierContainer<TieredAffix>) =
     let generateAffixBlock {ILvl=ilvl;DisplayHtml=innerHtml;Tier=tier;Meta=meta} =
         let meta = cleanMeta meta
         let tier = tier |> replace "Tier " "T"
+        let fossilOpt,display=cleanAffixDisplay innerHtml
         let attrs = [
-            "data-ilvl"%=string ilvl
+            yield "data-ilvl"%=string ilvl
+            match fossilOpt with
+            | Some fo ->
+                let fo =
+                    parseNodeForChildren fo
+                    |> Seq.filter(isNodeType HtmlNodeType.Element)
+                    |> List.ofSeq
+                    |> Seq.map(fun n -> sprintf "%s=%s" (getAttrValueOrNull "data-tooltip" n) (getInnerText n))
+                    |> delimit"&#10;"
+                yield "title"%=fo
+            | None -> ()
         ]
-        li attrs %(sprintf "iLvl %i: %s (%s)%s" ilvl (cleanAffixDisplay innerHtml) meta tier)
+        li attrs %(sprintf "iLvl %i: %s (%s)%s" ilvl display meta tier)
     
-    div [A.className "modWrapper"][
+    let affixDescr= parseNodeForChildren item.Display |> Seq.map(getInnerText>>trim) |> delimit" "
+    div ["data-descr"%=affixDescr;A.className "modWrapper";"data-modfor"%=string i][
         generateAffixHead item.Display
         div [A.id <| sprintf "mod%i" i;A.className "VAL"]
             [
@@ -208,7 +238,7 @@ let processOne =
         }
     let toHtmlModBucket (x:FixDivisor<AffixContainer<Element>>) =
         let makeSideBucket (x:AffixContainer<Element>) =
-            div [A.className "modContainer";"data-bucket"=x.EffixType][
+            div [A.className "modContainer";"data-bucket"%=x.EffixType][
                 yield br []
                 yield div [A.className "seperator"][
                     strong [] %(x.EffixType)
