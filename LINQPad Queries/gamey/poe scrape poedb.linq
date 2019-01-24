@@ -15,6 +15,8 @@ open PathOfSupporting.Parsing.Html.Impl.Html
 open PathOfSupporting.Parsing.Html.PoeDb.Tw
 open PathOfSupporting.Parsing.Html.PoeDb.Tw.Impl.Munge
 
+type Page = | Page of string
+
 module Helpers =
     let delimit d x = String.Join(d,value=Array.ofSeq x)
     let fValString f = function | null | "" -> None | x -> f x |> Some
@@ -55,7 +57,6 @@ module Helpers =
     module Tuple2 =
         let mapSnd f (x,y) = x, f y
         
-        
 open Helpers
 let parseNodeForChildren =
     sprintf "<span>%s</span>"
@@ -74,7 +75,7 @@ module Async =
             return! f result
         }
 open PathOfSupporting.Parsing.Impl.FsHtml
-let targets =
+let targets : (_*Page*_*string option) list =
     let openModalDiv i ident style =
         div [A.id <| sprintf "openModal%i" i;A.className "modalDialog"][
                 div[][
@@ -83,19 +84,39 @@ let targets =
                 ]
             ]
     let genStandardCorruption ident =
-        [div [A.id "item"] [    a [A.href "#openModal1000"] %("Corruption")
+        [div [A.ClassName "item"] [    a [A.href "#openModal1000"] %("Corruption")
                                 openModalDiv 1000 ident String.Empty
             ]]
     let setThisColor c = sprintf "this.style.color='%s'" c
-    let complex = [
-        {cn="Body Armour";an="str_armour"},"ch-ar", genStandardCorruption"chestcorr"
-        {cn="Body Armour";an="dex_armour"},"ch-ev", genStandardCorruption"chestcorr"
-        {cn="Body Armour";an="int_armour"},"ch-es", genStandardCorruption"chestcorr"
-    ]
+    let complex =
+        let combos = // cn, an start, corruption, triple file name, enchantment
+            [
+                "Body Armour",Page "ch","chestcorr", Some "garb",None
+                "Helmet",Page "hm","helmcorr",None,Some "hm-enchant.html"
+                "Boots",Page "bt","corrboots",None,Some "bt-enchant.html"
+                "Gloves",Page "gl","corrgloves",None,Some "gl-enchant.html"
+            ]
+        let stats =[ "str","ar";"dex","ev";"int","es"]
+        let genAn = List.map fst >> delimit"_" >> sprintf "%s_armour"
+        let genFn cn = List.map snd >> delimit String.Empty >> sprintf "%s-%s" cn
+        let genComplex cn (Page slot) (corr,enchantOpt) items =  {cn=cn;an= items |> genAn},Page <| genFn slot items, genStandardCorruption corr,enchantOpt
+        [
+            for (cn,Page slot,corr, tripleName,enchOpt) in combos do
+                match tripleName with
+                | Some trip ->
+                    yield {cn=cn;an=genAn stats}, Page <| sprintf "%s-%s" slot trip, genStandardCorruption corr,None
+                | None -> ()
+                
+                for i in [0..stats.Length - 1] do
+                    let stat1 = stats.[i]
+                    yield genComplex cn (Page slot) (corr,enchOpt) [stat1]
+                    for stat2 in stats.[i+1 ..] do
+                        yield genComplex cn (Page slot) (corr,enchOpt) [stat1;stat2]
+        ]
     [
         // poedb name, local file name, corruption element
         "Amulet","ac-amulet", 
-                            [   div [A.id "item"] [
+                            [   div [A.className "item"] [
                                     a [A.href "#openModal1000";"onMouseOver"%= setThisColor "#06ef89";"onMouseOut"%=setThisColor"#000"] %("Talisman")
                                     openModalDiv 1000 "talismanimplicit" "text-align:left; line-height:20px; font-size:17px"
                                     a [A.href "#openModal0"] %("Corruption")
@@ -115,9 +136,10 @@ let targets =
         "Two Hand Sword", "2h-sword", genStandardCorruption "2hswordcorr"
         "Wand","1h-wand", genStandardCorruption "wandcorr"
     ]
-    |> List.map(fun (x,pg,corr) -> {cn=x;an=null},pg,corr)
+    |> List.map(fun (title,pg,corr) -> title, Page pg,corr)
+    |> List.map(fun (x,pg,corr) -> {cn=x;an=null},pg,corr,None)
     |> List.append complex
-    // just get the one for now
+
 open PathOfSupporting.Parsing.Html.PoeAffix
 let getIds x=
     let rec getIt x =
@@ -130,8 +152,6 @@ let getIds x=
                 yield! idAttrs
                 yield! List.collect getIt children
             ]
-        
-    
     getIt x
 let generateAffix i (item:AffixTierContainer<TieredAffix>) =
     let cleanAffixDisplay =
@@ -173,7 +193,7 @@ let generateAffix i (item:AffixTierContainer<TieredAffix>) =
         ]
         li attrs %(sprintf "iLvl %i: %s (%s)%s" ilvl display meta tier)
     
-    let affixDescr= parseNodeForChildren item.Display |> Seq.map(getInnerText>>trim) |> delimit" "
+    let affixDescr= parseNodeForChildren item.Display |> Seq.map(getInnerText>>trim) |> Seq.filter(String.IsNullOrWhiteSpace >> not) |> delimit" "
     div ["data-descr"%=affixDescr;A.className "modWrapper";"data-modfor"%=string i][
         generateAffixHead item.Display
         div [A.id <| sprintf "mod%i" i;A.className "VAL"]
@@ -181,9 +201,8 @@ let generateAffix i (item:AffixTierContainer<TieredAffix>) =
                 br[]
                 ol [] (item.Children |> List.map generateAffixBlock)
             ]
-            
-    
     ]
+
 type FixDivisor<'t> = {Prefixes:'t list;Suffixes:'t list} with
     static member map f x = {Prefixes = f x.Prefixes;Suffixes=f x.Suffixes}
     static member mapi f x = 
@@ -250,7 +269,7 @@ let processOne =
         let right = x.Suffixes |> List.map makeSideBucket
         guardIds "right" (element "bah" [] right) |> ignore
         br [] :: left,br [] :: right
-    let mapItemAffixContainer pg corruption {ItemType=item;Children=children} =
+    let mapItemAffixContainer pg corruption enchOpt {ItemType=item;Children=children} =
         if waitForAttach then
             printfn "doing item %s,%i" item <| System.Diagnostics.Process.GetCurrentProcess().Id
             Util.ReadLine() |> ignore
@@ -264,6 +283,7 @@ let processOne =
                 Main2=[h2[] %(item)]
                 Main3=[h2[] %("Suffix")]
                 Corruption=corruption
+                EnchantPage=enchOpt
                 Left=left
                 Right=right
             }
@@ -272,14 +292,14 @@ let processOne =
         |> sprintf "<!doctype html>\r\n%s"
         |> fun x -> File.WriteAllText(sprintf @"C:\projects\poeaffix.github.io\%s.html" pg,x)
                             
-    fun (anCn,pg, corruption) ->
+    fun (anCn,pg, corruption,enchOpt) ->
         anCn 
         |> parseModPhp
         |> Async.map(
-            Result.map(List.map (mapItemAffixContainer pg corruption))
-    )
-let wrapProcess (cn,pg,corr) =
-    processOne (cn,pg,corr)
+            Result.map(List.map (mapItemAffixContainer pg corruption enchOpt))
+        )
+let wrapProcess (cn,Page pg,corr,enchOpt) =
+    processOne (cn,pg,corr,enchOpt)
     |> Async.Catch
     |> Async.map(
         function
