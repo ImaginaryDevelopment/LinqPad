@@ -14,6 +14,7 @@ open PathOfSupporting.Parsing.Html
 open PathOfSupporting.Parsing.Html.Impl.Html
 open PathOfSupporting.Parsing.Html.PoeDb.Tw
 open PathOfSupporting.Parsing.Html.PoeDb.Tw.Impl.Munge
+open PathOfSupporting.Parsing.Trees.Gems
 
 type Page = | Page of string
 
@@ -84,8 +85,8 @@ let targets : (_*Page*_*string option) list =
                 ]
             ]
     let genStandardCorruption ident =
-        [div [A.ClassName "item"] [    a [A.href "#openModal1000"] %("Corruption")
-                                openModalDiv 1000 ident String.Empty
+        [div [A.className "item"] [ a [A.href "#openModal1000"] %("Corruption")
+                                    openModalDiv 1000 ident String.Empty
             ]]
     let setThisColor c = sprintf "this.style.color='%s'" c
     let complex =
@@ -93,18 +94,27 @@ let targets : (_*Page*_*string option) list =
             [
                 "Body Armour",Page "ch","chestcorr", Some "garb",None
                 "Helmet",Page "hm","helmcorr",None,Some "hm-enchant.html"
-                "Boots",Page "bt","corrboots",None,Some "bt-enchant.html"
+                "Boots",Page "bt","corrboots",None,Some "gl-enchant.html"
                 "Gloves",Page "gl","corrgloves",None,Some "gl-enchant.html"
+                "Shield",Page "sh","corrshield",None,None
             ]
         let stats =[ "str","ar";"dex","ev";"int","es"]
-        let genAn = List.map fst >> delimit"_" >> sprintf "%s_armour"
+        let genAn isShield items =
+            let words = items |> List.map fst |> delimit"_"
+            let an =  words |> sprintf "%s_armour"
+            if isShield then
+                match words with
+                | "int" -> "focus"
+                | x -> sprintf "%s_shield" x
+                |> sprintf "%s,%s" an
+            else an
         let genFn cn = List.map snd >> delimit String.Empty >> sprintf "%s-%s" cn
-        let genComplex cn (Page slot) (corr,enchantOpt) items =  {cn=cn;an= items |> genAn},Page <| genFn slot items, genStandardCorruption corr,enchantOpt
+        let genComplex cn (Page slot) (corr,enchantOpt) items =  {cn=cn;an= items |> genAn (cn="Shield")},Page <| genFn slot items, genStandardCorruption corr,enchantOpt
         [
             for (cn,Page slot,corr, tripleName,enchOpt) in combos do
                 match tripleName with
                 | Some trip ->
-                    yield {cn=cn;an=genAn stats}, Page <| sprintf "%s-%s" slot trip, genStandardCorruption corr,None
+                    yield {cn=cn;an=genAn (cn="Shield") stats}, Page <| sprintf "%s-%s" slot trip, genStandardCorruption corr,None
                 | None -> ()
                 
                 for i in [0..stats.Length - 1] do
@@ -122,12 +132,14 @@ let targets : (_*Page*_*string option) list =
                                     a [A.href "#openModal0"] %("Corruption")
                                     openModalDiv 0 "corrammy" "text-align:left" ]]
         "Bow","2h-bow", genStandardCorruption "bowcorr"
+        "Belt","ac-belt",genStandardCorruption "corrbelt"
         "Claw","1h-claw",genStandardCorruption "clawcorr"
         "Dagger","1h-dagger",genStandardCorruption "daggcorr"
         "FishingRod","2h-fish",genStandardCorruption "fishcorr"
         "One Hand Axe","1h-axe",genStandardCorruption "1haxecorr"
         "One Hand Mace","1h-mace",genStandardCorruption "1hmacecorr"
         "One Hand Sword","1h-sword",genStandardCorruption "1hswordcorr"
+        "Quiver","ac-quiver",genStandardCorruption "corrquiv"
         "Ring","ac-ring",genStandardCorruption "corrring"
         "Sceptre","1h-sceptre",genStandardCorruption "sceptrecorr"
         "Staff","2h-staff",genStandardCorruption "staffcorr"
@@ -216,8 +228,7 @@ type FixDivisor<'t> = {Prefixes:'t list;Suffixes:'t list} with
             |> fun (i,items) -> i,List.rev items
             
         let i,prefixes = foldIx f 0 x.Prefixes
-        let i,suffixes = foldIx f i x.Suffixes
-        printfn "Finished mapi index Count=%i" i
+        let _i,suffixes = foldIx f i x.Suffixes
         {Prefixes = prefixes;Suffixes=suffixes}
     static member ofContainers x =
         let isPre x = x.EffixType |> containsI "prefix"
@@ -286,6 +297,7 @@ let processOne =
                 EnchantPage=enchOpt
                 Left=left
                 Right=right
+                Updated=DateTime.UtcNow
             }
         |> guardIds "fin"
         |> toString
@@ -303,27 +315,92 @@ let wrapProcess (cn,Page pg,corr,enchOpt) =
     |> Async.Catch
     |> Async.map(
         function
-        |Choice1Of2 _x -> null
-        |Choice2Of2 y -> 
+        |Choice1Of2 (Error e) -> Some e
+        |Choice1Of2 _x -> None
+        |Choice2Of2 y ->
             y.Data.Add("cn",box cn)
             y.Data.Add("pg",box pg)
-            y)
+            let pe =PathOfSupporting.Internal.Helpers.PoSException.Exception y
+            Some("processOne error",Some pe) // PathOfSupporting.Internal.Helpers
+    )
+let findEnchantMatch (skills:Parsing.Trees.Gems.Gem list) (htmlText:string) =
+    let inline isPair (sk:Gem) htmlDelim skillName = (htmlText |> containsI htmlDelim) && sk.Name=skillName
+    skills
+    |> List.tryFind(fun sk ->
+        let inline isPair d sn = isPair sk d sn
+    
+        htmlText.Contains(value=sk.Name,comparison=StringComparison.InvariantCultureIgnoreCase)
+        || (isPair "Charged Slam" "Tectonic Slam")
+        || (isPair "Skeletons" "Summon Skeleton")
+        || (isPair "Animated Guardian" "Animate Guardian")
+        || (isPair "Animated Weapons" "Animate Weapon")
+        || (isPair "Holy Relic" "Summon Holy Relic")
+        || (isPair "Spectre" "Raise Spectre")
+        || (isPair "Zombie" "Raise Zombie")
+        || (isPair "Chaos Golem" "Summon Chaos Golem")
+        || (isPair "Lightning Golem" "Summon Lightning Golem")
+        || (isPair "Flame Golem" "Summon Flame Golem")
+        || (isPair "Ice Golem" "Summon Flame Golem")
+        || (isPair "Stone Golem" "Summon Stone Golem")
+        || (isPair "Fire Nova" "Fire Nova Mine")
+        || (isPair "Agony Crawler" "Herald of Agony")
+        || (isPair "Sentinels of Dominance" "Dominating Blow")
+        || (isPair "Sentinel of Dominance" "Dominating Blow")
+        || (isPair "Sentinels of Purity" "Herald of Purity")
+        || (isPair "Converted Enemies" "Conversion Trap")
+        || (isPair "Raging Spirits" "Summon Raging Spirit")
+    )
+    |> Option.map(fun x -> x.Name)
+    
+let runHelmetEnchant() =
+    let skills =
+        match PathOfSupporting.Parsing.Trees.Gems.getSkillGems {ResourceDirectory="C:\projects\PathOfSupporting\PoS";Filename=None} with
+        | Ok x -> x
+        | Error e -> e.Dump("skills error"); List.empty
+    PathOfSupporting.Internal.Helpers.Api.fetch "http://poedb.tw/us/mod.php?type=enchantment&an=helmet"
+    |> Async.map (
+        Result.map parse
+        >> Result.map(fun n ->
+            let n =
+        
+                n
+                |> selectNodes ".//table//tbody/tr/td[2]"
+                |> Seq.choose(fun x ->
+                    let text = getInnerText x
+                    if text ="&nbsp;" then None
+                    else Some (findEnchantMatch skills text,x)
+                )
+                |> List.ofSeq
+            (n |> Seq.filter(fst >> Option.isNone) |> Seq.map snd).Dump("unmatched")
+            n
+            |> Seq.choose(fun (x,y) -> x |> Option.map(fun x -> x,y))
+            |> Seq.groupBy fst
+            |> Seq.map(fun (k,items) -> k, items |> Seq.map snd |> Seq.map getInnerText)
+            |> Seq.sortBy fst
+        )
+    )
+    |> Async.RunSynchronously
+    |> Dump
+    |> ignore
 let runAffixes() =
     targets
     |> List.map wrapProcess
-    |> Async.Parallel
-    |> Async.RunSynchronously
-    |> Dump
+    |> List.map Async.RunSynchronously
+    |> List.choose id
+    |> fun x ->
+        Util.ClearResults()
+        x.Dump(depth=1)
     |> ignore
 
 let generateIndex() =
     html [] [
         PathOfSupporting.Parsing.Html.PoeAffix.generateHead "PoE Affix" []
-        PathOfSupporting.Parsing.Html.PoeAffix.Index.generateIndexBody []
+        PathOfSupporting.Parsing.Html.PoeAffix.Index.generateIndexBody DateTime.UtcNow []
     ]
     |> guardIds "fin"
     |> toString
     |> sprintf "<!doctype html>\r\n%s"
     |> fun x -> File.WriteAllText(sprintf @"C:\projects\poeaffix.github.io\%s.html" "index",x)
-//generateIndex()
-runAffixes()
+generateIndex()
+runHelmetEnchant()
+//runAffixes()
