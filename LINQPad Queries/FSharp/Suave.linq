@@ -18,7 +18,7 @@ open Suave.Authentication
 type Tutorial = 
     |HelloWorld
     |Routing
-    |Async //TODO: implementation
+    |Async
     |BasicAuth
     |Logging
 module ServerSamples = 
@@ -26,12 +26,81 @@ module ServerSamples =
         startWebServer defaultConfig (Successful.OK "Hello World!")
         
     let routing () = 
+        let (|ParseInt|_|) =
+            function
+            | null | "" -> None
+            | x -> 
+                match Int32.TryParse x with
+                | true, i -> Some i
+                | _ -> None
+            
+            
+        // this only returns a string but hopefully it helps imply how more complicated items could be composed
+        let queryParamOrFail name (ctx:HttpContext) =
+            match ctx.request.queryParam name with
+            | Choice1Of2 value -> 
+                Choice1Of2 value
+            | Choice2Of2 msg ->
+                RequestErrors.BAD_REQUEST msg
+                |> Choice2Of2
+        let queryIntOrFail name =
+            queryParamOrFail name
+            >> Choice.bind(
+                (|ParseInt|_|)
+                >> function
+                    | Some i -> Choice1Of2 i
+                    | None -> RequestErrors.BAD_REQUEST (sprintf "query param %s was not a number" name) |> Choice2Of2
+            )
+        let clientQueryPart:WebPart =
+            path "/clientQuery" >=>
+            (fun ctx ->
+                queryIntOrFail "companyId" ctx
+                |> function
+                    | Choice1Of2 v -> sprintf "CompanyId %i" v |> OK
+                    | Choice2Of2 requestErrorWebPart -> requestErrorWebPart 
+                |> fun wp -> wp ctx
+            )
+        let fullQueryPart:WebPart =
+            path "/query" >=>
+            (fun ctx ->
+                match queryIntOrFail "companyId" ctx, queryIntOrFail "clientId" ctx, queryIntOrFail "customerId" ctx with
+                | Choice2Of2 reqErr,_,_ -> reqErr
+                | _,Choice2Of2 reqErr,_ -> reqErr
+                | _,_,Choice2Of2 reqErr -> reqErr
+                | Choice1Of2 compId, Choice1Of2 clientId, Choice1Of2 customerId ->
+                    sprintf "CompanyId %i, ClientId %i, CustomerId %i" compId clientId customerId
+                    |> OK
+                |> fun wp -> wp ctx
+            )
+        // https://stackoverflow.com/a/36549318/57883
+        let requestVersionPart name:WebPart =
+            request (fun r ->
+                let qValue=
+                    match r.queryParam name with
+                    |Choice1Of2 x -> x
+                    |Choice2Of2 _ -> "defaultValue"
+                OK (sprintf "The value we'll use for %s is %s" name qValue)
+            )
+            
         choose 
             [
                 GET >=> choose
                     [   
                         path "/" >=> OK "Default GET"
                         path "/hello" >=> OK "Hello GET"
+                        pathScan "/whatnumber/%i" ((sprintf "Your number is %i") >> OK)
+                        pathScan "/client/%i/customer/%i" (fun (clientId,customerId) -> sprintf "Client %i, Customer %i" clientId customerId |> OK)
+                        pathScan "/client/%i/customerQuery" (fun clientId ctx -> 
+                            match queryParamOrFail "customerId" ctx with
+                            | Choice1Of2 (ParseInt customerId) ->
+                                sprintf "Client %i, Customer %i" clientId customerId
+                                |> fun msg ->  OK msg ctx
+                            | Choice1Of2 _ -> RequestErrors.BAD_REQUEST "query param customerId was not a number" ctx
+                            | Choice2Of2 wp -> wp ctx
+                        )
+                        clientQueryPart
+                        fullQueryPart
+                        requestVersionPart "customerId"
                         path "/goodbye" >=> OK "Good bye GET"
                     ]
                 POST >=> choose
@@ -62,7 +131,7 @@ module ServerSamples =
                 new Suave.Logging.Logger with
                     member __.name = [| "My custom logger" |]
                     member __.logWithAck logLevel f =
-                        let x = f logLevel
+                        let _x = f logLevel
                         Async.result ()
                     member __.log level f = 
                         let logLine = f level
@@ -91,4 +160,5 @@ let startServer serverType =
             
 LINQPad.Hyperlinq("http://localhost:8083").Dump()
 LINQPad.Hyperlinq("http://localhost:8083/public").Dump()
-startServer Async
+//startServer Async
+startServer Routing
