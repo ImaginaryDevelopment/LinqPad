@@ -81,7 +81,21 @@ module ServerSamples =
                     |Choice2Of2 _ -> "defaultValue"
                 OK (sprintf "The value we'll use for %s is %s" name qValue)
             )
-            
+        let troubleShootExtensionPart extensionToCheck :WebPart =
+            fun ctx ->
+                match extensionToCheck with
+                | null | "" -> ServerErrors.INTERNAL_ERROR "Extension Error not supplied, part is not set up correctly"
+                | x when not <| x.StartsWith "." -> ServerErrors.INTERNAL_ERROR "Extensions start with a '.', part is not set up correctly"
+                | _ ->
+                    let mtm = ctx.runtime.mimeTypesMap
+                    match mtm extensionToCheck with
+                    | None ->
+                        sprintf "%s is not supported by the mime types map, compose your mime type with the `defaultMimeTypesMap`" extensionToCheck
+                        |> RequestErrors.FORBIDDEN
+                    | Some x ->
+                        sprintf "%s is supported and uses '%s', compression on? : %A" extensionToCheck x.name x.compression
+                        |> OK
+                |> fun wp -> wp ctx
         choose 
             [
                 GET >=> choose
@@ -100,8 +114,14 @@ module ServerSamples =
                         )
                         clientQueryPart
                         fullQueryPart
-                        requestVersionPart "customerId"
+                        path "/req" >=> requestVersionPart "customerId"
                         path "/goodbye" >=> OK "Good bye GET"
+                        #if DEBUG
+                        pathScan "/checkExtension/%s" (fun name -> troubleShootExtensionPart name)
+                        // catch all
+                        (fun ctx -> sprintf "404, also homeFolder resolves to %s" (Path.GetFullPath ".") |> RequestErrors.NOT_FOUND |> fun wp -> wp ctx)
+                        #endif
+                        
                     ]
                 POST >=> choose
                     [
