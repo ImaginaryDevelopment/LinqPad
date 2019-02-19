@@ -1,4 +1,5 @@
 <Query Kind="FSharpProgram">
+  <NuGetReference>FSharp.Core</NuGetReference>
   <NuGetReference>Newtonsoft.Json</NuGetReference>
   <NuGetReference>Suave</NuGetReference>
 </Query>
@@ -59,8 +60,12 @@ module ServerSamples =
         let logger = 
             {
                 new Suave.Logging.Logger with
-                    member x.Log level f = 
-                        let logLine = f()
+                    member __.name = [| "My custom logger" |]
+                    member __.logWithAck logLevel f =
+                        let x = f logLevel
+                        Async.result ()
+                    member __.log level f = 
+                        let logLine = f level
                         logLine.Dump()
                         |> ignore
                         
