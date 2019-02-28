@@ -38,7 +38,9 @@ module NativeMethods =
 type ident = string
 type LeakCheckStream<'t when 't :> Stream>(identifier:ident,wrapped:'t) =
     inherit Stream()
-    do printfn "Creating stream %s" identifier
+    let ident2 = Guid.NewGuid()
+    let mutable isDisposed = false
+    do printfn "Creating stream %s, %A" identifier ident2
     override __.CanRead with get() = wrapped.CanRead
     override __.CanSeek with get() = wrapped.CanSeek
     override __.CanTimeout with get() = wrapped.CanTimeout
@@ -76,8 +78,37 @@ type LeakCheckStream<'t when 't :> Stream>(identifier:ident,wrapped:'t) =
     
     interface IDisposable with
         member x.Dispose() =
-            printfn "Disposing a stream %s" identifier
+            printfn "Disposing a stream %s %A" identifier ident2
+            isDisposed <- true
             wrapped.Dispose()
+    override x.Finalize() =
+        if not <| isDisposed then
+            eprintfn "Item undisposed! %s %A" identifier ident2
+        else printfn "I was disposed! %s %A" identifier ident2
+        base.Finalize()
+    
+type DisposeLink<'t>(underlyingDisposable:IDisposable,target:'t) =
+    member __.Value = target
+    member __.Dispose() =
+        // Disposals should never throw
+        let tryDispose (x:IDisposable) =
+            try
+                x.Dispose()
+            with ex -> eprintfn "%s" ex.Message
+        match box target with
+        | :? IDisposable as disp -> tryDispose disp
+        | _ -> ()
+        tryDispose underlyingDisposable
+    interface IDisposable with
+        member x.Dispose() = x.Dispose()
+module DisposeLink =
+    let disposeLink<'t> target underlier =
+        new DisposeLink<'t>(underlier,target)
+        
+    let map f (dl:DisposeLink<_>) =
+        let next = f dl.Value
+        disposeLink next dl
+    
 module Xps =
     let loadXps path f =
         use doc = new XpsDocument(path,FileAccess.ReadWrite)
@@ -110,7 +141,7 @@ module Xps =
         |> Seq.map (fun x ->
             let bm = new System.Drawing.Bitmap(x)
             bm.PixelFormat.Dump()
-            bm
+            new DisposeLink<_>(x,bm)
         )
     let toWpfImage(bi:BitmapSource) =
         let i = Image()
@@ -120,8 +151,9 @@ module Xps =
         xps
         |> getBitmaps
         |> Seq.map(fun x ->
-            use hBitmap = NativeMethods.SafeHBitmapHandle(x.GetHbitmap(),true)
-            System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(hBitmap.DangerousGetHandle(),IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions())
+            use hBitmap = new NativeMethods.SafeHBitmapHandle(x.Value.GetHbitmap(),true)
+            let next = System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(hBitmap.DangerousGetHandle(),IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions())
+            new DisposeLink<_>(x,next)
 //            let bi = BitmapImage()
 //            bi.BeginInit()
 //            x.Seek(0L,SeekOrigin.Begin) |> ignore
@@ -139,8 +171,6 @@ module Drawing =
         let tiff = Image.FromStream(stream)
         tiff
         
-        
-    
 let printPreview (fds:FixedDocumentSequence)=
     let fdsv = System.Windows.Controls.DocumentViewer(Document=fds)
     let w = Window(Content=fdsv)
@@ -152,11 +182,32 @@ let printPreview (fds:FixedDocumentSequence)=
 let previewXps path =
     Xps.loadXps path Xps.toFds
     |> printPreview 
-(
-    System.Windows.Application() |> ignore
-)
-Xps.loadXps @"C:\Users\bdimp\Desktop\testform.xps" Xps.getBitmaps
-|> Seq.mapi(fun i bm -> Drawing.bitmapToTiff(string i) bm)
+//(
+//    System.Windows.Application() |> ignore
+//)
+let path = @"C:\Users\bdimp\Desktop\testform.xps"
+let dc = lazy(
+    let dc = DumpContainer()
+    dc.Dump()
+    dc
+    )
+Xps.loadXps path Xps.getBitmaps
+|> Seq.mapi(fun i bm ->
+    let target = Path.Combine(Path.GetTempPath(),Path.GetFileNameWithoutExtension path + ".tiff")
+    let dl = bm |> DisposeLink.map(Drawing.bitmapToTiff(string i))
+    dl.Dump()
+    dl
+    |> fun t -> t.Value.Save(target)
+    printfn "Done saving"
+    dc.Value.Content <- target
+    Util.ReadLine(sprintf "Done with %s?" target) |> ignore<string>
+    bm.Dispose()
+    File.Delete target
+    printfn "File deleted %s" target
+    // this appears to show multiple streams that are not disposed when finalized
+    System.GC.Collect()
+    System.GC.WaitForPendingFinalizers()
+    )
 |> Seq.truncate 1
 |> Dump
     
