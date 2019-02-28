@@ -117,18 +117,19 @@ module Xps =
         let fds = xps.GetFixedDocumentSequence()
         fds
     // scaling: https://stackoverflow.com/questions/13144615/rendertargetbitmap-renders-image-of-a-wrong-size
-    let scaleRender pgW pgH scale =
+    let scaleRender pgW pgH =
         let maxWidth = Math.Round(21.0 / 2.54 * 96.0); // A4 width in pixels at 96 dpi
         let maxHeight = Math.Round(29.7 / 2.54 * 96.0); // A4 height in pixels at 96 dpi
-//        double scale = 1.0;
+        let scale = 1.0
         let scale = min scale (maxWidth / pgW)
         let scale = max scale (maxHeight / pgH)
-        let cv = ContainerVisual(Transform = ScaleTransform(scale,scale))
+        let cv = System.Windows.Media.ContainerVisual(Transform = System.Windows.Media.ScaleTransform(scale,scale))
         cv.Children.Add(page.Visual);
 
         let w = pgW * scale |> int 
         let h = pgH * scale |> int
-        let rt = new RenderTargetBitmap( w,h,96, 96, PixelFormats.Default)
+        let rt = new RenderTargetBitmap( w,h,96.0, 96.0, System.Windows.Media.PixelFormats.Default)
+        rt.Render cv
         rt
 
     let asBitmapStream (xps:XpsDocument) =
@@ -139,11 +140,9 @@ module Xps =
             let docPage = fds.DocumentPaginator.GetPage i
 //            let rt = RenderTargetBitmap(docPage.Size.Width, docPage.Size.Height, 96.0,96.0, System.Windows.Media.PixelFormats.Bgra32)
             let sz = docPage.Size
-            let w,h =int sz.Width,int sz.Height
             (fds.DocumentPaginator.PageCount,i,w,h).Dump()
             // fix this: https://stackoverflow.com/questions/13144615/rendertargetbitmap-renders-image-of-a-wrong-size
-            let rt = RenderTargetBitmap(w,h, 100.0,100.0, System.Windows.Media.PixelFormats.Default)
-            rt.Render(docPage.Visual)
+            let rt = scaleRender sz.Width sz.Height
             let encoder = BmpBitmapEncoder()
             encoder.Frames.Add(BitmapFrame.Create rt)
             // unfortunately some recipients need to keep the stream open
