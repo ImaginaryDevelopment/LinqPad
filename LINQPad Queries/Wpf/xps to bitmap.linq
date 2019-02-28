@@ -116,6 +116,21 @@ module Xps =
     let toFds (xps:XpsDocument) =
         let fds = xps.GetFixedDocumentSequence()
         fds
+    // scaling: https://stackoverflow.com/questions/13144615/rendertargetbitmap-renders-image-of-a-wrong-size
+    let scaleRender pgW pgH scale =
+        let maxWidth = Math.Round(21.0 / 2.54 * 96.0); // A4 width in pixels at 96 dpi
+        let maxHeight = Math.Round(29.7 / 2.54 * 96.0); // A4 height in pixels at 96 dpi
+//        double scale = 1.0;
+        let scale = min scale (maxWidth / pgW)
+        let scale = max scale (maxHeight / pgH)
+        let cv = ContainerVisual(Transform = ScaleTransform(scale,scale))
+        cv.Children.Add(page.Visual);
+
+        let w = pgW * scale |> int 
+        let h = pgH * scale |> int
+        let rt = new RenderTargetBitmap( w,h,96, 96, PixelFormats.Default)
+        rt
+
     let asBitmapStream (xps:XpsDocument) =
         let fds = xps.GetFixedDocumentSequence()
         [0..fds.DocumentPaginator.PageCount - 1]
@@ -126,6 +141,7 @@ module Xps =
             let sz = docPage.Size
             let w,h =int sz.Width,int sz.Height
             (fds.DocumentPaginator.PageCount,i,w,h).Dump()
+            // fix this: https://stackoverflow.com/questions/13144615/rendertargetbitmap-renders-image-of-a-wrong-size
             let rt = RenderTargetBitmap(w,h, 100.0,100.0, System.Windows.Media.PixelFormats.Default)
             rt.Render(docPage.Visual)
             let encoder = BmpBitmapEncoder()
@@ -167,7 +183,7 @@ module Drawing =
     let prepareEncoder isInitial =
         let items =
             [
-                new EncoderParameter(Encoder.Compression, int64 EncoderValue.CompressionCCITT4)
+                new EncoderParameter(Encoder.Compression, int64 EncoderValue.CompressionNone)
                 new EncoderParameter(Encoder.SaveFlag, (if isInitial then EncoderValue.MultiFrame else EncoderValue.FrameDimensionPage) |> int64)
             ]
         let eps = new EncoderParameters(items.Length)
@@ -207,6 +223,8 @@ module Drawing =
                     tiff <- imaged :?> Bitmap
                     match tst with
                     | TiffFile filepath ->
+                        if File.Exists filepath then
+                            failwithf "File Exists at %s" filepath
                         tiff.Save(filepath,ei,ep)
                     | TiffStream str ->
                         tiff.Save(str,ei,ep)
@@ -258,7 +276,7 @@ let processOne path =
     |> ignore
     
 let processAll doc = // one doc per page
-    let target = Path.Combine(Path.GetTempPath(),Path.GetFileNameWithoutExtension path + ".tiff")
+    let target = Path.Combine(Path.GetTempPath(),Path.GetFileNameWithoutExtension doc + ".tiff")
     Xps.loadXps doc Xps.asBitmapStream
     |> Drawing.bitmapsToTiff (Drawing.TiffSaveType.TiffFile target)
     target
@@ -268,7 +286,12 @@ Directory.EnumerateFiles(path,"*.xps")
     let target = processAll fn
     printfn "Done saving"
     dc.Value.Content <- target
-    Util.ReadLine(sprintf "Done with %s?" fn) |> ignore<string>
+    let response = Util.ReadLine(sprintf "Done with %s?" fn)
+    File.Delete target
+    response
+    |> function
+        |null | "" -> ()
+        | x -> failwithf "Stop the presses"
 )
 //let print =    
 //     PrintServer server = new LocalPrintServer();
