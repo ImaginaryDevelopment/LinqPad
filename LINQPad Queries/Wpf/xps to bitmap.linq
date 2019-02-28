@@ -161,14 +161,21 @@ module Drawing =
     let getEncoderInfo mimeType =
         ImageCodecInfo.GetImageEncoders()
         |> Seq.tryFind(fun e ->
-            (e.MimeType, mimeType).Dump("mimes")
+//            (e.MimeType, mimeType).Dump("mimes")
             e.MimeType = mimeType
         )
-    let prepareEncoder () =
-        let ep = new EncoderParameters(2)
-        ep.Param.[0] <- EncoderParameter(Encoder.Compression, int64 EncoderValue.CompressionCCITT4)
-        ep.Param.[1] <- EncoderParameter(Encoder.SaveFlag, int64 EncoderValue.MultiFrame)
-        ep
+    let prepareEncoder isInitial =
+        let items =
+            [
+                new EncoderParameter(Encoder.Compression, int64 EncoderValue.CompressionCCITT4)
+                new EncoderParameter(Encoder.SaveFlag, (if isInitial then EncoderValue.MultiFrame else EncoderValue.FrameDimensionPage) |> int64)
+            ]
+        let eps = new EncoderParameters(items.Length)
+        items
+        |> Seq.iteri(fun i ep ->
+            eps.Param.[i] <- ep
+        )
+        eps
         
     // https://stackoverflow.com/questions/398388/convert-bitmaps-to-one-multipage-tiff-image-in-net-2-0
     let bitmapToTiff ident (bitmap:Bitmap) =
@@ -186,12 +193,13 @@ module Drawing =
         |TiffStream of Stream
     let bitmapsToTiff tst items =
         let mutable tiff = null
-        use ep = prepareEncoder()
+        use ep = prepareEncoder false
         items
         |> Seq.iter(fun bm ->
             let imaged = Image.FromStream(bm)
             if isNull tiff then
                 let mime = "image/tiff"
+                use ep = prepareEncoder true
                 
                 match getEncoderInfo mime with
                 | None -> failwithf "Could not find encoder %s" mime
@@ -222,9 +230,6 @@ let previewXps path =
     Xps.loadXps path Xps.toFds
     |> printPreview 
 //(
-//    System.Windows.Application() |> ignore
-//)
-let path = 
 let dc = lazy(
     let dc = DumpContainer()
     dc.Dump()
@@ -256,12 +261,13 @@ let processAll doc = // one doc per page
     let target = Path.Combine(Path.GetTempPath(),Path.GetFileNameWithoutExtension path + ".tiff")
     Xps.loadXps doc Xps.asBitmapStream
     |> Drawing.bitmapsToTiff (Drawing.TiffSaveType.TiffFile target)
+    target
     
 Directory.EnumerateFiles(path,"*.xps")
 |> Seq.iter(fun fn ->
-    processAll fn
+    let target = processAll fn
     printfn "Done saving"
-    dc.Value.Content <- fn
+    dc.Value.Content <- target
     Util.ReadLine(sprintf "Done with %s?" fn) |> ignore<string>
 )
 //let print =    
