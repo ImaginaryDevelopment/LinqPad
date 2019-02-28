@@ -188,7 +188,7 @@ module Drawing =
         let mutable tiff = null
         use ep = prepareEncoder()
         items
-        |> Seq.iteri(fun i bm ->
+        |> Seq.iter(fun bm ->
             let imaged = Image.FromStream(bm)
             if isNull tiff then
                 let mime = "image/tiff"
@@ -224,33 +224,46 @@ let previewXps path =
 //(
 //    System.Windows.Application() |> ignore
 //)
-let path = @"C:\Users\bdimp\Desktop\testform.xps"
+let path = 
 let dc = lazy(
     let dc = DumpContainer()
     dc.Dump()
     dc
     )
-Xps.loadXps path Xps.getBitmaps
-|> Seq.mapi(fun i bm ->
+let processOne path =
+    Xps.loadXps path Xps.getBitmaps
+    
+    |> Seq.mapi(fun i bm ->
+        let target = Path.Combine(Path.GetTempPath(),Path.GetFileNameWithoutExtension path + ".tiff")
+        let dl = bm |> DisposeLink.map(Drawing.bitmapToTiff(string i))
+        dl.Dump()
+        dl
+        |> fun t -> t.Value.Save(target)
+        printfn "Done saving"
+        dc.Value.Content <- target
+        Util.ReadLine(sprintf "Done with %s?" target) |> ignore<string>
+        bm.Dispose()
+        File.Delete target
+        printfn "File deleted %s" target
+        // this appears to show multiple streams that are not disposed when finalized
+        System.GC.Collect()
+        System.GC.WaitForPendingFinalizers()
+        )
+    |> Dump
+    |> ignore
+    
+let processAll doc = // one doc per page
     let target = Path.Combine(Path.GetTempPath(),Path.GetFileNameWithoutExtension path + ".tiff")
-    let dl = bm |> DisposeLink.map(Drawing.bitmapToTiff(string i))
-    dl.Dump()
-    dl
-    |> fun t -> t.Value.Save(target)
+    Xps.loadXps doc Xps.asBitmapStream
+    |> Drawing.bitmapsToTiff (Drawing.TiffSaveType.TiffFile target)
+    
+Directory.EnumerateFiles(path,"*.xps")
+|> Seq.iter(fun fn ->
+    processAll fn
     printfn "Done saving"
-    dc.Value.Content <- target
-    Util.ReadLine(sprintf "Done with %s?" target) |> ignore<string>
-    bm.Dispose()
-    File.Delete target
-    printfn "File deleted %s" target
-    // this appears to show multiple streams that are not disposed when finalized
-    System.GC.Collect()
-    System.GC.WaitForPendingFinalizers()
-    )
-|> Seq.truncate 1
-|> Dump
-    
-    
+    dc.Value.Content <- fn
+    Util.ReadLine(sprintf "Done with %s?" fn) |> ignore<string>
+)
 //let print =    
 //     PrintServer server = new LocalPrintServer();
 //
