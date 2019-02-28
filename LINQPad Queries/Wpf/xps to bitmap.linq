@@ -122,12 +122,11 @@ module Xps =
         |> Seq.map(fun i ->
 //            let docPage = fds.References.[i]
             let docPage = fds.DocumentPaginator.GetPage i
-//            let bitmap = BitmapImage()
 //            let rt = RenderTargetBitmap(docPage.Size.Width, docPage.Size.Height, 96.0,96.0, System.Windows.Media.PixelFormats.Bgra32)
             let sz = docPage.Size
             let w,h =int sz.Width,int sz.Height
             (fds.DocumentPaginator.PageCount,i,w,h).Dump()
-            let rt = RenderTargetBitmap(w,h, 96.0,96.0, System.Windows.Media.PixelFormats.Default)
+            let rt = RenderTargetBitmap(w,h, 100.0,100.0, System.Windows.Media.PixelFormats.Default)
             rt.Render(docPage.Visual)
             let encoder = BmpBitmapEncoder()
             encoder.Frames.Add(BitmapFrame.Create rt)
@@ -154,22 +153,62 @@ module Xps =
             use hBitmap = new NativeMethods.SafeHBitmapHandle(x.Value.GetHbitmap(),true)
             let next = System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(hBitmap.DangerousGetHandle(),IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions())
             new DisposeLink<_>(x,next)
-//            let bi = BitmapImage()
-//            bi.BeginInit()
-//            x.Seek(0L,SeekOrigin.Begin) |> ignore
-//            bi.StreamSource <- x
-//            bi.CacheOption <- BitmapCacheOption.OnLoad
-//            bi.EndInit()
-//            bi
+            // alternative option at https://social.msdn.microsoft.com/Forums/vstudio/en-US/87871d07-1ee0-4cec-830f-71beb53b2e17/pixelformat-why-is-the-difference?forum=wpf
             )
 module Drawing =
     open System.Drawing
+    open System.Drawing.Imaging
+    let getEncoderInfo mimeType =
+        ImageCodecInfo.GetImageEncoders()
+        |> Seq.tryFind(fun e ->
+            (e.MimeType, mimeType).Dump("mimes")
+            e.MimeType = mimeType
+        )
+    let prepareEncoder () =
+        let ep = new EncoderParameters(2)
+        ep.Param.[0] <- EncoderParameter(Encoder.Compression, int64 EncoderValue.CompressionCCITT4)
+        ep.Param.[1] <- EncoderParameter(Encoder.SaveFlag, int64 EncoderValue.MultiFrame)
+        ep
+        
     // https://stackoverflow.com/questions/398388/convert-bitmaps-to-one-multipage-tiff-image-in-net-2-0
     let bitmapToTiff ident (bitmap:Bitmap) =
         let stream = new LeakCheckStream<_>(ident,new MemoryStream())
         bitmap.Save(stream, Imaging.ImageFormat.Tiff)
         let tiff = Image.FromStream(stream)
         tiff
+        
+        
+        
+
+    [<NoComparison>]
+    type TiffSaveType =
+        |TiffFile of string
+        |TiffStream of Stream
+    let bitmapsToTiff tst items =
+        let mutable tiff = null
+        use ep = prepareEncoder()
+        items
+        |> Seq.iteri(fun i bm ->
+            let imaged = Image.FromStream(bm)
+            if isNull tiff then
+                let mime = "image/tiff"
+                
+                match getEncoderInfo mime with
+                | None -> failwithf "Could not find encoder %s" mime
+                | Some ei ->
+                    tiff <- imaged :?> Bitmap
+                    match tst with
+                    | TiffFile filepath ->
+                        tiff.Save(filepath,ei,ep)
+                    | TiffStream str ->
+                        tiff.Save(str,ei,ep)
+            else
+                tiff.SaveAdd(imaged,ep)
+        )
+        use ep = new EncoderParameters(1)
+        ep.Param.[0] <- new EncoderParameter(Encoder.SaveFlag, int64 EncoderValue.Flush)
+        tiff.SaveAdd ep
+        
         
 let printPreview (fds:FixedDocumentSequence)=
     let fdsv = System.Windows.Controls.DocumentViewer(Document=fds)
