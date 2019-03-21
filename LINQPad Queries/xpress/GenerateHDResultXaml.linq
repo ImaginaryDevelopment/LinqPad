@@ -5,7 +5,8 @@
 
 let delimit (d:string) (x: string seq) = String.Join(d, x)
 let delimit13 = delimit Environment.NewLine
-let clipboard x = System.Windows.Forms.Clipboard.SetText(x)
+let clipboard x = System.Windows.Forms.Clipboard.SetText(x); x
+let replace d r = function | null | "" as x -> x | x -> x.Replace(d,newValue=r)
 module Option =
     let getOrDefault y =
         function
@@ -18,7 +19,15 @@ type NumericEntryRow = {LabelOpt:string; BindingName:string;FormatStringOpt:stri
 let previousRows = 1
 let generateRow i x =
     let i = i + previousRows
-    let loaded = if x.BindingName = "Height" then "Loaded=\"HeightTextBox_Loaded\" LostFocus=\"TxtHeight_LostFocus\"" else null
+    let loaded =
+        match  x.BindingName with
+        | "Height" ->
+            "Loaded=\"HeightTextBox_Loaded\" LostFocus=\"TxtHeight_LostFocus\""
+        |"SBP" 
+        |"DBP"
+        |"Gluc" ->
+            sprintf "LostFocus=\"Txt_Warn_LostFocus\" Tag=\"%s\"" x.BindingName
+        | _ -> null
     printfn "Generating Row %i <| %s" i x.BindingName
     let label =
         x.LabelOpt |> Option.ofObj |> Option.getOrDefault x.BindingName
@@ -62,6 +71,8 @@ let generateRow i x =
                 yield "Margin=\"10,0,0,0\""
                 yield sprintf "Visibility=\"{Binding %s.%s, Converter={StaticResource hasValueConverter}}\"" x.BindingName subField
                 yield "VerticalAlignment=\"Center\""
+            if subField = "Error" then
+                yield "TextWrapping=\"Wrap\""
             yield "/>"
             
         ] |> String.concat " "
@@ -70,7 +81,7 @@ let generateRow i x =
         yield label
         if x.Editable then
             yield userInput
-        if ["SBP"] |> Seq.contains x.BindingName then
+        if ["SBP";"DBP"] |> Seq.contains x.BindingName then
             yield makeDisplay 4 "Error" false
         yield makeDisplay 2 "Next" true
         yield makeDisplay 3 "Prev" true
@@ -116,7 +127,22 @@ let toPascal (x:string) =
     )).Dump("props")
 // there is an extra row margin between each row
 //(input |> Seq.mapi (fun i -> generateRow (i * 2))).Dump("gridText")
-(input |> Seq.mapi (fun i -> generateRow (i * 2)) |> String.concat "\r\n" |> clipboard)
+let makeInputs = true
+if makeInputs then
+    // inputs
+    (input |> Seq.mapi (fun i -> generateRow (i * 2)) |> String.concat "\r\n" |> clipboard)
+else
+    // summary
+    (input
+        |> Seq.mapi (fun i num -> generateRow (i * 2) {num with Editable=false})
+        |> String.concat "\r\n"
+        |> replace ".Value" ""
+        |> replace "TcHdl.Next" "TcHdl.Next.Value"
+        |> replace "TcHdl.Prev" "TcHdl.Prev.Value"
+        |> clipboard)
+|> Dump
+|> ignore
+    
 (input |> Seq.map(fun x ->
         sprintf """
             <!-- %s Row -->
