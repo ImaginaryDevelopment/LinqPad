@@ -7,6 +7,14 @@ let delimit (d:string) (x: string seq) = String.Join(d, x)
 let delimit13 = delimit Environment.NewLine
 let clipboard x = System.Windows.Forms.Clipboard.SetText(x); x
 let replace d r = function | null | "" as x -> x | x -> x.Replace(d,newValue=r)
+let replace1 (d:string) r =
+    function
+    | null
+    | "" as x -> x
+    | x ->
+        match x.IndexOf d with
+        | i when i < 0 -> x
+        | i -> x.[0..i-1] + r + x.[i+d.Length ..]
 module Option =
     let getOrDefault y =
         function
@@ -127,7 +135,7 @@ let toPascal (x:string) =
     )).Dump("props")
 // there is an extra row margin between each row
 //(input |> Seq.mapi (fun i -> generateRow (i * 2))).Dump("gridText")
-let makeInputs = true
+let makeInputs = false
 if makeInputs then
     // inputs
     (input |> Seq.mapi (fun i -> generateRow (i * 2)) |> String.concat "\r\n" |> clipboard)
@@ -137,8 +145,10 @@ else
         |> Seq.mapi (fun i num -> generateRow (i * 2) {num with Editable=false})
         |> String.concat "\r\n"
         |> replace ".Value" ""
-        |> replace "TcHdl.Next" "TcHdl.Next.Value"
-        |> replace "TcHdl.Prev" "TcHdl.Prev.Value"
+        |> replace1 "TcHdl.Next" "TcHdl.Next.Value"
+        |> replace1 "TcHdl.Prev" "TcHdl.Prev.Value"
+        |> replace1 "BMI.Next" "BMI.Next.Value"
+        |> replace1 "BMI.Prev" "BMI.Prev.Value"
         |> clipboard)
 |> Dump
 |> ignore
