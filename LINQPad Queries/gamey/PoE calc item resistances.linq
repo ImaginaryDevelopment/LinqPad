@@ -1,5 +1,7 @@
 <Query Kind="FSharpProgram">
   <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.dll</Reference>
+  <NuGetReference>FSharp.Core</NuGetReference>
+  <Namespace>Microsoft.FSharp.Core</Namespace>
 </Query>
 
 // poe calc pseudo resist total
