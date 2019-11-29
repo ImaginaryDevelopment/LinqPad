@@ -57,7 +57,7 @@ let dumpt t x=
     x.Dump(description=t)
     x
 let dumpft t f x= 
-    f x |> dumpt |> ignore
+    f x |> dumpt t |> ignore
     x
 let after (delim:string) (x:string) = 
     x.Substring(x.IndexOf(delim) + delim.Length)
@@ -77,13 +77,13 @@ let dataModelsToGen : TableIdentifier list = [
 printfn "wee?"
 let dte = 
     try
-        Macros.VsMacros.getWindowNames()
-        |> Dump
-        |> Seq.find(fun wn -> wn.Contains("HealthDesigns"))
-        |> dumpt "VisualStudioWindowName"
-        |> Macros.VsMacros.getDteByWindowName
-        |> dumpft "VisualStudioProcInfo" (fun p -> p.Name)
-        //System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE") :?> EnvDTE.DTE
+//        Macros.VsMacros.getWindowNames()
+//        |> Dump
+//        |> Seq.find(fun wn -> wn.Contains("HealthDesigns"))
+//        |> dumpt "VisualStudioWindowName"
+//        |> Macros.VsMacros.getDteByWindowName
+//        |> dumpft "VisualStudioProcInfo" (fun p -> p.Name)
+        System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE") :?> EnvDTE.DTE
     with ex ->
         let msg = "could not find or hook into a vs instance"
         ex.Dump(msg)
@@ -102,8 +102,8 @@ printfn "activeDocument is %A" activeDocumentFullNameOpt
 printfn "Got dte for solution %s" dte.Solution.FileName
 let doMultiFile = true
 let targetSqlProjectName = "ApplicationDatabase"
-let targetCodeProjectName = "HD.Schema"
-let typeScriptProjectName = "HD.Service"
+let targetCodeProjectName = "HD.Schema.Core"
+//let typeScriptProjectName = "HD.Service"
 let typeScriptFolderName = None //Some "src" // this isn't working correctly with f# projects
 let refData : ReferenceData list = []
 //            type ReferenceData = {FKeyId:FKeyIdentifier; GenerateReferenceTable:bool; ValuesWithComment: IDictionary<string,string>}
@@ -173,11 +173,11 @@ let cgsm =
         {
             TargetProjectName= targetCodeProjectName
             TargetNamespace= "HD.Schema.DataModels"
-            TypeScriptGenSettingMap= Some{
-                TargetProjectName= typeScriptProjectName
-                ColumnNolist = columnBlacklist
-                TargetFolderOpt = typeScriptFolderName
-            }
+            TypeScriptGenSettingMap= None //Some{
+//                TargetProjectName= typeScriptProjectName
+//                ColumnNolist = columnBlacklist
+//                TargetFolderOpt = typeScriptFolderName
+//            }
             CString = cString
             UseOptionTypes= false
             ColumnNolist= columnBlacklist
@@ -224,8 +224,9 @@ let results =
     //runFullGeneration scriptFullPath generatePartials toGen addlCodeTables |> Map.ofDictionary
     //    type TableGenerationInfo = {Schema:string; Name:string; GenerateFull:bool}
     let iDte = GenerateAllTheThings.DteGenWrapper(dte)
+    
     GenerateAllTheThings.runGeneration  
-        (sprintf "%s.linq" Util.CurrentQuery.Name) sb iDte manager cgsm [toGen2] dataModelsToGen (fun _ -> {SettersCheckInequality=false;AllowPropertyChangeOverride=false})
+        (sprintf "%s.linq" Util.CurrentQuery.Name) sb iDte manager cgsm [toGen2] dataModelsToGen // (fun _ -> {SettersCheckInequality=false;AllowPropertyChangeOverride=false})
     let r = manager.Process doMultiFile
     r
 // not important, just nice to have, clean up of opened documents in VS
