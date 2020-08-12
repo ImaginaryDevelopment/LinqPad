@@ -7,7 +7,7 @@
 //parseIp "192.168.0.0.1"
 // consider perf of this implementation: http://www.codeproject.com/Articles/10190/Implement-a-basic-IP-Scanner-for-a-local-LAN-in-C
 
-let dumpt (t:string) x = x.Dump(t); x
+let dumpt (t:string) x = x.Dump(t,Nullable 0); x
 let getNetworkInterfaces() = NetworkInterface.GetAllNetworkInterfaces()
 //let getIpAddresses mask ip = 
 //    let ip'= IPAddress.Parse(ip).GetAddressBytes()
@@ -63,7 +63,6 @@ let fDc =
     dc.Dump("dc")
     dc.Content <- pingsStarted
     (fun () -> dc.Content <- pingsStarted)
-    
 getNetworkInterfaces()
 |> Seq.filter(fun ni -> ni.OperationalStatus <> OperationalStatus.Down)
 |> Seq.map (fun ni -> ni,ni.GetIPProperties())
@@ -72,8 +71,7 @@ getNetworkInterfaces()
 |> Seq.filter(fun (_,_,ua) -> not <| isNull ua.IPv4Mask && ua.Address |> string <> "127.0.0.1")
 |> Array.ofSeq
 |> dumpt "interfaces"
-// to filter on a specific interface, this is helpful, otherwise comment it out
-//|> Seq.filter(fun (ni,_,ua) -> ni.Name = "Xpress")
+|> Seq.filter(fun (ni,_,ua) -> ni.Name = "Xpress")
 |> Seq.map (fun (ni,ip,ua) -> ni,ip,ua,calculateIpRange (ua.IPv4Mask |> string) (ua.Address |> string))
 |> Seq.map (fun (ni,ip,ua,(start,last)) -> start,last,ni,ip,ua)
 |> Seq.map(fun (start,last,ni,ip,ua) -> start |> string |> parseIp, last |> string |> parseIp, ni,ip,ua)
@@ -100,12 +98,3 @@ getNetworkInterfaces()
     
 )
 |> List.ofSeq
-//|> Seq.map (fun asyncs -> asyncs |> Seq.map(fun a-> a) |> List.ofSeq)
-//|> Array.Parallel.map(fun (ni,ip,uaOpt) ->
-//    async{
-//        let p = Ping()
-//        p.SendAsync(
-//        let! args = Async.AwaitEvent (p.PingCompleted)
-//        return p
-//    }
-//)
