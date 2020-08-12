@@ -107,20 +107,25 @@ dpsLineTestCases
                         failwithf "Actual %A, expected %i" v expected
         
 )
-dpsLineTestCases.Dump()
+//dpsLineTestCases.Dump("testcases")
 maybeCache false None getText
 //|> fun x -> x.SplitLines()
 |> fun x ->
     match x, x with
     | AttackSpeed aps,DamageEntries dmgs ->
-        (aps,dmgs).Dump("debug")
+//        (aps,dmgs).Dump("debug")
         let dps = dmgs |> calcDps aps
         printfn "Aps:%A, dps: %A" aps dps
         ()
     | AttackSpeed _, _ -> printfn "Couldn't find damage"
     | _, DamageEntries _ ->
         printfn "Could find AttackSpeed"
-    | x -> printfn "Couldn't find either"
+    | _ -> printfn "Couldn't find either"
+
+    printfn ""
+    printfn ""
+
+// notes about previous league estimations
     printfn "For level 50ish we found a ~245 dagger without difficulty"
     printfn "For endgamish ~ 320 1h"
     [x].Dump("Weapon")

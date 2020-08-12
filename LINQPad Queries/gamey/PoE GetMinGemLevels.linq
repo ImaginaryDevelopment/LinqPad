@@ -1,5 +1,6 @@
 <Query Kind="FSharpExpression">
   <Reference>&lt;RuntimeDirectory&gt;\System.Net.Http.dll</Reference>
+  <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.dll</Reference>
   <NuGetReference>PathOfSupporting</NuGetReference>
   <Namespace>PathOfSupporting.Parsing.Trees</Namespace>
   <Namespace>PathOfSupporting.Parsing.Trees.Gems</Namespace>
@@ -11,9 +12,9 @@ let getGemPath () =
     let fullTarget = Path.Combine(dir,"Gems.json")
     if not <| File.Exists fullTarget then
         let src = "https://github.com/ImaginaryDevelopment/PathOfSupporting/raw/master/PoS/Gems3.5.json"
-        let hc = System.Net.Http.HttpClient()
+        let hc = new System.Net.Http.HttpClient()
         let text = hc.GetStringAsync src |> Async.AwaitTask |> Async.RunSynchronously
-        text.Dump(fullTarget)
+        text.[0..300].Dump(fullTarget)
         if not <|Directory.Exists dir then
             Directory.CreateDirectory dir |> ignore
         File.WriteAllText(fullTarget,text)
@@ -33,7 +34,7 @@ let getGemPath () =
 //    let fp = ass.Location
 //    System.Resources.ResourceManager(t).Dump()
     
-match PathOfSupporting.Parsing.PoB.PathOfBuildingParsing.processCodeOrPastebin("https://pastebin.com/sCMfDMHe") with
+match PathOfSupporting.Parsing.PoB.PathOfBuildingParsing.processCodeOrPastebin(System.Windows.Forms.Clipboard.GetText()) with //("https://pastebin.com/sCMfDMHe") with
 | Error e -> e.Dump(); None
 | Ok ch ->
     let skillIds =
@@ -51,4 +52,3 @@ match PathOfSupporting.Parsing.PoB.PathOfBuildingParsing.processCodeOrPastebin("
     result
 |> Option.map (fun v -> v |> Seq.sortBy(fun x -> x.LevelRequirement))
 |> Option.iter (fun x -> x.Dump() )
-    

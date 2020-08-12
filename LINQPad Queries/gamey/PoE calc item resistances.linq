@@ -19,7 +19,7 @@ let (|RMatch|_|) (p:string) (x:string) =
         Some r
     else None
 let (|RMatches|_|) (p:string) (x:string) = 
-    let r = Regex.Matches(x,p)
+    let r = Regex.Matches(x,p, RegexOptions.Multiline)
     if r.Count > 0 then
         Some r
     else None
@@ -58,9 +58,10 @@ let foldTotal items =
     items@["Elemental",elem;"Total",x]
 text
 |> function
-    | RMatches @"([+-]\d+)% to (?:(all Elemental|Fire|Cold|Chaos|Lightning)(?: and )?)+ Resistances?" r ->
+    | RMatches @"^.*([+-]\d+)% to (?:(all Elemental|Fire|Cold|Chaos|Lightning)(?: and )?)+ Resistances?" r ->
         r
         |> Seq.cast<Match>
+        |> Seq.filter(fun m -> m.Value.StartsWith("Minions") |> not)
         |> Seq.map (fun m -> (m.Groups.[1].Value |> int), m.Groups.[2].Captures |> Seq.cast<Capture> |> Seq.map(fun c -> c.Value) |> List.ofSeq)
         |> Seq.collect(fun (amount,caps) -> expandCaps amount caps)
         |> Seq.groupBy snd
@@ -70,7 +71,7 @@ text
         |> foldTotal
         |> Dump
         |> ignore
-    | txt -> printfn "Could not match"
+    | txt -> printfn "Could not match against %s" txt
 
 
 [text].Dump("item")

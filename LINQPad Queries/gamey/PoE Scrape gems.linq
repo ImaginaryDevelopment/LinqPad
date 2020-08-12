@@ -8,6 +8,7 @@
   <Namespace>System.Net.Http</Namespace>
 </Query>
 
+// parse poe gamepedia for the active skill gems, with required level
 let delimit (d:string) (s:string seq) = String.Join(d,values=s)
 let replace (s:string) (r:string) (t:string) = t.Replace(s,r)
 
@@ -121,8 +122,8 @@ let getActiveSkills ot =
                     |> SuperSerial.serialize
     //        |> Seq.map(fun x -> x.InnerHtml)
     span
-getActiveSkills Fiddle
-|> fun x -> System.Windows.Forms.Clipboard.SetText x
+getActiveSkills Full
+|> fun x -> System.Windows.Forms.Clipboard.SetText x; x
 |> Dump
 |> ignore
 //text
