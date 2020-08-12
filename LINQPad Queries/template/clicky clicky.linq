@@ -25,23 +25,6 @@ let curry f (x,y) = f x y
 let sleep (x:int) = System.Threading.Thread.Sleep x
 type RelativePoints={Absolute:System.Drawing.Point; Relative:System.Drawing.Point}
 
-//
-//module PInvoke = 
-//    // https://docs.microsoft.com/en-us/dotnet/articles/fsharp/language-reference/delegates
-//    type delegateEnumWindowsProc = delegate of hWnd:IntPtr*lParam:IntPtr -> bool
-//    //public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-//    [<DllImport("user32.dll")>]
-//    extern bool private SetForegroundWindow(IntPtr hWnd)
-//    [<DllImport("user32.dll")>]
-//    extern bool private EnumWindows(delegateEnumWindowsProc enumProc, IntPtr lParam)
-//    
-//    let setForegroundWindow hWnd = 
-//        SetForegroundWindow hWnd
-//    let enumWindows () = 
-//        let windows = ResizeArray()
-//        let f = new delegateEnumWindowsProc(fun (hWnd,lParam) -> windows.Add hWnd )
-//        EnumWindows(f, IntPtr.Zero)
-//PInvoke.enumWindows().Dump()
 let mapAbsPoint (relativity:System.Drawing.Point) abs = 
     {Absolute = abs; Relative=point (abs.X - relativity.X) (abs.Y - relativity.Y) }
 module WinForm =
@@ -51,11 +34,13 @@ module WinForm =
         //printfn "Changing mouse to %i,%i" x y
         Cursor.Position <- System.Drawing.Point(x,y)    
         
+let timer = System.Diagnostics.Stopwatch.StartNew()
+timer.Reset()
 module Simulator =
 
     let is = WindowsInput.InputSimulator()
     let click() = 
-        WinForm.getMousePosition() |> fun x -> printfn "Clicking at %i,%i" x.X x.Y
+//        WinForm.getMousePosition() |> fun x -> printfn "Clicking at %i,%i" x.X x.Y
         is.Mouse.LeftButtonClick()
     
     //is.Mouse.MoveMouseBy(100,100)
@@ -66,9 +51,23 @@ module Simulator =
         WinForm.setMousePosition pt.X pt.Y
     
     let keepFing delay f = 
+        let mutable clickEnabled = true
+        
         while not <| is.InputDeviceState.IsKeyDown WindowsInput.Native.VirtualKeyCode.CONTROL do
-            f()
-            sleep delay
+            // enable click pausing, instead of stopping
+            if is.InputDeviceState.IsKeyDown WindowsInput.Native.VirtualKeyCode.MENU then // menu is alt key
+                if clickEnabled then
+                    timer.Stop()
+                    clickEnabled <- false
+                    sleep <| min delay 250
+                else
+                    clickEnabled <- true
+                    sleep <| min delay 100
+                    timer.Start()
+            if clickEnabled then
+                f()
+                sleep delay
+            else sleep <| min delay 100
             
     // keep clicking center, but move mouse around some to pick things up?
     let run watchPosition delay (funs: (unit -> unit) list) =
@@ -94,29 +93,23 @@ module Simulator =
         keepFing delay toDo
 
 let target = 
-    Util.ReadLine("Position mouse over preferred formation area") |> ignore
+    Util.ReadLine("Position mouse over click target") |> ignore
     let pt = WinForm.getMousePosition()
     {X=pt.X; Y=pt.Y}
     
-//CotLi.ClickLevelUp 3
-////Process.GetProcesses()
-////|> Seq.filter(fun p -> p.ProcessName = "chrome")
-//Process.GetProcessesByName "chrome"
-//|> Seq.map (fun p -> 
-//    p.MainWindowHandle,p.MainWindowTitle)
-//|> Dump
-//|> ignore
+let mutable count = 0
 let funs = 
     [
-        //fun() -> ()
         fun () -> 
-            Simulator.move target
-            Simulator.click ()
+//            Simulator.move target
+            Simulator.click () |> ignore
+            count <- count + 1
             ()
             
-        //fun () -> moveMouseToCenterRightOfRightScreen()
     ]
-let delay = 10
+
 let watchPosition = false
-Simulator.run watchPosition 500 funs
-//CotLi.clickCrusadersTab()
+Simulator.run watchPosition 55 funs
+let seconds = timer.Elapsed.TotalSeconds
+let avg = float count / seconds
+printfn "Clicked %i times in %A(%f seconds) (%f/second)" count timer seconds avg

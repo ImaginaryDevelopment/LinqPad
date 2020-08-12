@@ -118,8 +118,6 @@ let mailbox =
     mp.Start()
     mp
 
-type CommandTranslateResult = | Success of Command | Bad of string
-
 let (|AddCmd|_|) =
     function
     | RMatchI "Add (\d+)" r ->
@@ -144,7 +142,7 @@ let (|ClearCmd|_|) =
 let rec takeInput (state:State) (s:string) : bool*State = 
     let inputMap = 
         match s with
-        | RMatchI "HelloWorld" -> InnerCommand <| Command.HelloWorld "Hello"
+        | RMatchI "HelloWorld" _ -> InnerCommand <| Command.HelloWorld "Hello"
         | AddCmd cmd -> InnerCommand cmd 
         | RemoveCmd cmd -> InnerCommand cmd
         | RMatchI "Checkout" _ -> InnerCommand Command.Checkout
