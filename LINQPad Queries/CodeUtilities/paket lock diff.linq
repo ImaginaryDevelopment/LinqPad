@@ -23,17 +23,15 @@ let getKeys (m:Map<_,_>) = m |> Map.toSeq |> Seq.map fst |> Set.ofSeq
 type DiffResult<'t,'diff> =
     |Equal of 't
     |Unequal of 'diff
-//type JoinDiff<'tkey, 't, 'diff> =
-//    | Left of 'tkey * 't
-//    | Diff of 'tkey * DiffResult<'diff>
-//    | Right of 'tkey * 't
     
 type Joined<'key, 't when 'key : comparison> = {
     Left: Map<'key,'t>
     Right: Map<'key,'t>
     Both: Map<'key,('t * 't)>
 }
+
 let getKV (m:Map<_,_>) k = k,m.[k]
+
 let joinMaps(l:Map<_,_>,r):Joined<_,_>=
     let l',r' = getKeys l, getKeys r
     let getKV (m:Map<_,_>) k = k, m.[k]
@@ -67,12 +65,10 @@ type PkgName = PkgName of string
 let unwrapPN = function | PkgName x -> x
 type PkgVersion = PkgVersion of string
 let unwrapPV = function | PkgVersion x -> x
-type Package = PkgName * PkgVersion
-//type PackageDiff = JoinDiff<PkgName,Package,PkgVersion*PkgVersion>
-//type GroupDiff = JoinDiff<GroupName,Package list, PackageDiff list>
+
 type PackageMap = Map<PkgName,PkgVersion>
     
-let packageJoin (l:Map<PkgName, PkgVersion>, r):Joined<PkgName,PkgVersion>=
+let packageJoin (l:PackageMap, r):Joined<PkgName,PkgVersion>=
     joinMaps(l,r)
     
 let comparePackage (PkgName x) (PkgVersion lv,PkgVersion rv) =
@@ -129,9 +125,12 @@ module Helpers =
             
     type [<Measure>] bytes
     module Map =
+        // Map.map doesn't let you change the keys
         let mapkv f x = x |> Map.toSeq |> Seq.map(fun (k,v) ->  f k v) |> Map.ofSeq
+        // mapkv doesn't have different functions for key and value mapping
         let mapBoth fk fv x = x |> Map.toSeq |> Seq.map(fun (k,v) -> fk k, fv v) |> Map.ofSeq
     
+    // diagnostics, not needed for lock file diffing
     module Memory = // https://cseducators.stackexchange.com/questions/4425/should-i-teach-that-1-kb-1024-bytes-or-1000-bytes/4426
         let inline memoryFormat x = stringf "N1" x
         let getUsedMemory () = GC.GetTotalMemory(false)
@@ -164,7 +163,6 @@ open Helpers
 
 
 module LockFiles =
-//let parseLock lines = Paket.LockFileParser.Parse lines
     let parseLock lines = Paket.LockFile.Parse(null,lines)
     let getLockHttp =
         let hc = new HttpClient()
@@ -193,7 +191,7 @@ let displayDiffResult fValue (x:DiffResult<_,_>) =
     | Equal x -> sprintf "%A" <| fValue x
     | Unequal (l,r) -> sprintf "%s <> %s" (fValue l) (fValue r)
 
-let displayComparison (x:DiffMap<GroupName,PackageMap,PackageDiff>) = // DiffMap<PkgName,PkgVersion,DiffResult<PkgVersion*PkgVersion>>>) = 
+let displayComparison (x:DiffMap<GroupName,PackageMap,PackageDiff>) =
     let fValue x = x |> Map.mapBoth unwrapPN unwrapPV
     x
     |> displayDiffMap unwrapGN fValue (
@@ -201,12 +199,14 @@ let displayComparison (x:DiffMap<GroupName,PackageMap,PackageDiff>) = // DiffMap
             y |> displayDiffMap unwrapPN unwrapPV (displayDiffResult unwrapPV) |> Map.ofSeq |> Map.map (fun _ v -> sprintf "%A" v)
     )
     
-let sampleLock1 = "https://github.com/fsprojects/Paket/raw/master/paket.lock"
+let sampleLock1 = 
+     "https://github.com/fsprojects/Paket/raw/master/paket.lock"
 // hope it is different!
 let sampleLock2 =
     //"https://github.com/fsprojects/Paket/raw/bugfixmerge/paket.lock"
     //"https://github.com/fable-compiler/ts2fable/raw/master/paket.lock"
     "https://github.com/fsprojects/FSharp.Formatting/raw/master/paket.lock"
+    
     
 let parseState1 =
     sampleLock1    
@@ -229,7 +229,8 @@ lockDiff
 |> displayComparison
 |> dump
 
-let mem = GC.GetTotalMemory(false)
-mem * 1L<bytes>
-|> Memory.formatBytes systemMult
-|> dump
+if debug then
+    let mem = GC.GetTotalMemory(false)
+    mem * 1L<bytes>
+    |> Memory.formatBytes systemMult
+    |> dump
