@@ -9,10 +9,19 @@
 
 let debug = false
 
+let dump<'t> (x:'t) =
+    x
+    #if !true // #if LINQPAD doesn't work // also #if true doesn't appear to work!
+    |> Dump
+    |> ignore
+    #else
+    |> printfn "%A"
+    #endif
+
 let getKeys (m:Map<_,_>) = m |> Map.toSeq |> Seq.map fst |> Set.ofSeq
 
-type DiffResult<'diff> =
-    |Equal
+type DiffResult<'t,'diff> =
+    |Equal of 't
     |Unequal of 'diff
 //type JoinDiff<'tkey, 't, 'diff> =
 //    | Left of 'tkey * 't
@@ -39,8 +48,8 @@ let joinMaps(l:Map<_,_>,r):Joined<_,_>=
     }
 type DiffMap<'key,'t,'diff when 'key : comparison> = {
     Left: Map<'key,'t>
-    Right: Map<'key,'t>
     Both: Map<'key, 'diff>
+    Right: Map<'key,'t>
 }
     
 let joinDiff fDiff (x:Joined<_,_>):DiffMap<_,_,_>=
@@ -53,8 +62,11 @@ let joinDiff fDiff (x:Joined<_,_>):DiffMap<_,_,_>=
     }
 
 type GroupName = GroupName of string
+let unwrapGN = function | GroupName x -> x
 type PkgName = PkgName of string
+let unwrapPN = function | PkgName x -> x
 type PkgVersion = PkgVersion of string
+let unwrapPV = function | PkgVersion x -> x
 type Package = PkgName * PkgVersion
 //type PackageDiff = JoinDiff<PkgName,Package,PkgVersion*PkgVersion>
 //type GroupDiff = JoinDiff<GroupName,Package list, PackageDiff list>
@@ -64,13 +76,13 @@ let packageJoin (l:Map<PkgName, PkgVersion>, r):Joined<PkgName,PkgVersion>=
     joinMaps(l,r)
     
 let comparePackage (PkgName x) (PkgVersion lv,PkgVersion rv) =
-    if lv = rv then Equal else Unequal (x,(lv,rv))
+    if lv = rv then Equal lv else Unequal (x,(lv,rv))
     
 let diffPackages (l,r) =
     packageJoin(l,r)
     |> joinDiff(fun (l,r) ->
         if l = r then
-            Equal
+            Equal l
         else
             Unequal(l,r)
     )
@@ -96,8 +108,8 @@ let l,r =
     ]
     
 compareLocks (l,r)
-//|> Dump
-|> ignore
+|> (fun x -> if debug then dump x else ())
+
 module Helpers =
     /// Calls ToString on the given object, passing in a format-string value.
     let inline stringf format (x : ^a) = 
@@ -117,7 +129,8 @@ module Helpers =
             
     type [<Measure>] bytes
     module Map =
-        let mapBoth f x = x |> Map.toSeq |> Seq.map(fun (k,v) ->  f k v) |> Map.ofSeq
+        let mapkv f x = x |> Map.toSeq |> Seq.map(fun (k,v) ->  f k v) |> Map.ofSeq
+        let mapBoth fk fv x = x |> Map.toSeq |> Seq.map(fun (k,v) -> fk k, fv v) |> Map.ofSeq
     
     module Memory = // https://cseducators.stackexchange.com/questions/4425/should-i-teach-that-1-kb-1024-bytes-or-1000-bytes/4426
         let inline memoryFormat x = stringf "N1" x
@@ -161,56 +174,46 @@ module LockFiles =
             if debug then (value.Length,value.[0..200]).Dump("Sample")
             value
             
-let inline displayMap fkey fvalue m = 
-    m |> Map.mapBoth (fun k v -> fkey k, fvalue v)
     
-let displayDiffMap f (x:DiffMap<_,_,_>) =
+let displayDiffMap fkey fvalue fdiff (x:DiffMap<_,_,_>) =
+    let inline displayMap fvalue m = 
+        m |> Map.mapBoth fkey fvalue
     [
         if Map.exists (fun _ _ -> true) x.Left then
-            yield "left", x.Left |> displayMap string string
-        yield "Both", f x.Both //  |> Map.filter(fun _ -> function | Equal -> false | _ -> true ) |> Map.mapBoth (fun k v -> string k, string v)
+            yield "left", x.Left |> displayMap fvalue
+        yield "Both", x.Both |> displayMap fdiff
         if Map.exists (fun _ _ -> true) x.Right then
-            yield "right",  x.Right |> displayMap string string
+            yield "right",  x.Right |> displayMap fvalue
     ]
     
-    
-let displayDiffResultMap (x:Map<_,DiffResult<_>>) =
-    x |> Map.filter(fun _ -> function | Equal -> false | _ -> true ) |> Map.mapBoth (fun k v -> string k, string v)
-    
-let inline displayInequalities (x:DiffMap<_,_,DiffResult<_>>) =
-    
-    [
-        if Map.exists (fun _ _ -> true) x.Left then
-            yield "left", x.Left |> displayMap string string
-        yield "Both", displayDiffResultMap x.Both //  |> Map.filter(fun _ -> function | Equal -> false | _ -> true ) |> Map.mapBoth (fun k v -> string k, string v)
-        if Map.exists (fun _ _ -> true) x.Right then
-            yield "right",  x.Right |> displayMap string string
-    ]
-    
-let inline displayRecMap (fkey:'key -> _) f (x:DiffMap<'key,_,DiffMap<_,_,_>>) =
-    [
-        if Map.exists (fun _ _ -> true) x.Left then
-            yield "left", x.Left |> displayMap fkey string
-        yield "Both", x.Both |> Map.mapBoth (fun k v -> fkey k, f v) |> displayMap string string//  |> Map.filter(fun _ -> function | Equal -> false | _ -> true ) |> Map.mapBoth (fun k v -> string k, string v)
-        if Map.exists (fun _ _ -> true) x.Right then
-            yield "right",  x.Right |> displayMap fkey string
-    ]
-    
-let displayComparison (x:DiffMap<GroupName,PackageMap,DiffMap<PkgName,_,_>>) = 
-    x |> displayRecMap (function | GroupName gn -> gn) (fun x ->
-        displayInequalities x
+type PackageDiff = DiffMap<PkgName,PkgVersion,DiffResult<PkgVersion,PkgVersion*PkgVersion>>
+
+let displayDiffResult fValue (x:DiffResult<_,_>) =
+    match x with
+    | Equal x -> sprintf "%A" <| fValue x
+    | Unequal (l,r) -> sprintf "%s <> %s" (fValue l) (fValue r)
+
+let displayComparison (x:DiffMap<GroupName,PackageMap,PackageDiff>) = // DiffMap<PkgName,PkgVersion,DiffResult<PkgVersion*PkgVersion>>>) = 
+    let fValue x = x |> Map.mapBoth unwrapPN unwrapPV
+    x
+    |> displayDiffMap unwrapGN fValue (
+        fun y ->
+            y |> displayDiffMap unwrapPN unwrapPV (displayDiffResult unwrapPV) |> Map.ofSeq |> Map.map (fun _ v -> sprintf "%A" v)
     )
     
 let sampleLock1 = "https://github.com/fsprojects/Paket/raw/master/paket.lock"
 // hope it is different!
 let sampleLock2 =
     //"https://github.com/fsprojects/Paket/raw/bugfixmerge/paket.lock"
-    "https://github.com/fable-compiler/ts2fable/raw/master/paket.lock"
+    //"https://github.com/fable-compiler/ts2fable/raw/master/paket.lock"
+    "https://github.com/fsprojects/FSharp.Formatting/raw/master/paket.lock"
+    
 let parseState1 =
     sampleLock1    
     |> LockFiles.getLockHttp
     |> splitLines
     |> tryDump LockFiles.parseLock
+    
 let parseState2 =
     sampleLock2
     |> LockFiles.getLockHttp
@@ -218,15 +221,15 @@ let parseState2 =
     |> tryDump LockFiles.parseLock
     
 let prepareLock (l:Paket.LockFile) =
-    l.Groups |> Map.mapBoth (fun gn _ -> GroupName gn.CompareString, l.GetTopLevelDependencies gn |> Map.mapBoth(fun pn pv -> PkgName pn.CompareString, PkgVersion pv.Version.AsString))
+    l.Groups |> Map.mapkv (fun gn _ -> GroupName gn.CompareString, l.GetTopLevelDependencies gn |> Map.mapkv (fun pn pv -> PkgName pn.CompareString, PkgVersion pv.Version.AsString))
+    
 let lockDiff = compareLocks(prepareLock parseState1, prepareLock parseState2)    
+
 lockDiff
 |> displayComparison
-|> Dump
-|> ignore
+|> dump
 
 let mem = GC.GetTotalMemory(false)
 mem * 1L<bytes>
 |> Memory.formatBytes systemMult
-|> Dump
-|> ignore
+|> dump
