@@ -1,7 +1,7 @@
 <Query Kind="FSharpProgram" />
 
-// paket lock file diffing
-// https://github.com/fsprojects/Paket/blob/master/src/Paket.Core/PaketConfigFiles/LockFile.fs
+// format a value of bytes in MB, GB, KB, etc..
+// https://stackoverflow.com/questions/1242266/converting-bytes-to-gb-in-c
 let debug = false
 module Helpers =
     /// Calls ToString on the given object, passing in a format-string value.
