@@ -1,14 +1,19 @@
 <Query Kind="FSharpProgram" />
 
 
-type JoinResult<'tLeft,'tRight> =
+type SetJoinResult<'tLeft,'tRight> =
     {
         LeftOnly:'tLeft list
-        RightOnly:'tRight list
         Both: ('tLeft*'tRight) list
+        RightOnly:'tRight list
     } 
+type MapJoinResult<'tKey,'tLeft,'tRight> =
+    {
+        LeftOnly: Map< 'tKey, 'tLeft>
+        Both: Map< 'tKey, 'tLeft * 'tRight>
+        RightOnly: Map< 'tKey, 'tRight>
+    }
     
-//type SetJoinResult<'t> = { Both: 't list; LeftOnly: 't list; RightOnly: 't list}
 type SetJoinType<'t> =
     | LeftOnly of 't
     | Both of 't
