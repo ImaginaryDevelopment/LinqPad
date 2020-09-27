@@ -99,3 +99,6 @@ let mb (x:int64<MB>):int64<bytes>= x * (pown systemMult 2)* 1L<bytes/MB>
 )
 |> Dump
 |> ignore
+
+Memory.formatBytes systemMult 76430026L<bytes>
+|> Dump

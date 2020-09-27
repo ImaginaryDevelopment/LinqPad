@@ -17,6 +17,7 @@
 let origin = Uri "https://www.pathofexile.com"
 let path = "/character-window/get-stash-items"
 let stashStartIndex = 0
+let league = "Standard" // "Hardcore" 
 
 type SearchType =
     | FindEnchanted
@@ -67,6 +68,7 @@ module Seq =
         
         
 module Helpers =
+    let keyValue x = (|KeyValue|) x
     let isNotNull =
         function
         | null -> false
@@ -81,7 +83,7 @@ module Helpers =
         let v = x |> Array.ofSeq
         String.Join(d,value= v)
     let contains (x:'t) (items: 't seq) = items.Contains(x)
-    let containsSubStr (x:string) (v: string) = isNotNull v && v.Contains(x)
+    let containsSubStr (x:string) (v: string) = isNotNull v && v.Contains(x, StringComparison.InvariantCultureIgnoreCase)
     let toLower (x:string) = if isNotNull x then x.ToLower() else x
     let containsAnySubStr (subs:string seq) (items: string seq) =
         items
@@ -170,6 +172,8 @@ module Cereal =
             | Some values -> Some values
             | _ -> None
         | _ -> None
+    let serializeToken (jt:Linq.JToken) =
+        jt.ToString(Formatting.Indented)
     let deserialize (t:Type) (x:string) = JsonConvert.DeserializeObject(x,t)
     let deserializeT<'T> (x:string) =
         try
@@ -215,7 +219,7 @@ let fFetch =
             textBuffer <- s::a::b::[]
         | a::b::c::[] ->
             textBuffer <- s::a::b::c::[]
-        | _ -> textBuffer <- List.empty
+        | _ -> textBuffer <- [s] // buffer overful, set to the thing coming in
         dcFetchStatus.Content <- textBuffer
     )
 type SecureStashParams = {
@@ -260,20 +264,23 @@ let fetch useCache (fKey:string option -> string) (fContinue:int*string -> 'T op
     
     SequenceState.Start
     |> Seq.unfold(
+        let fetchOrSleepRetry f =
+            try
+                f()
+            with ex ->
+                if ex.Message.Contains("429") then
+                    fFetch <| sprintf "hit rate limit at %A" DateTime.Now
+                    let delay = 60m<s> * sToMs
+                    sleep delay ()
+                    |> Async.RunSynchronously 
+                    fFetch <| sprintf "Retrying request at %A" DateTime.Now
+                    f()
+                else
+                    printfn "Did not contain 429! - %s" ex.Message
+                    reraise()
         function 
         | Start -> 
             fFetch "getting first item"
-            let fetchOrSleepRetry f =
-                try
-                    f()
-                with ex ->
-                    if ex.Message.Contains("429") then
-                        printfn "Retrying request"
-                        let delay = 60m<s> * sToMs
-                        sleep delay ()
-                        |> Async.RunSynchronously 
-                        f()
-                    else reraise()
                 
             let result = maybeCache (fun _ -> fetch ssp.TabStartIndex) (fKey None) useCache
             fFetch "finished fetch"
@@ -282,7 +289,8 @@ let fetch useCache (fKey:string option -> string) (fContinue:int*string -> 'T op
         | SequenceState.Continue nextTabId ->
             fFetch (sprintf "getting %i" nextTabId)
             // if what you get back is empty, we reached the end
-            let result = maybeCache(fun _ -> fetch nextTabId) (string nextTabId |> Some |> fKey) useCache
+            let f1 _ = fetchOrSleepRetry (fun () -> fetch nextTabId)
+            let result = maybeCache(f1) (string nextTabId |> Some |> fKey) useCache
             fFetch "finished fetch"
             fContinue result
             |> Some
@@ -319,26 +327,10 @@ let fStatsOut =
     )
         
 let deserializeJToken text = 
-    //text.Dump()
     let x = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string,JToken>>(text)
     fStatsOut (text.Length |> int64)
     x    
     
-(* 
-    {   "verified":false,"w":1,"h":1,"icon":"https:\/\/web.poecdn.com\/image\/Art\/2DItems\/Currency\/CurrencyRerollRare.png?v=c60aa876dd6bab31174df91b1da1b4f9&w=1&h=1&scale=1",
-        "league":"Standard",
-        "id":"d825910720c5d2d00de634a34d3ba9367ad972edf73f84abad2878cddc7dda4c",
-        "name":"",
-        "typeLine":"Chaos Orb",
-        "identified":true,
-        "ilvl":0,
-        "properties":[
-            {"name":"Stack Size","values":[["60\/10",0]],"displayMode":0,"type":32}
-            ],
-        "explicitMods":["Reforges a rare item with new random modifiers"],
-        "descrText":"Right click this item then left click a rare item to apply it.",
-        "frameType":5,"stackSize":60,"maxStackSize":5000,"x":2,"y":0,"inventoryId":"Stash1"}
-*)
 type Requirement = { Name:string;Values:int[][];DisplayMode:int;Suffix:string}
 
 [<NoComparison;NoEquality>]
@@ -412,6 +404,32 @@ type StashType =
         static member GetLayouts () =
             StashType.All
             |> List.map StashType.GetLayout
+        static member GetTabType x =
+            let isTabOpt n (x:Dictionary<_,_>) =
+                x.ContainsKey n
+            let (|IsTabOpt|_|) n x =
+                if isTabOpt n x then Some ()
+                else None
+            //let (|UniqueTab|_|) x = isTabOpt "uniqueLayout" x
+            //let (|CurrencyTab|_|) x = isTabOpt "currencyLayout" x
+            //let (|BlightTab|_|) x = isTabOpt "blightLayout" x
+            match x with
+            | IsTabOpt "currencyLayout" -> Some Currency
+            | IsTabOpt "blightLayout" -> Some Blight
+            | IsTabOpt "deliriumLayout" -> Some Delirium
+            | IsTabOpt "delveLayout" -> Some Delve
+            | IsTabOpt "divinationLayout" -> Some Divination
+            | IsTabOpt "fragmentLayout" -> Some Fragment
+            | IsTabOpt "essenceLayout" -> Some Essence
+            | IsTabOpt "mapLayout" -> Some Map
+            | IsTabOpt "metamorphLayout" -> Some Metamorph
+            | IsTabOpt "uniqueLayout" -> Some Unique
+            | _ when Set.ofSeq x.Keys = Set ["numTabs";"tabs";"items"] -> Some Standard
+            //| Quad
+            //| Standard
+            //| Unique
+            | _ -> None
+ 
     
 type Colour = {
     R:int
@@ -493,6 +511,7 @@ type FetchedStash = {
     FilteredItems: (Item * obj) list
 }
 
+
 // league was Harbinger at the time of the original code here
 let fetchStashes league useCache:seq<_>= 
     let getMap = remembral<Tab[], IDictionary<string,JToken>>()
@@ -529,23 +548,37 @@ let fetchStashes league useCache:seq<_>=
         }
     |> Seq.map(fun (i,dic,raw) -> 
         let keys = dic.Keys |> Seq.map string |> Set
+        let hasKey x = keys |> Set.contains x
         let tabMap = getMap (fun dic -> dic.["tabs"] |> string |> deserializeT) dic
-        if isNull dic.["items"] || (string dic.["items"]).Length < 10 then invalidOp "items missing"
+        let tab = tabMap |> Seq.tryFind(fun t -> t.I = i) |> Option.map(fun t -> t.N) |> Option.defaultValue "-1"
+        let displayDiag (desc:string) =
+            let data = dic |> Seq.map keyValue |> Seq.filter(fun (k,_) -> k <> "tabs") |> Map.ofSeq |> Map.map(fun _ v -> serializeToken v)
+            (i,tab,keys, data , Util.OnDemand("raw",fun () -> raw)).Dump(desc)
+        let failForNoItems () =
+            let items = string dic.["items"]
+            if not <| hasKey "items" || (not <| hasKey "currencyLayout" && items.Length < 10) then
+                printfn "Items: %s" items
+                displayDiag "no items"
+                invalidOp "items missing"
+            
         let stashType =
-            [
-                "blightLayout", Blight
-                "currencyLayout", Currency
-                "essenceLayout", Essence
-                "fragmentLayout", Fragment
-                "metamorphLayout", Metamorph
-            ]
-            |> List.choose(fun (k,t) ->
-                if keys |> Set.contains k then t |> Some
-                elif keys = Set ["numTabs";"tabs";"items"] then Some Standard
-                else None
-            )
-            |> List.tryHead
+            match StashType.GetTabType dic with
+            | Some Standard
+            | Some Map
+            // uniques are not working with the api
+            | Some Unique -> Some Unique
+            | Some x ->
+                failForNoItems()
+                Some x
+            | None ->
+                failForNoItems()
+                if keys |> Set.exists(fun x -> x.Contains("ayout")) |> not then
+                    displayDiag "unknown type"
+                if keys = Set ["numTabs";"tabs";"items"] then Some Standard
+                else 
+                    None
             |> Option.defaultValue Unknown
+        
            
         let filter(item:Item) = 
             let filters: (unit -> bool) list =
@@ -554,6 +587,7 @@ let fetchStashes league useCache:seq<_>=
                 let hasEnchant () = isNotNull item.EnchantMods && item.EnchantMods.Length > 0
                 let hasEnchantT (x:string) () = hasEnchant() && item.EnchantMods |> Seq.exists (containsSubStr x)
                 let hasInName (x:string) () = isNotNull item.Name && item.Name.Contains(x)
+                let hasExplicit (x:string) () = isNotNull item.ExplicitMods && item.ExplicitMods |> Seq.exists (containsSubStr x)
                 [
                     //fun stash -> isNull stash.AccountName |> not
                     //fun stash -> stash.Items |> Seq.exists(fun item -> item.League = league)
@@ -568,7 +602,8 @@ let fetchStashes league useCache:seq<_>=
                     //typeHasNo "Vise"
                     //fun item -> isNull item.TypeLine || not <| item.TypeLine.Contains "Amulet"
                     //fun item -> isNotNull item.ImplicitMods && item.ImplicitMods.Length > 0 && item.ImplicitMods.[0] <> "Item sells for much more to vendors"
-                    hasInName "Vixen"
+                    //hasInName "Vixen"
+                    hasExplicit "Damage Over Time Mult"
                     
                     //        ()
                 ]
@@ -597,7 +632,7 @@ let useCache = true
 let deserializeStashResp raw =
     deserializeT<StashResponseRaw> raw
     
-fetchStashes "Standard" useCache
+fetchStashes league useCache
 //|> Seq.truncate 2
 |> Seq.filter(fun (s,_) ->
     s.FilteredItems.Length > 0
@@ -613,6 +648,6 @@ fetchStashes "Standard" useCache
 //)
 |> Seq.map fst
 |> Seq.catch "404"
-|> Seq.truncate 1
+//|> Seq.truncate 1
 |> Dump
 |> ignore

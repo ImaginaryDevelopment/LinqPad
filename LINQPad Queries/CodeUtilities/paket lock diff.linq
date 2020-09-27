@@ -200,12 +200,14 @@ let displayComparison (x:DiffMap<GroupName,PackageMap,PackageDiff>) =
     )
     
 let sampleLock1 = 
-     "https://github.com/fsprojects/Paket/raw/master/paket.lock"
+    // "https://github.com/fsprojects/Paket/raw/master/paket.lock"
+    "https://gist.github.com/ImaginaryDevelopment/a062fe5bb09dfd6958e73e9dd0df9b24/raw/40bfbc80b139b3fec7ea1781f4d5e9e36bd71806/fed.paket.lock"
 // hope it is different!
 let sampleLock2 =
     //"https://github.com/fsprojects/Paket/raw/bugfixmerge/paket.lock"
     //"https://github.com/fable-compiler/ts2fable/raw/master/paket.lock"
-    "https://github.com/fsprojects/FSharp.Formatting/raw/master/paket.lock"
+    //"https://github.com/fsprojects/FSharp.Formatting/raw/master/paket.lock"
+    "https://gist.github.com/ImaginaryDevelopment/a062fe5bb09dfd6958e73e9dd0df9b24/raw/40bfbc80b139b3fec7ea1781f4d5e9e36bd71806/updateserver.paket.lock"
     
     
 let parseState1 =
