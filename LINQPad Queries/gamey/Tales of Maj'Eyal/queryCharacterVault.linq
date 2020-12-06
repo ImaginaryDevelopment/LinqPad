@@ -3,8 +3,23 @@
   <Namespace>System.Windows.Media</Namespace>
 </Query>
 
-// need to handle unicode talent names :(
+// does not handle pagination on winners
+// need to handle or filter unicode talent names :( - Character zone Size field may be an easy indicator
+// need to pull up points spent in category for category analysis
+
+let authority = "https://te4.org/"
 let path = "characters-vault"
+let urlDump,showUrls =
+    let urls: ResizeArray<string*obj> = ResizeArray()
+    let dm = DumpContainer()
+    let add = fun (x:string) ->
+        let uri = Uri(Uri authority,relativeUri=x) |> string
+        urls.Add (x,box <| LINQPad.Hyperlinq uri)
+        dm.Content <- null
+        dm.Content <- urls
+    add, (fun () -> dm.Dump("urls"))
+    
+    
 let flip f x y = f y x
 let trim (x:string) = x.Trim()
 let before (delim:string) (x:string) = x.[0.. x.IndexOf delim - 1]
@@ -45,8 +60,9 @@ let logKeyed title (items:(string*Result<_,_>) seq) =
     result
        
 let cache (key:string) (f:unit -> 't) =
-    printfn "Caching %s" key
+    //printfn "Caching %s" key
     Util.Cache(Func<_> f, key)
+    
 module Map =
     let addItem k x (m:Map<_,'t list>) =
         if m.ContainsKey k then
@@ -54,6 +70,24 @@ module Map =
             m |> Map.add k (x::existing)
         else
             m |> Map.add k [x]
+    //let addChildItem (k:'tk) (subk:'tsk,value) (m: Map<'tk,Map<'tsk,_ list>>) : Map<'tk,Map<'tsk, _ list>> =
+    //    if m.ContainsKey k then
+    //        let m1 =
+    //            let existing:Map<'tsk, _ list> = m.[k]
+    //            existing |> addItem subk value
+    //        m |> Map.add k m1
+    //    else
+    //        m |> Map.add k subk [value]
+    // merge the data in m2 into m1, using m2's values as additional items in m1's list
+    let mergeAsList (m2:Map<'tk,'tv >) (m:Map<'tk, 'tv list>) : Map<'tk, 'tv list> =
+        (m,m2)
+        ||> Map.fold(fun m k v ->
+            m |> addItem k v
+        )
+        
+    //let mergeChildMap (k:'tk) (m2:Map<'tsk,_ list>) (m: Map<'tk,Map<'tsk,_ list>>) : Map<'tk,Map<'tsk, _ list>> =        
+    //    if m.ContainsKey k then
+    //        let m1 = 
         
 module Async =
     let map f x = 
@@ -65,7 +99,7 @@ module Async =
 module Fetch =     
     let httpClient () =
         let c = new System.Net.Http.HttpClient()
-        c.BaseAddress <- Uri "https://te4.org/"
+        c.BaseAddress <- Uri authority
         c
     let encodeQueryValue (x:string) =
         Uri.EscapeDataString x
@@ -74,6 +108,8 @@ module Fetch =
             use c = httpClient()
             try
                 let! text = Async.AwaitTask <| c.GetStringAsync path 
+                urlDump path
+                //(path).Dump("Fetched")
                 return text
             with ex -> // retry
                 (path,ex).Dump("path failure")
@@ -117,6 +153,7 @@ module Parse =
     let getElements (key:string) (x:HtmlNode) =
         x.ChildNodes
         |> Seq.filter(fun n -> n.Name = key)
+        |> List.ofSeq
 
     let (| GetElement |_|) (name:string) x =
         getElement name x
@@ -128,7 +165,7 @@ module Parse =
         Fetch.queryPage path kvs
         |> Async.map (parseHtml >> getElementById "characters")
     
-    let setupInputs () =
+    let setupInputs () = // this was to persue the feature of an interactive script, instead hard-coded values have been used.
         let getForm (d:HtmlAgilityPack.HtmlDocument) =
             d
             |> getElementById "selectors"
@@ -197,13 +234,17 @@ module Parse =
         x
         |> getElements "td"
         |> List.ofSeq
-        |> function
-            | userTr::charTr::_versionTr::_winnerTr::_lastUpdatedTr::[] ->
-                let _userhref,uname = userTr |> getElement "a" |> Option.get |> fun a -> a.GetAttributeValue("href", String.Empty), a.InnerText
-                let cHref,cName = charTr |> getElement "a" |> Option.get |> fun a -> a.GetAttributeValue("href",String.Empty), a.InnerText
+        |> function // columns aren't always consistent
+            | userTd::charTd::_ -> (userTd,charTd)
+            | bad -> 
+                (bad |> List.map getOuterHtml).Dump("character row failure")
+                failwithf "unexpected number of elements %i in %s" bad.Length (bad |> List.map getOuterHtml |> String.concat "")
+        |> (fun (userTd,charTd) ->
+                let _userhref,uname = userTd |> getElement "a" |> Option.get |> fun a -> a.GetAttributeValue("href", String.Empty), a.InnerText
+                let cHref,cName = charTd |> getElement "a" |> Option.get |> fun a -> a.GetAttributeValue("href",String.Empty), a.InnerText
                 {User=uname;Name=cName;Path=cHref;Link=null}
+            )
                 //cHref,sprintf "%s: %s = %s" uname cName cHref
-            | bad -> failwithf "unexpected number of elements %i in %s" bad.Length (bad |> List.map getOuterHtml |> String.concat "")
             
 type TalentPower = TP of string with member x.ToDump() = match x with | TP v -> v
 //type CDisp = CDisp of string with member x.ToDump() = match x with | CDisp v -> v
@@ -215,7 +256,7 @@ module Retrieval =
             "tag_winner", ["winner"] // only query winners
         ]
         
-    Parse.setupInputs()
+    Parse.setupInputs() // not needed/used, featureset deferred
     |> ignore
     
         
@@ -235,8 +276,6 @@ module Retrieval =
         
     //let dissectCharsheetHead =
     //    getElement "table"
-        
-        
         
     let mutable unmappedKeys = Set.empty
     let addAll items s =
@@ -277,9 +316,13 @@ module Retrieval =
         |> Parse.getElement "table"
         |> Option.bind (Parse.getElement "tbody")
         |> Option.map (Parse.getElements "tr")
+        |> Option.map(fun x ->
+            printfn "%i characters found on page 1" x.Length
+            x
+        )
         
     //type FetchType = | Path of string | Values of Map<string, string list>
-    let fetchMapped v : (Character *TalentFetchResult) seq option =
+    let fetchMapped v : (Character * TalentFetchResult) seq option =
         let r = 
             (alwaysInputs,v)
             ||> Map.fold(fun m k v ->
@@ -301,7 +344,7 @@ module Retrieval =
             >> ignore
         )
 let retrieveSample () =        
-    Retrieval.fetchMapped Map.empty
+    Retrieval.fetchMapped (Map["tag_class[]",["12"]])
     |> Option.iter(fun x ->
         x
         |> Seq.map (fun x -> x)
@@ -311,26 +354,36 @@ let retrieveSample () =
     )
     
 module Invert =
-    type CategoryAnalysis = Map<TalentCategoryType,Map<string, TalentPower * Character>>
-    let analyzeCategories (ch:Character,m:Map<TalentCategoryType,TalentCategory list>) : CategoryAnalysis = 
+    // correct shape of data for munging with other characters, is the shaping of a single character's data
+    type CCategoryAnalysis = Map<TalentCategoryType,Map<string, Character*TalentPower>>
+    // analysis of how popular a talent categories are by talent category type (generic vs class) with characters
+    type CategoryAnalysis = Map<TalentCategoryType,Map<string, (Character*TalentPower) list>>
+    let analyzeCategories (ch:Character,m:Map<TalentCategoryType,TalentCategory list>) : CCategoryAnalysis = 
         m
         |> Map.map(fun _tct tcs ->
-            let m': Map<string,TalentPower * Character> = Map.empty
+            let m': Map<string,Character * TalentPower > = Map.empty
             (m',tcs)
             ||> List.fold(fun m tc ->
-                m |> Map.add tc.Name (TP tc.Power,ch)
+                m |> Map.add tc.Name (ch,TP tc.Power)
             )
         )
     // analyze multiple characters
-    let analyzeCCategories (items:CategoryAnalysis list) =
-        (Map.empty,items)
-        ||> List.fold(fun m (ca:CategoryAnalysis) ->
-            (m,ca)
-            ||> Map.fold(fun m k v ->
-                m |> Map.addItem k v
+    let analyzeCCategories (items:CCategoryAnalysis list) : CategoryAnalysis =
+        let m:CategoryAnalysis = Map.empty
+        let r : CategoryAnalysis = 
+            (m,items)
+            ||> List.fold(fun m (ca:CCategoryAnalysis) ->
+                (m,ca)
+                ||> Map.fold(fun m tct v ->
+                    let nextV =
+                        if m.ContainsKey tct then
+                            m.[tct] |> Map.mergeAsList v
+                        else v |> Map.map (fun _ v -> [v])
+                    m |> Map.add tct nextV
+                    
+                )
             )
-            
-        )
+        r
         
 [<NoComparison>]
 type TalentError = {Tct:TalentCategoryType; Ch:Character; Errors: (TalentCategory*Err list) list}
@@ -340,6 +393,7 @@ let liftFetchErrors (talents:(TalentCategory * Err list) list) : TalentCategory 
     ||> List.fold(fun (c,e) (tc,errs) ->
         tc::c, if List.isEmpty errs then e else (tc,errs)::e
     )
+    
 // pull out the errors for aggregation with other character errors        
 let extractFetchErrors (ch,m:TalentFetchResult) =
     let cl,dirty = 
@@ -351,8 +405,6 @@ let extractFetchErrors (ch,m:TalentFetchResult) =
         )
     (ch,cl), dirty
         
-    
-    
 let filterErrors (items : _ seq) =
     let init = List.empty, List.empty 
     let clean,dirty =
@@ -364,14 +416,16 @@ let filterErrors (items : _ seq) =
     dirty.Dump("failed items")
     clean
     
-    
-Retrieval.fetchMapped Map.empty
+Retrieval.fetchMapped (Map["tag_class[]",["12"]])
 |> Option.iter(fun x ->
     x
     |> Seq.map (fun x -> x)
     //|> Seq.truncate 2
     |> filterErrors
+    |> List.ofSeq
     |> Seq.map Invert.analyzeCategories
+    |> List.ofSeq
+    |> Invert.analyzeCCategories
     |> Dump
     |> ignore
 )
@@ -400,3 +454,4 @@ module Heat =
         |> Seq.fold (+) (Color.FromScRgb(1.f,0.f,0.f,0.f))
         
 ()
+showUrls()
