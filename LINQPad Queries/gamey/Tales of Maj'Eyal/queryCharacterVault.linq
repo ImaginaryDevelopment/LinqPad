@@ -1,5 +1,6 @@
 <Query Kind="FSharpProgram">
   <NuGetReference>HtmlAgilityPack</NuGetReference>
+  <Namespace>System.Windows.Media</Namespace>
 </Query>
 
 let path = "characters-vault"
@@ -45,6 +46,14 @@ let logKeyed title (items:(string*Result<_,_>) seq) =
 let cache (key:string) (f:unit -> 't) =
     printfn "Caching %s" key
     Util.Cache(Func<_> f, key)
+module Map =
+    let addItem k x (m:Map<_,'t list>) =
+        if m.ContainsKey k then
+            let existing = m.[k]
+            m |> Map.add k (x::existing)
+        else
+            m |> Map.add k [x]
+        
 module Async =
     let map f x = 
         async {
@@ -80,10 +89,16 @@ module Fetch =
         let fullpath = sprintf "%s?%s" path query
         getPage fullpath
         
+[<NoComparison>]
+type Character = {User:string;Name:string;Path:string;Link:obj}
 type Talent = {Name:string;Points:int}
     with member x.Dump() = sprintf "%s-%i" x.Name x.Points
 type TalentCategory = {Name:string; Power:string;Talents:Talent list}
-
+type TalentCategoryType =
+    | Class
+    | Generic
+    with member x.ToDump() = string x
+    
 module Parse =
     open HtmlAgilityPack
     let parseHtml (x:string) =
@@ -180,9 +195,12 @@ module Parse =
             | userTr::charTr::_versionTr::_winnerTr::_lastUpdatedTr::[] ->
                 let _userhref,uname = userTr |> getElement "a" |> Option.get |> fun a -> a.GetAttributeValue("href", String.Empty), a.InnerText
                 let cHref,cName = charTr |> getElement "a" |> Option.get |> fun a -> a.GetAttributeValue("href",String.Empty), a.InnerText
-                cHref,sprintf "%s: %s = %s" uname cName cHref
+                {User=uname;Name=cName;Path=cHref;Link=null}
+                //cHref,sprintf "%s: %s = %s" uname cName cHref
             | bad -> failwithf "unexpected number of elements %i in %s" bad.Length (bad |> List.map getOuterHtml |> String.concat "")
             
+type TalentPower = TP of string with member x.ToDump() = match x with | TP v -> v
+//type CDisp = CDisp of string with member x.ToDump() = match x with | CDisp v -> v
 module Retrieval =    
     let alwaysInputs =
         Map [
@@ -235,6 +253,16 @@ module Retrieval =
             |> Map.ofSeq
             
         m
+    let extractTalentsOnly m =
+        (Map.empty,m)
+        ||> Map.fold(fun m k v ->
+            match k with 
+            | "Generic Talents" -> 
+                m |> Map.add Generic v
+            | "Class Talents" ->
+                m |> Map.add Class v
+            | _ -> m
+        )
         
     let fetchCharacters inputs =
         Parse.getCharacters inputs
@@ -251,7 +279,7 @@ module Retrieval =
         )
         |> fetchCharacters
         |> Option.map (
-            Seq.map (Parse.rowToCharacter >> fun (h,disp) -> disp, getCharacter h |> Async.RunSynchronously |> Option.map(dissectCharacterZones >> mapCharacterZones) |> Option.defaultValue Map.empty)
+            Seq.map (Parse.rowToCharacter >> fun ch -> ch, getCharacter ch.Path |> Async.RunSynchronously |> Option.map(dissectCharacterZones >> mapCharacterZones >> extractTalentsOnly) |> Option.defaultValue Map.empty)
         )
         
     let sampleFetch () =
@@ -263,12 +291,68 @@ module Retrieval =
             >> Dump
             >> ignore
         )
-        
+let retrieveSample () =        
+    Retrieval.fetchMapped Map.empty
+    |> Option.iter(fun x ->
+        x
+        |> Seq.map (fun x -> x)
+        |> Seq.truncate 2
+        |> Dump
+        |> ignore
+    )
+    
+module Invert =
+    type CategoryAnalysis = Map<TalentCategoryType,Map<string, TalentPower * Character>>
+    let analyzeCategories (ch:Character,m:Map<TalentCategoryType,TalentCategory list>) : CategoryAnalysis = 
+        m
+        |> Map.map(fun _tct tcs ->
+            let m': Map<string,TalentPower * Character> = Map.empty
+            (m',tcs)
+            ||> List.fold(fun m tc ->
+                m |> Map.add tc.Name (TP tc.Power,ch)
+            )
+        )
+    // analyze multiple characters
+    let analyzeCCategories (items:CategoryAnalysis list) =
+        (Map.empty,items)
+        ||> List.fold(fun m (ca:CategoryAnalysis) ->
+            (m,ca)
+            ||> Map.fold(fun m k v ->
+                m |> Map.addItem k v
+            )
+            
+        )
 Retrieval.fetchMapped Map.empty
 |> Option.iter(fun x ->
     x
-    |> Seq.map (fun x -> x)
-    |> Seq.truncate 1
+    //|> Seq.map (fun x -> x)
+    //|> Seq.truncate 2
+    |> Seq.map Invert.analyzeCategories
     |> Dump
     |> ignore
 )
+
+module Heat =
+    let colorIntensity (v:float) min max (colorRange:Color seq) =
+        if v < min || v > max then failwithf "value %0.3f should be between min (%0.3f) and max (%0.3f)" v min max
+        let nV = (v - min) / (max - min) |> float32 // between 0..1
+        let steps = colorRange |> Seq.length
+        let step = 1.f / float32 steps
+        let minV = nV - step
+        let maxV = nV + step
+        let (<->) x (a,b) = x>=a && x<=b //between operator
+        seq {for i in 0..steps -> (float32 i) * step} 
+        |> Seq.windowed 2 
+        |> Seq.map(fun r -> r.[0],r.[1])
+        |> Seq.map(fun (a,b) ->
+            if nV <-> (a,b) then abs((a-b)/2.0f-nV)
+            elif minV <-> (a,b) then step-(nV-b)
+            elif maxV <-> (a,b) then step-(a-nV)
+            else 0.0f)
+        |> Seq.zip colorRange 
+        |> Seq.map (fun (c,s) -> s,Color.FromScRgb(1.f, c.ScR*s, c.ScG*s, c.ScB*s))
+        |> Seq.filter (fun (a,_) -> a>0.f)
+        |> Seq.map (fun (_,c)-> c)
+        |> Seq.fold (+) (Color.FromScRgb(1.f,0.f,0.f,0.f))
+        
+()
