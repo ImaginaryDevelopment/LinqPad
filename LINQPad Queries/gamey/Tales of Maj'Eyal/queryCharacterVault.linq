@@ -3,6 +3,7 @@
   <Namespace>System.Windows.Media</Namespace>
 </Query>
 
+// need to handle unicode talent names :(
 let path = "characters-vault"
 let flip f x y = f y x
 let trim (x:string) = x.Trim()
@@ -98,7 +99,7 @@ type TalentCategoryType =
     | Class
     | Generic
     with member x.ToDump() = string x
-    
+type Err = Err of string list    
 module Parse =
     open HtmlAgilityPack
     let parseHtml (x:string) =
@@ -145,11 +146,13 @@ module Parse =
                 let talentName =
                     let last = getElements "li" ul |> Seq.last
                     last |> getOuterHtml |> after "</div>" |> before "<" |> trim
-                Some {Name=talentName;Points= spentTd |> getText |> before "/5" |> int}
-            | _ -> data |> getOuterHtml |> fun x -> x.Dump("failing to get talent data"); None
-        with ex -> (ex.Message,getOuterHtml data,getOuterHtml spentTd).Dump("parseTalent fail"); None
+                Ok {Name=talentName;Points= spentTd |> getText |> before "/5" |> int}
+            | _ -> data |> getOuterHtml |> fun x -> x.Dump("failing to get talent data"); Error ("nonmatch",getOuterHtml data)
+        with ex ->
+            //(ex.Message,getOuterHtml data,getOuterHtml spentTd).Dump("parseTalent fail")
+           	Error(ex.Message,getOuterHtml data)
         
-    let mapTalents el =
+    let mapTalents el: (TalentCategory * (_ )) seq=
         el
         |> getElement "table"
         |> Option.get
@@ -176,7 +179,10 @@ module Parse =
                 | Title (cat,pwr) :: rem ->
                     
                     let paired = rem |> List.map(function | a::b::[] -> a,b | x -> x.Dump("pairing failed"); failwith "pairing failed" )
-                    Some {Name=cat;Power=pwr;Talents= List.choose parseTalent paired}
+                    let talents = paired |> List.map parseTalent
+                    let good = talents |> List.choose (function | Ok x -> Some x | _ -> None)
+                    let bad = talents |> List.choose (function | Error x -> Some x | _ -> None) |> List.map(fun (e1,e2) -> Err [e1;e2])
+                    Some ({Name=cat;Power=pwr;Talents= good},bad)
                 | _ ->
                     dump "failing uhoh"
                     None
@@ -201,6 +207,7 @@ module Parse =
             
 type TalentPower = TP of string with member x.ToDump() = match x with | TP v -> v
 //type CDisp = CDisp of string with member x.ToDump() = match x with | CDisp v -> v
+type TalentFetchResult =  Map<TalentCategoryType,(TalentCategory * Err list) list>
 module Retrieval =    
     let alwaysInputs =
         Map [
@@ -272,15 +279,17 @@ module Retrieval =
         |> Option.map (Parse.getElements "tr")
         
     //type FetchType = | Path of string | Values of Map<string, string list>
-    let fetchMapped v =
-        (alwaysInputs,v)
-        ||> Map.fold(fun m k v ->
-            Map.add k v m
-        )
-        |> fetchCharacters
-        |> Option.map (
-            Seq.map (Parse.rowToCharacter >> fun ch -> ch, getCharacter ch.Path |> Async.RunSynchronously |> Option.map(dissectCharacterZones >> mapCharacterZones >> extractTalentsOnly) |> Option.defaultValue Map.empty)
-        )
+    let fetchMapped v : (Character *TalentFetchResult) seq option =
+        let r = 
+            (alwaysInputs,v)
+            ||> Map.fold(fun m k v ->
+                Map.add k v m
+            )
+            |> fetchCharacters
+            |> Option.map (
+                Seq.map (Parse.rowToCharacter >> fun ch -> ch, getCharacter ch.Path |> Async.RunSynchronously |> Option.map(dissectCharacterZones >> mapCharacterZones >> extractTalentsOnly) |> Option.defaultValue Map.empty)
+            )
+        r
         
     let sampleFetch () =
         fetchMapped Map.empty
@@ -322,11 +331,46 @@ module Invert =
             )
             
         )
+        
+[<NoComparison>]
+type TalentError = {Tct:TalentCategoryType; Ch:Character; Errors: (TalentCategory*Err list) list}
+let liftFetchErrors (talents:(TalentCategory * Err list) list) : TalentCategory list * ((TalentCategory*Err list) list) =
+    let init = List.empty, List.empty
+    (init,talents)
+    ||> List.fold(fun (c,e) (tc,errs) ->
+        tc::c, if List.isEmpty errs then e else (tc,errs)::e
+    )
+// pull out the errors for aggregation with other character errors        
+let extractFetchErrors (ch,m:TalentFetchResult) =
+    let cl,dirty = 
+        let init = Map.empty, List.empty
+        (init,m)
+        ||> Map.fold(fun (cl,d) tct talents ->
+            let clean,dirty = liftFetchErrors talents
+            cl |> Map.add tct clean, if List.isEmpty dirty then d else (ch,dirty) :: d
+        )
+    (ch,cl), dirty
+        
+    
+    
+let filterErrors (items : _ seq) =
+    let init = List.empty, List.empty 
+    let clean,dirty =
+        (init,items)
+        ||> Seq.fold(fun (cl,d) item ->
+            let clean,dirty = extractFetchErrors item
+            clean::cl, if List.isEmpty dirty then d else dirty::d
+        )
+    dirty.Dump("failed items")
+    clean
+    
+    
 Retrieval.fetchMapped Map.empty
 |> Option.iter(fun x ->
     x
-    //|> Seq.map (fun x -> x)
+    |> Seq.map (fun x -> x)
     //|> Seq.truncate 2
+    |> filterErrors
     |> Seq.map Invert.analyzeCategories
     |> Dump
     |> ignore
