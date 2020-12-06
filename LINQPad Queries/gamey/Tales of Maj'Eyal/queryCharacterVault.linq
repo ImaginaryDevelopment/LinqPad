@@ -70,24 +70,13 @@ module Map =
             m |> Map.add k (x::existing)
         else
             m |> Map.add k [x]
-    //let addChildItem (k:'tk) (subk:'tsk,value) (m: Map<'tk,Map<'tsk,_ list>>) : Map<'tk,Map<'tsk, _ list>> =
-    //    if m.ContainsKey k then
-    //        let m1 =
-    //            let existing:Map<'tsk, _ list> = m.[k]
-    //            existing |> addItem subk value
-    //        m |> Map.add k m1
-    //    else
-    //        m |> Map.add k subk [value]
+            
     // merge the data in m2 into m1, using m2's values as additional items in m1's list
     let mergeAsList (m2:Map<'tk,'tv >) (m:Map<'tk, 'tv list>) : Map<'tk, 'tv list> =
         (m,m2)
         ||> Map.fold(fun m k v ->
             m |> addItem k v
         )
-        
-    //let mergeChildMap (k:'tk) (m2:Map<'tsk,_ list>) (m: Map<'tk,Map<'tsk,_ list>>) : Map<'tk,Map<'tsk, _ list>> =        
-    //    if m.ContainsKey k then
-    //        let m1 = 
         
 module Async =
     let map f x = 
