@@ -12,6 +12,7 @@ type MappedClass =
     | ArcaneBlade
     | Archmage
     | Marauder
+    | Solipsist
     | SunPaladin
     with
         member x.FormValue =
@@ -20,13 +21,17 @@ type MappedClass =
             | ArcaneBlade -> "Arcane Blade", "22"
             | Archmage -> string x, "7"
             | Marauder -> string x, "71"
+            | Solipsist -> string x, "102"
             | SunPaladin ->  "Sun Paladin", "27"
-let classOpt = Adventurer.FormValue |> Some
+let classOpt = Solipsist.FormValue |> Some
 let authority = "https://te4.org/"
 let path = "characters-vault"
 let alwaysInputs =
     Map [
         "tag_official_addons", ["1"] // only querying characters using only official addons
+        //"tag_permadeath[]",["66"] // roguelike - 1 life
+        "tag_permadeath[]",["65"] // adventure - x lives
+        "tag_difficulty[]",["36"] // insane
         //"tag_level_min", ["50"]
         //"tag_dead",["dead"] // I query dead ppl
         "tag_winner", ["winner"] // only query winners
@@ -248,6 +253,8 @@ module Parse =
         |> List.ofSeq
         |> function // columns aren't always consistent
             | userTd::charTd::_ -> (userTd,charTd)
+            //| userTd::charTd::_ -> Some (userTd,charTd)
+            //| td :: [] when (getText td).Contains("No characters available") -> None
             | bad -> 
                 (bad |> List.map getOuterHtml).Dump("character row failure")
                 failwithf "unexpected number of elements %i in %s" bad.Length (bad |> List.map getOuterHtml |> String.concat "")
@@ -485,7 +492,7 @@ paging
                 k, decimal total / decimal characters
             )
             |> Seq.sortByDescending snd
-            |> Seq.truncate 30 // adventurer can be too many for charting
+            |> Seq.truncate 34 // adventurer can be too many for charting
         )
     let chartPtsExist (m:Map<string,(Character*TalentPower*CategoryAnaly) list>) =
         m |> chartf (fun m ->
@@ -498,7 +505,7 @@ paging
                 k, decimal total / decimal characters
             )
             |> Seq.sortByDescending snd
-            |> Seq.truncate 30 // adventurer can be too many for charting
+            |> Seq.truncate 34 // adventurer can be too many for charting
             
         )
     let pagingText = sprintf "attempted %i characters on %i page(s)" characters paging.Length 
