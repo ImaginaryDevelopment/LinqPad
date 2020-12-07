@@ -6,7 +6,19 @@
 // does not handle pagination on winners
 // need to handle or filter unicode talent names :( - Character zone Size field may be an easy indicator
 // need to pull up points spent in category for category analysis
-
+type MappedClass = 
+    | ArcaneBlade
+    | Archmage
+    | Marauder
+    | SunPaladin
+    with
+        member x.FormValue =
+            match x with
+            | ArcaneBlade -> "Arcane Blade", "22"
+            | Archmage -> string x, "7"
+            | Marauder -> string x, "71"
+            | SunPaladin ->  "Sun Paladin", "27"
+let classOpt = Archmage.FormValue |> Some
 let authority = "https://te4.org/"
 let path = "characters-vault"
 let urlDump,showUrls =
@@ -235,7 +247,10 @@ module Parse =
             )
                 //cHref,sprintf "%s: %s = %s" uname cName cHref
             
-type TalentPower = TP of string with member x.ToDump() = match x with | TP v -> v
+type TalentPower = TalentPower of string with member x.ToDump() = match x with | TalentPower v -> v
+type CategoryInvestment = CategoryInvestment of int with member x.ToDump() = match x with | CategoryInvestment v -> v
+type CategoryAnaly = { TotalPoints: int; TalentsObtained:int}
+
 //type CDisp = CDisp of string with member x.ToDump() = match x with | CDisp v -> v
 type TalentFetchResult =  Map<TalentCategoryType,(TalentCategory * Err list) list>
 module Retrieval =    
@@ -342,18 +357,24 @@ let retrieveSample () =
         |> ignore
     )
     
+type SequenceStatData = { Mean:decimal;Median:int; Min:int;Max:int;Population:int}
+
 module Invert =
     // correct shape of data for munging with other characters, is the shaping of a single character's data
-    type CCategoryAnalysis = Map<TalentCategoryType,Map<string, Character*TalentPower>>
+    type CCategoryAnalysis = Map<TalentCategoryType,Map<string, Character*TalentPower*CategoryAnaly>>
     // analysis of how popular a talent categories are by talent category type (generic vs class) with characters
-    type CategoryAnalysis = Map<TalentCategoryType,Map<string, (Character*TalentPower) list>>
+    type CategoryAnalysis = Map<TalentCategoryType,Map<string, (Character*TalentPower*CategoryAnaly) list>>
+    
     let analyzeCategories (ch:Character,m:Map<TalentCategoryType,TalentCategory list>) : CCategoryAnalysis = 
         m
         |> Map.map(fun _tct tcs ->
-            let m': Map<string,Character * TalentPower > = Map.empty
+            let m': Map<string,Character * TalentPower*CategoryAnaly> = Map.empty
             (m',tcs)
             ||> List.fold(fun m tc ->
-                m |> Map.add tc.Name (ch,TP tc.Power)
+                let ci = tc.Talents |> List.sumBy(fun t -> t.Points)
+                let cCount = tc.Talents |> List.filter(fun t -> t.Points > 0) |> List.length
+                let ca = {TotalPoints = ci; TalentsObtained = cCount}
+                m |> Map.add tc.Name (ch,TalentPower tc.Power, ca)
             )
         )
     // analyze multiple characters
@@ -405,7 +426,11 @@ let filterErrors (items : _ seq) =
     dirty.Dump("failed items")
     clean
     
-Retrieval.fetchMapped (Map["tag_class[]",["12"]])
+Retrieval.fetchMapped (Map[
+    match classOpt with
+    | Some (_name,v) -> yield "tag_class[]",[v]
+    | None -> ()
+    ])
 |> Option.iter(fun x ->
     x
     |> Seq.map (fun x -> x)
@@ -415,9 +440,64 @@ Retrieval.fetchMapped (Map["tag_class[]",["12"]])
     |> Seq.map Invert.analyzeCategories
     |> List.ofSeq
     |> Invert.analyzeCCategories
+    |> fun x ->
+        // potential sample data shape for charting:
+        // Talent Category line
+        // Sub Talent lines
+        [ "Spell / Fire", 5.0 / 30.0] |> ignore
+        let characters =
+            let s = x |> Map.toSeq |> Seq.map snd |> Seq.collect Map.toSeq |> Seq.collect snd |> Seq.map(fun (ch,_,_) -> ch.Name) |> Seq.distinct |> Seq.length
+            s
+        let gens = x.[Generic]
+        let chartf title f m =
+            let data: (string*decimal) seq = f m 
+            data.Chart(Func<_,_>(fst >> box),Func<_,_>(snd>>box), Util.SeriesType.Bar).DumpInline(heading=title)
+            |> ignore
+            
+        let chartTPtsAvg title (m:Map<string,(Character*TalentPower*CategoryAnaly) list>) =
+            m |> chartf title (fun m ->
+                m
+                |> Map.toSeq
+                |> Seq.filter(fst >> fun name -> int name.[0] < 255)
+                |> Seq.map(fun (k,v) ->
+                    let cas = v |> List.map(fun (_,_,ca) -> ca)
+                    let total = cas |> List.map(fun ca -> ca.TotalPoints) |> Seq.sum
+                    k, decimal total / decimal characters
+                )
+                |> Seq.sortByDescending snd
+            )
+        let chartPtsExist title (m:Map<string,(Character*TalentPower*CategoryAnaly) list>) =
+            m |> chartf title (fun m ->
+                m
+                |> Map.toSeq
+                |> Seq.filter(fst >> fun name -> int name.[0] < 255)
+                |> Seq.map(fun (k,v) ->
+                    let cas = v |> List.map(fun (_,_,ca) -> ca)
+                    let total = cas |> List.filter(fun ca -> ca.TotalPoints > 0) |> Seq.length
+                    k, decimal total / decimal characters
+                )
+                |> Seq.sortByDescending snd
+                
+            )
+        let ctptsavg title data =  
+            let fullTitle = (classOpt |> (function | Some (name,_) -> sprintf "%s " name | None -> String.Empty) |> sprintf "%s - Avg Pts per character - first page of %swinners" title ) 
+            chartTPtsAvg fullTitle data
+        let ctptex title data =
+            let fullTitle = (classOpt |> (function | Some (name,_) -> sprintf "%s " name | None -> String.Empty) |> sprintf "%s - Avg Characters Did Invest - first page of %swinners" title ) 
+            chartPtsExist fullTitle data
+            
+        ctptsavg "Generic Talents" gens
+        //chartTPtsAvg (classOpt |> function | Some cls -> sprintf "%s " cls | None -> String.Empty |> sprintf "Generic Talents - Avg Pts per character - first page of %swinners" ) gens
+        let cls = x.[Class]
+        //chartTPtsAvg  "Class Talents - Avg Pts per character - first page of rogue winners" cls
+        ctptsavg "Class Talents" cls
+        ctptex "Class Talents" cls
+        ctptex "Generic Talents" gens
+        x
     |> Dump
     |> ignore
 )
+// LINQPadChart
 
 module Heat =
     let colorIntensity (v:float) min max (colorRange:Color seq) =
