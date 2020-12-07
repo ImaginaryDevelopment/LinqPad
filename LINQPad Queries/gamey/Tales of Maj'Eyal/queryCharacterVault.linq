@@ -3,10 +3,12 @@
   <Namespace>System.Windows.Media</Namespace>
 </Query>
 
-// does not handle pagination on winners
+// does not handle pagination decently
 // need to handle or filter unicode talent names :( - Character zone Size field may be an easy indicator
 // need to pull up points spent in category for category analysis
+
 type MappedClass = 
+    | Adventurer
     | ArcaneBlade
     | Archmage
     | Marauder
@@ -14,11 +16,12 @@ type MappedClass =
     with
         member x.FormValue =
             match x with
+            | Adventurer -> string x, "104"
             | ArcaneBlade -> "Arcane Blade", "22"
             | Archmage -> string x, "7"
             | Marauder -> string x, "71"
             | SunPaladin ->  "Sun Paladin", "27"
-let classOpt = Archmage.FormValue |> Some
+let classOpt = Adventurer.FormValue |> Some
 let authority = "https://te4.org/"
 let path = "characters-vault"
 let alwaysInputs =
@@ -482,6 +485,7 @@ paging
                 k, decimal total / decimal characters
             )
             |> Seq.sortByDescending snd
+            |> Seq.truncate 30 // adventurer can be too many for charting
         )
     let chartPtsExist (m:Map<string,(Character*TalentPower*CategoryAnaly) list>) =
         m |> chartf (fun m ->
@@ -494,6 +498,7 @@ paging
                 k, decimal total / decimal characters
             )
             |> Seq.sortByDescending snd
+            |> Seq.truncate 30 // adventurer can be too many for charting
             
         )
     let pagingText = sprintf "attempted %i characters on %i page(s)" characters paging.Length 
@@ -506,13 +511,6 @@ paging
         
     let cls = x.[Class]
     let getBitMap (ch:LINQPadChart) = ch.ToBitmap()
-        //let w = System.Windows.Forms.Screen.PrimaryScreen.WorkingArea.Width / 2
-        //let h = w / 2
-        //let img = new System.Drawing.Bitmap(w, h)
-        //use g = System.Drawing.Graphics.FromImage img
-        //ch.P
-        //ch.Paint(g, new Rectangle(0,0,w,h))
-        //img
     (
         let title,clsd,gend = ctptsavg (cls,gens)
         //[clsd;gend] |> List.map getBitMap |> fun x -> x.Dump(title)
@@ -524,7 +522,7 @@ paging
     )
         
     x
-|> Dump
+//|> Dump
 |> ignore
 
 // heat not included yet
