@@ -7,6 +7,9 @@
 // need to handle or filter unicode talent names :( - Character zone Size field may be an easy indicator
 // need to pull up points spent in category for category analysis
 
+let authority = "https://te4.org/"
+let path = "characters-vault"
+
 type MappedClass = 
     | Adventurer
     | ArcaneBlade
@@ -23,19 +26,51 @@ type MappedClass =
             | Marauder -> string x, "71"
             | Solipsist -> string x, "102"
             | SunPaladin ->  "Sun Paladin", "27"
-let classOpt = Solipsist.FormValue |> Some
-let authority = "https://te4.org/"
-let path = "characters-vault"
+let classOpt = [Solipsist.FormValue] |> Some
+type Difficulty = 
+    | Normal
+    | Insane
+    with
+        member x.FormValue =
+            match x with
+            | Normal -> string x, "6"
+            | Insane -> string x, "36"
+let diffOpt = 
+        Some [Difficulty.Normal.FormValue]
+type Permadeath =
+    | Adventure // small # of lives
+    | Roguelike // 1 life
+    with
+        member x.FormValue =
+            match x with
+            | Adventure -> string x, "65"
+            | Roguelike -> string x, "66"
+let pdOpt =
+    Some [Permadeath.Roguelike.FormValue]
 let alwaysInputs =
     Map [
         "tag_official_addons", ["1"] // only querying characters using only official addons
-        //"tag_permadeath[]",["66"] // roguelike - 1 life
-        "tag_permadeath[]",["65"] // adventure - x lives
-        "tag_difficulty[]",["36"] // insane
+        //"tag_permadeath[]", [ Permadeath.Roguelike.FormValue |> snd]
+        //"tag_difficulty[]", [Difficulty.Normal.FormValue  |> snd]
+        match pdOpt with
+        | Some values -> "tag_permadeath[]", values |> List.map snd
+        | None -> ()
+        match diffOpt with
+        | Some values -> "tag_difficulty[]", values |> List.map snd
+        | None -> ()
+        "tag_winner", ["winner"] // only query winners
         //"tag_level_min", ["50"]
         //"tag_dead",["dead"] // I query dead ppl
-        "tag_winner", ["winner"] // only query winners
     ]
+let charDump, showChars =
+    let chars: ResizeArray<string*obj> = ResizeArray()
+    let dm = DumpContainer()
+    let add = fun (name:string,path:string) ->
+        let uri = Uri(Uri authority, relativeUri=path) |> string
+        chars.Add(name,box <| LINQPad.Hyperlinq uri)
+        dm.Content <- null
+        dm.Content <- chars
+    add, (fun () -> dm.Dump("chars"))
 let urlDump,showUrls =
     let urls: ResizeArray<string*obj> = ResizeArray()
     let dm = DumpContainer()
@@ -124,7 +159,6 @@ module Fetch =
             use c = httpClient()
             try
                 let! text = Async.AwaitTask <| c.GetStringAsync path 
-                urlDump path
                 //(path).Dump("Fetched")
                 return text
             with ex -> // retry
@@ -252,15 +286,16 @@ module Parse =
         |> getElements "td"
         |> List.ofSeq
         |> function // columns aren't always consistent
-            | userTd::charTd::_ -> (userTd,charTd)
-            //| userTd::charTd::_ -> Some (userTd,charTd)
-            //| td :: [] when (getText td).Contains("No characters available") -> None
+            //| userTd::charTd::_ -> (userTd,charTd)
+            | userTd::charTd::_ -> Some (userTd,charTd)
+            | td :: [] when (getText td).Contains("No characters available") -> None
             | bad -> 
                 (bad |> List.map getOuterHtml).Dump("character row failure")
                 failwithf "unexpected number of elements %i in %s" bad.Length (bad |> List.map getOuterHtml |> String.concat "")
-        |> (fun (userTd,charTd) ->
+        |> Option.map (fun (userTd,charTd) ->
                 let _userhref,uname = userTd |> getElement "a" |> Option.get |> fun a -> a.GetAttributeValue("href", String.Empty), a.InnerText
                 let cHref,cName = charTd |> getElement "a" |> Option.get |> fun a -> a.GetAttributeValue("href",String.Empty), a.InnerText
+                charDump (cName,cHref)
                 {User=uname;Name=cName;Path=cHref;Link=null}
             )
                 //cHref,sprintf "%s: %s = %s" uname cName cHref
@@ -278,6 +313,7 @@ module Retrieval =
     
         
     let getCharacter path =
+        urlDump path
         async {
             try
                 let text = cache path (fun () -> Fetch.getPage path |> Async.RunSynchronously)
@@ -341,6 +377,11 @@ module Retrieval =
     //type FetchType = | Path of string | Values of Map<string, string list>
     //let fetchMapped pageOpt v : Map<string,(Character * TalentFetchResult) seq option> =
     let fetchMapped pageOpt v : (Character * TalentFetchResult) seq option =
+        let fItem =
+            Parse.rowToCharacter
+            >> Option.map(fun ch ->
+                let m = getCharacter ch.Path |> Async.RunSynchronously |> Option.map(dissectCharacterZones >> mapCharacterZones >> extractTalentsOnly) |> Option.defaultValue Map.empty
+                ch, m)
         let r = 
             let always,pg =
                 match pageOpt with
@@ -351,9 +392,7 @@ module Retrieval =
                 Map.add k v m
             )
             |> fetchCharacters pg
-            |> Option.map (
-                Seq.map (Parse.rowToCharacter >> fun ch -> ch, getCharacter ch.Path |> Async.RunSynchronously |> Option.map(dissectCharacterZones >> mapCharacterZones >> extractTalentsOnly) |> Option.defaultValue Map.empty)
-            )
+            |> Option.map (Seq.choose fItem)
         r
         
         
@@ -452,7 +491,7 @@ let filterErrors (items : _ seq) =
 let opts =
     Map[
         match classOpt with
-        | Some (_name,v) -> yield "tag_class[]",[v]
+        | Some v -> yield "tag_class[]",v |> List.map snd
         | None -> ()
     ]
 let paging = [None;Some 1]
@@ -474,7 +513,8 @@ paging
     // Sub Talent lines
     [ "Spell / Fire", 5.0 / 30.0] |> ignore
     let characters =
-        let s = x |> Map.toSeq |> Seq.map snd |> Seq.collect Map.toSeq |> Seq.collect snd |> Seq.map(fun (ch,_,_) -> ch.Name) |> Seq.distinct |> Seq.length
+        let s = x |> Map.toSeq |> Seq.map snd |> Seq.collect Map.toSeq |> Seq.collect snd |> Seq.map(fun (ch,_,_) -> ch.Name + ch.Path) |> Seq.distinct |> Seq.length
+        
         s
     let gens = x.[Generic]
     let chartf f m =
@@ -502,18 +542,27 @@ paging
             |> Seq.map(fun (k,v) ->
                 let cas = v |> List.map(fun (_,_,ca) -> ca)
                 let total = cas |> List.filter(fun ca -> ca.TotalPoints > 0) |> Seq.length
-                k, decimal total / decimal characters
+                let wt = decimal total / decimal characters
+                if wt > 1m then
+                    (k,characters,total,wt,cas).Dump("wth?")
+                k, wt
             )
             |> Seq.sortByDescending snd
             |> Seq.truncate 34 // adventurer can be too many for charting
             
         )
     let pagingText = sprintf "attempted %i characters on %i page(s)" characters paging.Length 
+    let makeTitle title =
+        let makeOpt = Option.map(List.map fst >> String.concat "+" >> sprintf "%s ") >> Option.defaultValue String.Empty
+        let co = classOpt |> makeOpt
+        let dO = diffOpt |> makeOpt
+        let pd = pdOpt |> makeOpt
+        sprintf "%s - %s of %s%s%s" title pagingText co dO pd
     let ctptsavg (cls,gens) =  
-        let fullTitle = (classOpt |> (function | Some (name,_) -> sprintf "%s " name | None -> String.Empty) |> sprintf "Avg Pts per character - %s of %s" pagingText ) 
+        let fullTitle = makeTitle "Avg Pts per character"
         fullTitle, chartTPtsAvg cls, chartTPtsAvg gens
     let ctptex (cls,gens) =
-        let fullTitle = (classOpt |> (function | Some (name,_) -> sprintf "%s " name | None -> String.Empty) |> sprintf "Avg Characters Did Invest - %s of %s" pagingText) 
+        let fullTitle = makeTitle "Avg Characters Did Invest"
         fullTitle,chartPtsExist cls, chartPtsExist gens
         
     let cls = x.[Class]
@@ -557,4 +606,5 @@ module Heat =
         |> Seq.fold (+) (Color.FromScRgb(1.f,0.f,0.f,0.f))
         
 ()
+showChars()
 showUrls()
