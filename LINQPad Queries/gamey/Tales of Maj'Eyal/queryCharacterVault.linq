@@ -21,6 +21,13 @@ type MappedClass =
 let classOpt = Archmage.FormValue |> Some
 let authority = "https://te4.org/"
 let path = "characters-vault"
+let alwaysInputs =
+    Map [
+        "tag_official_addons", ["1"] // only querying characters using only official addons
+        //"tag_level_min", ["50"]
+        //"tag_dead",["dead"] // I query dead ppl
+        "tag_winner", ["winner"] // only query winners
+    ]
 let urlDump,showUrls =
     let urls: ResizeArray<string*obj> = ResizeArray()
     let dm = DumpContainer()
@@ -114,6 +121,7 @@ module Fetch =
                 return text
             with ex -> // retry
                 (path,ex).Dump("path failure")
+                do! Async.Sleep 1500 // rest up for next attempt
                 let! text = Async.AwaitTask <| c.GetStringAsync path 
                 return text
         }
@@ -254,11 +262,6 @@ type CategoryAnaly = { TotalPoints: int; TalentsObtained:int}
 //type CDisp = CDisp of string with member x.ToDump() = match x with | CDisp v -> v
 type TalentFetchResult =  Map<TalentCategoryType,(TalentCategory * Err list) list>
 module Retrieval =    
-    let alwaysInputs =
-        Map [
-            "tag_official_addons", ["1"] // only querying characters using only official addons
-            "tag_winner", ["winner"] // only query winners
-        ]
         
     Parse.setupInputs() // not needed/used, featureset deferred
     |> ignore
@@ -314,32 +317,38 @@ module Retrieval =
             | _ -> m
         )
         
-    let fetchCharacters inputs =
+    let fetchCharacters pg inputs =
         Parse.getCharacters inputs
         |> Async.RunSynchronously
         |> Parse.getElement "table"
         |> Option.bind (Parse.getElement "tbody")
         |> Option.map (Parse.getElements "tr")
         |> Option.map(fun x ->
-            printfn "%i characters found on page 1" x.Length
+            printfn "%i characters found on page %i" x.Length (pg + 1)
             x
         )
         
     //type FetchType = | Path of string | Values of Map<string, string list>
-    let fetchMapped v : (Character * TalentFetchResult) seq option =
+    //let fetchMapped pageOpt v : Map<string,(Character * TalentFetchResult) seq option> =
+    let fetchMapped pageOpt v : (Character * TalentFetchResult) seq option =
         let r = 
-            (alwaysInputs,v)
+            let always,pg =
+                match pageOpt with
+                | Some pg -> alwaysInputs |> Map.add "page" ([string pg]), pg
+                | None -> alwaysInputs, 0
+            (always,v)
             ||> Map.fold(fun m k v ->
                 Map.add k v m
             )
-            |> fetchCharacters
+            |> fetchCharacters pg
             |> Option.map (
                 Seq.map (Parse.rowToCharacter >> fun ch -> ch, getCharacter ch.Path |> Async.RunSynchronously |> Option.map(dissectCharacterZones >> mapCharacterZones >> extractTalentsOnly) |> Option.defaultValue Map.empty)
             )
         r
         
+        
     let sampleFetch () =
-        fetchMapped Map.empty
+        fetchMapped None Map.empty
         |> Option.map(
             Seq.map (fun x -> x)
             //|> Seq.map(fun (x,y) -> x, y |> logErrors x)
@@ -348,14 +357,17 @@ module Retrieval =
             >> ignore
         )
 let retrieveSample () =        
-    Retrieval.fetchMapped (Map["tag_class[]",["12"]])
-    |> Option.iter(fun x ->
-        x
-        |> Seq.map (fun x -> x)
-        |> Seq.truncate 2
-        |> Dump
-        |> ignore
-    )
+    [
+        let opts = Map["tag_class[]",["12"]]
+        Retrieval.fetchMapped None opts
+        Retrieval.fetchMapped (Some 1) opts
+    ]
+    |> List.choose id
+    
+    |> Seq.map (fun x -> x)
+    |> Seq.truncate 2
+    |> Dump
+    |> ignore
     
 type SequenceStatData = { Mean:decimal;Median:int; Min:int;Max:int;Population:int}
 
@@ -416,6 +428,7 @@ let extractFetchErrors (ch,m:TalentFetchResult) =
     (ch,cl), dirty
         
 let filterErrors (items : _ seq) =
+    Util.Progress <- Nullable 50
     let init = List.empty, List.empty 
     let clean,dirty =
         (init,items)
@@ -425,80 +438,96 @@ let filterErrors (items : _ seq) =
         )
     dirty.Dump("failed items")
     clean
-    
-Retrieval.fetchMapped (Map[
-    match classOpt with
-    | Some (_name,v) -> yield "tag_class[]",[v]
-    | None -> ()
-    ])
-|> Option.iter(fun x ->
-    x
-    |> Seq.map (fun x -> x)
-    //|> Seq.truncate 2
-    |> filterErrors
-    |> List.ofSeq
-    |> Seq.map Invert.analyzeCategories
-    |> List.ofSeq
-    |> Invert.analyzeCCategories
-    |> fun x ->
-        // potential sample data shape for charting:
-        // Talent Category line
-        // Sub Talent lines
-        [ "Spell / Fire", 5.0 / 30.0] |> ignore
-        let characters =
-            let s = x |> Map.toSeq |> Seq.map snd |> Seq.collect Map.toSeq |> Seq.collect snd |> Seq.map(fun (ch,_,_) -> ch.Name) |> Seq.distinct |> Seq.length
-            s
-        let gens = x.[Generic]
-        let chartf title f m =
-            let data: (string*decimal) seq = f m 
-            data.Chart(Func<_,_>(fst >> box),Func<_,_>(snd>>box), Util.SeriesType.Bar).DumpInline(heading=title)
-            |> ignore
-            
-        let chartTPtsAvg title (m:Map<string,(Character*TalentPower*CategoryAnaly) list>) =
-            m |> chartf title (fun m ->
-                m
-                |> Map.toSeq
-                |> Seq.filter(fst >> fun name -> int name.[0] < 255)
-                |> Seq.map(fun (k,v) ->
-                    let cas = v |> List.map(fun (_,_,ca) -> ca)
-                    let total = cas |> List.map(fun ca -> ca.TotalPoints) |> Seq.sum
-                    k, decimal total / decimal characters
-                )
-                |> Seq.sortByDescending snd
-            )
-        let chartPtsExist title (m:Map<string,(Character*TalentPower*CategoryAnaly) list>) =
-            m |> chartf title (fun m ->
-                m
-                |> Map.toSeq
-                |> Seq.filter(fst >> fun name -> int name.[0] < 255)
-                |> Seq.map(fun (k,v) ->
-                    let cas = v |> List.map(fun (_,_,ca) -> ca)
-                    let total = cas |> List.filter(fun ca -> ca.TotalPoints > 0) |> Seq.length
-                    k, decimal total / decimal characters
-                )
-                |> Seq.sortByDescending snd
-                
-            )
-        let ctptsavg title data =  
-            let fullTitle = (classOpt |> (function | Some (name,_) -> sprintf "%s " name | None -> String.Empty) |> sprintf "%s - Avg Pts per character - first page of %swinners" title ) 
-            chartTPtsAvg fullTitle data
-        let ctptex title data =
-            let fullTitle = (classOpt |> (function | Some (name,_) -> sprintf "%s " name | None -> String.Empty) |> sprintf "%s - Avg Characters Did Invest - first page of %swinners" title ) 
-            chartPtsExist fullTitle data
-            
-        ctptsavg "Generic Talents" gens
-        //chartTPtsAvg (classOpt |> function | Some cls -> sprintf "%s " cls | None -> String.Empty |> sprintf "Generic Talents - Avg Pts per character - first page of %swinners" ) gens
-        let cls = x.[Class]
-        //chartTPtsAvg  "Class Talents - Avg Pts per character - first page of rogue winners" cls
-        ctptsavg "Class Talents" cls
-        ctptex "Class Talents" cls
-        ctptex "Generic Talents" gens
-        x
-    |> Dump
-    |> ignore
-)
-// LINQPadChart
 
+let opts =
+    Map[
+        match classOpt with
+        | Some (_name,v) -> yield "tag_class[]",[v]
+        | None -> ()
+    ]
+let paging = [None;Some 1]
+paging
+|> List.map(flip Retrieval.fetchMapped opts)
+|> Seq.choose id
+|> Seq.collect id
+|> List.ofSeq // need to do this now so the progress bar change ahead isn't misleading
+|> Seq.map (fun x -> x)
+//|> Seq.truncate 2
+|> filterErrors
+|> List.ofSeq
+|> Seq.map Invert.analyzeCategories
+|> List.ofSeq
+|> Invert.analyzeCCategories
+|> fun x ->
+    // potential sample data shape for charting:
+    // Talent Category line
+    // Sub Talent lines
+    [ "Spell / Fire", 5.0 / 30.0] |> ignore
+    let characters =
+        let s = x |> Map.toSeq |> Seq.map snd |> Seq.collect Map.toSeq |> Seq.collect snd |> Seq.map(fun (ch,_,_) -> ch.Name) |> Seq.distinct |> Seq.length
+        s
+    let gens = x.[Generic]
+    let chartf f m =
+        let data: (string*decimal) seq = f m 
+        data.Chart(Func<_,_>(fst >> box),Func<_,_>(snd>>box), Util.SeriesType.Bar)//.DumpInline(heading=title)
+        
+    let chartTPtsAvg (m:Map<string,(Character*TalentPower*CategoryAnaly) list>) =
+        m |> chartf (fun m ->
+            m
+            |> Map.toSeq
+            |> Seq.filter(fst >> fun name -> int name.[0] < 255)
+            |> Seq.map(fun (k,v) ->
+                let cas = v |> List.map(fun (_,_,ca) -> ca)
+                let total = cas |> List.map(fun ca -> ca.TotalPoints) |> Seq.sum
+                k, decimal total / decimal characters
+            )
+            |> Seq.sortByDescending snd
+        )
+    let chartPtsExist (m:Map<string,(Character*TalentPower*CategoryAnaly) list>) =
+        m |> chartf (fun m ->
+            m
+            |> Map.toSeq
+            |> Seq.filter(fst >> fun name -> int name.[0] < 255)
+            |> Seq.map(fun (k,v) ->
+                let cas = v |> List.map(fun (_,_,ca) -> ca)
+                let total = cas |> List.filter(fun ca -> ca.TotalPoints > 0) |> Seq.length
+                k, decimal total / decimal characters
+            )
+            |> Seq.sortByDescending snd
+            
+        )
+    let pagingText = sprintf "attempted %i characters on %i page(s)" characters paging.Length 
+    let ctptsavg (cls,gens) =  
+        let fullTitle = (classOpt |> (function | Some (name,_) -> sprintf "%s " name | None -> String.Empty) |> sprintf "Avg Pts per character - %s of %s" pagingText ) 
+        fullTitle, chartTPtsAvg cls, chartTPtsAvg gens
+    let ctptex (cls,gens) =
+        let fullTitle = (classOpt |> (function | Some (name,_) -> sprintf "%s " name | None -> String.Empty) |> sprintf "Avg Characters Did Invest - %s of %s" pagingText) 
+        fullTitle,chartPtsExist cls, chartPtsExist gens
+        
+    let cls = x.[Class]
+    let getBitMap (ch:LINQPadChart) = ch.ToBitmap()
+        //let w = System.Windows.Forms.Screen.PrimaryScreen.WorkingArea.Width / 2
+        //let h = w / 2
+        //let img = new System.Drawing.Bitmap(w, h)
+        //use g = System.Drawing.Graphics.FromImage img
+        //ch.P
+        //ch.Paint(g, new Rectangle(0,0,w,h))
+        //img
+    (
+        let title,clsd,gend = ctptsavg (cls,gens)
+        //[clsd;gend] |> List.map getBitMap |> fun x -> x.Dump(title)
+        Util.HorizontalRun(false, clsd |> getBitMap,gend |> getBitMap).Dump(title)
+    )
+    (
+        let title,clsd,gend = ctptex (cls,gens)
+        Util.HorizontalRun(false, clsd |> getBitMap,gend |> getBitMap).Dump(title)
+    )
+        
+    x
+|> Dump
+|> ignore
+
+// heat not included yet
 module Heat =
     let colorIntensity (v:float) min max (colorRange:Color seq) =
         if v < min || v > max then failwithf "value %0.3f should be between min (%0.3f) and max (%0.3f)" v min max
