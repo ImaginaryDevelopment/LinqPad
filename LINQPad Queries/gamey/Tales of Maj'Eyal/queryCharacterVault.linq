@@ -5,7 +5,7 @@
 
 // does not handle pagination decently
 // need to handle or filter unicode talent names :( - Character zone Size field may be an easy indicator
-// need to pull up points spent in category for category analysis
+// TODO: make a chart showing talent popularity for all with more than 2 points ordered by actual total spent
 
 let authority = "https://te4.org/"
 let path = "characters-vault"
@@ -14,6 +14,7 @@ type MappedClass =
     | Adventurer
     | ArcaneBlade
     | Archmage
+    | Doombringer
     | Marauder
     | Solipsist
     | SunPaladin
@@ -23,10 +24,11 @@ type MappedClass =
             | Adventurer -> string x, "104"
             | ArcaneBlade -> "Arcane Blade", "22"
             | Archmage -> string x, "7"
+            | Doombringer -> string x, "23313"
             | Marauder -> string x, "71"
             | Solipsist -> string x, "102"
             | SunPaladin ->  "Sun Paladin", "27"
-let classOpt = [Solipsist.FormValue] |> Some
+let classOpt = [Doombringer.FormValue] |> Some
 type Difficulty = 
     | Normal
     | Insane
@@ -36,7 +38,7 @@ type Difficulty =
             | Normal -> string x, "6"
             | Insane -> string x, "36"
 let diffOpt = 
-        Some [Difficulty.Normal.FormValue]
+        None // Some [Difficulty.Normal.FormValue]
 type Permadeath =
     | Adventure // small # of lives
     | Roguelike // 1 life
@@ -583,6 +585,7 @@ paging
 
 // heat not included yet
 module Heat =
+    // http://www.fssnip.net/cN/0
     let colorIntensity (v:float) min max (colorRange:Color seq) =
         if v < min || v > max then failwithf "value %0.3f should be between min (%0.3f) and max (%0.3f)" v min max
         let nV = (v - min) / (max - min) |> float32 // between 0..1
