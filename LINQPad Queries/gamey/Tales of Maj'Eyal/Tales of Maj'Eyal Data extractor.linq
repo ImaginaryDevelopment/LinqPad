@@ -359,11 +359,12 @@ module Retrieval =
     let dissectCharsheetHead =
         Parse.getElement "table"
     let dissectProdigies x =
+        Parse.dumpOuter "prodigies?" x
         option{
             let! tbl = Parse.getElement "table" x
             Assert.hasClass "talents" tbl
-            let! tbody = Parse.getElement "tbody" tbl
-            let trs = Parse.getElements "tr" tbody
+            // tbody wasn't present at least once
+            let trs = Parse.getElement "tbody" tbl |> Option.map (Parse.getElements "tr") |> Option.defaultValue (Parse.getElements "tr" tbl)
             return trs |> List.choose (
                 Parse.getElements "td"
                 >> function
