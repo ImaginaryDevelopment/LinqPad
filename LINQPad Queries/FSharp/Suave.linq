@@ -14,6 +14,33 @@ open Suave.Successful
 open Suave.Operators
 open Suave.Authentication
 
+let (|ParseInt|_|) =
+    function
+    | "" | null -> None
+    | x ->
+        match Int32.TryParse x with
+        | true, i -> Some i
+        | _ -> None
+
+
+let (|HasParam|_|) name (ctx:HttpContext) =
+    ctx.request.queryParam name
+    |> function
+        |Choice1Of2 value ->
+            Some value
+        | _ -> None
+        
+let playersAvailablePart:WebPart =
+    function
+    //access to both gameId and player in session
+    |HasParam "inSession" playerInSession & HasParam "gameId" gameId as ctx ->
+        // do your processing here, sample return:
+        OK "we had all the required important parts" ctx
+    // or an example of something more strongly typed
+    | HasParam "inSession" (ParseInt playerInSession) & HasParam "gameId" (ParseInt gameId) as ctx ->
+        // do your processing here, sample return:
+        OK "we had all the required important parts" ctx
+    | ctx -> never ctx
 //needs: serve files, serve pages
 type Tutorial = 
     |HelloWorld
@@ -58,7 +85,9 @@ module ServerSamples =
                 |> function
                     | Choice1Of2 v -> sprintf "CompanyId %i" v |> OK
                     | Choice2Of2 requestErrorWebPart -> requestErrorWebPart 
-                |> fun wp -> wp ctx
+                |> fun wp ->
+                    let result = wp ctx
+                    result
             )
         let fullQueryPart:WebPart =
             path "/query" >=>
@@ -103,6 +132,9 @@ module ServerSamples =
                         path "/" >=> OK "Default GET"
                         path "/hello" >=> OK "Hello GET"
                         pathScan "/whatnumber/%i" ((sprintf "Your number is %i") >> OK)
+                        path "/headers" >=> (fun ctx -> ctx.request.headers |> sprintf "%A" |> fun x -> OK x ctx)
+                        path "/now" >=> (fun ctx -> DateTime.Now  |> sprintf "%A" |> fun x -> OK x ctx)
+                        path "/diag" >=> (fun ctx -> ctx.isLocal |> sprintf "%A" |> fun x -> OK x ctx)
                         pathScan "/client/%i/customer/%i" (fun (clientId,customerId) -> sprintf "Client %i, Customer %i" clientId customerId |> OK)
                         pathScan "/client/%i/customerQuery" (fun clientId ctx -> 
                             match queryParamOrFail "customerId" ctx with
@@ -178,7 +210,11 @@ let startServer serverType =
     | Logging -> ServerSamples.logging()
     | Async -> ServerSamples.async ()
             
-LINQPad.Hyperlinq("http://localhost:8083").Dump()
-LINQPad.Hyperlinq("http://localhost:8083/public").Dump()
-//startServer Async
+LINQPad.Hyperlinq("http://localhost:8080").Dump()
+LINQPad.Hyperlinq("http://localhost:8080/public").Dump()
+//startServer Async 
+//startServer HelloWorld
+let test f f2 f3 =
+    f >>= f2 >>= f3
+    
 startServer Routing

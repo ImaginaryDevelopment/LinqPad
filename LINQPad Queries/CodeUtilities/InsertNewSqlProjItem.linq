@@ -122,40 +122,74 @@ let insertBuildItem (BuildItemFullPath bif as bi) projPath text =
 let (ProjectFullPath pp as projPath) = Util.GetPassword("sqlproj full path") |> ProjectFullPath 
 if File.Exists pp |> not then
     failwithf "bad sql proj path:%s" pp
-let getDefaultFunText schema name =
-    [|
-        sprintf "CREATE FUNCTION [%s].[%s]" schema name
-        "("
-        "    @PatientID int"
-        ")"
-        "RETURNS int"
-        "AS"
-        "BEGIN"
-        "  declare @Id int"
-        "  select @Id=id from somewhere"
-        "return @Id"
-    |]
-let getDefaultSprocText schema name =
-    [|
-        sprintf "CREATE  PROCEDURE [%s].[%s]" schema name
-        "    @payerID varchar(10),"
-        "    @AppointmentFacilityID int"
-        "AS"
-        String.Empty
-        "BEGIN"
-        "    select * from blah"
-        "END"
-    |]
+type InsertionType =
+    |Function
+    |Sproc
+    |Table
+let getDefaultText schema name =
+    function
+    | Function ->
+        [|
+            sprintf "CREATE FUNCTION [%s].[%s]" schema name
+            "("
+            "    @PatientID int"
+            ")"
+            "RETURNS int"
+            "AS"
+            "BEGIN"
+            "  declare @Id int"
+            "  select @Id=id from somewhere"
+            "return @Id"
+        |]
+    | Sproc ->
+        [|
+            sprintf "CREATE  PROCEDURE [%s].[%s]" schema name
+            "    @payerID varchar(10),"
+            "    @AppointmentFacilityID int"
+            "AS"
+            String.Empty
+            "BEGIN"
+            "    select * from blah"
+            "END"
+        |]
+    | Table ->
+        [|
+            sprintf "CREATE TABLE [%s].[%s]" schema name
+            "("
+            sprintf "%sID int identity primary key," name
+            sprintf "[UserID] int NOT NULL CONSTRAINT [FK_%s_UserID_Users_UserID] FOREIGN KEY ([UserID]) REFERENCES [dbo].[Users] ([UserID])," name
+            sprintf "[Created] DateTime NOT NULL CONSTRAINT DF_%s_Created DEFAULT getutcdate()" name
+            ")"
+        |]
+let getTargetPath schema name =
+    function
+    | Function ->
+        sprintf @"Schema Objects\Schemas\%s\Programmability\Functions\%s.function.sql" schema name
+    | Sproc ->
+        sprintf @"Schema Objects\Schemas\%s\Programmability\Stored Procedures\%s.sproc.sql" schema name
+    | Table ->
+        sprintf @"Schema Objects\Schemas\%s\Tables\%s.table.sql" schema name
 // does not auto-correct casing
 let schemaTarget = Util.ReadLine("Schema?","dbo", suggestions= ["dbo";"Accounts";"Diags"])   
-let isFunction = Util.ReadLine("isFunction?",false)
+let insertionType = 
+    // keep asking until a valid item is selected
+    Seq.unfold(fun selectedValidInsertionType ->
+        if selectedValidInsertionType then
+            None
+        else
+            match Util.ReadLine<string>(prompt="Insertion Type?",defaultValue="Sproc", suggestions= [ "Sproc";"Function";"Table"]) with
+            | "Sproc" -> Some(Some Sproc,true)
+            | "Function" -> Some(Some Function,true)
+            | "Table" -> Some(Some Table,true)
+            | _ -> Some(None,false)
+    ) false
+    |> Seq.choose id
+    |> Seq.head
+    
 let name = Util.ReadLine("Name?")
 let biFullPath =
     // nice to have: populate the autocomplete bank with the folders found under schemas
-    let relPath = 
-        if isFunction then
-            sprintf @"Schema Objects\Schemas\%s\Programmability\Functions\%s.function.sql" schemaTarget name
-        else sprintf @"Schema Objects\Schemas\%s\Programmability\Stored Procedures\%s.sproc.sql" schemaTarget name
+    let relPath = getTargetPath schemaTarget name insertionType
     Path.Combine(Path.GetDirectoryName projPath.Value,relPath)
     |> BuildItemFullPath
     
@@ -165,7 +199,8 @@ text
 |> fun x ->
     File.WriteAllLines(projPath.Value, Array.ofList x)
     if not <| File.Exists biFullPath.Value then
-        File.WriteAllLines(biFullPath.Value,if isFunction then getDefaultFunText schemaTarget name else getDefaultSprocText schemaTarget name)
+        let text = getDefaultText schemaTarget name insertionType
+        File.WriteAllLines(biFullPath.Value, text)
         printfn "Created file at %s" biFullPath.Value
         Tfs.add biFullPath.Value
     else Array.empty

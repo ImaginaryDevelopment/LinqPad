@@ -2,7 +2,8 @@
 
 // find PoE chat log, search for text perhaps
 
-let leagueStartOpt = Some "2020/09/18 12"
+let leagueStartOpt = None // Some "2020/04/01 12"
+let debug = false
 
 [<Struct>]
 type SearchType =
@@ -10,16 +11,36 @@ type SearchType =
     | And of terms:string list
     
 let searchTerms = [
-    And [ "Replica"; "@To"]
+    And [ "anguish"; "@To"]
     //Single "@To"
     //Single "@From"
     ]
 
-// for steam users they should be in the steam game installation folder
-let commonSteamFolderNames = [
-    "Steam"
-    "SteamLibrary"
-]
+module LogLocation =
+    let regularSearch (rootDirectory:DirectoryInfo) =
+        [
+            yield rootDirectory.FullName
+            yield Path.Combine(rootDirectory.FullName,"Games")
+            yield Path.Combine(rootDirectory.FullName,"games")
+        ]
+        |> Seq.filter(Directory.Exists)
+        
+    // for steam users they should be in the steam game installation folder
+    let steamSearch (rootDirectory:DirectoryInfo) =
+
+        let commonSteamFolderNames = [
+            "Steam"
+            "SteamLibrary"
+        ]
+        [
+        
+            yield! commonSteamFolderNames |> Seq.map(fun x -> Path.Combine(rootDirectory.FullName, x))
+            yield! commonSteamFolderNames |> Seq.map(fun x -> Path.Combine(rootDirectory.FullName,"Games", x))
+            yield! commonSteamFolderNames |> Seq.map(fun x -> Path.Combine(rootDirectory.FullName,"games", x))
+        ]
+        |> Seq.map(fun root -> Path.Combine(root,"steamapps","common"))
+        |> Seq.filter(Directory.Exists)
+    
 let inline throwNullOrEmpty name =
     function
     | null | "" -> invalidOp <| sprintf "%s must not be null or empty" name
@@ -29,9 +50,6 @@ let inline withValueString f =
     function
     | null | "" -> None
     | x -> f x |> Some
-
-            //Seq.skipWhile(fun x -> not <| x.StartsWith ls)
-//let inline doesnt f x = f x |> not
 
 let inline startsWith search =
     throwNullOrEmpty "search" search
@@ -67,26 +85,53 @@ System.IO.DriveInfo.GetDrives()
     d.DriveType = System.IO.DriveType.Fixed
 )
 |> Seq.map(fun x -> x.RootDirectory)
-|> Seq.fold(fun state rd ->
-    state @ [
-        yield! commonSteamFolderNames |> Seq.map(fun x -> Path.Combine(rd.FullName, x))
-        yield! commonSteamFolderNames |> Seq.map(fun x -> Path.Combine(rd.FullName,"Games", x))
+|> Seq.collect(fun rd ->
+    [
+        LogLocation.steamSearch rd
+        LogLocation.regularSearch rd
     ]
-    
-) List.empty
+    |> Seq.collect id
+)
+|> List.ofSeq
 |> List.filter(Directory.Exists)
-|> Seq.map(fun root -> Path.Combine(root,"steamapps","common","Path of Exile", "logs"))
-|> Seq.filter(Directory.Exists)
-|> Seq.map(fun logPath -> Path.Combine(logPath,"Client.txt"))
-|> Seq.filter(File.Exists)
+|> fun dirs ->
+    if debug then
+        printfn "Searching %i root dirs" dirs.Length
+        dirs.Dump("Searching")
+    dirs
+|> Seq.collect(fun root ->
+    [
+        "Path of Exile"
+        "PathOfExile"
+    ]
+    |> Seq.map(fun p -> Path.Combine(root,p, "logs"))
+)
+//|> Seq.filter(Directory.Exists)
+|> List.ofSeq
+|> fun dirs ->
+    if debug then
+        printfn "Searching %i dirs" dirs.Length
+        dirs.Dump("Searching logpaths")
+    dirs
 |> Seq.map(fun logPath ->
+    if debug then printfn "%s, exists? %b" logPath <| Directory.Exists logPath 
+    let p = Path.Combine(logPath,"Client.txt")
+    if debug then
+        printfn "Checking if log %s exists, %b" p <| File.Exists p
+    p
+)
+|> Seq.filter(File.Exists)
+|> Seq.distinct
+|> Seq.map(fun logPath ->
+    printfn "Getting log file info"
     let fi = FileInfo(logPath)
     fi,fi.LastWriteTime
 )
 |> Seq.sortByDescending snd
 
 |> fun x ->
-    x.Dump()
+    if debug then
+        x.Dump("logs to search")
     x
 |> Seq.tryHead
 |> Option.iter(fun (fi, _dt) ->
@@ -96,22 +141,25 @@ System.IO.DriveInfo.GetDrives()
     sr
     |> Seq.unfold(fun sr ->
         if sr.EndOfStream then None
-        else Some( sr.ReadLine(),sr)
+        else Some(sr.ReadLine(),sr)
     )
-    |> fun x -> 
+    |> fun x -> // if we have a league start, skip all before that 
+        // we are doing raw string skipping here instead of an actual time. 
+        // if the journal starts after the specified date/time it might skip all
         leagueStartOpt
         |> Option.map(fun ls -> 
             x |> Seq.skipWhile(startsWith ls >> not) //fun x -> not <| x.StartsWith ls)
         )
         |> Option.defaultValue x
-    |> Seq.skip 1
-    |> Seq.skipWhile(contains "Connect time" >> not)
-    |> Seq.skip 1
-    |> Seq.skipWhile(contains "Connect time" >> not)
-    |> Seq.skip 1
-    |> Seq.skipWhile(contains "Connect time" >> not)
-    |> Seq.skip 1
+    //|> Seq.skip 1
+    //|> Seq.skipWhile(contains "Connect time" >> not)
+    //|> Seq.skip 1
+    //|> Seq.skipWhile(contains "Connect time" >> not)
+    //|> Seq.skip 1
+    //|> Seq.skipWhile(contains "Connect time" >> not)
+    //|> Seq.skip 1
     |> Seq.filter(fun x -> not <| x.Contains("[VULKAN]"))
+    |> Seq.filter(fun x -> not <| x.Contains("[EOS SDK]"))
     |> fun x ->
         match searchTerms with
         | [] -> x

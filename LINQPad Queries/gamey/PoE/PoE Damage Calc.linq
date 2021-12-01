@@ -134,9 +134,10 @@ type CharacterAttack = {WeaponStyle:WeaponStyle; Modifications:(ModifierType*Dam
         
 let entropyScratch = {Name="Entropy Scratch";Damage=[{Type=Phys;Min=109.0m;Max=310.0m}]; Speed=1.63m}
 let dragonBarb = {Name="Dragon Barb";Damage=[{Type=Phys; Min=91.0m; Max=275.0m}];Speed=1.94m}
+let empyreanScalpel= {Name="Empyrean Scalpel";Damage=[{Type=Phys;Min=71.0m;Max=164.0m}]; Speed=1.4m}
 let lancingSteel = {Name="Lancing Steel"; Eff=0.81m}
 let iveBeenImpaled = 
-    {   WeaponStyle=Two(entropyScratch,dragonBarb)
+    {   WeaponStyle=Two(empyreanScalpel,dragonBarb)
         SpeedIncrease= 0.88m; SpeedMore= 0.1m;Skill=lancingSteel
         Modifications=[
                         Increase,Option' None, 145m

@@ -1,11 +1,18 @@
 <Query Kind="FSharpProgram">
+  <NuGetReference>Newtonsoft.Json</NuGetReference>
   <NuGetReference>Selenium.WebDriver</NuGetReference>
+  <Namespace>Newtonsoft.Json</Namespace>
 </Query>
 
 // convert a currency to reference value (chaos orbs)
 open OpenQA.Selenium
 
 open OpenQA.Selenium.Chrome
+module Option =
+    let getOrDefault y =
+        function
+        | Some x -> x
+        | None -> y
 let dumpt t x = x.Dump(description=t); x
 let getInnerHtml (x:IWebElement) = x.GetAttribute("innerHTML")
 let trim1 (delim:string) (x:string) = x.Trim(delim |> Array.ofSeq)
