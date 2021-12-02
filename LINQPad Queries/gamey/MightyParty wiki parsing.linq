@@ -28,20 +28,39 @@ module Helpers =
         | ValueString x -> x.[x.IndexOf delimiter + delimiter.Length ..]
         | x -> x
         
-        
     module Option =
         let getOrFail msg = 
             function
             | Some x -> x
             | None -> failwith msg
-
+    module List =
+        let partitionResults items =
+            ((List.empty,List.empty),items |> List.indexed)
+            ||> List.fold( fun (oks,errs) ->
+                    function
+                    | i,Ok x -> (i,x)::oks,errs
+                    | i,Error e -> oks, (i,e)::errs
+            )
     module Async =
         let map f x =
             async {
                 let! x = x
                 return f x
             }
-        
+        let catch x =
+            async{
+                try
+                    let! x = x
+                    return Ok x
+                with ex ->
+                    return Error ex
+            }
+        // if the Async<'t> is Async<Result<_,_>> make sure it is because of a catch instead of just returning a Result
+        // the perf hit of a try/catch is about 99% weighted on the damage being done in failure, no throw means almost no hit
+        let catchResult x =
+            catch x
+            |> map(function | Ok x -> x | Error ex -> Error ex)
+            
     module Html =
         let inline getChildNodes (node:HtmlNode) = node.ChildNodes
         let inline getNodeName (x:HtmlNode) = x.Name
@@ -201,7 +220,7 @@ let processATable title fAssertHeaders fMap (IsTable table) =
     |> Html.getChildElements // now we have trs
     |> Seq.choose(fun node ->
         match Html.getNodeName node with
-        | "tr" -> Some <| Html.getChildElements node
+        | "tr" -> Some (Html.getChildElements node |> List.ofSeq)
         | _ ->
             (Html.getOuterHtml node, node.Name, node.NodeType)
             |> dumpt "Not a tr"
@@ -217,6 +236,7 @@ let processATable title fAssertHeaders fMap (IsTable table) =
     )
     |> Seq.skip 1
     |> Seq.choose id
+    
 let mapHeroRow (tds:HtmlNode seq) =
     let extractImage (imagetd:HtmlNode) =
         //let image = Html.getInnerHtml image // wip
@@ -263,33 +283,37 @@ let mapHeroRow (tds:HtmlNode seq) =
                 Gender=g
                 Type=t
                 }
-        | x -> failwithf "tr of length %i was unexpected" <| Seq.length x
+        | x -> failwithf "hero: tr of length %i was unexpected" <| Seq.length x
 
-let processHeroTable (IsTable table) =
-    // assuming they never remove tbody and violate html
-    table
-    |> Html.getChildNodes
-    |> Html.findByName "tbody"
-    |> Html.getChildElements // now we have trs
-    |> Seq.choose(fun node ->
-        match Html.getNodeName node with
-        | "tr" -> Some <| Html.getChildElements node
-        | _ ->
-            (Html.getOuterHtml node, node.Name, node.NodeType)
-            |> dumpt "Not a tr"
-            failwithf "unexpected node in table" 
-    )
-    |> Seq.mapi (fun i x ->
-        match i with
-        | 0 ->
-            printfn "header? %s" (x |> Seq.map Html.getInnerText |> String.concat ",")
-            None
-        | _ -> Some(x |> mapHeroRow)
-    )
-    |> Seq.skip 1
-    |> Seq.choose id
-let mapSoulBindRow () = ()    
-let processSoulBindTable (IsTable table) = processHeroTable table
+let processHeroTable = processATable "heroTable" ignore mapHeroRow
+
+type SoulBindRow = {
+    Level:string
+    Required:string list // (string * int) list?
+    RequiredLvl:string // ^
+}
+
+let mapSoulBindRow (tds: HtmlNode list) =
+    tds
+    |> List.ofSeq
+    |> function
+        | level::req::reqLvl:: _ -> // cost::bonus::might::strength
+            {
+                Level=
+                    match Html.getInnerText level |> trim with
+                    | "I" -> 1
+                    | "II" -> 2
+                    | "III" -> 3
+                    | "IV" -> 4
+                    | _ -> -1
+                    |> string
+                    
+                Required= req |> Html.getDescsByName "li" |> Seq.map Html.getOuterHtml |> List.ofSeq
+                RequiredLvl = Html.getInnerText reqLvl |> afterOrSelf "Level" |> trim
+            }
+        | x -> failwithf "soulBind:tr of length %i was unexpected" <| Seq.length x
+
+let processSoulBindTable table = processATable "soulBindTable" ignore mapSoulBindRow table
     
 let getHeroInfo (hero:HeroTableRow) =
     async {
@@ -298,13 +322,34 @@ let getHeroInfo (hero:HeroTableRow) =
         //return Html.getOuterHtml body
         // we need the table.wikitable that has a previous sibling 'h3 > #Required_Heroes_to_Soulbind_Adherent
         let soulBindH3 =
-            body.Descendants()
-            |> Seq.find(fun node -> node.Id = "Required_Heroes_to_Soulbind_Adherent")
+            let potentials =
+                body.Descendants("h3")
+                |> List.ofSeq
+            potentials
+            |> Seq.tryPick(fun h3 ->
+                Html.getDescs h3
+                |> Seq.tryFind (fun node ->
+                    node.Id.StartsWith("Required_Heroes_to_Soulbind")
+                )
+                |> function
+                    | Some node -> Some node
+                    | None ->
+                        potentials |> List.map Html.getOuterHtml |> dumpt "potentials" |> ignore
+                        failwith "Could not find an h3 with a soulbind child"
+            )
+            |> function
+                | Some x -> x
+                | None ->
+                    Html.getOuterHtml body
+                    |> dumpt "bad body"
+                    |> ignore
+                    failwithf "Unable to find soulbinding info for %s:%s" hero.Name hero.Rel
             |> fun span -> span.ParentNode
         let soulBindTable = soulBindH3 |> Html.getFollowingSiblings |> Seq.find (Html.getNodeName >> is "table")
         
-        return Html.getOuterHtml soulBindTable
+        return soulBindTable |> processSoulBindTable
     }
+    |> Async.catch
 
 let GetHeroList () =
     Http.getHtml "Hero_List"
@@ -314,18 +359,65 @@ let GetHeroList () =
     |> Html.getTables 
     |> Seq.map (processHeroTable>>List.ofSeq)
     |> List.ofSeq
-    
-let firstHero =
-    GetHeroList()
-    |> Seq.head
-    |> Seq.head
-    
-firstHero |> Dump |> ignore    
+type Soulbind = {
+    Requirements: string list
+    ReqLvl: int
+}
+type HeroInfo = {
+    Image:obj
+    ID:string // int
+    Name:string
+    //Rel:string
+    Rarity:string
+    Alignment: string
+    Gender:string
+    Type:string
+    Soulbinds: Soulbind list
+}
+let heroes = GetHeroList()
+let showSingleHero skip =
+    let firstHero =
+        heroes
+        |> Seq.head
+        |> Seq.skip skip
+        |> Seq.head
+        
+    firstHero |> Dump |> ignore    
 
-firstHero
-|> getHeroInfo
-|> Async.Catch
-|> Async.RunSynchronously
-|> Dump
+    firstHero
+    |> getHeroInfo
+    |> Async.catchResult
+    |> Async.RunSynchronously
+    |> Dump
+    |> ignore
+heroes
+|> List.concat
+|> Seq.map (fun h -> getHeroInfo h |> Async.map(function | Ok x -> Ok(h,List.ofSeq x) | Error ex -> Error(h,ex)) |> Async.RunSynchronously)
+|> Seq.truncate 4
+|> Seq.map(function
+    | Ok (h,hi) -> Ok {
+            Image= h.Image
+            ID = h.ID
+            Name = h.Name
+            Rarity = h.Rarity
+            Alignment = h.Alignment
+            Gender = h.Gender
+            Type = h.Type
+            Soulbinds =
+                hi
+                |> List.map(fun r ->
+                    {
+                        Requirements = r.Required
+                        ReqLvl = int r.RequiredLvl
+                    }
+                )
+        }
+    | Error ex -> Error ex
+)
+|> List.ofSeq
+|> List.partitionResults
+|> fun (o,e) ->
+    e.Dump("errors")
+    o
+|> Dump    
 |> ignore
-    
