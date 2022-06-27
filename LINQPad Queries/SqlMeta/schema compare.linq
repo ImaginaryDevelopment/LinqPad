@@ -19,6 +19,7 @@ let dDump x = if debug then Dump x; x
 
 module Helpers = 
     let tee f x = f x; x
+    let (|ValueString|NonValueString|) x =
         if String.IsNullOrWhiteSpace x then NonValueString x
         else ValueString x
     let (|EndsWithI|_|) d =
