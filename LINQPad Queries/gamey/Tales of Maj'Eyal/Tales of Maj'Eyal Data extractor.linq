@@ -1,5 +1,6 @@
 <Query Kind="FSharpProgram">
   <NuGetReference>HtmlAgilityPack</NuGetReference>
+  <NuGetReference>ToMEHelper</NuGetReference>
   <Namespace>System.Windows.Media</Namespace>
 </Query>
 
@@ -11,26 +12,38 @@
 
 let authority = "https://te4.org/"
 let path = "characters-vault"
+let diagProdigies = false
 
 type MappedClass = 
     | Adventurer
+    | Anorithil 
     | ArcaneBlade
     | Archmage
+    | Berserker
+    | CultistOfEntropy
     | Doombringer
+    | Doomed
     | Marauder
+    | ParadoxMage
     | Solipsist
     | SunPaladin
     with
         member x.FormValue =
             match x with
             | Adventurer -> string x, "104"
+            | Anorithil -> string x, "20"
             | ArcaneBlade -> "Arcane Blade", "22"
             | Archmage -> string x, "7"
+            | Berserker -> string x, "16"
+            | CultistOfEntropy -> "Cultist Of Entropy", "133921"
             | Doombringer -> string x, "23313"
+            | Doomed -> string x, "29"
             | Marauder -> string x, "71"
+            | ParadoxMage -> "Paradox Mage", "43"
             | Solipsist -> string x, "102"
             | SunPaladin ->  "Sun Paladin", "27"
-let classOpt = [Doombringer.FormValue] |> Some
+            
+let classOpt = [Berserker.FormValue] |> Some
 type Difficulty = 
     | Normal
     | Insane
@@ -41,13 +54,18 @@ type Difficulty =
             | Insane -> string x, "36"
 let alwaysInputs =
     Map [
-        "tag_official_addons", ["1"] // only querying characters using only official addons
+        yield "tag_official_addons", ["1"] // only querying characters using only official addons
         //"tag_permadeath[]", [ Permadeath.Roguelike.FormValue |> snd]
         //"tag_difficulty[]", [Difficulty.Normal.FormValue  |> snd]
-        "tag_winner", ["winner"] // only query winners
+        yield "tag_winner", ["winner"] // only query winners
         //"tag_level_min", ["50"]
         //"tag_dead",["dead"] // I query dead ppl
+        match classOpt with
+        | Some cls -> 
+            yield  "tag_class[]", cls |> List.map(snd)
+        | _ -> ()
     ]
+    
     
 [<Struct>]
 type OptionalBuilder =
@@ -229,17 +247,6 @@ module Parse =
         Fetch.queryPage path kvs
         |> Async.map (parseHtml >> getElementById "characters")
     
-    let setupInputs () = // this was to persue the feature of an interactive script, instead hard-coded values have been used.
-        let getForm (d:HtmlAgilityPack.HtmlDocument) =
-            d
-            |> getElementById "selectors"
-            |> fun el -> el.OuterHtml
-        cache "formpage" <| fun () ->
-                Fetch.getPage path
-                |> Async.RunSynchronously
-        |> parseHtml
-        |> getForm
-        
     let parseTalent (data,spentTd) =
         try
             match data with
@@ -359,7 +366,8 @@ module Retrieval =
     let dissectCharsheetHead =
         Parse.getElement "table"
     let dissectProdigies x =
-        Parse.dumpOuter "prodigies?" x
+        if diagProdigies then
+            Parse.dumpOuter "prodigies?" x
         option{
             let! tbl = Parse.getElement "table" x
             Assert.hasClass "talents" tbl
@@ -368,7 +376,7 @@ module Retrieval =
             return trs |> List.choose (
                 Parse.getElements "td"
                 >> function
-                | Parse.ProdigyTitle t :: Parse.NodeName "td" _el ::[] -> Some(t,1)
+                | Parse.ProdigyTitle t :: Parse.NodeName "td" _el ::[] -> Some(t |> afterLastOrSelf "." ,1)
                 | s -> s |> List.map(Parse.getOuterHtml) |> fun x -> x.Dump("prodigy shape unexpected"); None
                 )
         }

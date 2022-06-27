@@ -1,11 +1,51 @@
 <Query Kind="FSharpProgram">
   <NuGetReference>HtmlAgilityPack</NuGetReference>
+  <NuGetReference>Newtonsoft.Json</NuGetReference>
   <Namespace>HtmlAgilityPack</Namespace>
+  <Namespace>Newtonsoft.Json.Linq</Namespace>
 </Query>
 
 // scrape https://mightyparty.fandom.com/wiki/Hero_List and create a tracker app, like for COTLI
-let displayHeroImages = true
-let diagnoseImageTd = false
+// > 34 seconds to run, why?
+
+type ImageMode =
+    | Display
+    | Raw
+    | NoValue
+    
+module Settings =
+    let displayHeroImages = ImageMode.Raw
+    let diagnoseImageTd = false
+    let displayMetaUrl = false
+    let displayCacheMessages = false
+    let displayRequests = false
+    let writeJson = true
+    let findOrphans = false
+    
+open Settings
+let target =
+    let gamey = Util.CurrentQueryPath |> Path.GetDirectoryName
+    if gamey.EndsWith("gamey") |> not then
+        failwithf "unexpected path: %s" gamey
+    // assumes directory exists
+    Path.Combine(gamey,"data", "mightypartyheroes.json")
+    
+//target.Dump()
+
+let remappings = Map [
+    "Ball&#39;Zt, the Warden", "Ball'Zt, the Warden"
+    "Caesar&#39;s Head", "Caesar's Head"
+    "D&#39;Arc, Iron Maiden", "D'Arc, Iron Maiden"
+    "Evil %22Santa%22", "Evil \"Santa\""
+    "Evil&#39;s Helper", "Evil's Helper"
+    "General Zor&#39;Ma", "General Zor'Ma"
+    "Madam Lo&#39;Trix", "Madam Lo'Trix"
+    "Melia, Forest&#39;s Daughter", "Melia, Forest's Daughter"
+    "Old god&#39;s servant", "Old god's servant"
+    //"Scare Doctor", ??
+    "sporelok", "Sporelok"
+    "Ysh&#39;Tmala, The Old God","Ysh'Tmala, The Old God"
+]
 module Helpers =
     let inline dumpt (title:string) (x:obj) = x.Dump(description=title)
     let inline is y x = y = x
@@ -41,6 +81,7 @@ module Helpers =
                     | i,Ok x -> (i,x)::oks,errs
                     | i,Error e -> oks, (i,e)::errs
             )
+            
     module Async =
         let map f x =
             async {
@@ -142,9 +183,17 @@ module Helpers =
         let getTables (parent:HtmlNode) =
             parent
             |> getDescsByName "table"
+    module Serial =
+        open Newtonsoft.Json
+        let serialize<'t> indent (x:'t) =
+            if indent then
+                JsonConvert.SerializeObject(x, Formatting.Indented)
+            else JsonConvert.SerializeObject(x)
+        let inline deserialize<'t> (x:string) = JsonConvert.DeserializeObject<'t>(x)
             
 open Helpers
 open Helpers.Html.Patterns
+
         
 module Http =
     open System.Net.Http
@@ -156,11 +205,13 @@ module Http =
         override x.SendAsync(req,token) =
             match req.RequestUri.Query with
             | ValueString _ -> 
-                printfn "Requesting %A" req.RequestUri
-                printfn "Requesting query: %A" req.RequestUri.Query
+                if Settings.displayRequests then
+                    printfn "Requesting %A" req.RequestUri
+                    printfn "Requesting query: %A" req.RequestUri.Query
                 base.SendAsync(req,token)
             | _ ->
-                printfn "Requesting %A" req.RequestUri
+                if Settings.displayRequests then
+                    printfn "Requesting %A" req.RequestUri
                 let resp = base.SendAsync(req,token)
                 resp
                 
@@ -173,9 +224,12 @@ module Http =
             async{
                 let! resp = Async.AwaitTask <| httpClient.GetStringAsync(uri)
                 let mutable fromCache = false
-                let resp = Util.Cache((fun () -> resp), uri.ToString(), &fromCache)
-                if not fromCache then
-                   printfn "Freshly fetched" 
+                let key = string uri
+                let resp = Util.Cache((fun () -> resp), key, &fromCache)
+                if Settings.displayCacheMessages then
+                    if not fromCache then
+                            printfn "Freshly fetched from %s"  key
+                    else printfn "Fetched %s from cache" key
                 return resp
             }
             |> Async.StartAsTask
@@ -183,20 +237,21 @@ module Http =
 let runHtmlAssertions (html:HtmlNode) = 
     // look for <meta name="twitter:url" content="https://mightyparty.fandom.com/wiki/Hero_List">
     // debug log the url
-    html
-    |> Html.getChildNodes
-    |> Html.findByName "head"
-    |> Html.getChildNodes
-    |> Seq.filter (Html.getNodeName >> is "meta")
-    //|> Seq.map Html.getOuterHtml
-    |> Seq.choose(
-        function
-        | AttrValIs("name","twitter:url") & AttrVal "content" content -> Some content
-        | _ -> None
-    )
-    |> Seq.tryHead
-    
-    |> dumpt "meta:url"
+    if displayMetaUrl then
+        html
+        |> Html.getChildNodes
+        |> Html.findByName "head"
+        |> Html.getChildNodes
+        |> Seq.filter (Html.getNodeName >> is "meta")
+        //|> Seq.map Html.getOuterHtml
+        |> Seq.choose(
+            function
+            | AttrValIs("name","twitter:url") & AttrVal "content" content -> Some content
+            | _ -> None
+        )
+        |> Seq.tryHead
+        
+        |> dumpt "meta:url"
     
 type HeroTableRow = {
     Image:obj
@@ -229,7 +284,7 @@ let processATable title fAssertHeaders fMap (IsTable table) =
     |> Seq.mapi (fun i x ->
         match i with
         | 0 ->
-            printfn "%s header? %s" title (x |> Seq.map Html.getInnerText |> String.concat ",")
+            //printfn "%s header? %s" title (x |> Seq.map Html.getInnerText |> String.concat ",")
             fAssertHeaders x
             None
         | _ -> Some(fMap x)
@@ -251,9 +306,10 @@ let mapHeroRow (tds:HtmlNode seq) =
             |> Option.defaultValue null
         match diagnoseImageTd, displayHeroImages,raw, scaled with
         | true, _, _, _ -> Html.getInnerHtml imagetd, null
-        | _, true, _, ValueString src -> src,Util.Image(src) |> box
+        | _, ImageMode.Display, _, ValueString src -> src, Util.Image(src) |> box
+        // propagate the image data for serialization
+        | _, ImageMode.Raw, _, ValueString src -> src, src |> box
         | _ -> raw, null
-        
         
     tds
     |> List.ofSeq
@@ -293,7 +349,22 @@ type SoulBindRow = {
     RequiredLvl:string // ^
 }
 
+let tryRemap x =
+    match remappings |> Map.tryFind x with
+    | Some v -> v
+    | None -> x
 let mapSoulBindRow (tds: HtmlNode list) =
+    let mapReq req =
+        req
+        |> Html.getDescsByName "li"
+        |> Seq.map (
+            Html.getChildElements
+            >> Seq.choose (Html.getAttrValue "data-hero")
+            >> Seq.tryHead
+            >> Option.map tryRemap
+            >> Option.defaultValue "eh?"
+        )
+        |> List.ofSeq
     tds
     |> List.ofSeq
     |> function
@@ -308,7 +379,7 @@ let mapSoulBindRow (tds: HtmlNode list) =
                     | _ -> -1
                     |> string
                     
-                Required= req |> Html.getDescsByName "li" |> Seq.map Html.getOuterHtml |> List.ofSeq
+                Required= mapReq req
                 RequiredLvl = Html.getInnerText reqLvl |> afterOrSelf "Level" |> trim
             }
         | x -> failwithf "soulBind:tr of length %i was unexpected" <| Seq.length x
@@ -375,6 +446,8 @@ type HeroInfo = {
     Soulbinds: Soulbind list
 }
 let heroes = GetHeroList()
+Util.ElapsedTime.Dump("getHeroList done")
+
 let showSingleHero skip =
     let firstHero =
         heroes
@@ -393,7 +466,7 @@ let showSingleHero skip =
 heroes
 |> List.concat
 |> Seq.map (fun h -> getHeroInfo h |> Async.map(function | Ok x -> Ok(h,List.ofSeq x) | Error ex -> Error(h,ex)) |> Async.RunSynchronously)
-|> Seq.truncate 4
+//|> Seq.truncate 4
 |> Seq.map(function
     | Ok (h,hi) -> Ok {
             Image= h.Image
@@ -415,9 +488,39 @@ heroes
     | Error ex -> Error ex
 )
 |> List.ofSeq
+|> fun x ->
+    Util.ElapsedTime.Dump("pre-partition")
+    x
 |> List.partitionResults
+
 |> fun (o,e) ->
+    Util.ElapsedTime.Dump("post-part")
     e.Dump("errors")
-    o
-|> Dump    
-|> ignore
+    let unindexed = o |> List.map snd
+    if Settings.findOrphans then
+        let nameMap = unindexed |> Seq.map(fun x -> x.Name, x.ID) |> Map.ofSeq
+        //let heroMap = unindexed |> Seq.map(fun x -> x.ID, x) |> Map.ofSeq
+        // validation of soulbind names as a key
+        unindexed
+        |> List.choose(fun hi ->
+               hi.Soulbinds
+               |> Seq.collect(fun sb -> sb.Requirements)
+               |> Seq.choose(fun n -> if Map.containsKey n nameMap then None else Some n)
+               |> List.ofSeq
+               |> function
+                | [] -> None
+                | bad -> Some(hi,bad)
+        )
+        |> dumpt "bad apples"
+    //let allHeroes = unindexed |> Seq.collect (fun x -> x.Name::(x.Soulbinds |> List.collect(fun sb -> sb.Requirements))) |> Set.ofSeq
+    unindexed
+|> fun x ->
+    if Settings.writeJson then
+        // should we verify the image field isn't holding a real image first?
+        let data = Serial.serialize true x
+        File.WriteAllText(target,contents=data)
+        ()
+    else
+        x |> Dump |> ignore
+
+Util.ElapsedTime.Dump("fin")

@@ -10,25 +10,45 @@
 let authority = "https://te4.org/"
 let path = "characters-vault"
 
+type Campaign =
+    | Maj
+    | Orcs
+    with
+        member x.FormValue =
+            match x with
+            | Maj -> "2"
+            | Orcs -> "67402"
+
 type MappedClass = 
     | Adventurer
+    | Anorithil 
     | ArcaneBlade
     | Archmage
+    | Berserker
+    | CultistOfEntropy
     | Doombringer
+    | Doomed
     | Marauder
+    | ParadoxMage
     | Solipsist
     | SunPaladin
     with
         member x.FormValue =
             match x with
             | Adventurer -> string x, "104"
+            | Anorithil -> string x, "20"
             | ArcaneBlade -> "Arcane Blade", "22"
             | Archmage -> string x, "7"
+            | Berserker -> string x, "16"
+            | CultistOfEntropy -> "Cultist Of Entropy", "133921"
             | Doombringer -> string x, "23313"
+            | Doomed -> string x, "29"
             | Marauder -> string x, "71"
+            | ParadoxMage -> "Paradox Mage", "43"
             | Solipsist -> string x, "102"
             | SunPaladin ->  "Sun Paladin", "27"
-let classOpt = [Doombringer.FormValue] |> Some
+            
+let classOpt = [Berserker.FormValue] |> Some
 type Difficulty = 
     | Normal
     | Insane
@@ -52,6 +72,7 @@ let pdOpt =
 let alwaysInputs =
     Map [
         "tag_official_addons", ["1"] // only querying characters using only official addons
+        "tag_campaign[]", [Campaign.Maj.FormValue] // only regular maj
         //"tag_permadeath[]", [ Permadeath.Roguelike.FormValue |> snd]
         //"tag_difficulty[]", [Difficulty.Normal.FormValue  |> snd]
         match pdOpt with
@@ -229,7 +250,7 @@ module Parse =
         |> parseHtml
         |> getForm
         
-    let parseTalent (data,spentTd) =
+    let parseTalent (data:HtmlNode,spentTd:HtmlNode) =
         try
             match data with
             | NodeName "td" (GetElement "ul" ul) ->
@@ -243,6 +264,8 @@ module Parse =
            	Error(ex.Message,getOuterHtml data)
         
     let mapTalents el: (TalentCategory * (_ )) seq=
+        (getOuterHtml el).Dump("get this")
+        failwith "stop it"
         el
         |> getElement "table"
         |> Option.get

@@ -1,6 +1,10 @@
 <Query Kind="FSharpProgram" />
 
+// calculate the fastest path to getting e-fermented eyes (based on getting enough eyes only)
+
 // simulate all hours
+// calculate based on existing inventory, and minions, the fastest path to get to X amount of Gold (for making a mana flux orb in this case)
+
 // at each hour step - check for ability to purchase, check for ability to upgrade, branch on all (subtracting from inventory)
 // produce for each branch
 // select branches that match best target time (accounting for loss of inventory, and production for that hour)
@@ -36,8 +40,8 @@ let rates =
         {Delay=11m<sec>;Produces=p;Cost=204_800m+409_600m;Tier=9uy}
     ]
 let getMinionsByIndices  =
-    List.map(fun i -> rates.[i])
-let purchase = rates.[0].Cost
+    List.map(fun i -> rates[i])
+let purchase = rates[0].Cost
 
 let getMaxUpgrade inventory =
     rates
@@ -59,7 +63,7 @@ let fin =
 let upgrade1 inventory minionIndex =
     let nextI = minionIndex + 1
     if nextI < rates.Length then
-        let cost = rates.[nextI].Cost
+        let cost = rates[nextI].Cost
         if cost <= inventory then
             Some nextI
         else None
@@ -105,7 +109,7 @@ let getUpgradeCombos hour {Inventory=inventory; MinionIndices=minions;TotalCost=
           |0 -> [[]]
           |i -> [for j=lo to (Array.length n)-1 do
                       for ks in choose (j+1) (i-1) do
-                        yield n.[j] :: ks ]
+                        yield n[j] :: ks ]
         in choose 0 k            
     match getMaxUpgrade inventory with
     | None -> List.empty
@@ -124,7 +128,7 @@ let getUpgradeCombos hour {Inventory=inventory; MinionIndices=minions;TotalCost=
         |> List.choose(fun x ->
             let totalCost = 
                 x
-                |> List.map(fun s -> rates.[s.MinionIndex].Cost)
+                |> List.map(fun s -> rates[s.MinionIndex].Cost)
                 |> List.sum
                 
             if totalCost <= inventory then
@@ -153,7 +157,7 @@ let getUpgradeCombos hour {Inventory=inventory; MinionIndices=minions;TotalCost=
                 WhenObtained = hour
                 TotalCost = tc + cost
                 MinionIndices=nextMinions
-                ProducedPerHour=nextMinions |> List.map (fun m -> rates.[m] |> getMinionHrProduction) |> List.sum
+                ProducedPerHour=nextMinions |> List.map (fun m -> rates[m] |> getMinionHrProduction) |> List.sum
                 TotalTimeToTarget=getTotalTimeToTarget hour nextInventory nextMinions }
         
         )
@@ -177,7 +181,7 @@ let simulateHour startHour (x:Simulation) : Simulation list =
                         MinionIndices=nextMinions
                         TotalCost = x.TotalCost + purchase
                         WhenObtained=startHour
-                        ProducedPerHour= nextMinions |> List.map(fun i -> rates.[i]) |> getHrProductionAll 
+                        ProducedPerHour= nextMinions |> List.map(fun i -> rates[i]) |> getHrProductionAll 
                         TotalTimeToTarget=getTotalTimeToTarget startHour nextInventory nextMinions}
            // simulate upgrade
            // only simulating first minion upgrades atm
@@ -211,7 +215,7 @@ let initial =
     let minions = mi |> getMinionsByIndices
     let sim = { Inventory=initialInventory
                 WhenObtained=0m<hr>
-                TotalCost=mi |> List.map(fun i ->  rates.[i].Cost) |> List.sum
+                TotalCost=mi |> List.map(fun i ->  rates[i].Cost) |> List.sum
                 MinionIndices= mi
                 TotalTimeToTarget = getTotalTimeToTarget 0m<hr> 0m mi
                 ProducedPerHour = getHrProductionAll minions

@@ -5,10 +5,12 @@
 </Query>
 
 // take a sqlproj/dbproj read all the sprocs/tables and compare them
+
 // basic functionality appears to work!
 // incomplete feature: external diff enabling
 //      design:comparison is copying all the files and db-reflected info into a temp folder
 //      problem: external diff enabling temp dir isn't copying completely
+// unimplemented feature: table diffing
 
 let dc = new TypedDataContext()
 let debug = false
@@ -17,6 +19,12 @@ let dDump x = if debug then Dump x; x
 
 module Helpers = 
     let tee f x = f x; x
+        if String.IsNullOrWhiteSpace x then NonValueString x
+        else ValueString x
+    let (|EndsWithI|_|) d =
+        function
+        |NonValueString _ -> None
+        |ValueString x -> if x.EndsWith(d,StringComparison.InvariantCultureIgnoreCase) then Some x else None
     //let (|NonEmptyList|_|) = function | [] -> None | x -> Some x
     type Path with
         static member combine1 y x = Path.Combine(x,y)
@@ -135,8 +143,6 @@ module SchemaCompare =
                     eprintfn "Bad frp:%s" path
                     reraise()
                 path
-            // if the db reflection doesn't exist?
-            let drp x = dr |> Path.combine1 x |> Directory.existsOrCreate
             match smm with
             // not found in the db
             // create empty file in db reflect (drp)
@@ -159,7 +165,11 @@ module SchemaCompare =
                     (name,path,targetPath).Dump("copy failed")
                     reraise()
                 dprintn <| sprintf "Copied %s to %s" path targetPath
-            | Different tmm -> ()
+            | Different tmm ->
+                
+                
+                ()
+            ()
                 
             Some mmt    
         )  None
@@ -232,10 +242,14 @@ module SchemaDb =
     open Pm.Dal.AdoHelper
     let cn = Pm.Dal.AdoHelper.Connections.Connector.CreateCString dc.Connection.ConnectionString
     let fGetDbText name = 
-        Pm.Dal.AdoHelper.getReaderArray cn {CommandText=sprintf "sp_helptext"; CommandType = CommandType.StoredProcedure;OptParameters = Some <| dict [ "@objname", box name] } (fun r ->
+        let nameForQuery =
+            match name with
+            | EndsWithI ".sproc" (Before ".sproc" realName) ->
+                realName
+            | _ -> name
+        Pm.Dal.AdoHelper.getReaderArray cn {CommandText=sprintf "sp_helptext"; CommandType = CommandType.StoredProcedure;OptParameters = Some <| dict [ "@objname", box nameForQuery] } (fun r ->
             try
                 let x = r.GetString 0
-            
                 string x
             with ex ->
                 ex.Dump(sprintf "Failed to get %s" name)

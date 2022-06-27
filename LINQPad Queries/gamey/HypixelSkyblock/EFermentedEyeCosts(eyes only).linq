@@ -1,5 +1,9 @@
 <Query Kind="FSharpProgram" />
 
+// calculate the cost to get the eyes for fermented eyes based on manually input bazaar costs
+// determines if buying eyes, or enchanted eyes are better
+// AH used to be able to sell them
+
 [<Measure>] type Plain
 [<Measure>] type Enchanted
 [<Measure>] type EEye
