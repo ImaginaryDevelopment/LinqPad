@@ -6,14 +6,20 @@
 
 // load a xaml screen for stand-alone viewing/interaction
 // parts borrowed from the LoadXamlDragAndDrop script
+// wip, throws XamlParse
 open System.Windows
 open System.Windows.Controls
 
 let debug = true
-let path = Environment.ExpandEnvironmentVariables(@"%devroot%\Source-dev-rewrite\PracticeManagement\PracticeManagement\Intellidox\PrintIntellidoxControl.xaml")
+
+let path = Environment.ExpandEnvironmentVariables(@"%devroot%\..\..\pm2022\PracticeManagement\PatientDataGrid\PatientAddEditPopup.xaml")
+if not <| System.IO.File.Exists path then
+    (Environment.ExpandEnvironmentVariables "%devroot%", path).Dump("Does not exist")
+    
 type System.String with
     static member defaultComparison = StringComparison.InvariantCultureIgnoreCase
     static member equalsI (x:string) (x2:string) = not <| isNull x && not <| isNull x2 && x.Equals(x2, StringComparison.InvariantCultureIgnoreCase)
+    static member split (d:string list) (item:string) = item.Split(d|>Array.ofList, StringSplitOptions.None)
     
     
 [<AutoOpen>]
@@ -24,11 +30,12 @@ module Helpers =
     let toLower (s:string) = s.ToLower()
     let tee f x = x, f x
     let splitLines (x:string) = x.Split([| "\r\n";"\n"|], StringSplitOptions.None)
-    let delimit delimiter (values:#seq<string>) = String.Join(delimiter, Array.ofSeq values)
+    let delimit (delimiter:string) (values:#seq<string>) = String.Join(delimiter, Array.ofSeq values)
     let (|StringEqualsI|_|) s1 (toMatch:string) = if String.equalsI toMatch s1 then Some() else None
     let regMatches (pattern:string) (text:string) = Regex.Matches(text,pattern) |> Seq.cast<Match> |> List.ofSeq
     let regIsMatch (pattern:string) (text:string) = Regex.IsMatch(text, pattern)
     let regReplace (pattern:string) (replacement:string) (text:string) = Regex.Replace(text,pattern,replacement)
+    let regReplaceF pattern (f:MatchEvaluator) text = Regex.Replace(text,pattern,f)
     let regReplaceM (pattern:string) (replacement:string) (text:string) = Regex.Replace(text,pattern,replacement, RegexOptions.Multiline)
     
     let regRemove x t = regReplace x String.Empty t
@@ -79,23 +86,30 @@ let replaceResourceDictionaries basePath fGetSourceMapOpt xamlText =
         |> replaceResourceDictionaries (Path.GetDirectoryName(path)) pairs 
 
 let text =
-	File.ReadAllText path
-	|> regRemove "x:Class=\".+\""
-	// replace behaviors namespace,static resources
-	|> regRemove "xmlns:b=\".+\""
-	|> regRemove "<b:.+>"
-	//|> replace "xmlns:bc=\"clr-namespace:Pm.UI.WpfCustomControls;assembly=Pm.UI\"" localTag
-	// replace converters namespace, static resources
-	|> regRemove "xmlns:converter=\".+\""
-	|> regRemove "<converter:.+>"
-	// remove converter calls
-	|> regRemove ",\s*Converter={StaticResource.*?}"
-	|> regRemove "Converter=\"{StaticResource.*?}\""
+    File.ReadAllText path
+    |> replace "<notify:NotifyWindow" "<Window"
+    |> replace "</notify:NotifyWindow>" "</Window>"
+    |> regRemove "x:Class=\".+\""
+    // replace behaviors namespace,static resources
+    |> regRemove "xmlns:b=\".+\""
+    |> regRemove "<b:.+>"
+    //|> replace "xmlns:bc=\"clr-namespace:Pm.UI.WpfCustomControls;assembly=Pm.UI\"" localTag
+    // replace converters namespace, static resources
+    |> regRemove "xmlns:converter=\".+\""
+    |> regRemove "<converter:.+>"
+    // remove converter calls
+    |> regRemove ",\s*Converter={StaticResource.*?}"
+    |> regRemove "Converter=\"{StaticResource.*?}\""
     |> regRemove "Style=\"{StaticResource [\w_]+}\""
+    |> regRemove "Validation.Error=\"[^\"]+\""
+    |> regRemove "xmlns:\w+=\"clr-namespace:[^\"]+\""
+    |> regRemove "Icon=\"[^\"]+\""
+    |> regRemoveM false "<DataTemplate DataType=[\S\s]*</DataTemplate>"
     
     |> regRemove "Click=\"[\w_]+\"\s*"
-	|> replaceResourceDictionaries path (fun _tag _sourceAttribValue -> None)
-
+    |> regReplaceF "{lang:\w+ ([\w_]+)}" (MatchEvaluator(fun m -> m.Groups.[1].Value))
+    |> replaceResourceDictionaries path (fun _tag _sourceAttribValue -> None)
+// throws: XamlParseException: StaticResourceExtension
 let parse<'t> x =  System.Windows.Markup.XamlReader.Parse x :?> 't
 type DisplayItem = {DisplayName:string}
 let items = [{DisplayName="test"}]

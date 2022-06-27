@@ -20,6 +20,7 @@
   <Namespace>System.Windows.Automation.Peers</Namespace>
 </Query>
 
+// wip can't seem to load PracticeManagement.exe
 void Main()
 {
     var debug = false;

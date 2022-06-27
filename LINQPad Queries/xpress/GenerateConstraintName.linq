@@ -11,7 +11,7 @@ let capture (pattern:string) (s:string) = Regex.Match(s, pattern).Groups.[1].Val
 
 // assume tablename matches with file (e.g. Payment.Table.sql) and is properly cased
 let getTableName filename = Path.GetFileNameWithoutExtension(Path.GetFileNameWithoutExtension(filename))
-let dbProjPath = @"C:\TFS\PracticeManagement\dev\PracticeManagement\Db" 
+let dbProjPath = @"C:\tfs\practicemanagement\trunk\Db\" 
 let sqlTableFiles = 
     Directory.GetFiles(dbProjPath, "*.table.sql", SearchOption.AllDirectories)
     |> Array.map(fun fn -> getTableName fn, fn)
@@ -32,7 +32,7 @@ let readColumns (lines:#seq<string>) =
     //|> Seq.map (fun (columnName, columnType, constraints)
     |> Array.ofSeq
     
-let target = @"C:\TFS\PracticeManagement\devDb\Schema Objects\Schemas\dbo\Tables\Payment.table.sql" 
+let target = @"C:\tfs\practicemanagement\trunk\Db\Schema Objects\Schemas\dbo\Tables\PatientIdentifications.table.sql" 
 
 let tableName = getTableName target
 tableName.Dump("tablename")

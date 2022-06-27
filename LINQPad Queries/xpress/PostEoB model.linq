@@ -1,4 +1,6 @@
-<Query Kind="FSharpProgram" />
+<Query Kind="FSharpProgram">
+  <NuGetReference>FSharp.Core</NuGetReference>
+</Query>
 
 // data fetch auth is not working yet
 // new post era/eob rules
@@ -7,7 +9,8 @@
 // can an item exist/validate without any of the following (manual or auto) (manual made era, or data fed)
 // patientid, visitid, chargeid
 // chargeId should feed amount box? or no?
-
+let delimit (d:string) items =
+    String.Join(d,value=Array.ofSeq items)
 module Domain = 
     [<Measure>] type PatientId
     [<Measure>] type VisitId
@@ -96,7 +99,7 @@ module Display =
                 | TDisp x -> box x
         let dc = 
             DumpContainer( getDisplay x)
-        dc.Dump(titleOpt |> Option.getOrDefault String.Empty)
+        dc.Dump(titleOpt |> Option.defaultValue String.Empty)
         getDisplay >> (fun x -> dc.Content <- x)
     type Prop<'T> = {Get: unit -> 'T; Set: 'T -> unit}
     let makeStatefulDisplay<'T> titleOpt x : Prop<'T>= 

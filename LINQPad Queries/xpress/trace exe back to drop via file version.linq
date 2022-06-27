@@ -1,6 +1,7 @@
 <Query Kind="FSharpProgram">
   <Reference>&lt;RuntimeDirectory&gt;\System.IO.Compression.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.IO.Compression.FileSystem.dll</Reference>
+  <NuGetReference>FSharp.Core</NuGetReference>
   <Namespace>System.IO.Compression</Namespace>
   <DisableMyExtensions>true</DisableMyExtensions>
   <CopyLocal>true</CopyLocal>
@@ -220,7 +221,8 @@ module LegacyDrops =
         | CombineFileExists (sprintf "drop/%s" exeName) fp ->
             Some {DropRoot=DropRoot d;ExePath=fp}
         | _ ->
-            failwithf "uhoh! %s was drop root" d
+            printfn "uhoh! %s was drop root" d
+            None
         
     let (|ExeDrop|_|) (DropRoot d) = 
         let fp = Path.Combine(d,exeSubPath)

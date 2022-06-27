@@ -61,20 +61,12 @@ window.KeyDown.Add(fun k ->
         if k.Key = Input.Key.Escape then
             window.Close())
 let mutable change1,pos1,pos2,(distanceX: Point option),(distanceY: Point option) = true, None, None, None, None
-//let s = 
-//    //window.MouseMove.Throttle(TimeSpan.FromSeconds 1.)
-//    window.MouseMove.Sample(TimeSpan.FromSeconds 1.)
-//    |> Observable.subscribe(fun _ -> 
-//        dc.Content <- null
-//        dc.Content <- (DateTime.Now,PInvoke.getPixelColor())
-//        )
-    
-    
-    
+ 
     
 
 window.MouseLeftButtonUp.Add (fun e -> 
     let position = e.GetPosition(window)
+    // wip? not tested? who knows
     let getWpfControlPixelColor () = 
         let targetBitmap = Imaging.RenderTargetBitmap(int window.ActualWidth, int window.ActualHeight, 96., 96., PixelFormats.Default)
         targetBitmap.Render(window)
@@ -100,5 +92,6 @@ window.MouseLeftButtonUp.Add (fun e ->
         Math.Max(p1.Y, p2.Y) - Math.Min(p1.Y, p2.Y) |> Some |> fDistanceY
     | _ -> fDistanceX None
     )
+System.Threading.Thread.Sleep 2000
 window.ShowDialog()
 |> ignore

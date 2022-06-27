@@ -1,15 +1,27 @@
 <Query Kind="FSharpProgram">
   <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\BCore.ADO.dll">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\BCore.ADO.dll</Reference>
   <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\BCore.dll">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\BCore.dll</Reference>
-  <Reference Relative="..\..\..\FsInteractive\MacroRunner\CodeGeneration\bin\Debug\CodeGeneration.dll">C:\projects\FsInteractive\MacroRunner\CodeGeneration\bin\Debug\CodeGeneration.dll</Reference>
+  <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\CodeGeneration.dll">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\CodeGeneration.dll</Reference>
   <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\CodeGeneration.Sql.dll">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\CodeGeneration.Sql.dll</Reference>
   <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\CodeGeneration.VS.dll">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\CodeGeneration.VS.dll</Reference>
-  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio\2017\Community\Common7\IDE\PublicAssemblies\envdte.dll</Reference>
-  <Reference>&lt;ProgramFilesX86&gt;\Microsoft Visual Studio\2017\Community\Common7\IDE\PublicAssemblies\envdte80.dll</Reference>
+  <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\EnvDTE.dll">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\EnvDTE.dll</Reference>
+  <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\EnvDTE80.dll">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\EnvDTE80.dll</Reference>
   <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\MacroRunner.exe">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\MacroRunner.exe</Reference>
+  <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\Microsoft.VisualStudio.Shell.Interop.10.0.dll">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\Microsoft.VisualStudio.Shell.Interop.10.0.dll</Reference>
+  <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\Microsoft.VisualStudio.Shell.Interop.11.0.dll">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\Microsoft.VisualStudio.Shell.Interop.11.0.dll</Reference>
+  <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\Microsoft.VisualStudio.Shell.Interop.8.0.dll">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\Microsoft.VisualStudio.Shell.Interop.8.0.dll</Reference>
+  <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\Microsoft.VisualStudio.Shell.Interop.9.0.dll">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\Microsoft.VisualStudio.Shell.Interop.9.0.dll</Reference>
+  <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\Microsoft.VisualStudio.Shell.Interop.dll">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\Microsoft.VisualStudio.Shell.Interop.dll</Reference>
+  <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\Microsoft.VisualStudio.TeamFoundation.VersionControl.dll">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\Microsoft.VisualStudio.TeamFoundation.VersionControl.dll</Reference>
+  <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\Microsoft.VisualStudio.TextManager.Interop.8.0.dll">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\Microsoft.VisualStudio.TextManager.Interop.8.0.dll</Reference>
+  <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\Microsoft.VisualStudio.TextManager.Interop.dll">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\Microsoft.VisualStudio.TextManager.Interop.dll</Reference>
+  <Reference Relative="..\..\..\FsInteractive\MacroRunner\MacroRunner\bin\Debug\Microsoft.VisualStudio.TextTemplating.Interfaces.10.0.dll">C:\projects\FsInteractive\MacroRunner\MacroRunner\bin\Debug\Microsoft.VisualStudio.TextTemplating.Interfaces.10.0.dll</Reference>
+  <Reference>&lt;ProgramFilesX86&gt;\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.5.2\System.Data.dll</Reference>
+  <Reference>&lt;ProgramFilesX86&gt;\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.5.2\System.Data.Entity.Design.dll</Reference>
   <Reference>&lt;RuntimeDirectory&gt;\System.Data.Entity.Design.dll</Reference>
   <GACReference>Microsoft.VisualStudio.TextTemplating.Interfaces.10.0, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</GACReference>
   <NuGetReference>FSharp.Core</NuGetReference>
+  <NuGetReference>Humanizer</NuGetReference>
 </Query>
 
 // this thing works fine via linqpad (translating reference paths only)
@@ -48,10 +60,11 @@ open BCore.CodeGeneration.SqlWrapCore
 open BCore.CodeGeneration.SqlWrapCore.ColumnTyping
 open CodeGeneration.GenerateAllTheThings
 
-open MacroRunner
+//open MacroRunner
 open CodeGeneration.VS.DteWrap
 open CodeGeneration.VS.MultipleOutputHelper.Managers
 open Macros.SqlMacros
+open PureCodeGeneration
 
 let debug = false
 
@@ -64,7 +77,7 @@ let dumpt t x=
     x.Dump(description=t)
     x
 let dumpft t f x= 
-    f x |> dumpt |> ignore
+    f x |> dumpt t |> ignore
     x
 let after (delim:string) (x:string) = 
     x.Substring(x.IndexOf(delim) + delim.Length)
@@ -105,13 +118,15 @@ let dte =
         |> Seq.find(fun wn -> wn.Contains("PracticeManagement"))
         |> dumpt "VisualStudioWindowName"
         |> Macros.VsMacros.getDteByWindowName
-        |> dumpft "VisualStudioProcInfo" (fun p -> p.Name)
-        //System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE") :?> EnvDTE.DTE
+//        |> dumpft "VisualStudioProcInfo" (fun p -> p.Name)
+        //Microsoft.VisualStudio.Shell.Interop.
+        //System.Runtime.InteropServices.Marshal.get
+        //let x =  System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE")
+        //:?> EnvDTE.DTE
     with ex ->
         let msg = "could not find or hook into a vs instance"
         ex.Dump(msg)
         reraise()
-    
 printfn "Got dte for solution %s" dte.Solution.FileName
 let cString = 
     dte.Solution.FindProjectItem("BuildTime.fs").FileNames 0s
@@ -196,10 +211,10 @@ let manager =
     let dteWrapper = wrapDte dte
     VsManager(None, dteWrapper, sb, templateProjectItem,debug)
 let pluralizer = 
-    Macros.VsMacros.createPluralizer()
-    |> function
-        | Choice1Of2 p -> p
-        | _ -> failwith "Could not locate pluralizer"
+    //Macros.VsMacros.createPluralizer()
+    //|> function
+    //    | Choice1Of2 p -> p
+    //    | _ -> failwith "Could not locate pluralizer"
     
 let cgsm = 
         {
@@ -212,13 +227,15 @@ let cgsm =
 //                    TargetFolderOpt = typeScriptFolderName
 //                }
             CString = cString
-            UseOptionTypes= false
+//            UseOptions= false
+            NullableHandling= PureCodeGeneration.NullableHandling.UseNullable
             ColumnNolist= columnNolist
             Measures= measureList |> Set.ofSeq
             MeasuresNolist= measureNolist |> Set.ofSeq
             IncludeNonDboSchemaInNamespace= true
-            Pluralize=pluralizer.Pluralize
-            Singularize=pluralizer.Singularize
+            Pluralize= Humanizer.InflectorExtensions.Pluralize
+            //pluralizer.Pluralize
+            Singularize=Humanizer.InflectorExtensions.Singularize //pluralizer.Singularize
             TypeGenerationNolist = Set [
                                         "PaymentReversal"
             ]
@@ -248,6 +265,12 @@ let toGen : TableInput list =
     let facilityFKey = FKeyIdentifier {Table={Schema="dbo";Name="Facilities"};Column="FacilityID"}
     let facilityFKeyColumn =  ColumnInput.createFKeyedInt "FacilityId" facilityFKey
     [
+        TableInput(Schema="Admit", Name="Level",
+            Columns=[
+                ColumnInput.createPKIdentity "ID"
+                ColumnInput.create "Display" (ColumnType.StringColumn 50)
+            ]
+        )
         TableInput(Schema="dbo", Name="EraPayment", 
             Columns=[
                 {ColumnInput.createFKeyedInt "EraPaymentID" (FKeyIdentifier {Table={Schema="dbo"; Name="Payment"}; Column="PaymentId"}) with Nullability = PrimaryKey}
@@ -512,7 +535,6 @@ let toGen2 =
         toGenAccounting
     ]
     
-open PureCodeGeneration
 let fGetNotifyOptions (ti:TableIdentifier) : NotifyClassOptions =
     if ti.Name= "PatientInfo" then
         {SettersCheckInequality=true;AllowPropertyChangeOverride=false}

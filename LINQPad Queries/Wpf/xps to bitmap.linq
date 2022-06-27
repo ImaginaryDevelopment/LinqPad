@@ -117,14 +117,14 @@ module Xps =
         let fds = xps.GetFixedDocumentSequence()
         fds
     // scaling: https://stackoverflow.com/questions/13144615/rendertargetbitmap-renders-image-of-a-wrong-size
-    let scaleRender pgW pgH =
+    let scaleRender pgW pgH pgVisual =
         let maxWidth = Math.Round(21.0 / 2.54 * 96.0); // A4 width in pixels at 96 dpi
         let maxHeight = Math.Round(29.7 / 2.54 * 96.0); // A4 height in pixels at 96 dpi
         let scale = 1.0
         let scale = min scale (maxWidth / pgW)
         let scale = max scale (maxHeight / pgH)
         let cv = System.Windows.Media.ContainerVisual(Transform = System.Windows.Media.ScaleTransform(scale,scale))
-        cv.Children.Add(page.Visual);
+        cv.Children.Add pgVisual
 
         let w = pgW * scale |> int 
         let h = pgH * scale |> int
@@ -140,9 +140,9 @@ module Xps =
             let docPage = fds.DocumentPaginator.GetPage i
 //            let rt = RenderTargetBitmap(docPage.Size.Width, docPage.Size.Height, 96.0,96.0, System.Windows.Media.PixelFormats.Bgra32)
             let sz = docPage.Size
-            (fds.DocumentPaginator.PageCount,i,w,h).Dump()
+            (fds.DocumentPaginator.PageCount,i, sz.Width,sz.Height).Dump()
             // fix this: https://stackoverflow.com/questions/13144615/rendertargetbitmap-renders-image-of-a-wrong-size
-            let rt = scaleRender sz.Width sz.Height
+            let rt = scaleRender sz.Width sz.Height docPage.Visual
             let encoder = BmpBitmapEncoder()
             encoder.Frames.Add(BitmapFrame.Create rt)
             // unfortunately some recipients need to keep the stream open
@@ -246,7 +246,7 @@ let printPreview (fds:FixedDocumentSequence)=
 let previewXps path =
     Xps.loadXps path Xps.toFds
     |> printPreview 
-//(
+let path = @"C:\Users\bdimp\Documents\binarydefense"
 let dc = lazy(
     let dc = DumpContainer()
     dc.Dump()

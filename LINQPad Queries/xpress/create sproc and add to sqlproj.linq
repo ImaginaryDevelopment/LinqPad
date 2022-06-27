@@ -43,7 +43,7 @@ module Tfs =
 // nice to have: auto detect existing proc and change to alter instead of create
 
 let sprocText = Util.Cache(Func<_>(System.Windows.Forms.Clipboard.GetText), "sprocText")
-sprocText .Dump("sproc text")
+sprocText.Dump("sproc text")
 let sprocName = 
     match sprocText with
     |RMatchI "procedure (\[?dbo\]\.)?\[?(\w+)\]?" m -> m.Groups.[2].Value

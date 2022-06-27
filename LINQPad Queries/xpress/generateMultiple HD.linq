@@ -77,12 +77,6 @@ let dataModelsToGen : TableIdentifier list = [
 printfn "wee?"
 let dte = 
     try
-//        Macros.VsMacros.getWindowNames()
-//        |> Dump
-//        |> Seq.find(fun wn -> wn.Contains("HealthDesigns"))
-//        |> dumpt "VisualStudioWindowName"
-//        |> Macros.VsMacros.getDteByWindowName
-//        |> dumpft "VisualStudioProcInfo" (fun p -> p.Name)
         System.Runtime.InteropServices.Marshal.GetActiveObject("VisualStudio.DTE") :?> EnvDTE.DTE
     with ex ->
         let msg = "could not find or hook into a vs instance"

@@ -1,10 +1,9 @@
 <Query Kind="FSharpProgram">
-  
-  <Reference Relative="..\..\..\..\FsInteractive\BReusable.dll">C:\projects\FsInteractive\BReusable.dll</Reference>
+  <Reference Relative="..\..\..\FsInteractive\BReusable.dll">C:\projects\FsInteractive\BReusable.dll</Reference>
   <Reference>&lt;ProgramFilesX64&gt;\Microsoft SQL Server\120\SDK\Assemblies\Microsoft.SqlServer.ConnectionInfo.dll</Reference>
   <Reference>&lt;ProgramFilesX64&gt;\Microsoft SQL Server\120\SDK\Assemblies\Microsoft.SqlServer.Smo.dll</Reference>
-  <Reference Relative="..\..\..\..\FsInteractive\ProcessMacros.dll">C:\projects\FsInteractive\ProcessMacros.dll</Reference>
-  <Reference Relative="..\..\..\..\FsInteractive\SqlMacros.dll">C:\projects\FsInteractive\SqlMacros.dll</Reference>
+  <Reference Relative="..\..\..\FsInteractive\ProcessMacros.dll">C:\projects\FsInteractive\ProcessMacros.dll</Reference>
+  <Reference Relative="..\..\..\FsInteractive\SqlMacros.dll">C:\projects\FsInteractive\SqlMacros.dll</Reference>
   <NuGetReference>Rx-Main</NuGetReference>
   <Namespace>BReusable</Namespace>
   <Namespace>Macros.ProcessMacros</Namespace>
@@ -13,6 +12,11 @@
 
 // build and deploy a .sqlproj -> .dacpac
 // getting this into CI http://stackoverflow.com/questions/15556339/how-to-build-sqlproj-projects-on-a-build-server?rq=1
+(* 
+    todo : add command line for command line schema compare generation: 
+    taken from: https://social.msdn.microsoft.com/Forums/en-US/30c355a3-4134-4c62-a1df-0fafa9c594a0/schema-compare-from-command-line?forum=vstsdb
+    vsdbcmd.exe /a:deploy /dd:- /dsp:sql /model:ProjectName.dbschema /targetmodelfile:TargetDatabase.dbschema /DeploymentScriptFile:OutputFilename.sql /p:TargetDatabase="TargetDatabaseName" 
+*)
 
 let (|StartsWithI|_|) s1 (toMatch:string) = if toMatch <> null && toMatch.StartsWith(s1, StringComparison.InvariantCultureIgnoreCase) then Some () else None
 
