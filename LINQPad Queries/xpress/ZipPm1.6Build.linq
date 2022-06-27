@@ -11,17 +11,34 @@ let (|SContains|_|) (delimiter:string) (text:string) = if isNull text || not <| 
 
 module Seq =
     let sortByDesc f s = Enumerable.OrderByDescending( s, Func<_,_>(f))
-for f in Directory.GetFiles(targetDir, "*.txt") do
-    match f with
-    | SContains "DebugLog"
-    | SEndsWith "App.Config" -> File.Delete(f)
-    | _ -> ()
-    
-for f in Directory.GetFiles(targetDir, "*.xml") do
-    match f with
-    | SEndsWith "PracticeManagement.Config.Xml" -> File.Delete f
-    | _ -> ()
-
+let cleanUp() =
+    let deleteWithLog f =
+        printfn "Deleting '%s'" f
+        File.Delete f
+        
+    Directory.GetFiles(targetDir, "*.txt")
+    |> Seq.iter(
+        function
+        | SContains "DebugLog"
+        | SEndsWith "App.Config" as f ->
+            deleteWithLog f
+        | _ -> ()
+    )
+    Directory.GetFiles(targetDir, "*.log")
+    |> Seq.iter(
+        function
+        | SEndsWith "application.log" as f -> deleteWithLog f
+        | _ -> ()
+    )
+        
+    Directory.GetFiles(targetDir, "*.xml")
+    |> Seq.iter(
+        function
+        | SEndsWith "PracticeManagement.Config.xml" as f -> deleteWithLog f
+        | _ -> ()
+    )
+        
+cleanUp()
 
     
 type BuildVersionInputs = {Subversion:int; Year:int; Month:int; Day:int; BuildNumber:int}
@@ -50,6 +67,7 @@ let latest =
             else None
 
 latest.Dump("latest")
+
 let bvi =
     match latest with
     | Some bvi -> 
