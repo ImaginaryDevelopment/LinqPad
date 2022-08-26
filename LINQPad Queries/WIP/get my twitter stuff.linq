@@ -5,14 +5,22 @@
 
 // connect to twitter, save all my liked/favorited tweets in case the owner deletes their account or the tweet.
 // desired feature: unshorten any urls found
+// status: only seems to get 200 no matter what countOpt is set to
+
 // JSON.net note: if deserializing into T casing is ignored, if deserializing by property name it is not
 
 open System.Globalization
 open System.Net
 open System.Net.Http
 open Newtonsoft.Json
+module String =
+    let defaultComparison = StringComparison.InvariantCultureIgnoreCase
+    let subString2 start e (text:string) = text.Substring(start, e)
 
-let isDebug = false
+let countOpt = Some 400 // Some 2
+let userId = "maslowjax"
+let isDebug = true
+
 let savePathOpt = 
     let result = 
         // intended to help decide if we should save out to the computer, or if we are just testing/developing this script
@@ -40,7 +48,7 @@ let savePathOpt =
         // return None to skip saving, Some path to save the result to file
         |> Some
             
-    result.Dump("hello?")
+    result.Dump("saving backup to")
     result            
 
 [<AutoOpen>]
@@ -60,11 +68,12 @@ module Helpers =
     let (|Matched|_|) (m:Match)= if m.Success then Some m else None
     let flip f x y = f y x
     
+    let containsI (delimiter:string) (x:string) = if isNull x then false elif isNull delimiter || delimiter = "" then failwithf "bad contains call" else x.IndexOf(delimiter, String.defaultComparison) >= 0
     let containsIAnyOf (delimiters:string seq) (x:string) = delimiters |> Seq.exists(flip containsI x)
     
     let dumpt (t:string) x = x.Dump(t); x
     let dumpBlack (t:string) blacklist x = 
-        let blacklist = blacklist |> delimit ", "
+        let blacklist = blacklist |> String.concat ", "
         x.Dump(description=t,exclude=blacklist)
     let dumpc (t:string) (x : _ list) = x.Length.Dump(t); x
     let dumpLaterOrDebug (t:string) onDemand x = 
@@ -76,7 +85,6 @@ module Helpers =
         
         x
         
-    let containsI (delimiter:string) (x:string) = if isNull x then false elif isNull delimiter || delimiter = "" then failwithf "bad contains call" else x.IndexOf(delimiter, String.defaultComparison) >= 0
     
     let stringEqualsI s1 (toMatch:string)= not <| isNull toMatch && toMatch.Equals(s1, StringComparison.InvariantCultureIgnoreCase)
                     
@@ -126,13 +134,13 @@ module Helpers =
         let format fmt ([<ParamArray>] arr) = 
             String.Format(fmt, arr )
     
-        let contains d (s:string) = s.Contains(d)
-        let endsWith d (s:string) = s.EndsWith d
+        let contains (d:string) (s:string) = s.Contains(d)
+        let endsWith (d:string) (s:string) = s.EndsWith d
         let endsWithC (c:char) (s:string) = s |> endsWith (c |> string)
         let getIndexOf (d:string) (s:string) = match s.IndexOf d with | -1 -> None | x -> Some x
         let prettifyJsonObj o = JsonConvert.SerializeObject(o, Formatting.Indented)
         let prettifyJson s = s |> JsonConvert.DeserializeObject |> prettifyJsonObj
-        let delimit delimiter (values:#seq<string>) = String.Join(delimiter, Array.ofSeq values)
+        let delimit (delimiter:string) (values:#seq<string>) = String.Join(delimiter, Array.ofSeq values)
         
     let deserializePartial propName s = Newtonsoft.Json.Linq.JObject.Parse(s).[propName]    
     let deserializeT<'T> x = JsonConvert.DeserializeObject<'T> x
@@ -155,8 +163,6 @@ module Helpers =
             |> ignore
             reraise()    
             
-    module Array =
-        let ofOne x = [| x |]
     module Seq = 
         let any x = x |> Seq.exists(fun _ -> true)        
     let buildParam name value = sprintf "%s=%s" name value
@@ -199,8 +205,6 @@ module Helpers =
 ()
 // for OAuth isntead of this app only thing see: https://dev.twitter.com/oauth/reference/post/oauth2/token
 
-
-
 type Cache =
     |LinqPad of key:string // Util.Cache(... key)
     |AppDomain of key:String // AppDomain.CurrentDomain.SetData
@@ -212,8 +216,8 @@ type DataLifecycle = //could be named cache, but one of the entries is to save i
     
 let cacheBearer:Cache option = Cache.LinqPad "bearerData" |> Some
 // from https://apps.twitter.com/
-let consumerKey = Util.GetPassword "TwitterApiKey"
-let consumerSecret = Util.GetPassword "TwitterSecret"
+let consumerKey = Util.GetPassword "TwitterApiKey" // ClientID
+let consumerSecret = Util.GetPassword "TwitterSecret" // ClientSecret
 
 if consumerKey.StartsWith(" ") then 
     if isDebug then printfn "Key %s" consumerKey
@@ -224,77 +228,8 @@ if consumerSecret.StartsWith(" ") then
     
 let baseUrl = "https://api.twitter.com/"
 
-module Bearer = 
-    type BearerTokenResponse = {token_type:string; access_token:string;errors:IDictionary<string,obj>[]}
-    type Bearer =
-        | Token of string
-        | Error of IDictionary<string,obj>[]
-        
-    let sampleToken = """{"token_type":"bearer","access_token":"somebearerToken"}"""
-    let sampleError = """{"errors":[{"code":99,"message":"Unable to verify your credentials","label":"authenticity_token_error"}]}"""
-    let getBearer caching = 
-        // also didn't work: 
-        //let encodedPair = sprintf "userName=%s&password=%s" consumerKey consumerSecret |> Encoding.UTF8.GetBytes |> Convert.ToBase64String
-        let getRawText () = 
-            if isDebug then 
-                printfn "Key %s" consumerKey
-                printfn "Secret %s" consumerSecret
-            let encodedPair = sprintf "%s:%s" consumerKey consumerSecret |> dumpt "before encoding" |> Encoding.UTF8.GetBytes |> Convert.ToBase64String
-            encodedPair.Dump("encoded pair")
-            use client = new HttpClient()
-            client.Timeout.Dump("default timeout")
-            use content = new StringContent("grant_type=client_credentials")
-            let url = sprintf "%s%s" baseUrl "oauth2/token"
-            url.Dump("url")
-            use req = new HttpRequestMessage(HttpMethod.Post, url, Content= content)
-            if isNull req then failwithf "Request was null"
-            if isNull req.Content then failwithf "Content was null"
-            
-            req.Content.Headers.ContentType <- System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/x-www-form-urlencoded",CharSet = "UTF-8")
-            
-            if not <| req.Headers.TryAddWithoutValidation("Authorization", sprintf "Basic %s" encodedPair) then failwithf "adding auth header failed"
-            let response = client.SendAsync(req).Result
-            let bearerData = response.Content.ReadAsStringAsync().Result
-            bearerData.Dump("raw response")
-            bearerData
-        let bearerData = 
-            match caching with
-            | Some (Cache.LinqPad key) -> Util.Cache(getRawText,key)
-            | Some (Cache.AppDomain key) -> 
-                match AppDomain.CurrentDomain.GetData key with
-                | null ->
-                    let data = getRawText()
-                    AppDomain.CurrentDomain.SetData(key, data)
-                    data
-                | x -> x :?> string
-            | Some (TempKeyed key) ->
-                let tmp=
-                    let tp = Path.GetTempPath()
-                    Path.Combine(tp, sprintf "%s.json" key)
-                
-                match File.Exists tmp with
-                | true -> File.ReadAllText tmp |> deserializeT 
-                | false -> 
-                    let data = getRawText()
-                    data |> prettifyJsonObj |> fun data -> File.WriteAllText(tmp,data)
-                    data
-            | None -> getRawText()
-        let bearerData = 
-            JsonConvert.DeserializeObject<BearerTokenResponse>(bearerData)
-            //|> dumpt "response"
-        if isNull bearerData.errors || bearerData.errors |> Seq.length = 0 then
-            if bearerData.token_type <> "bearer" then Console.Error.WriteLine(sprintf "Warning: token type was '%s', expected '%s'" bearerData.token_type "bearer")
-            Bearer.Token bearerData.access_token
-        else
-            Bearer.Error bearerData.errors
-        
 
-open Bearer    
-
-let bearer = 
-    match getBearer cacheBearer with
-    | Bearer.Token t -> t
-    | Bearer.Error errors -> errors.Dump("bearer errors"); failwith "bearer errors"
+let bearer = Util.GetPassword("TwitterBearer")
 
 let getApi apiPath = 
     printfn "Getting %s" apiPath
@@ -317,16 +252,21 @@ let getAppRateLimitStatus() =
     |> prettifyJson 
     |> dumpt "rate limit status"
 
+[<NoComparison>]
 type User = { Name:string; profile_image_url:string;Id:Int64 Nullable; screen_name:string; location:string; description:string; url:string;}
+[<NoComparison>]
 type Media = { Id:Int64 Nullable; Media_Url:string;Expanded_Url:string; Type:string; Display_Url:string}
 type Url = {Url:string; Expanded_url:string; Display_url:string}
+[<NoComparison>]
 type Entity = { Media: Media[]; Urls: Url[]}
 // did not compile
 //type TweetT<'T> = {(* Coordinates:obj; *) Id:'T<Int64>; Truncated:'T<bool>; Favorited:'T<bool>; Created_at:string; Id_str:string; In_reply_to_user_id_str:Int64 Nullable; Text:string; User:User; Entities:Entity}
+[<NoComparison>]
 type Tweet = {(* Coordinates:obj; *) Id:Int64 Nullable; Truncated:bool Nullable ; Favorited:bool Nullable; Created_at:string; Id_str:string; In_reply_to_user_id_str:Int64 Nullable; Text:string; User:User; Entities:Entity}
     with static member getText (x:Tweet) = x.Text
 
 type SearchMetadata = {Query:string;RefreshUrl:string}
+[<NoComparison>]
 type SearchResult = {Statuses:Tweet list; search_metadata:SearchMetadata}
 type UserIdentifier = |UserId of int |ScreenName of string
 //type Tweet = {(* Coordinates:obj; *) Id:Int64 option; Truncated:bool option; Favorited:bool option; Created_at:string; (* Id_str:string; *) In_reply_to_user_id_str:Int64 option; Text:string; User:User; Entities:Entity}
@@ -441,8 +381,8 @@ module NeedMoreAuth =
         |> List.ofSeq
 
 let cacheResult = true
-let countOpt = Some 200 // Some 2
-let userId = "maslowjax"
+
+// WIP? not well tested
 // save to file, appending new unique results if one already exists
 let saveAppendish savePathOpt key (data:Tweet list) = 
     match savePathOpt with
@@ -504,7 +444,7 @@ let saveAppendish savePathOpt key (data:Tweet list) =
         q
         
 try
-    let userInfo = 
+    let _userInfo = 
         getUsersShow cacheResult (UserIdentifier.ScreenName userId) None
 //    |> dumpt "getUsersShow"
 //    |> ignore
