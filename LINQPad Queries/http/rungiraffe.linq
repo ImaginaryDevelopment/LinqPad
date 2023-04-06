@@ -23,6 +23,8 @@ open Microsoft.Extensions.Logging
 
 open Giraffe
 
+let warnOnHttpsFailure = false
+
 module Option =
     let ofValueString =
         function
@@ -73,17 +75,6 @@ let webApp =
         route "/getclip" >=> sendText (fun () -> clip.PropValue |> Option.defaultValue defaultText)
         route "/getclipjson" >=> (fun x -> json (getClip()) x)
         
-        //// not using get/put
-        //route "/clip" >=> (fun x y ->
-        //    y.Request.Query.["value"]
-        //    |> string
-        //    |> Option.ofValueString
-        //    |> Option.map setClip
-        //    |> function
-        //        | None -> // assume get
-        //            text (clipText |> Option.defaultValue defaultText) x y
-        //        | Some v -> text v x y
-        //)
         route "/" >=> text "hello there"
         route "" >=> text "hello there"
 
@@ -99,13 +90,17 @@ let runWhbAdapter (ip:System.Net.IPAddress) port (whb:IWebHostBuilder) =
         whb.ConfigureKestrel(fun x ->
             
             x.Listen(ip,port, (fun listenOptions -> 
-                // listenOptions.Protocols <- HttpProtocols.Http1AndHttp2
-                //listenOptions.UseHttps()
-                //|> ignore
-                    ()
+                try
+                    listenOptions.Protocols <- Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http1AndHttp2
+                    listenOptions.UseHttps()
+                    |> ignore
+                with ex ->
+                    if warnOnHttpsFailure then
+                        printfn "Failed to setup https, this may be fine for your use case"
+                        ex.Dump()    
+                ()
                 )
             )
-            // https?
         )
         |> ignore
         whb.Configure (configureApp None) |> ignore
