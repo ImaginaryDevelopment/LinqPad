@@ -4,6 +4,8 @@
 </Query>
 
 // appears to be working, not fully tested, needs work on landing page as a menu perhaps?
+// does not work: clipboard access after startup, printfn doesn't work in kestrel context either
+
 open System
 open System.Net
 
@@ -27,23 +29,38 @@ module Option =
         | null | "" -> None
         | x when String.IsNullOrWhiteSpace x -> None
         | x -> Some x
-        
+type Prop<'t>(initialValue, getSideEffect, beforeSetSideEffect, afterSetSideEffect) =
+    let mutable value = initialValue
+    member _.PropValue
+        with get() = getSideEffect(); value
+        and set v =
+            beforeSetSideEffect (value,v)
+            let oldValue = value
+            value <- v
+            afterSetSideEffect(oldValue,v)
+    
 let getQueryValue (name:string) (c:Microsoft.AspNetCore.Http.HttpContext) = c.Request.Query.[name]
 
 let useContext f1 f2 = (fun x y -> f2 (f1 y) x y )
 
 let webApp =
+    // this doesn't appear to work at runtime, only startup
+    let getClip() : string option = System.Windows.Forms.Clipboard.GetText() |> Option.ofValueString
+    // this doesn't seem to work at all in the kestrel context
+    let setClip (text:string) = System.Windows.Forms.Clipboard.SetText text
+    
     // adapt to the clipboard read not working from this process, allow pushing to it
-    let mutable clipText = System.Windows.Forms.Clipboard.GetText() |> Option.ofValueString
+    let clip = Prop(getClip(), ignore, ignore, (fun (_,vOpt) -> vOpt |> Option.iter setClip ))
     let setClip value =
         value
-        |> Option.ofValueString
+        |> Option.bind Option.ofValueString
         |> function
             | None ->
-                clipText <- None
-                "Cleared text"
+                "Error: No text found"
             | Some v ->
-                clipText <- Some v
+                clip.PropValue <- Option.ofValueString v
+                printfn "Storing text"
+                printfn "%s" v
                 sprintf "Stored text '%s'" v
     let sendText f x y =
         text (f()) x y
@@ -52,23 +69,24 @@ let webApp =
         route "/hello" >=> text "world"
         // does not work
         //route "/getclip" >=> (fun x y -> text(System.Windows.Forms.Clipboard.GetText()) x y)
-        route "/setclip" >=> (useContext (getQueryValue "value" >> string >> setClip) text)
-        route "/getclip" >=> sendText (fun () -> clipText |> Option.defaultValue defaultText)
+        route "/setclip" >=> (useContext (getQueryValue "value" >> string >> Option.ofValueString >> setClip) text)
+        route "/getclip" >=> sendText (fun () -> clip.PropValue |> Option.defaultValue defaultText)
+        route "/getclipjson" >=> (fun x -> json (getClip()) x)
         
-        // not using get/put
-        route "/clip" >=> (fun x y ->
-            y.Request.Query.["value"]
-            |> string
-            |> Option.ofValueString
-            |> Option.map setClip
-            |> function
-                | None -> // assume get
-                    text (clipText |> Option.defaultValue defaultText) x y
-                | Some v -> text v x y
-        )
+        //// not using get/put
+        //route "/clip" >=> (fun x y ->
+        //    y.Request.Query.["value"]
+        //    |> string
+        //    |> Option.ofValueString
+        //    |> Option.map setClip
+        //    |> function
+        //        | None -> // assume get
+        //            text (clipText |> Option.defaultValue defaultText) x y
+        //        | Some v -> text v x y
+        //)
         route "/" >=> text "hello there"
         route "" >=> text "hello there"
-        
+
     ]
     
 let configureApp handlerOpt (app:IApplicationBuilder) =
@@ -79,7 +97,15 @@ let configureServices' (x:IServiceCollection) =
     x.AddGiraffe() |> ignore
 let runWhbAdapter (ip:System.Net.IPAddress) port (whb:IWebHostBuilder) =
         whb.ConfigureKestrel(fun x ->
-            x.Listen(ip,port)
+            
+            x.Listen(ip,port, (fun listenOptions -> 
+                // listenOptions.Protocols <- HttpProtocols.Http1AndHttp2
+                //listenOptions.UseHttps()
+                //|> ignore
+                    ()
+                )
+            )
+            // https?
         )
         |> ignore
         whb.Configure (configureApp None) |> ignore
