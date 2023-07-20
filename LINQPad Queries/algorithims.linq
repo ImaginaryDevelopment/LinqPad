@@ -35,7 +35,7 @@ let reduce a b =
     sprintf "%i / %i" (a/gcf) (b/gcf)
 // 26*26*26*26*10*10    
 
-let rec comb n l = 
+let rec comb (n:int) l = 
     match n, l with
     | 0, _ -> [[]]
     | _, [] -> []
