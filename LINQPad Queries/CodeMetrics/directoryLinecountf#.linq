@@ -1,9 +1,9 @@
 <Query Kind="FSharpProgram">
   <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.dll</Reference>
   <Namespace>System.Collections.ObjectModel</Namespace>
-  <Namespace>System.IO</Namespace>
   <Namespace>System.Runtime.InteropServices</Namespace>
   <Namespace>System.Windows.Forms</Namespace>
+  <IncludeWinSDK>true</IncludeWinSDK>
 </Query>
 
 open System
@@ -31,15 +31,16 @@ type HighestLinesByFolder = { Path:string;TotalLines:int;Details:seq<HighestLine
 let endsWithIgnore (test:string) (value:string) = value.EndsWith(test,StringComparison.CurrentCultureIgnoreCase)
 let startsWithIgnore (test:string) (value:string) = value.StartsWith(test,StringComparison.CurrentCultureIgnoreCase)
 let fileExcludeEndings = ["designer.cs";"generated.cs";"codegen.cs"]
-
+let (|ValueString|_|) (x:string) = if String.IsNullOrWhiteSpace x then None else Some x
 let fileExclude	(a:string):bool = 
     endsWithIgnore "designer.cs" a ||
     startsWithIgnore "jquery-" a ||
     startsWithIgnore "AssemblyInfo" a ||
-    endsWithIgnore "generated.fs" a
+    endsWithIgnore "generated.fs" a ||
+    endsWithIgnore ".chunk.js" a
     
     
-let pathExcludeEndings = ["obj"; "Debug";"node_modules";".sonar";"ServerObjects";"Service References";"Web References";"PackageTmp";"TestResults";"packages";"$tf";".git";"bin" ]
+let pathExcludeEndings = ["obj"; "Debug";"node_modules";".sonar";"ServerObjects";"Service References";"Web References";"PackageTmp";"TestResults";"packages";"$tf";".git";"bin"; "fable_modules"]
 
 let pathExclude (a:string) :bool =
     List.exists ( fun elem -> endsWithIgnore elem a) pathExcludeEndings ||
@@ -56,72 +57,40 @@ type  CountSettings = {
     }
 
 
-module BrowseFileDialogReflection = 
-    module Reflections = 
-        let c_flags = BindingFlags.Instance ||| BindingFlags.Public ||| BindingFlags.NonPublic
-        let windowsFormsAssembly = typeof<FileDialog>.Assembly
-        let fosPickFoldersBitFlag = windowsFormsAssembly.GetType("System.Windows.Forms.FileDialogNative+FOS").GetField("FOS_PICKFOLDERS").GetValue(null) :?> uint32
-        let iFileDialogType = windowsFormsAssembly.GetType("System.Windows.Forms.FileDialogNative+IFileDialog")
-        let private createVistaDialogMethodInfo = typeof<OpenFileDialog>.GetMethod("CreateVistaDialog", c_flags)
-        let createVistaDialog o = createVistaDialogMethodInfo.Invoke(o, Array.empty)
-        let private onBeforeVistaDialogMethodInfo = typeof<OpenFileDialog>.GetMethod("OnBeforeVistaDialog", c_flags)
-        let onBeforeVistaDialog o iFileDialog = onBeforeVistaDialogMethodInfo.Invoke(o, [| iFileDialog |]) |> ignore<obj>
-        let private getOptionsMethodInfo = typeof<FileDialog>.GetMethod("GetOptions", c_flags)
-        let private setOptionsMethodInfo = iFileDialogType.GetMethod("SetOptions", c_flags)
-        let getOptions o = getOptionsMethodInfo.Invoke(o, Array.empty) :?> uint32
-        let setOptions iFileDialog (pickFoldersBitFlag: uint32) = setOptionsMethodInfo.Invoke(iFileDialog, [| pickFoldersBitFlag|]) |> ignore<obj>
-        let private adviseMethodInfo = iFileDialogType.GetMethod("Advise")
-        let advise iFileDialog adviseParametersWithOutputConnectionToken = adviseMethodInfo.Invoke(iFileDialog, [| adviseParametersWithOutputConnectionToken; 0u|]) |> ignore<obj>
-        let private vistaDialogEventsConstructorInfo = windowsFormsAssembly.GetType("System.Windows.Forms.FileDialog+VistaDialogEvents").GetConstructor(c_flags, null, [| typeof<FileDialog> |] , null)
-        let vistaDialogEvents o = vistaDialogEventsConstructorInfo.Invoke([| o |])
-        let show x (owner:IntPtr) = iFileDialogType.GetMethod("Show").Invoke(x, [| owner|]) :?> int
-    
-    open Reflections 
-    let showOpenFolderDialog owner initialDirectory title = 
-        use ofd = new OpenFileDialog(AddExtension = false, CheckFileExists = false, DereferenceLinks=true, Filter = "Folders|\n", InitialDirectory = initialDirectory, Multiselect=false, Title=title)
-        let iFileDialog = createVistaDialog ofd
-        //iFileDialog.GetType().Dump() <- returned on win10 System.Windows.Forms.FileDialogNative+FileOpenDialogRCW
-        onBeforeVistaDialog ofd iFileDialog
-        (getOptions ofd ||| fosPickFoldersBitFlag)
-        |> setOptions iFileDialog
-    
-        let adviseParametersWithOutputConnectionToken = vistaDialogEvents ofd
-        advise iFileDialog adviseParametersWithOutputConnectionToken
-        let result = 
-            try
-                let retVal = show iFileDialog owner
-                Some((retVal = 0), ofd.FileName)
-            with ex ->
-                None
-        //ofd.ShowDialog()
-        result
-    
-//    showOpenFolderDialog IntPtr.Zero null null 
-//    |> Dump
-//    |> ignore
-        
-    
 //instance of above type
 let currentSettings:CountSettings=	{
     Path=
         let userPath=
             match Util.ReadLine("SourceDirectory?(blank to browse for the folder)",@"%devroot%") with
             | null | "" -> 
+                // no longer works in net core
                 let devRoot = Environment.ExpandEnvironmentVariables("%devroot%")
                 printfn "%%devroot%%=%s" devRoot
-                let initialDir = match String.IsNullOrEmpty devRoot with | true -> null | false -> devRoot
-                match BrowseFileDialogReflection.showOpenFolderDialog IntPtr.Zero initialDir "Selected the desired target folder/project folder/sln folder" with
-                | Some(false,_) | None -> failwithf "No directory selected"
-                | Some (true, p) -> p
+                use fbd = new System.Windows.Forms.FolderBrowserDialog()
+                match String.IsNullOrEmpty devRoot with
+                | true -> ()
+                | false -> fbd.InitialDirectory <- devRoot
+                fbd.Description <- "Selected the desired target folder/project folder/sln folder" 
+                match fbd.ShowDialog() with
+                | DialogResult.OK | DialogResult.Yes | DialogResult.Continue ->
+                    match fbd.SelectedPath with
+                    | ValueString sp -> Some sp
+                    | _ -> None
+                    
+                | _ -> None
+                |> function
+                    | None -> failwithf "No directory selected"
+                    | Some x -> x
+                
             | x -> Environment.ExpandEnvironmentVariables x
                 
-        let userExpanded= if userPath.Contains('%') then System.Environment.ExpandEnvironmentVariables(userPath) else userPath
+        let userExpanded= if userPath.Contains '%' then System.Environment.ExpandEnvironmentVariables userPath else userPath
         let exists=System.IO.Directory.Exists(userExpanded)
         if not exists then //guard clause
             raise(DirectoryNotFoundException(userExpanded))
         do userExpanded.Dump("Searching")
         userExpanded
-    Patterns=["*.cs";"*.aspx";"*.ascx";"*.fs"]
+    Patterns=["*.cs";"*.aspx";"*.ascx";"*.fs";"*.js";"*.jsx";"*.ts";"*.tsx"]
     FileExclude=fileExclude
     PathExclude=pathExclude
     }
@@ -246,7 +215,7 @@ let getFilesByPatterns directories patterns =
 let allFiles = getFilesByPatterns includedDirectories currentSettings.Patterns
 
 //rec means recursive function
-let filterFiles files fileFilter= seq{
+let filterFiles (files: string seq) fileFilter= seq{
     for file in files do
         let filename=System.IO.Path.GetFileName(file)
         if not(fileFilter(filename)) then
@@ -349,7 +318,7 @@ let buildLimitString f title threshold =
 let getHighestLinesByFile threshold = 
     summaries 
     |> Seq.sortBy (fun x-> -x.LineCount - 1) 
-    |> (fun fs -> if useTakeLimits.IsSome then Seq.take(useTakeLimits.Value) fs else fs)
+    |> (fun fs -> if useTakeLimits.IsSome then Seq.truncate(useTakeLimits.Value) fs else fs)
     |> Seq.map (fun x -> {  Filename=x.Filename
                             LineCount=x.LineCount
                             Location=makeLinq x.FullPath x.RelativePath
@@ -392,7 +361,7 @@ let getHighestLinesByFolder threshold =
     summaries 
     |> Seq.groupBy (fun x-> x.RelativePath)
     |> (fun group -> if useThresholds then (Seq.filter filter group) else group )
-    |> (fun group -> if useTakeLimits.IsSome then Seq.take(useTakeLimits.Value) group else group)
+    |> (fun group -> if useTakeLimits.IsSome then Seq.truncate(useTakeLimits.Value) group else group)
     |> Seq.map (fun (key,items) -> (key, items |> Seq.sumBy (fun i->i.LineCount) , items)) 
     |> Seq.sortBy (fun (key,l,items)-> -l) 
     
@@ -456,7 +425,7 @@ let getHighestByFileBase threshold =
     |> (fun group -> if useThresholds then (Seq.filter filter group) else group)
     |> Seq.map asFilenameGrouping
     |> Seq.sortBy (fun f-> -f.Lines)
-    |> (fun group -> if useTakeLimits.IsSome then Seq.take(useTakeLimits.Value) group else group)
+    |> (fun group -> if useTakeLimits.IsSome then Seq.truncate useTakeLimits.Value group else group)
     
 buildLimitString getHighestByFileBase "Highest lines by file base" highestLinesByFileMinimum
 
@@ -469,7 +438,7 @@ let getHighestMagicByFile threshold =
     let magic (fileSummary:FileSummary) = fileSummary.PotentialMagicNumbers.Value + fileSummary.DoubleQuotes.Value / 2
     summaries
     |> Seq.sortBy (fun fs -> -(magic fs))
-    |> (fun group -> if useTakeLimits.IsSome then Seq.take(useTakeLimits.Value) group else group)
+    |> (fun group -> if useTakeLimits.IsSome then Seq.truncate useTakeLimits.Value group else group)
     
 buildLimitString getHighestMagicByFile "Highest magic by file" highestMagicByFileMinimum
 
