@@ -22,6 +22,7 @@ let data =
     let tomeDataPath = Path.Combine(gameyPath, "Data", tomeLPath |> Path.GetFileName)
     let p = Path.Combine(tomeDataPath, sourceQueryPath |> sprintf "%s.json")
     if File.Exists p then
+        printfn "Reading file at '%s'" p
         File.ReadAllText p
         |> deserialize<CharAnalysisData>
     else

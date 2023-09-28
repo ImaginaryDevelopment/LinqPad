@@ -109,6 +109,7 @@ let runTryValidate x =
     |> function
         | Some x -> Some x
         | None -> fUnprocessedCount 1; None
+        
 let validateAndFetch x =
     match runTryValidate x with
     | None -> None
@@ -118,6 +119,7 @@ let validateAndFetch x =
             return ToMEHelper.Scraping.ApiSamples.tryDeserializeApiCharacter tomeLogger c
         }
         |> Some
+        
 pullsw.Start()
 procsw.Start()
 let pageLimit = Some 8
@@ -241,9 +243,12 @@ ToMEHelper.Scraping.ApiSamples.findAllCharsAsync None None hc {
     // count of how many characters invested in each category
     let catCount =
         chars
-        |> Seq.colect(fun (_,_,c) -> c)
-        |> Seq.map(fun (n, ct) ->
-            sprintf "%40s %3i %s" n ct (getAvgChars ct)
+        |> Seq.collect(fun (_,_,cas) -> cas)
+        |> Seq.countBy(fun ca -> ca.Category)
+        //|> Seq.collect(fun (_cs,_,cas) -> cas |> List.map(fun ca -> ca.Category))
+        |> Seq.sortByDescending snd
+        |> Seq.map(fun (ca,ct) ->
+            sprintf "%40s %3i %s" ca ct (getAvgChars ct)
         )
         |> String.concat "\r\n"
     catCount.Dump("category invest")

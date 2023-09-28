@@ -8,41 +8,50 @@ type Resource = {
     Inventory: uint64 }
 
 type ResourceEntry = Resource * DateTime
-type SerializableRE = int * uint64 * int64
-    
-// if F5 should record the values on run
-let track = false
+type SerializableRE = Resource * DateTime
+type TrackType =
+    | Goal of bool
+    | OnRateChange of bool
+    | Never // for moving windows like estimating how long it takes to save up for each ritual
 
-let million, billion = 1_000_000uL, 1_000_000_000uL
+// if F5 should record the values on run
+let track = true
+
+let thousand, million, billion = 1_000uL, 1_000_000uL, 1_000_000_000uL
 let _abdicate = 171_200
 
-let wheat = {Rate=825; Inventory = 41_000uL }
-let wood = {Rate=50; Inventory = 14_000uL }
-let stone = {Rate=770; Inventory = 137uL * million }
-let faith = {Rate = 487; Inventory = 0uL  } // 17.7 hours, 1064.3 minutes, Finished at 7/18/2023 4:05:36 PM
+let wheat = {Rate=4041; Inventory = 2880uL * thousand}
+let wood = {Rate=2180; Inventory = 19uL * million}
+let stone = {Rate=8925; Inventory = 25uL * million }
+let faith = {Rate = 1852; Inventory = 513_000uL  } // 17.7 hours, 1064.3 minutes, Finished at 7/18/2023 4:05:36 PM
+let hol = {Rate=18; Inventory = 0uL }
 
-let hol = {Rate=13; Inventory = 95_600uL}
-
-let target =
+let targets =
     [
-        //"Ritual(faith)", 325_200uL, faith
-        "StoneSkin(hol)", 99_999uL, hol 
-        "Academy 2 (stone)", (100uL * billion), stone
+        "Cathedralx2 (stone)", (30uL * million), stone, Goal (track && false)
+        "Religion (faith)", million, faith, OnRateChange (track && true)
+        //"Level up(1500)", 25uL * million, wood
+        "Hero", 5uL * million, wheat, OnRateChange (track && false)
+        "Ritual(faith)", 140_600uL, {faith with Inventory = 0uL}, Never
+        //"Tremors(hol)", 99_999uL, hol 
+        //"Academy 2 (stone)", (100uL * billion), stone
     ]
-    |> List.head
 
-let deserialize (rate,inventory, dtTicks) =
-    {Rate=rate;Inventory=inventory}, DateTime(ticks = dtTicks)
+
+let deserialize (text:string) =
+    let r, dt = System.Text.Json.JsonSerializer.Deserialize<SerializableRE>(text)
+    r, dt
     
 let serialize (r,dt:DateTime) =
-    r.Rate, r.Inventory, dt.Ticks
+    let x = (r,dt)
+    System.Text.Json.JsonSerializer.Serialize(x)
     
-let summarizeWait title goal resource (asof: DateTime) =
-    if resource.Inventory > goal then printfn "%s is ready" title
+let summarizeWait (title: string) goal resource (asof: DateTime) =
+    if resource.Inventory > goal then
+        title, asof, None, "Ready"
     else
     let seconds = float (goal - resource.Inventory) / float resource.Rate
     let eta = asof.AddSeconds(seconds)
-    let titling = sprintf "%s - %A ~ %A" title asof eta
     
     [
         yield $"%.1f{seconds} seconds"
@@ -58,31 +67,68 @@ let summarizeWait title goal resource (asof: DateTime) =
     ]
     |> List.rev
     |> List.truncate 2
-    //|> fun x -> $"Finished at %A{eta}"::x
-    //|> List.rev
-    //|> fun x -> $"Started at %A{now}"::x
-    //|> List.rev
-    |> fun x -> x.Dump(titling)
+    |> String.concat " - "
+    |> fun text ->
+        title, asof, Some eta, text
 
 // addNew is deciding, do we want to start tracking the new value we are testing with
-let trackChanges title addNew (value,dt: DateTime) = 
-    let mutable cacheValues : ResourceEntry list = List.empty
-    let fetchCache =
-        fun forceUpdate ->
-            let v = cacheValues |> List.map serialize |> Array.ofList
-            Util.Cache<SerializableRE[]>((fun () -> v), key= title,forceRefresh= forceUpdate)
-            |> List.ofArray
-            |> List.map deserialize
-            
-    cacheValues <- (value,dt)::fetchCache false
-    if addNew then
-        fetchCache true
-    else cacheValues
+let trackChanges key trackType (value,dt: DateTime) =
+    let useCaching () =
+        let mutable cacheValues : (Resource * DateTime) list = List.empty
+        let fetchCache =
+            fun forceUpdate ->
+                let v = cacheValues |> List.map serialize |> Array.ofList
+                // printfn "Key is %s" key
+                Util.Cache<string[]>((fun () -> v), key= key,forceRefresh= forceUpdate)
+                |> List.ofArray
+                |> List.map deserialize
+        let addNew () =  
+            cacheValues <- (value,dt)::fetchCache false
+            cacheValues // fetch false after this will use cache, rather than accessing local
+        fetchCache, addNew
+                
+    match trackType with
+    | OnRateChange false ->
+        let fetchCache, _ = useCaching()
+        match fetchCache false with
+        | [] -> [value,dt]
+        | (lastV,_)::_ as old ->
+            if lastV <> value then
+                (value,dt)::old
+            else old
+                
+    | TrackType.Never -> [value,dt]
+    
+    | OnRateChange true ->
+        let fetchCache,fAddNew = useCaching()
+        match fetchCache false with
+        | [] -> // no values, need to track at least 1 to determine rate change
+            fAddNew() |> ignore
+            fetchCache true
+        | (lastV,_)::rem as old ->
+            if lastV <> value then
+                fAddNew() |> ignore
+                fetchCache true
+            else old
+    | Goal trackNew ->
+        let fetchCache,fAddNew = useCaching()        
+        let next = fAddNew()
+    
+        if trackNew then // TODO: only addnew if the rate has changed, or maybe if the value deviates significantly from expected?
+            // forces the save to the cache
+            fetchCache true
+        else
+            next
     
 
-let title, goal, resource = target
-trackChanges "Faith" track (resource, DateTime.Now)
-|> List.iter(fun (v,dt) ->
-    summarizeWait title goal v dt
+targets
+|> List.map(fun (title, req, resource, trackType) ->
+    title, trackChanges title trackType (resource, DateTime.Now)
+    |> List.map(fun (v,dt) ->
+        let _, asof, eta, text = summarizeWait title req v dt
+        asof, eta |> Option.map string |> Option.defaultValue "Ready", text
+    )
 )
+|> Dump
+|> ignore
 printfn "%A" DateTime.Now
