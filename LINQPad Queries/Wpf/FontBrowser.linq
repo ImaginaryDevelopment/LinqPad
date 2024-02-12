@@ -65,7 +65,6 @@ let buildCbBinder items =
     let cb = buildCb items
     let b = Binding("SelectedItem",Source=cb)
     cb,b
-    
 
 let buildFontCombo prop =
     //let fonts = System.Drawing.FontFamily.Families
