@@ -120,7 +120,7 @@ Slot/category lookup: see [`Runes.md`](Runes.md). Equip up to **4 Tenacity** (Ru
 
 | Rune | Slot | Category | Cost | Why |
 | --- | --- | --- | --- | --- |
-| **Elemental Flow** | Tenacity | Negative | 1 | Bleed ticks faster |
+| **Elemental Flow** | Tenacity | Negative | 2 | Bleed ticks faster |
 | **Vulnerable Exploit** | Tenacity | Negative | 3 | Crit damage vs Dazed / Disoriented (Smoke Bomb helps) |
 | **Vulnerable Target** | Tenacity | Power | 2 | Flat crit chance |
 | **Extended Reach** | Tenacity | Power | 3 | Helps short Thrust range (−10% area on class) |

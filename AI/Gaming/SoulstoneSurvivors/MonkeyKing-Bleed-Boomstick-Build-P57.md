@@ -93,11 +93,11 @@ Subcategories in parentheses (Negative, Power, Utility, …) match the in-game r
 
 ### Recommended Boomstick loadout
 
-**Tenacity** (example ≈ 8 Runic Power — trim if you have less):
+**Tenacity** (example ≈ 9 Runic Power — trim if you have less):
 
 | Rune | Slot | Category | Cost | Why |
 | --- | --- | --- | --- | --- |
-| **Elemental Flow** | Tenacity | Negative | 1 | Bleed ticks faster |
+| **Elemental Flow** | Tenacity | Negative | 2 | Bleed ticks faster |
 | **Executioner** | Tenacity | Negative | 2 | Extra damage per different debuff on target |
 | **Pulse of Agony** | Tenacity | Negative | 2 | Bleed applies → cast frequency stacks |
 | **Decapitator** | Tenacity | Power | 3 | Instant-kills low-HP trash |

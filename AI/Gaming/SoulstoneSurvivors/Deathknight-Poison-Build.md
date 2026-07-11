@@ -67,14 +67,14 @@ Slot/category lookup: see [`Runes.md`](Runes.md). Equip up to **4 Tenacity** (Ru
 
 ### Recommended Poison loadout
 
-**Tenacity** (example ≈ 7 Runic Power — trim if you have less):
+**Tenacity** (example ≈ 8 Runic Power — trim if you have less):
 
 | Rune | Slot | Category | Cost | Why |
 | --- | --- | --- | --- | --- |
 | **Synchrony** | Tenacity | Strategy | 2 | Damage from shared skill types |
 | **Controlled Chaos** | Tenacity | Power | 3 | Random damage: take higher of two rolls |
 | **Overwhelming Chaos** | Tenacity | Power | 1 | Direct damage rolls in a wide range |
-| **Elemental Flow** | Tenacity | Negative | 1 | Poison ticks twice as often |
+| **Elemental Flow** | Tenacity | Negative | 2 | Poison ticks faster |
 
 **Versatility** (pick 3):
 

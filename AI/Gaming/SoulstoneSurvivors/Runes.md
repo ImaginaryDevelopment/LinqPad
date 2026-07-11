@@ -66,7 +66,7 @@ Source snapshot: [wiki Runes page](https://soulstone-survivors.fandom.com/wiki/R
 | Devastating Blow | Sacrifice | 4 | Cursed Captain |
 | Divine Legacy | Power-ups | 3 | Arcane Weaver |
 | Efficiency Focus | Buffs | 1 | Machinist |
-| Elemental Flow | Negative | 1 | Elementalist |
+| Elemental Flow | Negative | 2 | Elementalist |
 | Elemental Power | Buffs | 3 | Machinist |
 | Enduring Cold | Buffs | 1 | Myrmidon |
 | Enduring Spirit | Defense | 1 | Samurai |
