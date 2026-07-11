@@ -63,27 +63,51 @@ Suggested order:
 
 ## Runes
 
-### Primary set (simple / strong)
+Slot/category lookup: see [`Runes.md`](Runes.md). Equip up to **4 Tenacity** (Runic Power) and **3 Versatility** (0 cost). They are separate tabs.
 
-| Rune | Why |
-| --- | --- |
-| **Synchrony** | Keeps skill cadence consistent |
-| **Controlled Chaos** | Smoother damage rolls |
-| **Overwhelming Chaos** | Higher damage spikes |
-| **Elemental Flow** | Poison ticks twice as often |
+### Recommended Poison loadout
 
-### Alternate set (ailment / consistency)
+**Tenacity** (example ≈ 7 Runic Power — trim if you have less):
 
-| Rune | Why |
-| --- | --- |
-| **Improved Repertory** | 7th skill slot (−15% damage) for another applicator |
-| **War Tank** | +50% block (you have no dashes to lose) |
-| **Death Touch** | Deaths spread Poison |
-| **Decapitator** | Helps clear + Death Touch chains |
-| **Skill Mastery: Nature** | Opens Corrosion / more Poison tools |
-| **Reroll Mastery** | Faster path to Contagion + key skills |
+| Rune | Slot | Category | Cost | Why |
+| --- | --- | --- | --- | --- |
+| **Synchrony** | Tenacity | Strategy | 2 | Damage from shared skill types |
+| **Controlled Chaos** | Tenacity | Power | 3 | Random damage: take higher of two rolls |
+| **Overwhelming Chaos** | Tenacity | Power | 1 | Direct damage rolls in a wide range |
+| **Elemental Flow** | Tenacity | Negative | 1 | Poison ticks twice as often |
 
-Use Weapon Expert only if you want Lethal Blade at start; otherwise skip it.
+**Versatility** (pick 3):
+
+| Rune | Slot | Category | Why |
+| --- | --- | --- | --- |
+| **Reroll Mastery** | Versatility | Utility | Faster path to Contagion + key skills |
+| **Skill Mastery: Nature** | Versatility | Skill-pool | Opens Corrosion / more Poison tools |
+| **Weapon Expert** *(optional)* | Versatility | Utility | Start with Lethal Blade — skip if you hate aiming |
+
+**Alternates (Versatility):** **Skill Inclination: Nature**, **Unexpected Arsenal** (Spellblade).
+
+**Note:** **Elemental Flow** and **Synchrony** unlock on **The Elementalist** skill tree (prestige 20+). **Controlled Chaos** needs Overlord cycle 3; **Overwhelming Chaos** is Chaoswalker. Once unlocked, any character can equip them.
+
+### Alternate Tenacity (ailment / tank)
+
+| Rune | Slot | Category | Cost | Why |
+| --- | --- | --- | --- | --- |
+| **Improved Repertory** | Tenacity | Strategy | 3 | 7th skill (−15% damage) for another applicator |
+| **War Tank** | Tenacity | Defense | 1 | +50% block (you have no dashes to lose) |
+| **Death Touch** | Tenacity | Power | 2 | Deaths spread Poison (Necromancer) |
+| **Decapitator** | Tenacity | Power | 3 | Helps clear + Death Touch chains |
+
+### Where to look
+
+| Looking for… | Open tab | Filter |
+| --- | --- | --- |
+| Synchrony | **Tenacity** | Strategy |
+| Controlled Chaos, Overwhelming Chaos, Death Touch, Decapitator | **Tenacity** | Power |
+| Elemental Flow | **Tenacity** | Negative |
+| War Tank | **Tenacity** | Defense |
+| Improved Repertory | **Tenacity** | Strategy |
+| Weapon Expert, Reroll Mastery | **Versatility** | Utility |
+| Skill Mastery / Inclination | **Versatility** | Skill-pool |
 
 ## Passives — take / ban
 
@@ -125,7 +149,10 @@ Physical + Poison is the plan. Weakness from Festering Strike (and Dragonflight 
 ```
 Weapon:  Greatsword of Corruption (max upgrades)
 Skills:  Festering Strike · Path of Decay · Contagion · Acid Rain · Poison Bolt · Lethal Blade
-Runes:   Synchrony · Controlled Chaos · Overwhelming Chaos · Elemental Flow
+
+Tenacity:    Synchrony · Controlled Chaos · Overwhelming Chaos · Elemental Flow
+Versatility: Reroll Mastery · Skill Mastery: Nature · (Weapon Expert optional)
+
 Stats:   Move → Poison → Multicast / AoE / Cast freq → Defense
 Ban:     Bleed / Fire / Doom passives
 ```

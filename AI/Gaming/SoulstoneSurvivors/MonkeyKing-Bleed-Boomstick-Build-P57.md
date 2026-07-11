@@ -87,7 +87,7 @@ Crit / Electric path with Electric Strike. Fine for fun; not the recommended P57
 
 ## Runes
 
-In-game you equip **up to 4 Tenacity** (spend Runic Power) and **up to 3 Versatility** (0 Runic Power). Look under the matching tab — Tenacity will not appear in Versatility and vice versa.
+Slot/category lookup: see [`Runes.md`](Runes.md). Equip up to **4 Tenacity** (Runic Power) and **3 Versatility** (0 cost). They are separate tabs.
 
 Subcategories in parentheses (Negative, Power, Utility, …) match the in-game rune filters.
 

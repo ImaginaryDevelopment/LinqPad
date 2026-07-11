@@ -91,28 +91,51 @@ Drop Rupture if it appears — it is not worth a slot here.
 
 ## Runes
 
-### Primary set (Bleed + crit)
+Slot/category lookup: see [`Runes.md`](Runes.md). Equip up to **4 Tenacity** (Runic Power) and **3 Versatility** (0 cost). They are separate tabs.
 
-| Rune | Why |
-| --- | --- |
-| **Improved Repertory** | 7th skill (−15% damage) — worth it for another applicator |
-| **Vulnerable Target** | +crit chance |
-| **Critical Mastery** | Crit chance → crit damage |
-| **Merciless Precision** | Extra crit vs low HP |
-| **Weapon Expert** | Start with Eviscerate (or Fan of Bombs on Grenadier’s) |
-| **Reroll Mastery** | Faster path to Smoke Bomb / key skills |
-| **Unexpected Arsenal** *(optional)* | Pulls Fan of Bombs / dagger skills across weapons |
+### Recommended Bleed + crit loadout
 
-### Simpler set (fewer rune points)
+**Tenacity** (example ≈ 10 Runic Power — trim if you have less):
 
-| Rune | Why |
-| --- | --- |
-| **Elemental Flow** | Bleed ticks faster |
-| **Vulnerable Exploit** / **Vulnerable Target** | Crit package |
-| **Extended Reach** | Helps short Thrust range (−10% area on class) |
-| **Weapon Expert** | Secondary weapon skill at start |
+| Rune | Slot | Category | Cost | Why |
+| --- | --- | --- | --- | --- |
+| **Improved Repertory** | Tenacity | Strategy | 3 | 7th skill (−15% damage) — more Bleed sources |
+| **Vulnerable Target** | Tenacity | Power | 2 | +25% crit chance |
+| **Critical Mastery** | Tenacity | Power | 2 | Crit chance feeds crit damage |
+| **Merciless Precision** | Tenacity | Sacrifice | 3 | Huge crit vs low-HP targets |
 
-Skill Affinity: Bomb (unlocked at prestige 30) is fine if you lean Grenadier’s Mark / bombs.
+**Versatility** (pick 3):
+
+| Rune | Slot | Category | Why |
+| --- | --- | --- | --- |
+| **Weapon Expert** | Versatility | Utility | Start with Eviscerate (or Fan of Bombs on Grenadier’s) |
+| **Reroll Mastery** | Versatility | Utility | Faster path to Smoke Bomb / key skills |
+| **Unexpected Arsenal** | Versatility | General | Pulls unique weapon skills into the pool (Spellblade unlock) |
+
+**Alternates (Versatility):** **Skill Affinity: Bomb** (Assassin prestige 30 — early Bomb offers), **Skill Mastery: Bomb** / **Skill Inclination: Bomb** (Bomb lean / Grenadier’s Mark).
+
+**Unlock notes:** **Improved Repertory** = Necromancer. **Vulnerable Target** = Hound Master. **Critical Mastery** = Whispering Grove curse III. **Merciless Precision** = Pyromancer. **Elemental Flow** (swap option below) = Elementalist.
+
+### Budget / simpler Tenacity
+
+| Rune | Slot | Category | Cost | Why |
+| --- | --- | --- | --- | --- |
+| **Elemental Flow** | Tenacity | Negative | 1 | Bleed ticks faster |
+| **Vulnerable Exploit** | Tenacity | Negative | 3 | Crit damage vs Dazed / Disoriented (Smoke Bomb helps) |
+| **Vulnerable Target** | Tenacity | Power | 2 | Flat crit chance |
+| **Extended Reach** | Tenacity | Power | 3 | Helps short Thrust range (−10% area on class) |
+
+### Where to look
+
+| Looking for… | Open tab | Filter |
+| --- | --- | --- |
+| Improved Repertory | **Tenacity** | Strategy |
+| Vulnerable Target, Critical Mastery, Extended Reach | **Tenacity** | Power |
+| Merciless Precision | **Tenacity** | Sacrifice |
+| Elemental Flow, Vulnerable Exploit | **Tenacity** | Negative |
+| Weapon Expert, Reroll Mastery | **Versatility** | Utility |
+| Unexpected Arsenal | **Versatility** | General |
+| Skill Affinity / Mastery / Inclination | **Versatility** | Skill-pool |
 
 ## Passives — take / ban
 
@@ -163,9 +186,12 @@ Until 70, stay on Bleed Ambush. When Edge of Doom unlocks, switch to Reap + Doom
 Prestige:  52 (3 weapons — no Edge of Doom)
 Weapon:    Worn Daggers (or Grenadier's Mark)
 Skills:    Sinister Strike · Eviscerate · Smoke Bomb · Assassin Enclave · Fan of Bombs · Shrapnel Bomb / Bloody Saw
-Runes:     Improved Repertory · Vulnerable Target · Critical Mastery · Merciless Precision · Weapon Expert · Reroll Mastery
+
+Tenacity:    Improved Repertory · Vulnerable Target · Critical Mastery · Merciless Precision
+Versatility: Weapon Expert · Reroll Mastery · Unexpected Arsenal
+
 Focus:     Bleed + Ambush (via Smoke Bomb) · Crit · Cast freq / Multicast
-Ban:       Poison / Fire / Doom passives
+Ban:       Poison / Fire / Doom passives; Poisonous Blood
 ```
 
 ### Curved Daggers quick alt
@@ -174,6 +200,9 @@ Ban:       Poison / Fire / Doom passives
 Weapon: Twin Daggers · Backstab
 Skills: Twin Daggers · Backstab · Smoke Bomb · Bladestorm · Savage Strike / Uppercut · Fan of Bombs or Scent of Blood
 Idea:   Hit count + Ambush damage; Bleed is support, not the only win condition
+
+Tenacity:    (same crit package, or lean Synchrony / Decapitator)
+Versatility: Weapon Expert · Reroll Mastery · Skill Mastery: Swing (or Unexpected Arsenal)
 ```
 
 ---
