@@ -142,13 +142,26 @@ Subcategories in parentheses (Negative, Power, Utility, …) match the in-game r
 3. **Cast frequency**, **multicast**, **area**
 4. **Damage** / some crit once Bleed is rolling
 5. **Magnetic** + **movement speed**
-6. Some **max HP** (Boomstick tax)
+6. Some **max HP** (Boomstick −20 HP tax) — better than armor for this weapon
+
+### Armor / block — soft-ban on Boomstick
+
+| Passive | Verdict | Why |
+| --- | --- | --- |
+| **Block power** (Indomitable, etc.) | **Ban early** | Diminishing returns; this build lives on kiting + kill speed, not standing still. Ban frees slots for Bleed / cast freq / area. |
+| **Armor power** (Resilient, etc.) | **Skip / soft-ban** | Fine as a rare “I’m dying to chip” panic pick early; otherwise skip. Boomstick does not lean tank, and **Trickster Decoy** is the only skill that cared about armor — you swap Decoy off anyway. |
+| **Max HP** / flat DR | **Prefer over armor** | Directly offsets Boomstick’s −20 HP; flat DR helps chip without diluting the offense pool as hard. |
+| **Whirling Defense** Resilience | **Keep the skill** | Incidental armor from the skill is fine; that is not the same as stacking armor *passives*. |
+
+**Rule of thumb:** if the choice is armor/block vs Bleed, cast freq, multicast, area, or move — take offense/mobility. Only grab a defensive uncommon/rare if lords are one-shotting you and you already have the Bleed package online.
 
 ### Banish
 
 - Passives that push **Poison**, **Fire**, or **Doom** as your main ailment
 - Off-element clutter that steals slots from Bleed / physical / debuff offers
 - **Poisonous Blood** if it converts Bleed → Poison (Shrapnel Bomb scales on **Bleed** stacks — converting them weakens your finisher and pollutes the passive pool with Poison offers)
+- **Block power** (see above); **armor power** once you are not getting one-shot
+- **Leviathan** (move-speed tax) unless you are already very fast
 
 ## How to play a run
 
@@ -207,6 +220,65 @@ Idea:   Crit-scaled Electric Strike spam (Singular Focus)
 Tenacity: Singular Focus (+ crit Tenacity like Critical Mastery)
 Versatility: Unconventional Start · Skill Inclination: Electric · Reroll Mastery
 ```
+
+## Unholy Cathedral — cycle skill combos
+
+See [`Unholy-Cathedral.md`](Unholy-Cathedral.md) for full mode mechanics (**4 cycles**, skill lockout, Unholy Powers, strip between cycles, Mh'thaeus).
+
+Cathedral **strips actives/passives each cycle** and **locks out skills you already picked** for later cycles, so you cannot hold the Void Field 6-skill package all run. Build around **roles**, not fixed names. Keep Boomstick + the same Tenacity/Versatility runes; Unholy Powers between cycles are free stats — favor damage, cast freq, area, move. Cycle **4** actives also fight the final boss — save detonates for then.
+
+**Every cycle, try to cover:** (1) Bleed / Weakness applicator · (2) AoE clear · (3) Bleed detonate or big hit · (4) optional defense / Prowess.
+
+Pick the combo that matches what the cycle pool actually offers.
+
+### Combo A — Classic Bomb detonate
+
+Best when Bombs and Bleed tools show up.
+
+| Role | Prefer | Acceptable swaps |
+| --- | --- | --- |
+| Applicator | Gunpowder Strike | Fan of Bombs, Debilitating Bomb, any Bleed-on-hit |
+| Clear | Fan of Bombs / Bomb Barrage | Earthquake, Mine Field |
+| Detonate | **Shrapnel Bomb** | Pestilence-style Bleed burst if offered |
+| Soften | Armor Shatter / Light Beam | Anything with Weakness, Brittle, Exposed, Shattered |
+| Flex | Whirling Defense or Suction Bomb | Decoy only if nothing else |
+
+**Play:** stack Bleed → Shrapnel when thick. If Shrapnel is locked from an earlier cycle, lean Combo B or C.
+
+### Combo B — Debuff then physical smash
+
+Best when Holy / Earth / Slam show and Bombs are thin or already locked.
+
+| Role | Prefer | Acceptable swaps |
+| --- | --- | --- |
+| Soften | Light Beam + Earthquake | Armor Shatter, Shatter / Brittle skills |
+| Hitters | Massive Slam / Spinning Staff / Expansive Throw | Bladestorm, any big AoE physical |
+| Bleed bridge | Gunpowder Strike or Fan of Bombs | Skip if pool has no Bleed — go pure debuff + damage |
+| Flex | Whirling Defense | Resilience / Prowess builders |
+
+**Play:** layer Exposed / Brittle / Shattered / Weakness, then smash. Executioner rune loves this cycle even without Shrapnel.
+
+### Combo C — Prowess roller (Immortal’s Staff energy)
+
+Best when Slam / Whirling Defense / Expansive Throw appear (or you swapped to Immortal’s Staff for Cathedral).
+
+| Role | Prefer | Acceptable swaps |
+| --- | --- | --- |
+| Prowess engine | Whirling Defense + Spinning Staff / Massive Slam | Any Prowess builder |
+| Boss melt | **Expansive Throw** | Other high-coefficient Slam / Bomb |
+| Clear | Spinning Staff / Earthquake | Fan of Bombs if still available |
+| Flex | Light Beam or Armor Shatter | Skip Decoy |
+
+**Play:** stack Prowess every cast, Expansive Throw on elites / Mh'thaeus. Use this in a late cycle if Combo A already burned Shrapnel.
+
+### Cathedral pick order (any combo)
+
+1. Grab a **detonate or boss skill** if you see it (Shrapnel Bomb, Expansive Throw) — don’t save it for “later”; later may never offer it.
+2. Fill **applicator + AoE** next.
+3. Take **Whirling Defense** when the pool is defensive garbage otherwise.
+4. Never lock **Trickster Decoy** unless the alternative is empty — it wastes a cycle slot.
+
+Passives still follow the main guide (Bleed / debuffs / cast freq / area / HP). Soft-ban armor/block the same way.
 
 ---
 
