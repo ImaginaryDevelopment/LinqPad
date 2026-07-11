@@ -10,3 +10,5 @@ Fsx/.paket/
 *.pdb
 
 Framework 4\.6/MyExtensions\.FW46\.xml
+
+.fake
