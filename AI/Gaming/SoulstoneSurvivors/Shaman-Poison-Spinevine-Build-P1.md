@@ -192,6 +192,8 @@ Slot/category lookup: see [`Runes.md`](Runes.md). Up to **4 Tenacity** + **3 Ver
 
 At **10+**, you can pivot to Starweaver totem / Radiance builds. At **20+**, Cobra Totem slots cleanly into this Poison plan.
 
+**At prestige 35:** see [`Shaman-Poison-Spinevine-Build-P35.md`](Shaman-Poison-Spinevine-Build-P35.md) — same Spinevine Poison core, plus Cobra Totem, Ancestral Ritual, and Savage Pact.
+
 ## Quick reference
 
 ```
