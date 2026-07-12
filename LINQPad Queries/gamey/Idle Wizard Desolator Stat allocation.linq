@@ -1,7 +1,7 @@
 <Query Kind="FSharpProgram" />
 
-let initPoints = 1649
-let memoryAttributes = 10
+let initPoints = 1543 + 75 // bite sleeves, does not model them properly
+let memoryAttributes = 15
 type Attr =
     | Intelligence
     | Insight
@@ -12,6 +12,7 @@ type Attr =
     | Mastery
     | Empathy
     | Versatility
+    
 type StatLayout =
     { 
         int : int
@@ -92,7 +93,7 @@ let items = [
     Exact, Insight, 200
     Exact, Insight, 250
     Exact, Patience, 150
-    Exact, Patience, 250
+    Exact, Patience, 250 // 20
     Spend, Intelligence, 250 + memoryAttributes
     Spend, Versatility, 250 + memoryAttributes
 ]

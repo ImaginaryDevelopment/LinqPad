@@ -7,11 +7,11 @@ let (|Regex|_|) p x =
     if m.Success then
         Some m
     else None
-let (|Int|_|) x =
+let (|Int|_|) (x:string) =
     match Int32.TryParse x with
     | true, x -> Some x
     | false, _ -> None
-let (|Dec|_|) x =
+let (|Dec|_|) (x:string) =
     match System.Decimal.TryParse x with
     | true, x -> Some x
     | false, _ -> None
@@ -33,12 +33,17 @@ let translateStandard = // https://officespace.zendesk.com/hc/en-us/articles/115
     | EqualsI "M" -> Some 1.0e6
     | EqualsI "B" -> Some 1.0e9
     | EqualsI "T" -> Some 1.0e12
+    // Quadrillion
     | EqualsI "Qa" -> Some 1.0e15
+    // Quintillion (two different abbrev)
+    | EqualsI "Qu"
     | EqualsI "Qi" -> Some 1.0e18
+    // Sextillion
     | EqualsI "Sx" -> Some 1.0e21
     | EqualsI "Sp" -> Some 1.0e24
     | EqualsI "Oc" -> Some 1.0e27
     | EqualsI "No" -> Some 1.0e30
+    | EqualsI "Dc" -> Some 1.0e33
     | x ->
         printfn "failed to match %s" x
         None

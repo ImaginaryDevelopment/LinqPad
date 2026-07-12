@@ -23,16 +23,17 @@ let _abdicate = 171_200
 let wheat = {Rate=4041; Inventory = 2880uL * thousand}
 let wood = {Rate=2180; Inventory = 19uL * million}
 let stone = {Rate=8925; Inventory = 25uL * million }
-let faith = {Rate = 1852; Inventory = 513_000uL  } // 17.7 hours, 1064.3 minutes, Finished at 7/18/2023 4:05:36 PM
+let faith = {Rate = 94600; Inventory = 114uL * million  } // 17.7 hours, 1064.3 minutes, Finished at 7/18/2023 4:05:36 PM
 let hol = {Rate=18; Inventory = 0uL }
 
 let targets =
     [
-        "Cathedralx2 (stone)", (30uL * million), stone, Goal (track && false)
-        "Religion (faith)", million, faith, OnRateChange (track && true)
+        "Relic Lvl2", 20uL * billion,faith, Goal (track && true)
+        //"Cathedralx2 (stone)", (30uL * million), stone, Goal (track && false)
+        //"Religion (faith)", million, faith, OnRateChange (track && true)
         //"Level up(1500)", 25uL * million, wood
-        "Hero", 5uL * million, wheat, OnRateChange (track && false)
-        "Ritual(faith)", 140_600uL, {faith with Inventory = 0uL}, Never
+        //"Hero", 5uL * million, wheat, OnRateChange (track && false)
+        //"Ritual(faith)", 140_600uL, {faith with Inventory = 0uL}, Never
         //"Tremors(hol)", 99_999uL, hol 
         //"Academy 2 (stone)", (100uL * billion), stone
     ]

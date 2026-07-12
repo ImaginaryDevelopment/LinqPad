@@ -6,6 +6,7 @@
 
 // imaginarydevelopment.blogspot.com
 // @maslowjax
+// check out https://web.archive.org/web/20220725065218/https://www.codeproject.com/questions/564234/copyplustoplusclipboardplusinplusasp-c-23 to work on clipboard maybe
 
 open Suave
 open Suave.Files
