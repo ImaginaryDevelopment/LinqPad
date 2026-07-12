@@ -39,6 +39,8 @@ Source snapshot: [wiki Runes page](https://soulstone-survivors.fandom.com/wiki/R
 - **Mastery:** adds skills of that type your character would not normally have in the pool.
 - There is one Affinity / Inclination / Mastery rune **per skill type** (Bomb, Earth, Fire, …). Look under Versatility; filter by skill-pool / type name if the UI offers it.
 
+**Unexpected Arsenal:** adds **this character’s** unique weapon skills (for weapons you have already crafted) to the level-up pool. It does **not** pull other classes’ weapon skills.
+
 ---
 
 ## Tenacity (costs Runic Power, up to 4)

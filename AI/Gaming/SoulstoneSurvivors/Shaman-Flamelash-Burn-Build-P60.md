@@ -71,26 +71,24 @@ Upgrade Flamelash for crit damage + cast freq. Artifact **Warding Totem** (Burn)
 
 ### Flex slots (3–4)
 
-Skills marked with † need **Unexpected Arsenal** (Spellblade Versatility) — they are other classes’ weapon uniques, not something Skill Mastery: Fire unlocks on Shaman.
-
 | Role | Prefer | Solid swaps (same role) |
 | --- | --- | --- |
-| **Burn burst / Lord kill** | **Heat Explosion†** if Arsenal offered it; else **Meteor** | Flame Wave, Flamethrower |
+| **Heavy Burn / clear** | **Meteor** | Flame Wave, Flamethrower |
 | **Crit / Holy setup** | **Bull Charge** | Holy Frenzy (if offered), Light Beam / Smite |
 | **Multicast engine** | **Arcane Power** | — |
 | **Ancestry / area** (7th) | **Stone Spiral** | Drop Volcanic Effigy here if you took Weapon Expert |
 
-**Why not Skill Mastery: Fire?** Shaman already has **Fire** natively. Mastery only adds a type you *lack* — same rule as Mastery: Projectile on Demon Hunter. **Heat Explosion** is the Elementalist **Scepter of Flame** weapon skill; it will not appear just because you equipped Mastery: Fire. Use **Unexpected Arsenal** to fish for it, or skip it and kill with Meteor + Burn ticks + crit.
+**Heat Explosion is not available on Shaman.** It is an Elementalist weapon skill. **Skill Mastery: Fire** does nothing useful here (you already have Fire). **Unexpected Arsenal** only adds *this character’s* crafted weapon skills (e.g. Poisonous Thorn, Ancestral Empowerment) — not other classes’. Kill with Burn + crit + **Meteor** / Spiral instead.
 
 **Example final 6:** Flaming Spiral · Combustion · Fire Bolt · Bull Charge · Arcane Power · Meteor  
-**Example final 7 (Repertory):** above + Stone Spiral *(or Heat Explosion if Arsenal found it)*
+**Example final 7 (Repertory):** above + Stone Spiral
 
 **Swap rules:**
 
 - Never drop **Flaming Spiral** or **Combustion**.
 - **Volcanic Effigy** is not a flex keep — replace immediately.
 - Do **not** fill with Pestilence / Cobra / Poison skills.
-- Do **not** equip Skill Mastery: Fire or Skill Mastery: Holy expecting them to invent skills — Shaman already has both types.
+- Do **not** equip Skill Mastery: Fire or Skill Mastery: Holy expecting new skills — Shaman already has both types.
 
 ### Skill priority while leveling
 
@@ -98,8 +96,7 @@ Skills marked with † need **Unexpected Arsenal** (Spellblade Versatility) — 
 2. **Combustion** + **Fire Bolt**
 3. **Bull Charge** / **Arcane Power** / **Meteor**
 4. Swap **Volcanic Effigy** out ASAP
-5. **Heat Explosion** only if Unexpected Arsenal put it in the pool — then lock it
-6. **Stone Spiral** into a free 7th if Repertory is on
+5. **Stone Spiral** into a free 7th if Repertory is on
 
 ## Runes
 
@@ -131,14 +128,13 @@ Slot/category lookup: see [`Runes.md`](Runes.md).
 | --- | --- | --- | --- |
 | **Reroll Mastery** | Versatility | Utility | Reach Combustion / Fire Bolt / Meteor |
 | **Skill Inclination: Fire** | Versatility | Skill-pool | More native Burn offers |
-| **Unexpected Arsenal** | Versatility | General | Only real path to **Heat Explosion** on Shaman |
+| **Endless Refill** *or* **Unexpected Arsenal** | Versatility | Utility / General | Portal rerolls, *or* your other crafted Shaman weapon skills in pool |
 
 **Versatility flex:**
 
 | Option | When |
 | --- | --- |
 | **Weapon Expert** | Only if you accept swapping Effigy immediately |
-| **Endless Refill** | Prestige / portal farming |
 | **Skill Mastery: Electric** | Want Lightning Field / Surge for Dazed (Shaman lacks Electric — Mastery works here) |
 
 **Skip for this path:** Sacred Offering. **Skill Mastery: Fire** (useless — you already have Fire). Skill Mastery: Nature (Poison path).
@@ -163,9 +159,9 @@ Slot/category lookup: see [`Runes.md`](Runes.md).
 ## How to play a run
 
 1. Start Flamelash → **Flaming Spiral** always on. Skip or dump **Volcanic Effigy**.
-2. Reroll toward **Combustion** and **Fire Bolt**; add **Meteor** for burst if no Heat Explosion.
+2. Reroll toward **Combustion**, **Fire Bolt**, and **Meteor**.
 3. Stack Burn everywhere; Weakness from Spiral / Fire Bolt makes ticks hurt.
-4. Lords: thick Burn + crit spam; **Heat Explosion** if you have it, else Meteor + Spiral.
+4. Lords: thick Burn + crit spam + Meteor / Spiral (no Heat Explosion detonate on Shaman).
 5. Dance **rituals** — HP buff is offense here too.
 6. Compare feel to Spinevine Poison; both are valid at P60.
 
@@ -183,10 +179,10 @@ Prestige:  60 Flamelash Critical Burn (alt to Spinevine Poison)
 Weapon:    Maldrakar’s Flamelash (Weapon Expert optional — swap Effigy)
 Skills:    CORE — Flaming Spiral · Combustion · Fire Bolt
            FLEX — Bull Charge · Arcane Power · Meteor · Stone Spiral (7th)
-           OPTIONAL — Heat Explosion only via Unexpected Arsenal (not Mastery: Fire)
+           NO Heat Explosion (Elementalist weapon skill only)
 
 Tenacity:    Elemental Flow · Savage Pact (Strategy) · Improved Repertory · Fateful Strike / Adaptive Empowerment
-Versatility: Reroll Mastery · Skill Inclination: Fire · Unexpected Arsenal
+Versatility: Reroll Mastery · Skill Inclination: Fire · Endless Refill / Unexpected Arsenal
 
 Focus:     Burn · Weakness · Crit · Max HP · Multicast · Ritual
 Ban:       Poison as main ailment; Skill Mastery: Fire; don’t keep Volcanic Effigy
