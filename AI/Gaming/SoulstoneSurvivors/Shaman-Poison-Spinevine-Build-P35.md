@@ -171,6 +171,7 @@ Slot/category lookup: see [`Runes.md`](Runes.md).
 | --- | --- | --- |
 | **40** | Maldrakar’s Flamelash | Optional Burn/crit Fire pivot |
 | **50** | Stone Spiral | Totem / Colossal add-on |
+| **60** | See [`Shaman-Poison-Spinevine-Build-P60.md`](Shaman-Poison-Spinevine-Build-P60.md) | Stone Spiral on the Poison bar; still skip Flamelash |
 | **70** | Tharuun’s Lasher | Quicksand / Earth totem endgame |
 
 ## Quick reference
