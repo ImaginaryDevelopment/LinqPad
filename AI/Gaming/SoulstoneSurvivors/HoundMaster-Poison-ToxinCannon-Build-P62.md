@@ -69,27 +69,44 @@ Mortar Shot + Bombardment with Shrapnel Mine / Fan of Bombs. Uses **Pulse of Ago
 
 ## Skills (final 6) — Toxin Poison
 
+### Core (do not swap)
+
+These three define the build. Keep them once locked.
+
 | Skill | Role |
 | --- | --- |
-| **Pesticide Burst** | Primary Poison applicator (flamethrower cone) |
-| **Threshing Blast** | Poison-scaling damage + Ammunition |
-| **Pestilence** | Poison flood + scales with stacks |
-| **Acid Rain** | Sustained Poison AoE |
-| **Poison Puddle** *or* **Poison Bolt** | Extra stacks (Bolt often better than Cloud) |
-| **Poison Cloud** / **Weakening Grenade** / Mastery pick | Flex — prefer Corrosion / Putrid Hounds / Festering Strike if Mastery: Nature is on |
+| **Pesticide Burst** | Primary Poison applicator (weapon start) |
+| **Threshing Blast** | Poison-scaling cone + Ammunition (Weapon Expert) |
+| **Pestilence** | Poison flood + damage that scales with stacks |
 
-**Solid swaps (especially with Skill Mastery: Nature):** Corrosion, Putrid Hounds, Festering Strike (Poison + Weakness), Contagion (detonate stacks — still good when you re-stack fast).
+### Flex slots (3) — pick from these roles
 
-**Skip / low priority here:** Bear Trap, Shrapnel Mine, pure Fire skills that dilute Poison.
+| Role | Prefer | Solid swaps (same role) |
+| --- | --- | --- |
+| **Sustained AoE applicator** | **Acid Rain** | Poison Cloud, Poison Puddle |
+| **Extra stack / hit-rate** | **Poison Bolt** | Poison Puddle, Poison Cloud, Weakening Grenade |
+| **Scale / detonate / Weakness** | **Corrosion** *(Mastery: Nature)* | Putrid Hounds, Festering Strike, Contagion |
+
+**Example final 6:** Pesticide Burst · Threshing Blast · Pestilence · Acid Rain · Poison Bolt · Corrosion
+
+**Swap rules:**
+
+- Never drop the three **core** skills for a flex pick.
+- Within a flex role, any listed skill is fine — e.g. Acid Rain ↔ Poison Cloud, Poison Bolt ↔ Poison Puddle.
+- **Corrosion** / **Putrid Hounds** / **Festering Strike** / **Contagion** need **Skill Mastery: Nature**. They compete for the *same* flex slot (scale/detonate/Weakness) — take **one**, not all four unless you have Improved Repertory’s 7th slot.
+- Prefer **Festering Strike** or **Weakening Grenade** if Lords feel spongy (Weakness amplifies Poison ticks).
+- Prefer **Contagion** only if you re-stack Poison fast (you will with Pesticide Burst + Pestilence); it spends stacks for burst.
+
+**Skip / low priority:** Bear Trap, Shrapnel Mine, pure Fire / Bleed skills that dilute Poison.
 
 ### Skill priority while leveling
 
 **“Lock early”** = take immediately and keep for the run.
 
-1. **Threshing Blast** (Weapon Expert at start) + **Pesticide Burst**
-2. **Pestilence** as soon as it appears
-3. **Acid Rain** / Poison Puddle / Poison Bolt
-4. Fill last slots with Corrosion / Putrid Hounds / Festering Strike / Contagion if Mastery: Nature opened them; otherwise another Poison Nature skill
+1. **Threshing Blast** (Weapon Expert) + **Pesticide Burst** — core
+2. **Pestilence** — core; lock the moment it appears
+3. Fill flex: **Acid Rain** (or Cloud/Puddle), then **Poison Bolt** (or Puddle/Cloud)
+4. Last flex: **Corrosion** / Putrid Hounds / Festering Strike / Contagion if Mastery: Nature opened them; otherwise another Poison applicator
 
 ## Runes
 
@@ -200,7 +217,8 @@ Use when you want your new **Skill Inclination: Blast**.
 ```
 Prestige:  62 (Toxin Cannon; no Dragonfire)
 Weapon:    Toxin Cannon + Weapon Expert
-Skills:    Pesticide Burst · Threshing Blast · Pestilence · Acid Rain · Poison Puddle/Bolt · Corrosion/Putrid Hounds/Festering Strike (Mastery: Nature)
+Skills:    CORE — Pesticide Burst · Threshing Blast · Pestilence
+           FLEX — Acid Rain ↔ Cloud/Puddle · Poison Bolt ↔ Puddle/Cloud · Corrosion ↔ Putrid Hounds/Festering Strike/Contagion
 
 Tenacity:    Elemental Flow · Improved Repertory · Executioner · Decapitator
 Versatility: Weapon Expert · Reroll Mastery · Skill Mastery: Nature
