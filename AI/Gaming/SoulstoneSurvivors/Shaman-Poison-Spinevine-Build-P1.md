@@ -70,13 +70,15 @@ You do **not** have Bull Charge / Cobra Totem / Ancestral Empowerment. Fill from
 
 ### Flex slots (3) — pick from these roles
 
+Skills marked with † need **Skill Mastery: Nature** (foreign Nature — not in Shaman’s native pool otherwise).
+
 | Role | Prefer | Solid swaps (same role) |
 | --- | --- | --- |
 | **Sustained AoE applicator** | **Acid Rain** | Poison Cloud, Poison Puddle |
 | **Extra stacks / hit-rate** | **Poison Bolt** | Poison Puddle, Poison Cloud |
-| **Ancestry / setup / detonate** | **Shockwave Totem** | Corrosion*, Contagion*, Light Beam (Brittle/crit setup), Arcane Power (multicast) |
+| **Ancestry / setup / detonate** | **Shockwave Totem** | Corrosion†, Contagion†, Light Beam (Brittle/crit setup), Arcane Power (multicast) |
 
-\* **Corrosion** / **Contagion** / **Purging Slam** need **Skill Mastery: Nature** (foreign Nature). Worth it if unlocked on another character.
+† = requires **Skill Mastery: Nature** on your Versatility bar. Worth it if unlocked on another character (also unlocks Purging Slam).
 
 **Example final 6:** Vine Whip · Poisonous Thorn · Pestilence · Acid Rain · Poison Bolt · Shockwave Totem
 

@@ -81,13 +81,17 @@ With **Improved Repertory**, that is four cores + three flex in a 7-skill bar. W
 
 ### Flex slots (2–3)
 
+Skills marked with † need **Skill Mastery: Nature** (foreign Nature — not in Shaman’s native pool otherwise).
+
 | Role | Prefer | Solid swaps (same role) |
 | --- | --- | --- |
-| **Sustained AoE applicator** | **Acid Rain** | Poison Cloud, Poison Puddle, Corrosion* |
-| **Extra stacks / detonate** | **Poison Bolt** *or* **Corrosion*** | Contagion*, Purging Slam*, Poison Puddle |
-| **Ancestry / crit setup** *(if you have a 7th)* | **Bull Charge** | Shockwave Totem, Light Beam, Arcane Power |
+| **Sustained AoE applicator** | **Acid Rain** | Poison Cloud, Poison Puddle |
+| **Extra stacks / detonate** | **Corrosion†** if Mastery: Nature is on; else **Poison Bolt** | Contagion†, Purging Slam†, Poison Puddle, Poison Cloud |
+| **Ancestry / crit setup** (if you have a 7th) | **Bull Charge** | Shockwave Totem, Light Beam, Arcane Power |
 
-\* Needs **Skill Mastery: Nature**.
+† = requires **Skill Mastery: Nature** on your Versatility bar.
+
+**Corrosion vs Poison Bolt:** not the same tier. **Corrosion** is the better flex when Mastery: Nature is equipped (fast aura stacks + delayed burst). **Poison Bolt** is the best *native* filler when you do not have Mastery — do not skip Corrosion hoping for Bolt if Corrosion is offered.
 
 **Example final 6:** Vine Whip · Poisonous Thorn · Pestilence · Cobra Totem · Acid Rain · Corrosion  
 **Example final 7 (Repertory):** above + Bull Charge *or* Poison Bolt
