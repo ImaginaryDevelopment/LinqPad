@@ -103,6 +103,7 @@ Source snapshot: [wiki Runes page](https://soulstone-survivors.fandom.com/wiki/R
 | Recklessness | Sacrifice | 3 | Eliminate 3,000 elite enemies |
 | Sacred Offering | Summons | 2 | Shaman |
 | Sacrificed Growth | Sacrifice | 3 | Arcane Weaver |
+| Savage Pact | Strategy | 2 | Shaman (crit damage from max HP, cap 40%) |
 | Searing Intensity | Negative | 3 | Pyromancer |
 | Singular Focus | Power-ups | 4 | Caves of Dhal Zhog curse VI |
 | Surefooted | Defense | 1 | Reach XP level 65 in a single match |
@@ -114,8 +115,6 @@ Source snapshot: [wiki Runes page](https://soulstone-survivors.fandom.com/wiki/R
 | Vulnerable Exploit | Negative | 3 | Paladin |
 | Vulnerable Target | Power | 2 | Hound Master |
 | War Tank | Defense | 1 | Legionnaire |
-
-**Wiki note:** The Runes page also lists a second Shaman entry under the Prophecy icon (Strategy, cost 2: crit damage based on max HP). Treat as a possible duplicate/rename on the wiki; confirm in-game if you need that effect.
 
 ---
 
@@ -136,7 +135,7 @@ Source snapshot: [wiki Runes page](https://soulstone-survivors.fandom.com/wiki/R
 | Category | Runes |
 | --- | --- |
 | Buffs | Absolute Zero, Armor-piercing Rounds, Battle Proficiency, Chaotic Aptitude, Curse of the Depths, Efficiency Focus, Elemental Power, Enduring Cold, Extended Magazines, Frozen Blood |
-| Strategy | Adaptive Empowerment, Amplified Power, Center of Attention, Generalist, Immovable Object, Improved Repertory, Lord's Bane, Purity, Quick Reload, Ready for Battle, Swift Execution, Synchrony |
+| Strategy | Adaptive Empowerment, Amplified Power, Center of Attention, Generalist, Immovable Object, Improved Repertory, Lord's Bane, Purity, Quick Reload, Ready for Battle, Savage Pact, Swift Execution, Synchrony |
 | Sacrifice | Adrenaline, All or Nothing, Demonic Pact, Devastating Blow, Fateful Strike, Focused Mind, Focus Fire, Glass Cannon, Last Resort, Merciless Precision, Oscillating Power, Recklessness, Sacrificed Growth |
 | Negative | Advanced Tactics, Elemental Flow, Executioner, Misfortune's Embrace, Pulse of Agony, Searing Intensity, Synergetic, Vulnerable Exploit |
 | Power | Controlled Chaos, Critical Mastery, Death Touch, Decapitator, Extended Reach, Impaler, Multi Cast Mastery, Overwhelming Chaos, Vulnerable Target |

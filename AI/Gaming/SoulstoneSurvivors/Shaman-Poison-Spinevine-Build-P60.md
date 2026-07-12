@@ -4,6 +4,8 @@ Soulstone Survivors. Tuned for **prestige 60**: Spinevine Poison with **Cobra To
 
 Earlier versions: [`P1`](Shaman-Poison-Spinevine-Build-P1.md) · [`P35`](Shaman-Poison-Spinevine-Build-P35.md).
 
+Want Burn instead? See [`Shaman-Flamelash-Burn-Build-P60.md`](Shaman-Flamelash-Burn-Build-P60.md).
+
 ## Your unlocks at prestige 60
 
 | Prestige | Unlock | Use in this build? |
@@ -133,7 +135,7 @@ Slot/category lookup: see [`Runes.md`](Runes.md).
 | Rune | Slot | Category | Cost | Why |
 | --- | --- | --- | --- | --- |
 | **Elemental Flow** | Tenacity | Negative | 2 | Poison ticks faster |
-| **Savage Pact** | Tenacity | *(Shaman)* | 2 | Crit damage from max HP |
+| **Savage Pact** | Tenacity | Strategy | 2 | Crit damage from max HP |
 | **Improved Repertory** | Tenacity | Strategy | 3 | 7th skill → Stone Spiral fits cleanly |
 | **Executioner** | Tenacity | Negative | 2 | Damage per different debuff (Poison + Weakness + …) |
 

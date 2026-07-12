@@ -122,7 +122,7 @@ Slot/category lookup: see [`Runes.md`](Runes.md).
 | Rune | Slot | Category | Cost | Why |
 | --- | --- | --- | --- | --- |
 | **Elemental Flow** | Tenacity | Negative | 2 | Poison ticks faster |
-| **Savage Pact** | Tenacity | *(Shaman)* | 2 | Crit damage from max HP — buy on Shaman tree |
+| **Savage Pact** | Tenacity | Strategy | 2 | Crit damage from max HP — buy on Shaman tree |
 | **Improved Repertory** | Tenacity | Strategy | 3 | 7th skill (fits Cobra + flex) |
 | **Executioner** *or* **Critical Mastery** | Tenacity | Negative / Power | 2 | Debuff damage / crit conversion |
 
