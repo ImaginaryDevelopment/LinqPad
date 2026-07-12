@@ -6,9 +6,9 @@
 type IRate = decimal
 
 module Inputs =
-    let loanAmount = 299_250m
+    let loanAmount = 300_000m
 
-    let interestRate = 3.24m
+    let interestRate = 7.19m
     let years = 30;
    
 type LoanEntry = {
@@ -28,6 +28,13 @@ type AmortizationResult = {
     Schedule: LoanEntry list
 }
 
+let chunkBy chunkSize items =
+    items
+    |> List.indexed
+    |> List.groupBy(fun (i,_) -> i / chunkSize)
+    |> List.map(fun (g,v) -> g, v |> List.map snd)
+    |> List.map snd
+    
 
 module Calcs =
         
@@ -78,12 +85,6 @@ module Calcs =
             TotalPaid = schedule |> List.sumBy(fun le -> le.InterestAccrued + le.PrincipalPaid)
         }
 
-//type LoanEntryDisplay = {
-//    Balance: string
-//    TermRemaining:
-//    InterestAccrued:decimal
-//    PrincipalPaid:decimal
-//}
 type AmortizationDisplay = {
     LoanAmount: string
     InterestRate: string
@@ -91,7 +92,9 @@ type AmortizationDisplay = {
     InterestPaid: string
     TotalPaid: string
     Schedule: LoanEntry list
+    YSchedule: LoanEntry list
 }
+
 let formatMoney (x:decimal) =
     String.Format("{0:C}", x)
     
@@ -100,6 +103,22 @@ let formatAmort (le:AmortizationResult) = {
     InterestRate = sprintf "%.2f%%" le.InterestRate
     MonthlyPayment = formatMoney le.MonthlyPayment
     Schedule = le.Schedule
+    YSchedule =
+        let x = le.Schedule |> chunkBy 12
+        (List.empty, x)
+        ||> List.fold(fun years items ->
+            let year = 
+                ({Balance=le.TotalPaid;TermRemaining=le.Schedule.Length;InterestAccrued=0m;PrincipalPaid=0m}, items)
+                ||> List.fold(fun total item ->
+                    {   Balance = min total.Balance item.Balance
+                        TermRemaining= min total.TermRemaining item.TermRemaining
+                        InterestAccrued= total.InterestAccrued + item.InterestAccrued
+                        PrincipalPaid = total.PrincipalPaid + item.PrincipalPaid
+                    }
+                )
+            year::years
+        )
+        |> List.rev
     InterestPaid = formatMoney le.InterestPaid
     TotalPaid = formatMoney le.TotalPaid
     

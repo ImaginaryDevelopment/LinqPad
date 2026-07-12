@@ -2,6 +2,8 @@
 
 open FSharp.Reflection
 // merging attempt with http://www.fssnip.net/2V
+// use foo?bar for a property named bar
+// use foo?(bar) for dynamic property passing via (bar:string)
 
 // let us access public or private properties or methods dynamically
 open System
