@@ -63,27 +63,50 @@ If you prefer Slam stacking over bombs: Massive Slam + Spinning Staff + **Expans
 
 Crit / Electric path with Electric Strike. Fine for fun; not the recommended P57 clear build.
 
-## Skills (final 6) — Boomstick Bleed
+## Skills (final 6–7) — Boomstick Bleed
+
+### Core (do not swap)
 
 | Skill | Role |
 | --- | --- |
 | **Gunpowder Strike** | Fast Bleed + Weakness applicator |
 | **Shrapnel Bomb** | Primary burst (scales with Bleed stacks) |
-| **Earthquake** | AoE pressure + debuff setup |
-| **Light Beam** | Brittle / Holy pressure (debuff stack) |
-| **Whirling Defense** | Prowess / Resilience + defense while Bombing |
-| **Trickster Decoy** *or* **Armor Shatter** | Decoy is weak — prefer Armor Shatter / Fan of Bombs / Bomb Barrage |
 
-**Solid swaps:** Fan of Bombs, Bomb Barrage, Mine Field / Shrapnel Mine, Suction Bomb, Expansive Throw (if offered and you have Prowess).
+### Flex slots (4–5)
+
+| Role | Prefer | Solid swaps (same role) |
+| --- | --- | --- |
+| **AoE clear / Bleed flood** | **Fan of Bombs** | Bomb Barrage, Mine Field / Shrapnel Mine, Suction Bomb |
+| **Debuff soften** | **Earthquake** | Armor Shatter, anything with Exposed / Brittle / Shattered |
+| **Brittle / amp** | **Light Beam** | Armor Shatter (if Earthquake is core softener), Chromatic Bolt |
+| **Defense / Prowess** | **Whirling Defense** | Skip if you never get hit and need another Bomb |
+| **Extra Bleed / clear** (7th) | **Bomb Barrage** | Expansive Throw (if Prowess online), Fan of Bombs if not already taken |
+
+**Weapon Expert starts you with Trickster Decoy** — treat it as a placeholder. Swap it the first time a Prefer/swap skill above appears.
+
+**Example final 6:** Gunpowder Strike · Shrapnel Bomb · Fan of Bombs · Earthquake · Light Beam · Whirling Defense  
+**Example final 7 (Repertory):** above + Bomb Barrage / Armor Shatter
+
+**Swap rules:**
+
+- Never drop **Gunpowder Strike** or **Shrapnel Bomb**.
+- Prefer skills that apply **Bleed** and/or soften with **Weakness / Exposed / Brittle / Shattered**.
+- **Trickster Decoy** is never a keep — dump for any Bomb clear or shatter tool.
+- **Skill Mastery: Bomb** pulls non-native Bomb skills into the pool. For this build, lock these when offered:
+  1. **Shrapnel Bomb** (detonate — highest priority if not already in pool)
+  2. **Fan of Bombs** (clear + Bleed + Fragility + Finesse)
+  3. **Bomb Barrage** (Lord-facing Bleed lob)
+  4. **Shrapnel Mine** / **Mine Field** (ground Bleed / zone clear)
+  5. **Suction Bomb** (pull into mines / clones)
+  Skip or low priority: **Debilitating Bomb** (Fragility only — fine softener), **Explosive Arrows** / **Explosive Trap** (off-theme unless nothing better).
+- Do not wait for **Might of the Mountains** Earth skills.
 
 ### Skill priority while leveling
 
-**“Lock early”** = when these show as level-up choices, **take them immediately** and keep them in a skill slot for the rest of the run (do not skip/reroll hoping for something better).
-
-1. **Shrapnel Bomb** and **Gunpowder Strike** first (Bleed engine + detonate)
-2. Then fill **Earthquake** / **Light Beam** / other debuff applicators
-3. Swap **Trickster Decoy** out as soon as Armor Shatter / Fan of Bombs / Bomb Barrage appears
-4. **Whirling Defense** if you want Prowess / armor while bombing
+1. **Gunpowder Strike** + **Shrapnel Bomb** — lock ASAP
+2. **Fan of Bombs** / Bomb Barrage / mines — dump Decoy
+3. Earthquake / Light Beam / Armor Shatter
+4. Whirling Defense if the pool is thin or you want Prowess while bombing
 
 ## Runes
 
@@ -108,9 +131,23 @@ Subcategories in parentheses (Negative, Power, Utility, …) match the in-game r
 | --- | --- | --- | --- |
 | **Weapon Expert** | Versatility | Utility | Start with Trickster Decoy (swap it later) |
 | **Reroll Mastery** | Versatility | Utility | Extra rerolls → lock Shrapnel Bomb sooner |
-| **Skill Mastery: Bomb** | Versatility | *(skill-pool)* | Adds Bomb skills you lack (Fan of Bombs, mines, etc.) |
+| **Skill Mastery: Bomb** | Versatility | *(skill-pool)* | Adds Bomb skills MK would not normally see — see pick order below |
 
-**Alternates (Versatility):** **Skill Inclination: Bomb** (more Bomb offers — Monkey King prestige 60 unlocks Earth inclination, not Bomb; Bomb inclination comes from another class’s unlock), **Unexpected Arsenal** (Spellblade unlock — pulls unique weapon skills into the pool), **Unconventional Start** (Sentinel).
+**Skill Mastery: Bomb — pick order (this build):**
+
+| Priority | Skill | Why take it |
+| --- | --- | --- |
+| 1 | **Shrapnel Bomb** | Bleed-stack detonate / Lord burst |
+| 2 | **Fan of Bombs** | Wide clear · Bleed · Fragility · Finesse |
+| 3 | **Bomb Barrage** | Frontal Bleed spam vs Lords |
+| 4 | **Shrapnel Mine** | Passive Bleed fragments when triggered |
+| 5 | **Mine Field** | Trail zones; pairs with Suction / clones |
+| 6 | **Suction Bomb** | Groups packs onto mines / Decoy white clones |
+| Skip | Debilitating Bomb, Explosive Arrows, Explosive Trap | Weak / off-theme vs the list above |
+
+Boomstick already gives **Gunpowder Strike** / **Trickster Decoy** — Mastery is for the *other* Bomb skills, not those.
+
+**Alternates (Versatility):** **Skill Inclination: Bomb** (biases the Mastery pool harder — Assassin P60 unlock, not MK’s Earth Inclination), **Unexpected Arsenal** (your crafted MK weapon skills only), **Unconventional Start** (Sentinel).
 
 **Note:** **Elemental Flow** is unlocked on **The Elementalist**, not Monkey King. Reach prestige 20+ on Elementalist, then buy the Elemental Flow node on their skill tree. Once unlocked, any character can equip it. If you lack it, swap in **Battle Proficiency** (Tenacity · Buffs · 1 — Monkey King unlock) or **Improved Repertory** (Tenacity · Strategy · 3 — Necromancer).
 
@@ -184,14 +221,16 @@ Until 70, Boomstick Bleed or Immortal’s Prowess are your best options.
 
 ```
 Prestige:  57 (3 weapons — no Might of the Mountains)
-Weapon:    Trickster’s Boomstick
-Skills:    Gunpowder Strike · Shrapnel Bomb · Earthquake · Light Beam · Whirling Defense · Armor Shatter (swap Decoy)
+Weapon:    Trickster’s Boomstick + Weapon Expert
+Skills:    CORE — Gunpowder Strike · Shrapnel Bomb
+           FLEX — Fan of Bombs · Earthquake · Light Beam · Whirling Defense
+           (swap Decoy ASAP)
 
 Tenacity:  Elemental Flow · Executioner · Pulse of Agony · Decapitator
 Versatility: Weapon Expert · Reroll Mastery · Skill Mastery: Bomb
 
 Focus:     Bleed + Weakness/Exposed/Brittle/Shattered · Area · Cast freq
-Ban:       Poison / Fire / Doom passives; Poisonous Blood
+Ban:       Poison / Fire / Doom passives; Poisonous Blood; keep Decoy
 Orbs:      Collect 6 Yin/Yang → Twilight Harmony clones
 ```
 
@@ -199,27 +238,49 @@ Orbs:      Collect 6 Yin/Yang → Twilight Harmony clones
 
 Best use of your fresh **Expansive Throw** unlock.
 
-```
-Weapon:    Immortal’s Staff (+ Weapon Expert → Spinning Staff)
-Skills:    Massive Slam · Spinning Staff (multiples OK with Singular Focus) · Expansive Throw · Whirling Defense
-Idea:      Stack Prowess hard; Expansive Throw is the boss melter (damage scales with Prowess)
+### Core (do not swap)
 
-Tenacity:  Singular Focus · Improved Repertory · Battle Proficiency
-Versatility: Weapon Expert · Reroll Mastery · Skill Inclination: Slam
+| Skill | Role |
+| --- | --- |
+| **Massive Slam** | Primary Prowess / Slam engine |
+| **Spinning Staff** | Hit rate + Prowess (Weapon Expert) |
+| **Expansive Throw** | Boss melt — scales with Prowess (P50) |
 
-Take:      Damage, area, cast freq, multicast, Magnetic, move; Fortifying Damage helps Resilience
-Ban:       Crit-heavy paths (weapon/class tax crit damage); Poison / Fire / Doom
-```
+### Flex slots (2–3)
 
-### Cloudseeker quick alt
+| Role | Prefer | Solid swaps (same role) |
+| --- | --- | --- |
+| **Prowess / defense** | **Whirling Defense** | Battle Proficiency-driven keepers; Resilience builders |
+| **Clear / smash** | **Earthquake** | Extra Spinning Staff†, Armor Shatter |
+| **Amp / soften** (7th) | **Light Beam** | Armor Shatter, Gunpowder Strike (Bleed bridge) |
 
-```
-Weapon: Cloudseeker
-Skills: Electric Strike (multi) · Lightning Surge · Precision Wave
-Idea:   Crit-scaled Electric Strike spam (Singular Focus)
-Tenacity: Singular Focus (+ crit Tenacity like Critical Mastery)
-Versatility: Unconventional Start · Skill Inclination: Electric · Reroll Mastery
-```
+† Extra Spinning Staff / Massive Slam copies need **Singular Focus**.
+
+**Example final 6:** Massive Slam · Spinning Staff · Expansive Throw · Whirling Defense · Earthquake · Light Beam
+
+**Runes:** Singular Focus · Improved Repertory · Battle Proficiency (+ flex) · Weapon Expert · Reroll Mastery · Skill Inclination: Slam (if owned).
+
+**Take:** Damage, area, cast freq, multicast, Magnetic, move; Fortifying Damage helps Resilience.  
+**Ban:** Crit-heavy paths (weapon/class tax crit damage); Poison / Fire / Doom.
+
+## Alternate: Cloudseeker — Electric Crit
+
+### Core (do not swap)
+
+| Skill | Role |
+| --- | --- |
+| **Electric Strike** | Crit-scaled primary (multiples OK with Singular Focus) |
+| **Lightning Surge** | Dazed / move setup |
+
+### Flex slots
+
+| Role | Prefer | Solid swaps (same role) |
+| --- | --- | --- |
+| **Crit buff** | **Precision Wave** | Bloodlust / Might |
+| **Electric clear** | **Chain Lightning** / Thunder Strike | Chromatic Bolt |
+| **Extra Strike** (Singular Focus) | **Electric Strike** #2–3 | — |
+
+**Runes:** Singular Focus · Critical Mastery · Vulnerable Target · Weapon Expert / Unconventional Start · Reroll · Inclination: Electric (if owned).
 
 ## Unholy Cathedral — cycle skill combos
 
