@@ -25,41 +25,61 @@ Playstyle is “lawnmower”: keep moving, drag poison trails / AoE through pack
 
 ## Weapon
 
-**Greatsword of Corruption** (upgrade as high as you can)
+### Primary: Greatsword of Corruption
 
-| Bonus (weapon) | Notes |
+| Bonus | Notes |
 | --- | --- |
-| +movement speed | Scales with weapon level — core survivability |
-| +area | Helps hit while circling |
-| −15 armor | Mistakes hurt more; pick some armor/HP/block later |
-| Start skill | **Festering Strike** (Poison + Weakness, around you) |
+| +movement speed / +area (−15 armor) | Move is survivability — you cannot dash |
+| Start | **Festering Strike** — Poison + Weakness (keep forever) |
+| Weapon Expert | **Lethal Blade** — optional; aims and only pops already-poisoned targets |
 
-Skip **Pestilence** — Contagion covers that role better. **Lethal Blade** is optional (Weapon Expert); it needs aim and only explodes already-poisoned targets. Prefer Path of Decay / Acid Rain / Poison Bolt for hands-off stacking.
+Upgrade Corruption as high as you can. Artifact **Dragonflight** (Weakness) is nice-to-have, not required.
 
-Artifact power (Dragonflight → Weakness) is nice-to-have, not required.
+### Strong alt: Unholy Claymore (Doom)
 
-## Skills (final 6)
+Obliterate / Ray of Doom + Shadow Grasp. See alt — weaker clear than Contagion Poison.
+
+## Skills (final 6–7) — Poison Contagion
+
+### Core (do not swap)
 
 | Skill | Role |
 | --- | --- |
-| **Festering Strike** | Core applicator: Poison + Weakness |
-| **Path of Decay** | Poison trail while you ride (prestige 50 unique) |
-| **Contagion** | Primary burst / boss melt (prestige 20 unique) |
-| **Acid Rain** | Sustained Poison AoE |
-| **Poison Bolt** | Extra Poison application |
-| **Lethal Blade** | Finisher on poisoned targets (swap if you hate aiming) |
+| **Festering Strike** | Poison + Weakness applicator (weapon start) |
+| **Contagion** | Poison detonate / Lord melt (P20) |
+| **Path of Decay** | Poison trail while you ride (P50) |
 
-**Solid swaps if offered:** Corrosion, Pestilence (if Contagion not unlocked yet), Eldritch Grasp / Bladestorm / Firestorm (via Skill Mastery) for hit-rate and ailment passives.
+Skip **Pestilence** once Contagion is online — Contagion covers the kill role better.
+
+### Flex slots (2–3)
+
+| Role | Prefer | Solid swaps (same role) |
+| --- | --- | --- |
+| **Sustained Poison AoE** | **Acid Rain** | Poison Cloud, Corrosion |
+| **Extra applicator** | **Poison Bolt** | Poison Cloud, Pestilence *(only if Contagion not unlocked yet)* |
+| **Finisher / 7th** | **Lethal Blade** *(if Weapon Expert)* | Corrosion, Bladestorm |
+
+† Prefer native Nature Poison. **Skill Mastery: Nature / Ice / Shadow / Swing / Slam** — useless (native). Use **Inclination: Nature** if unlocked.
+
+**Example final 6:** Festering Strike · Contagion · Path of Decay · Acid Rain · Poison Bolt · Lethal Blade  
+**Example final 7 (Repertory):** above + Corrosion / Poison Cloud  
+**Hands-off 6 (no Lethal Blade):** Festering Strike · Contagion · Path of Decay · Acid Rain · Poison Bolt · Corrosion
+
+**Swap rules:**
+
+- Never drop **Festering Strike** or **Contagion**.
+- Prefer skills that apply **Poison** and/or **Weakness**.
+- Dump Contagion when packs / Lords are heavily stacked — you do not need to aim.
+- Do not fill with Doom / Bleed / Fire clutter on this path.
 
 ### Skill priority while leveling
 
-**“Lock early”** means: when Contagion or Festering Strike shows up as a level-up skill choice, **take it immediately** and keep it in an active skill slot for the rest of the run. Do not reroll past them or skip them for a “maybe better later” skill — those two define the build (Poison + Weakness application, and Contagion detonation).
+**“Lock early”** = take immediately and keep for the run.
 
-Suggested order:
-
-1. **Festering Strike** and **Contagion** first (as soon as each appears)
-2. Then fill remaining slots with Poison AoE (Acid Rain, Poison Bolt, etc.)
-3. **Path of Decay** last among the core six (strong, but secondary to Contagion + Festering Strike)
+1. **Festering Strike** + **Contagion** first
+2. **Acid Rain** / **Poison Bolt** / Corrosion
+3. **Path of Decay** once offered (strong, but secondary to Contagion + Festering)
+4. **Lethal Blade** only if you took Weapon Expert and like aiming — otherwise skip
 
 ## Runes
 
@@ -81,10 +101,12 @@ Slot/category lookup: see [`Runes.md`](Runes.md). Equip up to **4 Tenacity** (Ru
 | Rune | Slot | Category | Why |
 | --- | --- | --- | --- |
 | **Reroll Mastery** | Versatility | Utility | Faster path to Contagion + key skills |
-| **Skill Mastery: Nature** | Versatility | Skill-pool | Opens Corrosion / more Poison tools |
-| **Weapon Expert** *(optional)* | Versatility | Utility | Start with Lethal Blade — skip if you hate aiming |
+| **Skill Inclination: Nature** | Versatility | Skill-pool | More Poison / Nature offers *(Beastmaster / Shaman / DK if yours)* |
+| **Weapon Expert** *(optional)* | Versatility | Utility | Lethal Blade from the start — skip if you hate aiming |
 
-**Alternates (Versatility):** **Skill Inclination: Nature**, **Unexpected Arsenal** (Spellblade).
+**Alternates (Versatility):** Endless Refill, Unexpected Arsenal (your crafted DK weapon skills), Skill Affinity: Nature.
+
+**Do not** take **Skill Mastery: Nature** — Death Knight already has Nature. Mastery only adds *foreign* Nature you do not need on this path.
 
 **Note:** **Elemental Flow** and **Synchrony** unlock on **The Elementalist** skill tree (prestige 20+). **Controlled Chaos** needs Overlord cycle 3; **Overwhelming Chaos** is Chaoswalker. Once unlocked, any character can equip them.
 
@@ -107,7 +129,7 @@ Slot/category lookup: see [`Runes.md`](Runes.md). Equip up to **4 Tenacity** (Ru
 | War Tank | **Tenacity** | Defense |
 | Improved Repertory | **Tenacity** | Strategy |
 | Weapon Expert, Reroll Mastery | **Versatility** | Utility |
-| Skill Mastery / Inclination | **Versatility** | Skill-pool |
+| Skill Affinity / Inclination | **Versatility** | Skill-pool |
 
 ## Passives — take / ban
 
@@ -144,22 +166,33 @@ Physical + Poison is the plan. Weakness from Festering Strike (and Dragonflight 
 | **50** | **Path of Decay** — strong trail applicator |
 | 20+ | Class skill tree (Soul Harvest / Ebon Knights, Ready for Battle, etc.) |
 
+## Alternate: Unholy Claymore — Doom
+
+| Skill | Role |
+| --- | --- |
+| **Obliterate** / **Ray of Doom** | Doom engine |
+| **Shadow Grasp** | Doom detonate |
+| **Festering Strike** | Weakness bridge (native Nature pool) |
+| Flex | Shadow Bolt, Death Vortex, Misfortune tools |
+
+**Runes:** Misfortune’s Embrace · Fateful Strike · Critical Mastery · Vulnerable Target + Weapon Expert · Reroll · Inclination: Shadow.
+
+Poison Contagion is still the cleaner high-clear recommendation.
+
 ## Quick reference
 
 ```
 Weapon:  Greatsword of Corruption (max upgrades)
-Skills:  Festering Strike · Path of Decay · Contagion · Acid Rain · Poison Bolt · Lethal Blade
+Skills:  CORE — Festering Strike · Contagion · Path of Decay
+         FLEX — Acid Rain · Poison Bolt · Lethal Blade / Corrosion
 
 Tenacity:    Synchrony · Controlled Chaos · Overwhelming Chaos · Elemental Flow
-Versatility: Reroll Mastery · Skill Mastery: Nature · (Weapon Expert optional)
+Versatility: Reroll Mastery · Skill Inclination: Nature · (Weapon Expert optional)
 
-Stats:   Move → Poison → Multicast / AoE / Cast freq → Defense
-Ban:     Bleed / Fire / Doom passives
+Focus:   Move → Poison → Multicast / AoE / Cast freq → Defense
+Ban:     Bleed / Fire / Doom passives; Skill Mastery for native types
+Alt:     Unholy Claymore Doom
 ```
-
-## Alternate: Doom / multi-ailment
-
-If you prefer the starter **Unholy Claymore**: Obliterate / Ray of Doom + Shadow Grasp, stack Doom with Misfortune’s Embrace / Fateful Strikes, and add Weakness sources (e.g. Festering Strike via Skill Mastery). Poison Contagion is still the cleaner high-clear recommendation.
 
 ---
 

@@ -149,7 +149,7 @@ Clearing with a character lights a **stained-glass** icon for that character by 
 | Unlock | Actually from |
 | --- | --- |
 | The Shaman | Complete **Titan Hunt** |
-| The Machinist | **Sigil of Vileness** (Titan Hunt) |
+| The Machinist | **Sigil of Vileness** (Titan Hunt) | Guide: [`Machinist-Coremelter-Burn-Build-P60.md`](Machinist-Coremelter-Burn-Build-P60.md) |
 | The Samurai | **Sigil of Wickedness** (Titan Hunt) |
 | Most runes / Runic Power | Character trees + Void Field achievements |
 

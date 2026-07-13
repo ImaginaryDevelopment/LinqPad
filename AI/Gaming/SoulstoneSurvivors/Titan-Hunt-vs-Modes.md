@@ -20,7 +20,7 @@ Pick a **Titan** (themed map) → clear **tasks** for **Void Fragments** (15 unl
 
 **Sigils** are the difficulty ladder: Corruption → Vileness → Wickedness → Hate → Void, then Endless (+1 cycles) like Cathedral Heresy Endless. Enemy HP / damage / elite / boss HP and rewards scale hard; each **Titan slain in the same run** also stacks massive enemy HP (and ailment resist).
 
-**Exclusive unlocks:** Shaman (clear Titan Hunt), Machinist (Sigil of Vileness), Samurai (Sigil of Wickedness). Not available from Cathedral / Void Fields.
+**Exclusive unlocks:** Shaman (clear Titan Hunt), Machinist (Sigil of Vileness — [`Machinist-Coremelter-Burn-Build-P60.md`](Machinist-Coremelter-Burn-Build-P60.md)), Samurai (Sigil of Wickedness). Not available from Cathedral / Void Fields.
 
 ---
 
