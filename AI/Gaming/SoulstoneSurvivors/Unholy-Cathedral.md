@@ -134,7 +134,9 @@ Heresy gains +1 / +2 / … tiers. Enemy scaling examples from the wiki:
 
 - Role: Mixed · Blast / Bomb / Projectile / Swing / Thrust  
 - Stats: −10 HP, +5% crit chance, +20% crit damage, +15% experience  
-- Class runes: Pirate's Rum, Curse of the Depths, Devastating Blow → [`Runes.md`](Runes.md)
+- Ascension: Ghost Ship  
+- Class runes: Pirate's Rum, Curse of the Depths, Devastating Blow → [`Runes.md`](Runes.md)  
+- P60 guide: [`CursedCaptain-Admiral-Bleed-Build-P60.md`](CursedCaptain-Admiral-Bleed-Build-P60.md)
 
 ### Stained glass
 
@@ -169,7 +171,7 @@ Cathedral rewards **flexible** kits with a strong ascension / artifact that stil
 
 | Priority | Class | Why for Unholy |
 | --- | --- | --- |
-| 1 | **Pyromancer** | Community staple. Fast Burn clear in tight arenas; ascension + fire artifact amp work even when the active board resets each cycle. Strong Mh'thaeus DPS check. |
+| 1 | **Pyromancer** | Community staple. Fast Burn clear in tight arenas; ascension + fire artifact amp work even when the active board resets each cycle. Strong Mh'thaeus DPS check. Guide: [`Pyromancer-Firestarter-Burn-Build-P76.md`](Pyromancer-Firestarter-Burn-Build-P76.md). |
 | 2 | **Assassin** | Peak single-target / Lord delete for cycle 4 + boss. Prefer **Ambush / Bleed** flexibility over locking into multi-Reap Singular (harder to rebuild four times). Reroll Mastery + Endless Refill. |
 | 3 | **Monkey King** | Twilight Harmony clones are mode-agnostic power. Boomstick / Slam roles map cleanly to “burn fillers early, keep detonates for cycle 4” — see cycle combos in [`MonkeyKing-Bleed-Boomstick-Build-P57.md`](MonkeyKing-Bleed-Boomstick-Build-P57.md). |
 | 4 | **Engineer** | Mechatron gauge + summons scale from **stats / Unholy Powers**, not one perfect 6-skill board. EZ / Bomb paths stay strong in short cycles. |
