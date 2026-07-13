@@ -107,7 +107,7 @@ Source snapshot: [wiki Runes page](https://soulstone-survivors.fandom.com/wiki/R
 | Sacrificed Growth | Sacrifice | 3 | Arcane Weaver |
 | Savage Pact | Strategy | 2 | Shaman (crit damage from max HP, cap 40%) |
 | Searing Intensity | Negative | 3 | Pyromancer |
-| Singular Focus | Power-ups | 4 | Caves of Dhal Zhog curse VI |
+| Singular Focus | Power-ups | 5 | Caves of Dhal Zhog curse VI |
 | Surefooted | Defense | 1 | Reach XP level 65 in a single match |
 | Swift Execution | Strategy | 2 | Samurai |
 | Synchrony | Strategy | 2 | Elementalist |

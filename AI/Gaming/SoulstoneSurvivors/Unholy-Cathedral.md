@@ -2,7 +2,7 @@
 
 Soulstone Survivors general reference for the **Unholy Cathedral** game mode (Update 12, Aug 2024). Covers how a run works, cycle mechanics, difficulties, and permanent unlocks.
 
-Also see character-specific Cathedral tips (e.g. Monkey King cycle combos in [`MonkeyKing-Bleed-Boomstick-Build-P57.md`](MonkeyKing-Bleed-Boomstick-Build-P57.md)).
+Also see character-specific Cathedral tips (e.g. Monkey King cycle combos in [`MonkeyKing-Bleed-Boomstick-Build-P57.md`](MonkeyKing-Bleed-Boomstick-Build-P57.md)). Mode comparison: [`Titan-Hunt-vs-Modes.md`](Titan-Hunt-vs-Modes.md).
 
 ---
 
@@ -162,6 +162,22 @@ Clearing with a character lights a **stained-glass** icon for that character by 
 Exact drop tables change with patches; treat Cathedral as a fast material + unlock mode, not the main prestige grind (XP / build depth is intentionally shorter than Void Fields).
 
 ---
+
+## Recommended classes (5)
+
+Cathedral rewards **flexible** kits with a strong ascension / artifact that still works after skill strip — not Singular Focus duplicate boards.
+
+| Priority | Class | Why for Unholy |
+| --- | --- | --- |
+| 1 | **Pyromancer** | Community staple. Fast Burn clear in tight arenas; ascension + fire artifact amp work even when the active board resets each cycle. Strong Mh'thaeus DPS check. |
+| 2 | **Assassin** | Peak single-target / Lord delete for cycle 4 + boss. Prefer **Ambush / Bleed** flexibility over locking into multi-Reap Singular (harder to rebuild four times). Reroll Mastery + Endless Refill. |
+| 3 | **Monkey King** | Twilight Harmony clones are mode-agnostic power. Boomstick / Slam roles map cleanly to “burn fillers early, keep detonates for cycle 4” — see cycle combos in [`MonkeyKing-Bleed-Boomstick-Build-P57.md`](MonkeyKing-Bleed-Boomstick-Build-P57.md). |
+| 4 | **Engineer** | Mechatron gauge + summons scale from **stats / Unholy Powers**, not one perfect 6-skill board. EZ / Bomb paths stay strong in short cycles. |
+| 5 | **Elementalist** | Broad type pool (easy to fill each cycle with something good). Nature Poison Contagion or Fire Heat paths both leave a detonate / boss tool for cycle 4. |
+
+**Honorable:** Chaoswalker (Chaotic proc carries any board), Death Knight (Contagion detonate for Mh'thaeus).
+
+**Skip / hard mode:** kits that need **Singular Focus ×4–5 of one skill** or Weapon Expert one-shots that get locked out after cycle 1.
 
 ## Practical tips
 
