@@ -15,7 +15,7 @@ Soulstone Survivors. Tuned for **prestige 65** **without Misery’s End** (not c
 | 40 | **Misery’s End** | Available to craft — **skip** (Doom; weak vs this path) |
 | 50 | **Ricochet Shot** | **Core** — multi-hit Aptitude engine |
 | 60 | Skill Inclination: Projectile | **Yes** — biases arrows |
-| 70 | **Noxious Longbow** | Locked — best Poison path later |
+| 70 | **Noxious Longbow** | Locked — peak at P83: [`Sentinel-Noxious-Poison-Build-P83.md`](Sentinel-Noxious-Poison-Build-P83.md) |
 
 You have **~45 skill-tree points**. Prioritize **Nature’s Guardian**, then mount potency / cast freq / crit / move. Buy **Extended Reach** (60k) when you can — huge for Projectile. **Unconventional Start** is optional. Skip **Immovable Object** on this kite build (punishes moving).
 

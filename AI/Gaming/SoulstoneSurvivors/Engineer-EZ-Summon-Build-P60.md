@@ -184,9 +184,10 @@ Burst of Lead + Shrapnel Bomb + Heavy Artillery + EZ Sentry (via Unexpected Arse
 
 ## Prestige roadmap
 
-| Next | Unlock | Impact |
+| Status | Unlock | Impact |
 | --- | --- | --- |
-| **70** | **Bomb Launcher QT-22** | QT Bombuddy / Land Surprise — Bomb Bleed toys |
+| **Next (70)** | **Bomb Launcher QT-22** | QT toys via Arsenal / Bleed alt |
+| **Peak** | See [`Engineer-EZ-Summon-Build-P81.md`](Engineer-EZ-Summon-Build-P81.md) | Full kit refinement |
 | Already have | Volt Cannon · Ammo Box · Portable Nuke | Electric alt + turret engine online |
 
 ## Quick reference
