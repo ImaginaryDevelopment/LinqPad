@@ -1,56 +1,57 @@
-# Arcane Weaver — Pandemonium Disarray Build (Prestige 84)
+# Arcane Weaver — Pandemonium Disarray Build (Prestige 100)
 
-Soulstone Survivors. Tuned for **prestige 84** — **maximum Arcane Weaver power** at this level. **Pandemonium, Spire of Chaos** Disarray is the ceiling. Glacies Ice is the prestige-70 unlock and is **not** the peak. Benedictio Singular Holy is the best alternate if Pandemonium is not crafted yet.
+Soulstone Survivors. Tuned for **prestige 100** — **Legendary weapon unlocked**. **Pandemonium, Spire of Chaos** Disarray is the class ceiling. Pre-100 peak: [`ArcaneWeaver-Benedictio-Singular-Holy-Build-P84.md`](ArcaneWeaver-Benedictio-Singular-Holy-Build-P84.md).
 
-## Your unlocks at prestige 84
+## Your unlocks at prestige 100
 
 | Prestige | Unlock | Use in this build? |
 | --- | --- | --- |
-| Start | Arcane Staff | Skip — weak singular Arcane vs Pandemonium / Benedictio |
+| Start | Arcane Staff | Skip |
 | 5 | Arcane Shield | Skip on Chaos path |
 | 10 | Ignis, Greatstaff of Despair | **Burn alt** only |
 | 20 | Arcane Orb + skill tree | Skip on Chaos |
 | 20+ | **Mana Infusion** | **Mandatory** |
-| 30 | Skill Affinity: Arcane | Skip — use **Skill Mastery: Chaos** |
-| 40 | Benedictio, Staff of Dawn | **Strong alt** — Singular Holy (see below) |
+| 30 | Skill Affinity: Arcane | Skip on Chaos |
+| 40 | Benedictio, Staff of Dawn | **Strong alt** if you want Holy beams |
 | 50 | Arcane Conjuration | Skip on Chaos |
 | 60 | Skill Inclination: Arcane | Skip on Chaos |
-| **70** | Glacies, Rod of Eternal Ice | **Skip** — weakest endgame staff |
-| Craft | **Pandemonium, Spire of Chaos** | **Required weapon** |
-| 84 | *(no new milestone)* | Full kit + ~**64 skill-tree points** |
+| 70 | Glacies, Rod of Eternal Ice | **Skip** — weakest endgame staff |
+| **100** | **Pandemonium, Spire of Chaos** | **Required Legendary weapon** |
+| 100 | *(Legendary craft)* | Craft + upgrade Pandemonium |
 
-You have **~64 skill-tree points**. Finish **Mana Infusion** nodes (crystal spawn / mana gain / Infused duration / Infused multicast). Then cast freq / multicast / crit damage / damage / move / pickup range. Buy Weaver runes when useful: **Efficient Extraction** (0 — farming), **Sacrificed Growth** (3), **Divine Legacy** (3 — legendary fishing).
+You have **~80 skill-tree points**. Finish **Mana Infusion** nodes (crystal spawn / mana gain / Infused duration / Infused multicast). Then cast freq / multicast / crit damage / damage / move / pickup range. Buy Weaver runes: **Efficient Extraction** (0 — farming), **Sacrificed Growth** (3), **Divine Legacy** (3 — legendary fishing).
 
-## Why Pandemonium Disarray (not Glacies / not Arcane Staff)
+## Why Pandemonium Disarray (not Benedictio / not Glacies)
 
-At P84 the Weaver ceiling is **Disarray density under Chaotic Swirl + Mana Infusion**:
+At P100 the Weaver ceiling is **Disarray density under Chaotic Swirl + Mana Infusion**:
 
 - **Fractured Volley** + **Chaotic Swirl** apply **Disarray** constantly; Swirl’s **Chaotic** trait chain-casts your other skills
 - Weapon package: **+crit damage / +cast freq / +multicast** — paper HP stays paper, but offense is elite
-- **Manifestations of Chaos** scales damage off Disarray stacks — your Lord delete button once stacks are high
+- **Manifestations of Chaos** scales damage off Disarray stacks — Lord delete once stacks are high
 - **Mana Infusion** Infused state: +damage / +move / +area / **huge multicast** — collect crystals aggressively
-- **Glacies** (P70) is the prestige unlock and the **worst** staff for high curse
-- **Benedictio** Singular **Light Beam** (Exposed) is the best non-Chaos path — see alt
-- **Ignis** Burn is a solid Fire alt, not the ceiling
+- **Glacies** (P70) remains the **worst** staff for high curse
+- **Benedictio** Singular Holy is the best path **before** P100 — see the P84 guide
 
 ## Character notes
 
 | Trait | Value |
 | --- | --- |
-| Max HP | Low (glass) |
-| Armor | Low |
-| Offense | High once Infused |
+| Max HP | −20 (glass; Pandemonium does not fix this) |
+| Armor | −20 |
+| Damage | +10% |
+| Cast frequency | +10% |
+| Experience | +15% |
 
-**Skill types (native):** Arcane · Fire · Ice · Holy  
-**Chaos** is **not** native — take **Skill Mastery: Chaos** for Manifestations / Chaos Bolt / Unchained / etc.
+**Skill types (native):** Arcane · Chaos · Ice · Fire · Holy  
+**Skill Mastery: Chaos** is **useless** — Chaos is native. Prefer **Inclination: Chaos** (Chaoswalker) if you own it.
 
 **Mana Infusion (ascension):** kills drop **Mana Crystals**. Fill the orb → **Infused**: consumes mana over time for **+20% damage**, **+20% move**, **+12% area**, **+62% multicast** (base; tree improves further). Play around crystal pickups the way other classes play meat / panthers / fuel.
 
-**Playstyle:** glass cannon — fix move, scoop crystals, stand near Chaotic Swirl pillars. Armor / HP passives are not shameful. Do not greed Glacies “because P70.”
+**Playstyle:** glass cannon — fix move, scoop crystals, stand near Chaotic Swirl pillars. Armor / HP passives are not shameful. Do not greed Glacies.
 
 ## Weapon
 
-### Required: Pandemonium, Spire of Chaos
+### Required: Pandemonium, Spire of Chaos (Legendary — P100)
 
 | Bonus | Notes |
 | --- | --- |
@@ -59,8 +60,6 @@ At P84 the Weaver ceiling is **Disarray density under Chaotic Swirl + Mana Infus
 | Weapon Expert | **Chaotic Swirl** — orbiting pillars + Disarray + **Chaotic** |
 
 Upgrade Pandemonium fully. Artifact **Mana Beam (Disarray)** is worth finishing — plant crystals, fight Lords in the web.
-
-**Do not** use Glacies for peak. Arcane Staff / Ignis / Benedictio only as deliberate alts.
 
 ## Skills (final 6–7) — Pandemonium Disarray
 
@@ -72,17 +71,13 @@ Upgrade Pandemonium fully. Artifact **Mana Beam (Disarray)** is worth finishing 
 | **Chaotic Swirl** | AoE clear + Disarray + Chaotic triggers (Weapon Expert) |
 | **Manifestations of Chaos** | Damage scales with Disarray stacks — Lord melt |
 
-† Manifestations needs **Skill Mastery: Chaos** (or another pool opener) — Weaver does not natively offer Chaos skills.
-
 ### Flex slots (2–3)
 
 | Role | Prefer | Solid swaps (same role) |
 | --- | --- | --- |
 | **Disarray chain / Chaotic** | **Unchained Chaos** | Chaos Bolt, Chaotic Explosion |
 | **Buff / multicast** | **Bloodlust** *or* **Arcane Power** | — |
-| **7th applicator** (Repertory) | **Chaos Bolt** | Chaotic Explosion, Orbs of Chaos† |
-
-† Extra Chaos skills need **Skill Mastery: Chaos**. **Unexpected Arsenal** only adds *your* crafted Weaver weapon skills (Ignis / Benedictio / Glacies / Pandemonium) — useful for Fiery Pillar / Light Beam alts, not general Chaos pool.
+| **7th applicator** (Repertory) | **Chaos Bolt** | Chaotic Explosion, Orbs of Chaos |
 
 **Example final 6:** Fractured Volley · Chaotic Swirl · Manifestations of Chaos · Unchained Chaos · Bloodlust · Chaos Bolt  
 **Example final 7 (Repertory):** above + Chaotic Explosion / Arcane Power
@@ -91,8 +86,9 @@ Upgrade Pandemonium fully. Artifact **Mana Beam (Disarray)** is worth finishing 
 
 - Never drop **Fractured Volley**, **Chaotic Swirl**, or **Manifestations**.
 - Prefer **Chaotic**-trait skills so Swirl / Volley chain more casts.
-- **Skill Mastery: Arcane / Fire / Ice / Holy** — useless (native). **Skill Mastery: Chaos** is required for this path.
+- **Skill Mastery: Arcane / Chaos / Fire / Ice / Holy** — useless (native).
 - Skip Frost Beam kits, Arcane Beam singular, and Glacies skills on this path.
+- Empowering buffs (**Bloodlust**, Arcane Power) **refresh, do not stack**.
 
 ### Skill priority while leveling
 
@@ -134,10 +130,10 @@ Slot/category lookup: see [`Runes.md`](Runes.md).
 | Rune | Slot | Category | Why |
 | --- | --- | --- | --- |
 | **Weapon Expert** | Versatility | Utility | **Chaotic Swirl** from second 1 |
-| **Skill Mastery: Chaos** | Versatility | Skill-pool | Manifestations / Unchained / Chaos Bolt into pool |
 | **Reroll Mastery** | Versatility | Utility | Fish Manifestations early |
+| **Skill Inclination: Chaos** | Versatility | Skill-pool | If unlocked (Chaoswalker) — biases Chaos offers |
 
-**Flex Versatility:** Unconventional Start (skip Fractured Volley opener if offered something better), Divine Legacy is Tenacity — keep Extraction for material farms off-build.
+**Flex Versatility:** Unexpected Arsenal (Ignis / Benedictio weapon skills), Efficient Extraction for material farms, Unconventional Start.
 
 ## Passives — take / ban
 
@@ -169,52 +165,30 @@ Slot/category lookup: see [`Runes.md`](Runes.md).
 5. Lords: Disarray high → Manifestations melts. Plant artifact Mana Beam crystals in the fight zone.
 6. Respect telegraphs — −HP/−armor/−move. Dash, don’t tank.
 
-## Alternate: Benedictio Singular Holy (no Pandemonium)
-
-Best path if Pandemonium is not crafted. Cubic rates this above Singular Arcane.
-
-| Skill | Count | Role |
-| --- | --- | --- |
-| **Light Beam** | **4–5×** | Exposed stack + damage |
-| **Celestial Retribution** | 1× | Scales off Exposed — Lord delete |
-| **Arcane Power** | Optional early | Multicast until beams fill |
-
-**Runes:** Singular Focus · Improved Repertory · Ready for Battle / Surefooted + Unconventional Start · Reroll · **Inclination: Holy**  
-Banish other Holy junk until Light Beam copies are filled.
-
-Still skip Glacies.
-
-## Alternate: Ignis Burn
-
-Firestarter-style: Ray of Fire · Firestorm · Meteor Shower · Orbs of Destruction · Fiery Pillar (Weapon Expert) · Arcane Power.  
-**Runes:** Repertory · Searing Intensity · Elemental Flow · Synchrony + **Skill Mastery: Fire** · Unconventional Start · Weapon Expert.
-
-Solid, not the P84 ceiling.
-
 ## Prestige status
 
 | Status | Notes |
 | --- | --- |
-| **P84** | All prestige weapons unlocked; Pandemonium is craft-gated |
-| **Glacies** | Unlocked at P70 — do not play it for peak |
-| **Nothing left to farm** for class prestige kit until future patches |
+| **P100** | Legendary **Pandemonium** unlocked — craft and play this |
+| **P84 Benedictio** | Pre-Legendary peak — see linked guide |
+| **Glacies** | Still skip for peak |
 
 ## Quick reference
 
 ```
-Prestige:  84 (Pandemonium crafted — play for peak Disarray DPS)
+Prestige:  100 (Legendary — Pandemonium crafted)
 Weapon:    Pandemonium + Weapon Expert
 Skills:    Fractured Volley · Chaotic Swirl · Manifestations · Unchained Chaos · Bloodlust/Arcane Power · Chaos Bolt (+1)
 
 Tenacity:    Improved Repertory · Sacrificed Growth · Controlled Chaos · Overwhelming Chaos / Misfortune
-Versatility: Weapon Expert · Skill Mastery: Chaos · Reroll Mastery
+Versatility: Weapon Expert · Reroll Mastery · Inclination: Chaos (if owned)
 
 Focus:     Disarray stacks · Chaotic chain · Mana Infusion crystals · Cast freq / Multicast
-Skip:      Glacies · Arcane Staff singular · Skill Mastery for native Arcane/Fire/Ice/Holy
+Skip:      Glacies · Skill Mastery for native types · Benedictio as “still peak”
 Peak:      Infused + high Disarray + Manifestations on Lords
-Alt:       Benedictio 4–5× Light Beam + Celestial Retribution
+Pre-100:   Benedictio Singular Holy (P84 guide)
 ```
 
 ---
 
-*P84 peak Arcane Weaver. Pandemonium Disarray is the highest ceiling; Benedictio Singular Holy is the best craft-free alternate; skip Glacies.*
+*P100 peak Arcane Weaver. Pandemonium is the Legendary (5th) weapon — unlocks at prestige 100, not earlier. Benedictio Singular Holy is the P84 ceiling until then.*
