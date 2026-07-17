@@ -1,6 +1,8 @@
 # Myrmidon — Chant Crit Build (Prestige 84)
 
-Soulstone Survivors. Tuned for **prestige 84** — **maximum Myrmidon power** at this level. Full Epic kit including **Wail of the Reefs**. Primary path is **Chant of the Claws** crit + **Hymn** Devastating / Dazed via **Unexpected Arsenal**. Legendary weapon is **not out yet** (*Coming soon* on wiki).
+Soulstone Survivors. Tuned for **prestige 84** — **maximum Myrmidon power** through Epic. Full Epic kit including **Wail of the Reefs**. Primary path is **Chant of the Claws** crit + **Hymn** Devastating / Dazed via **Unexpected Arsenal**.
+
+**P100+ note:** Legendary unlocked in update 1.4 (craft at prestige 100). Community endgame still runs **this same Chant / Hymn crit kit** — power at high OL comes from **Blessing → Fury of the Seas form** (fervor uptime + Oceanic Strike), not a different weapon board. No separate P100 guide until the Legendary’s skills are worth swapping for.
 
 ## Your unlocks at prestige 84
 
@@ -16,7 +18,7 @@ Soulstone Survivors. Tuned for **prestige 84** — **maximum Myrmidon power** at
 | 50 | **Sea Current** | Ice alt — Slow + Icy Veins flood |
 | 60 | Skill Inclination *(class)* | Use on Ice path; Thrust/Holy from other classes on Crit |
 | **70** | **Wail of the Reefs** | **Skip** — weakest Epic (Earth) |
-| **100** | Legendary | **Not available yet** |
+| **100** | Legendary (craft) | Optional — **same Crit path still preferred**; form > gun swap |
 | 84 | *(no new milestone)* | Full Epic kit + ~**64 skill-tree points** |
 
 You have **~64 skill-tree points**. Finish **Blessing of the Depths** nodes (fervor gain / Blessed bonuses / Oceanic Strike). Then crit chance / crit damage / cast freq / multicast / move / armor. Buy Myrmidon runes: **Absolute Zero** (2), **Enduring Cold** (1), **Frozen Blood** (1).
@@ -210,8 +212,9 @@ Abyssal Fissure · Fury of the Depths · Colossal / Form Earth skills. Weaker ce
 
 | Status | Notes |
 | --- | --- |
-| **P84** | All Epic weapons + uniques unlocked |
-| **Legendary** | *Coming soon* — no P100 gun yet |
+| **P84** | All Epic weapons + uniques unlocked — **this guide is still the peak board** |
+| **P100 Legendary** | Craftable (update 1.4) — wiki skills sparse; endgame guides still use Chant / Hymn |
+| **P100+ play tip** | Same skills/runes; prioritize **fervor** / Blessed uptime so **Fury of the Seas** (Oceanic Strike) stays up on Lords |
 | **Wail** | Unlocked at P70 — do not play it for peak |
 
 ## Quick reference
@@ -234,4 +237,4 @@ Alts:      Song Ice/Slow · Hymn on-gun Holy · Wail Earth (weak)
 
 ---
 
-*P84 peak Myrmidon. Chant Crit + Arsenal Hymn skills is the highest ceiling; Song Ice/Slow is the real thematic sidegrade. Skip Wail. Legendary not released yet.*
+*P84–P100+ peak Myrmidon. Chant Crit + Arsenal Hymn skills remains the ceiling; Song Ice/Slow is the thematic sidegrade. Skip Wail. P100 Legendary exists but does not change this setup — lean harder into fervor / Fury of the Seas form.*
