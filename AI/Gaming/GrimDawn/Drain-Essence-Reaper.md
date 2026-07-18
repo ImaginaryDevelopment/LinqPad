@@ -72,22 +72,34 @@ Cunning matters because endgame often runs **Master of Death** exclusive for fir
 | Barrowholm | Friendly if you want Ravager |
 | Crafting smith | Angrim for endgame craft bonuses |
 
-**Movement:** After Warden Krieg → Forgotten Gods emissary → pick a cult for a movement augment early (**Charging Bull** / Solael recommended in the guide).
+**Movement / Solael (recommended):** After Warden Krieg → talk to the **Emissary** in Devil’s Crossing → Forgotten Gods intro → finish the first FG quest and pick **Solael**.
+
+Where to get **Charging Bull**:
+1. Join **Cult of Solael**.
+2. Go to the **Conclave of the Three** (FG hub).
+3. Buy **Emblem of the Charging Bull** from **Jugal (Wares of Solael)** — needs only **Friendly** Solael rep.
+4. Apply that emblem to **any medal** (it’s a medal augment, not a special medal by itself).
+5. Vendor tip: Jugal is easy to miss — near the **rift/portal**, by a tent (not sitting deep in the Solael camp like the other cult shops).
 
 ---
 
 ## Skill priorities (cold leveling skeleton)
 
-Order of ideas, not exact point dump every level:
+Spend **skill points** in this order. Ranks are targets from the guide’s grimtools snapshots (not exact every level).
 
-| Phase | Focus |
+| Phase | Spend points on |
 | --- | --- |
-| **1–10** | Necro bar + **Drain Essence** → unlock **Hungering Reach** and dump it |
-| **10–20** | Hungering Reach → **~10** (soft breakpoint), DE **16/16**, start **Spectral Binding** |
-| **20–30** | Finish Binding + **Spectral Wrath**; open **Nightblade** → rush **Pneumatic Burst** |
-| **30+** | Nightblade quality of life / defenses; skip Decomposition until conversion |
-| **~50–60** | With **Gargoyle Waistguard** (vit→cold) unlock full DE nodes including Decomposition |
-| **Endgame** | Cap DE nodes, Blade Spirits support, Master of Death exclusive, Nightblade utility |
+| **1–10** | Necro mastery bar + **Drain Essence**. As soon as **Hungering Reach** unlocks, dump into it. |
+| **10–20** | Hungering Reach → **10** (soft breakpoint), DE → **16/16**, start **Spectral Binding**. Keep raising Necro bar as needed to unlock nodes. |
+| **20–30** | Finish **Spectral Binding** + **Spectral Wrath**. Open **Nightblade**, raise NB bar, rush **Pneumatic Burst** (aim ~**8–10**). 1-pt Gravechill is fine. **Skip Decomposition.** |
+| **30–40** | **Nightblade bar** hard → finish PB to **10** → dump **Veil of Shadow** + **Night’s Chill** (cold RR aura). 1-pt NB utility as it unlocks (Phantasmal Armor / similar). Still **no Decomposition.** |
+| **40–50** | Finish **Nightblade mastery to 50**. Start **Blade Spirits**. Tiny Hungering Reach top-offs. Keep Ill Omen light. |
+| **50–60** | Get **Gargoyle Waistguard** (vit→cold). Then invest **Decomposition**, raise **Necro bar**, and push **Blade Spirits** hard (~**15**). |
+| **60–70+** | Decomposition toward **12**, Hungering Reach toward **12**, Necro bar toward **20–25**, keep Blade Spirits / PB / Spectral package topped. |
+| **Endgame** | Cap DE nodes, Blade Spirits support, Master of Death exclusive, Nightblade utility. |
+
+**Every level-up cheat sheet (if you just hit 30+):**  
+Nightblade bar → Pneumatic Burst → Veil of Shadow / Night’s Chill → Blade Spirits later → **still skip Decomposition until Gargoyle Waistguard**.
 
 Keep **Ill Omen** / occasional Necro debuffs light on cold auto-RR setups — vitality variants use more active RR (see below).
 
@@ -95,23 +107,43 @@ Keep **Ill Omen** / occasional Necro debuffs light on cold auto-RR setups — vi
 
 ## Leveling gear landmarks (cold)
 
-Guaranteed / high-value early greens (check grimtools map pins):
+High-value early greens / MIs. Use grimtools map pins if you get lost; rifts below are the usual closest teleports.
 
-| Item | Where / why |
+| Item | Closest rift / route | Notes |
+| --- | --- | --- |
+| **Karvor’s Conjuring Bone** | **Devil’s Crossing** → east into **Sodden Hollow** | Rotting corpse near the lightning-zombie area (across from the quest-sister boss path). Off-hand. |
+| **Isaac’s Spaulders** | **Foggy Bank** rift | Walk **west** to a tree stump — guaranteed early shoulders. |
+| **Spectral War Shield** | **Old Arkovia** / Twin Falls area (“The Assignment”) | Farm heroes **Laudos Varga** / **Nomos Dread**. Energy mitigation + targets. Also drops in Arkovian Undercity. |
+| **Port Valbury Herald weapon** | **Homestead** → **Conflagration** → Port Valbury gate | Kill the **Herald at the gate only** — no need to enter the dungeon. Long-term leveling weapon. |
+| **Ungoliax medal** (`Gaze of Ungoliax`) | **Shaded Basin** → Bloodbriar’s Lair / Forgotten Depths | Strong cold Necro leveling medal. Put **Charging Bull** emblem on a medal (this or any other). |
+| **Ilgorr’s medal** | **Broken Hills** / Steps of Torment entrance | Skeleton key dungeon (~40). Need **Blood of Ch’thon** keys (Kalderos free key + crafts). Base > perfect affixes. |
+| **Gargoyle Waistguard** | FG **Astral Fields** / Basalt Crags (pre-Korvaak) | **Vit → cold** conversion unlock. Farm gargoyles there. |
+| **Korvan Plating** | **Tomb of the Heretic** → Court of the Magi | Soft points into DE nodes. Key dungeon / Magi Court farm. |
+| **Magi Mantle** | Same Magi Court | Boss / Magi drops in Tomb of the Heretic. |
+
+**Faction shopping (~35 Respected):**
+
+| Vendor (town) | Buy |
 | --- | --- |
-| **Karvor’s Conjuring Bone** | Sudden Hollow corpse (near lightning zombie) |
-| **Isaac’s Spaulders** | Tree stump west of Foggy Bank rift |
-| **Spectral War Shield** | Farm Laudos Varga / Nomos Dread (Old Arkovia — “The Assignment”) — energy mitigation + targets |
-| **Port Valbury Herald weapon** | Kill the gate guardian (don’t need full dungeon) — leveling weapon for a long stretch |
-| **Ungoliax medal** | Strong cold Necro leveling medal |
-| **Ilgorr’s medal** | Steps of Torment (~40) — Blood of Ch’thon keys; base matters more than perfect affixes |
-| **Gargoyle Waistguard** | Astral Fields (pre-Korvaak) — **vit → cold** conversion |
-| **Korvan Plating** | Cairn / Korvan area — soft points into DE nodes |
-| **Magi Mantle** | Magi Court in Tomb of the Heretic |
+| Devil’s Crossing | **Devil’s Cuirass**, **Devil’s Shoulderguard** |
+| Rover camp (Old Arkovia / Act 2) | **Rhowari Handguards**, **Specter** BP, **Runestone** BP |
+| Homestead | **Harvest Footpads**, **Solar Defender** |
 
-**Faction shopping (~35 Respected):** Devil’s Cuirass / Shoulderguard, Rhowari Handguards, Harvest Footpads, Solar Defender, Rover Specter + Runestone blueprints.
+### Early components (~20) — where you actually get them
 
-**Early components (~20):** Antivenom Salve (boots/belt), Scaled Hide (chest), Silk Swatch, Wardstones (medal/amulet), Coldstones (weapon/OH), corpse dust / frozen heart rings, Equilibrium relic.
+Almost all of these are **crafted at the Blacksmith** in Devil’s Crossing once you rescue/unlock him (Act 1 blacksmith quest). Materials come from scrap / aether crystals / common mats you already pick up.
+
+| Component | Slot | Source |
+| --- | --- | --- |
+| **Antivenom Salve** ×2 | Boots + belt | **Craft** at blacksmith (baseline recipe) |
+| **Scaled Hide** | Chest | **Craft** at blacksmith (baseline) |
+| **Silk Swatch** ×2 | Pants + chest/shoulders | **Craft** at blacksmith (baseline / common recipe) |
+| **Wardstone** ×2 | Medal + amulet | **Craft** at blacksmith — move speed + ele/bleed res |
+| **Coldstone** ×2 | Weapon + off-hand | **Craft** at blacksmith — cold damage + phys→cold |
+| **Corpse Dust** / **Frozen Heart** | Rings | Common **loot** early; craft if you have the recipe |
+| **Equilibrium** relic | Relic slot | **Craft** at blacksmith once unlocked (baseline empowered relic — spirit / move speed) |
+
+If a recipe isn’t showing yet: keep looting chests/enemies, or check faction vendors later for component blueprints. Dynamite **treasure troves** are good blueprint hunters.
 
 ---
 
