@@ -134,6 +134,45 @@ You cannot target-farm Spellscourge from one named boss. Volume farming on Ultim
 - Clear with **War Cry + Blade Arc / Forcewave** until Bulwark.
 - Or 1H + **caster off-hand** if you want Devastation online during the farm (squishier).
 
+### Interim gear to farm while waiting on Spellscourge
+
+Play as a **tanky S&B physical Battlemage** (Blade Arc / Forcewave + War Cry + Overguard). These pieces are **target-farmable** and still useful after Spellscourge (Targo especially often stays).
+
+**Target-farm MIs (do these on Ultimate when you can):**
+
+| Slot | Item | Where |
+| --- | --- | --- |
+| Helm | **Milton’s Casque** | Milton Hart (Act 2 / Old Arkovia area) — Blitz / phys |
+| Shield | **Warden’s Fortress** | **Warden Krieg** — solid block shield until Bulwark |
+| Weapon | **Mutant Bludgeon** | Fleshwarped; also sold by **Hyram** (Steelcap District) |
+| Amulet | **Shambler’s Heart** → later **Mogara’s Fang** | Ancient Shambler / Mogara — Forcewave / +Soldier skills |
+| Medal | **Gutworm’s Mark** | Gutworm, Smuggler’s Basin — Deadly Momentum |
+| Pants | **Solael-Sect Legguards** | Guardian of Solael — ADCtH + resists |
+| Belt | **Ugdenbog Girdle** | Ugdenbog / Vinelton shop resets — +Soldier skills |
+
+**Faction fillers (buy, don’t wait on RNG):**
+
+| Slot | Item | Faction |
+| --- | --- | --- |
+| Gloves | Elite **Rhowari Grips** | Rovers — attack speed |
+| Boots | Elite **Legion Greaves** | Black Legion — phys res |
+| Rings | Coven combatant / phys rings | Coven — DA / speed / Field Command |
+| Armor | **Malmouth Vanguard** chest/shoulders | Malmouth — tanky while you farm Outskirts anyway |
+| Shield (stopgap) | **Malmouth Defender** | Malmouth — fine until Warden’s Fortress / Bulwark |
+
+**Also keep an eye out (random legendaries, not MI):**
+- Any **Targo’s Craft** pieces (chest/shoulders/helm/weapon) — Bottlemage often keeps **2pc Targo** with Spellscourge
+- **Chains of Oleron** / phys belts
+- High **block / armor / phys res / DA** greens and epics — resist gaps kill you more than missing DPS
+
+**Augments while you grind (Revered goals):**
+- **Mankind’s Vigil** (Black Legion) on armor
+- **Coven’s Black Ash**, Homestead powders, etc. as resists demand
+
+**Playstyle until Bulwark:** don’t force Devastation. Cap resists → War Cry → Blade Arc/Forcewave → farm Malmouth loop / totems / low SR. Swap to Devastation the second Spellscourge Bulwark drops.
+
+Budget stepping-stone guide (same mastery path → Bottlemage): [Budget S&B Physical Battlemage](https://forums.crateentertainment.com/t/1-1-9-0-budget-s-b-physical-battlemage/107770).
+
 ---
 
 ## Skills / stats to aim at (philosophy)
