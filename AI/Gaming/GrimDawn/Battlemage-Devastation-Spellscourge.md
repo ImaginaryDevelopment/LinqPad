@@ -91,9 +91,69 @@ Exact pieces shift between Bottlemage variants — **always verify on the grimto
 | **Rings** | Build-specific legendaries (Bottlemage discusses options like Gargabol vs Combustion-type rings — test on GT) |
 | **Belt** | Damage/armor pieces; Oleron chains sometimes mentioned as alt |
 | **Relic / jewelry** | Whatever the GT shows for OA/DA, absorb, +skills, CDR |
-| **Components / augments** | Block, armor, phys resist, life — tank first |
+| **Components / augments** | Block, armor, phys resist, life — tank first. **Bysmiel’s Cunning** on weapon once Revered |
 
 **Not the path:** trying to force a permanent caster off-hand glass Devastation mage on Battlemage. Caster OH is only a **temporary** bridge until Bulwark drops.
+
+---
+
+## Optimal gear hierarchy (where Bysmiel sits)
+
+Read top → bottom. Don’t chase Bysmiel shop gear before the set enabler.
+
+| Tier | What | Why |
+| --- | --- | --- |
+| **0 — Enabler** | **Spellscourge Bulwark** → rest of **Spellscourge** | Without Bulwark you don’t have Devastation + shield. Everything else is secondary |
+| **1 — Skeleton** | Cap resists / armor / block recovery; **Overguard** uptime pieces | Tank identity comes online; farm becomes safe |
+| **2 — Synergy** | **Targo** 2pc (often), Bottlemage weapon / rings / belt / relic from your chosen GT | Turns “can cast Devastation” into the real build |
+| **3 — Endgame augments** | Weapon: **Bysmiel’s Cunning**; Shield: usually **Ravager’s Eye** (Barrowholm); Armor: **Mankind’s Vigil** / resist powders | Buyable power after Revered — this is where Bysmiel earns its keep |
+| **4 — Flex / OA swap** | **Bysmiel’s Shroud** on weapon *or* shield if OA is short | Same tier as Cunning, different job (OA + %phys instead of flat IT + HP) |
+| **5 — Early FG utility** | Bysmiel **movement emblem** on medal | Quality-of-life while leveling / farming; replaced by endgame medal |
+| **6 — Budget only** | **Bysmiel Vile Seal** ring | Cheap %phys / Markovian’s Advantage filler — **not** Bottlemage BiS |
+| **Skip** | Bysmiel pet set (Authority / Iris / Influence), pet weapon augments, Mark of the Shadow Queen | Wrong damage identity for Spellscourge |
+
+**Rule of thumb:** farm Tier 0–2 first. Push **Cult of Bysmiel → Revered** in parallel so Tier 3 is ready the day your weapon slot stabilizes.
+
+---
+
+## Cult of Bysmiel (what matters for this build)
+
+You picked **Bysmiel** for Nytemare because Bottlemage wants **Bysmiel’s Cunning** on the 1H. You still earn rep with Dreeg / Solael over time — this just prioritizes the phys weapon shop.
+
+Buy from the **Cult of Bysmiel quartermaster** at the **Conclave of the Three** (Forgotten Gods hub) once reputation unlocks each tier.
+
+### Keep / chase
+
+| Item | Slot | Req | When to use |
+| --- | --- | --- | --- |
+| **Bysmiel’s Cunning** | 1H weapon / shield / focus augment (Revered, ilvl 90) | `60 Internal Trauma over 5s`, `+55% Physical / Pierce / Internal Trauma`, `+250 Health` | **Default weapon augment** on Bottlemage (OP notes: mallet → Cunning). Flat IT + %phys + HP fits converted physical Devastation |
+| **Bysmiel’s Shroud** | Same augment slots | `12 Aether`, `+55% Physical / Aether / Internal Trauma`, `+30 OA` | **OA flex** — swap onto weapon *or* shield when crit chance is low. Some phys builds pair Shroud with aether→phys conversion components; Bottlemage often keeps **Ravager’s Eye** on shield for `% Health / %DA / %OA / +25% All Damage` instead |
+| **Emblem of the Shadowy Assassin** | Medal augment (Friendly+) | Grants **Vanish** (melee blink-strike, 3.5s CD) | Early–mid **mobility**. Fine on S&B; drop when your endgame medal wants a different component |
+| **Emblem of the Leaping Mantis** | Medal augment (Friendly+) | Grants **Leap** (AoE land + short stun) | Alt mobility if you prefer leaping into the Devastation puddle over Vanish |
+
+### Situational / budget
+
+| Item | Notes |
+| --- | --- |
+| **Bysmiel Vile Seal** (epic faction ring) | `% Physical / Internal Trauma`, chaos res, `+3 Markovian’s Advantage` — useful **while farming** if rings are empty. Replace with Bottlemage legendary rings |
+| Mid-tier Bysmiel weapon powders (pre-Revered) | Temporary %phys fillers until Cunning unlocks — don’t stockpile |
+
+### Ignore for Spellscourge
+
+- Pet-focused Bysmiel gear and set pieces (**Bysmiel’s Trinkets**, Mindweaver, pet weapon augments)
+- **Mark of the Shadow Queen** (elemental / Panetti lane)
+- Most **Ateph** jewelry powders from Bysmiel (bleed / cold / lightning / pet) — Bottlemage jewelry usually wants other faction powders (e.g. Homestead / Coven / Steelbloom-type) per GT
+
+### Typical endgame augment split (Bottlemage-shaped)
+
+| Piece | Common pick | Source |
+| --- | --- | --- |
+| Weapon | **Bysmiel’s Cunning** | Cult of Bysmiel |
+| Shield | **Ravager’s Eye** | Barrowholm (not Bysmiel) |
+| Armor | **Mankind’s Vigil**, resist powders | Black Legion / etc. |
+| Rings | Build-specific (often Homestead / Coven style) | Per grimtools |
+
+If OA is starving after Cunning + Eye, try **Shroud on shield** (or weapon) and re-check DA — don’t blindly double-Bysmiel both hands.
 
 ---
 
@@ -168,6 +228,8 @@ Play as a **tanky S&B physical Battlemage** (Blade Arc / Forcewave + War Cry + O
 **Augments while you grind (Revered goals):**
 - **Mankind’s Vigil** (Black Legion) on armor
 - **Coven’s Black Ash**, Homestead powders, etc. as resists demand
+- Push **Cult of Bysmiel → Revered** for **Bysmiel’s Cunning** (weapon) — see hierarchy Tier 3 above
+- **Barrowholm → Revered** for **Ravager’s Eye** (usual shield pair with Cunning)
 
 **Playstyle until Bulwark:** don’t force Devastation. Cap resists → War Cry → Blade Arc/Forcewave → farm Malmouth loop / totems / low SR. Swap to Devastation the second Spellscourge Bulwark drops.
 
@@ -218,6 +280,8 @@ Skill respec at 92 is bits-expensive but doable; **masteries stay Soldier + Arca
 - [ ] Farm **Spellscourge Bulwark** first, then rest of Spellscourge (SR / totems / transmute)
 - [ ] Soft-respec skills toward that GT (Overguard / Markovian / Devastation / War Cry / Maiven’s)
 - [ ] Fix resist overcaps + block recovery before chasing DPS jewelry
+- [ ] Revered **Bysmiel** → put **Bysmiel’s Cunning** on weapon; keep **Shroud** as OA flex only
+- [ ] Revered **Barrowholm** → **Ravager’s Eye** on shield (default Bottlemage pair)
 - [ ] Watch Dahbadu’s video if you want the block-CDR mechanics explained out loud
 - [ ] Don’t abandon the build because tooltip DPS looks lower than a laser — measure by “did I face-tank the room”
 
