@@ -7,7 +7,7 @@ Roster snapshot. Masteries are the dual-class combo (cannot change once invested
 | Level | Class (masteries) | Name |
 | --- | --- | --- |
 | 92 | **Battlemage** (Soldier + Arcanist) | Nytemare |
-| 46 | **Witch Hunter** (Occultist + Inquisitor) | Barbie |
+| 46 | **Witch Hunter** (Occultist + Nightblade) | Barbie |
 | 41 | **Dervish** (Nightblade + Oathkeeper) | LetsDoAcid |
 | 30 | **Pyromancer** (Demolitionist + Occultist) | Gonorrhea |
 | 28 | **Ritualist** (Shaman + Occultist) | The Shocker |

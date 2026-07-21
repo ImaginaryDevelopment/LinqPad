@@ -77,6 +77,20 @@ Author notes multiple specs (standard vs extra-tanky for Calla / deep SR). Mirro
 - MI version: https://www.grimtools.com/calc/nZozaBGV
 - Mid-level milestone: https://www.grimtools.com/calc/RZRbd6rZ
 
+#### Weapon component alts (no MI / no Seal of Blades)
+
+Seal of Blades is mostly **5% ADCtH** — pierce/bleed % do almost nothing for phys Devastation. If you don’t have the BP, use these on the **1H** instead (augment slot stays **Bysmiel’s Cunning** when available):
+
+| Priority | Component | Why | Notes |
+| --- | --- | --- | --- |
+| **1 — Best fit** | **Seal of Might** | Flat phys + **% Phys / IT**, 25% aether→phys, HP; **Presence of Might** (pierce/vit/bleed res + armor; 1.2 also phys res) | Same “endgame seal” tier as Blades; **preferred** for Bottlemage DPS/tank |
+| **2 — Easy craft** | **Oleron’s Blood** | % Phys / IT, OA, total speed; **Oleron’s Might** weapon proc | Black Legion blueprint (cheap); great until Seal of Might |
+| **3 — Sustain bridge** | **Hollowed Fang** | Same **5% ADCtH** as Blades | Converts **10% phys→vit** — worse DPS; only if you need leech now |
+| **4 — More leech** | **Haunted Steel** | **8% ADCtH** | Heavier vit conversion — last resort for sustain |
+| **Skip on weapon** | **Blessed Steel** | Sacred Strike RR looks tempting | Converts phys→elem on the weapon — fights Spellscourge phys identity |
+
+**Practical order:** Oleron’s Blood (if you have the BP) → farm/craft **Seal of Might** → only use Fang/Haunted if Overguard/leech from gear isn’t enough yet. Don’t stall the build waiting on Seal of Blades.
+
 ---
 
 ## Gearing checklist (what to farm)

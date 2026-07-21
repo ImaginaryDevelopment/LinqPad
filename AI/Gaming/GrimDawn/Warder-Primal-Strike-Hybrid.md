@@ -132,6 +132,19 @@ Follow a beginner PS Warder grimtools path.
 
 Stay stacked for aura overlap.
 
+## Pairing with a Saboteur (base-game bomb carry)
+
+See [Saboteur-Grenado-Warder-Partner.md](./Saboteur-Grenado-Warder-Partner.md).
+
+| Warder | Saboteur |
+| --- | --- |
+| Holds aggro, auras, totem heal | Grenado / Thermite / Flashbang clear |
+| Squad Tactics → cast speed | More bomb cycles |
+| Raging Tempest → elemental RR | Cold/fire bombs hit harder |
+| Can solo with Primal Strike | Can solo glassier with Blast Shield + kite |
+
+Stay stacked for aura overlap — Saboteur shouldn’t Shadow Strike out of the bubble.
+
 ---
 
 ## vs pure support
