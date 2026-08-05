@@ -133,7 +133,8 @@ Jetragon gear = **Missile Launcher** (acts as saddle). Panthalus: **no saddle**,
 | Moldron Cryst | 850 | 270 | 70 | — | |
 | Bulldosu | 810 | 110 | 53 | — | |
 | Rushoar | 800 | 100 | 6 | ~5 | First saddle; mining boost |
-| Surfent Terra | 800 | 100 | 25 | ~31 | |
+| Surfent | 800 | 100 | 16 | ~12 | Water mount on land; swim dash **1440** |
+| Surfent Terra | 800 | 100 | 25 | ~31 | Ground form of Surfent |
 | Dualith | 800 | 210 | 48 | — | |
 | Dualith Noct | 800 | 210 | 69 | — | |
 | Whalaska | 750 | 200 | 42 | ~42 | Slow ground; better in water |
@@ -153,7 +154,7 @@ Stamina listed for out-of-water / general pool; swimming itself does not drain s
 | Neptilius | 2000 | 410 | 64 | Alpha ~60 | Fastest swimmer |
 | Chillet | 1890 | 100 | 11 | ~11* | Early dual ground/water |
 | Jormuntide | 1800 | 150 | 40 | Alpha ~45–55 | Classic water dragon |
-| Surfent | 1440 | 100 | 16 | ~12 | First dedicated swimmer |
+| Surfent | 1440 | 100 | 16 | ~12 | First dedicated swimmer; ground sprint **800** |
 | Elphidran Aqua | 1440 | 130 | 32 | — | |
 | Ghangler | 1350 | 320 | 31 | ~30 | High stam; stacking speed skill |
 | Ghangler Ignis | 1350 | 320 | 42 | — | |
