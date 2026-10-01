@@ -521,6 +521,38 @@ let prompt (message: string) (suggestions: string seq) =
   if isNullUnsafe raw then None
   else Some ((string raw).Trim())
 
+let confirmYesNo (message: string) =
+  match prompt message [ "y"; "n"; "yes"; "no" ] with
+  | Some t when String.Equals(t, "y", StringComparison.OrdinalIgnoreCase)
+                || String.Equals(t, "yes", StringComparison.OrdinalIgnoreCase) -> true
+  | _ -> false
+
+let itemLabel (item: CachedItem) = $"{item.Id} — {item.Name}"
+
+let storeAndPresent (cache: ItemCacheFile) (source: string) (exact: bool) (hits: CachedItem list) =
+  let toStore =
+    if exact then hits
+    elif hits.Length <= 25 then hits
+    else
+      printfn "Partial matches: %d. Caching the first 25." hits.Length
+      hits |> List.truncate 25
+  let added = mergeIntoCache cache toStore
+  printfn "Wrote %d new item(s) into item-cache.json (%d already present)." added (toStore.Length - added)
+  present source exact hits
+
+/// Show unfiltered candidates and only cache/accept if the user says yes.
+let offerUnfilteredMatches (cache: ItemCacheFile) (source: string) (exact: bool) (hits: CachedItem list) =
+  if hits.IsEmpty then false
+  else
+    printfn "No match with current filters. Candidates without filters (%d %s):" hits.Length (if exact then "exact" else "partial")
+    hits |> List.map itemLabel |> Dump |> ignore
+    if confirmYesNo "Accept these unfiltered matches? (y/n)" then
+      storeAndPresent cache source exact hits
+      true
+    else
+      printfn "Rejected unfiltered matches."
+      false
+
 type LookupRequest = {
   Query: string
   ClassFilter: (string * int) option
@@ -583,7 +615,7 @@ let promptLookup (localRoot: string) : LookupRequest option =
     let message =
       match classFilter, slotFilter with
       | None, None ->
-          "Class, gear slot, or item name/id (blank cancels). Until a class/slot is chosen, suggestions are only those filters."
+          "Class, gear slot, or item name/id (blank exits). Until a class/slot is chosen, suggestions are only those filters."
       | _ ->
           $"Filters [{status}]. Pick the other filter, or an item name/id (blank = list all filtered)."
 
@@ -638,36 +670,29 @@ let resolveLocalRootForPrompt () =
 
 printfn "Item cache: %s" Paths.itemCachePath
 
-let request =
-  if not (String.IsNullOrWhiteSpace itemName) then
-    Some {
-      Query = itemName.Trim()
-      ClassFilter = None
-      SlotFilter = None
-      PrefetchedItems = None
-    }
-  else
-    let localRoot = resolveLocalRootForPrompt ()
-    promptLookup localRoot
-
-match request with
-| None -> printfn "No lookup entered."
-| Some req ->
+let runLookup (req: LookupRequest) =
   let classBit = req.ClassFilter |> Option.map snd
   let slotBit = req.SlotFilter |> Option.map snd
+  let hasFilters = classBit.IsSome || slotBit.IsSome
   let query = req.Query
   let cache = loadCache ()
   let asId =
     match Int32.TryParse query with
     | true, id when not (String.IsNullOrWhiteSpace query) -> Some id
     | _ -> None
+  let hasNameQuery = asId.IsSome || not (String.IsNullOrWhiteSpace query)
 
   let filterList (items: CachedItem list) =
     items |> List.filter (fun i -> itemMatchesFilters i classBit slotBit)
 
-  let cachedHits =
+  let nameHitsFrom (items: CachedItem list) =
+    let exact = items |> List.filter (fun i -> sameName query i.Name)
+    if not exact.IsEmpty then exact, true
+    else items |> List.filter (fun i -> containsName query i.Name), false
+
+  let cachedFiltered =
     if rescan then []
-    elif String.IsNullOrWhiteSpace query && asId.IsNone then []
+    elif not hasNameQuery then []
     else
       match asId with
       | Some id ->
@@ -677,56 +702,114 @@ match request with
           else []
       | None -> cacheByName cache query sameName |> filterList
 
-  if not cachedHits.IsEmpty then
-    present "item-cache.json" true cachedHits
+  let cachedUnfiltered () =
+    if rescan || not hasNameQuery then []
+    else
+      match asId with
+      | Some id ->
+          let mutable existing = Unchecked.defaultof<CachedItem>
+          if cache.Items.TryGetValue(string id, &existing) then [ existing ] else []
+      | None ->
+          let exact = cacheByName cache query sameName
+          if not exact.IsEmpty then exact
+          else cacheByName cache query containsName
+
+  let tryUnfilteredFallback (alreadyTried: CachedItem list) =
+    if not (hasFilters && hasNameQuery) then
+      false
+    else
+      printfn "No item matched '%s' with the current filters; retrying without filters." query
+      let fromCache =
+        let hits = cachedUnfiltered ()
+        let exact = hits |> List.forall (fun i -> asId.IsSome || sameName query i.Name)
+        hits, exact
+      let cacheHits, cacheExact = fromCache
+      if not cacheHits.IsEmpty then
+        offerUnfilteredMatches cache "item-cache.json (unfiltered)" cacheExact cacheHits
+      else
+        match req.PrefetchedItems with
+        | Some filtered when not (String.IsNullOrWhiteSpace query) ->
+            // Prefetch was filter-scoped; scan content without filters.
+            let contentRoot =
+              let r = configuredContentRoot ()
+              if String.IsNullOrWhiteSpace r then getContentRoot () else r
+            if String.IsNullOrWhiteSpace contentRoot then
+              printfn "No local content root available for an unfiltered retry."
+              false
+            else
+              let found, exact = scanContent contentRoot query asId None None
+              let novel = found |> List.filter (fun i -> alreadyTried |> List.forall (fun t -> t.Id <> i.Id))
+              offerUnfilteredMatches cache "local clone (unfiltered)" exact (if novel.IsEmpty then found else novel)
+        | _ ->
+            let prefetchedRoot = configuredContentRoot ()
+            let contentRoot = getContentRoot ()
+            if not (String.IsNullOrWhiteSpace contentRoot) && not (String.Equals(contentRoot, prefetchedRoot, StringComparison.OrdinalIgnoreCase)) then
+              ensureContentFresh contentRoot
+            if String.IsNullOrWhiteSpace contentRoot then
+              printfn "No content source available for an unfiltered retry."
+              false
+            else
+              let source = if String.IsNullOrWhiteSpace (configuredContentRoot ()) then "github (unfiltered)" else "local clone (unfiltered)"
+              let found, exact = scanContent contentRoot query asId None None
+              offerUnfilteredMatches cache source exact found
+
+  if not cachedFiltered.IsEmpty then
+    present "item-cache.json" true cachedFiltered
   else
-    match req.PrefetchedItems with
-    | Some items when String.IsNullOrWhiteSpace query && asId.IsNone ->
-        let hits = filterList items
-        let toStore = if hits.Length <= 200 then hits else hits |> List.truncate 200
-        let added = mergeIntoCache cache toStore
-        printfn "Wrote %d new item(s) into item-cache.json (%d already present)." added (toStore.Length - added)
-        present "local clone (filtered)" true hits
-    | Some items when asId.IsNone && not (String.IsNullOrWhiteSpace query) ->
-        let exact = items |> List.filter (fun i -> sameName query i.Name) |> filterList
-        let hits, exactFlag =
-          if not exact.IsEmpty then exact, true
-          else items |> List.filter (fun i -> containsName query i.Name) |> filterList, false
-        if hits.IsEmpty then
-          printfn "No item matched '%s' with the current filters." query
-        else
-          let toStore =
-            if exactFlag then hits
-            elif hits.Length <= 25 then hits
-            else
-              printfn "Partial matches: %d. Caching the first 25." hits.Length
-              hits |> List.truncate 25
+    let unfilteredCacheHits =
+      if hasFilters && hasNameQuery then cachedUnfiltered () else []
+    if not unfilteredCacheHits.IsEmpty then
+      let exact = unfilteredCacheHits |> List.forall (fun i -> asId.IsSome || sameName query i.Name)
+      offerUnfilteredMatches cache "item-cache.json (unfiltered)" exact unfilteredCacheHits |> ignore
+    else
+      match req.PrefetchedItems with
+      | Some items when String.IsNullOrWhiteSpace query && asId.IsNone ->
+          let hits = filterList items
+          let toStore = if hits.Length <= 200 then hits else hits |> List.truncate 200
           let added = mergeIntoCache cache toStore
           printfn "Wrote %d new item(s) into item-cache.json (%d already present)." added (toStore.Length - added)
-          present "local clone (filtered)" exactFlag hits
-    | _ ->
-        let prefetchedRoot = configuredContentRoot ()
-        let contentRoot = getContentRoot ()
-        if not (String.IsNullOrWhiteSpace contentRoot) && not (String.Equals(contentRoot, prefetchedRoot, StringComparison.OrdinalIgnoreCase)) then
-          ensureContentFresh contentRoot
-        let source =
-          if String.IsNullOrWhiteSpace contentRoot then
-            printfn "No local idlequest-content clone selected. Fetching GitHub shards (slow)."
-            "github"
-          else
-            printfn "Scanning local content: %s" contentRoot
-            "local clone"
-        let found, exact = scanContent contentRoot query asId classBit slotBit
-        if found.IsEmpty then
-          if String.IsNullOrWhiteSpace query then printfn "No items matched the current filters."
-          else printfn "No item matched '%s'." query
-        else
-          let toStore =
-            if exact then found
-            elif found.Length <= 25 then found
+          present "local clone (filtered)" true hits
+      | Some items when hasNameQuery && asId.IsNone ->
+          let named, exactFlag = nameHitsFrom items
+          let hits = filterList named
+          if not hits.IsEmpty then
+            storeAndPresent cache "local clone (filtered)" exactFlag hits
+          elif not (tryUnfilteredFallback named) then
+            printfn "No item matched '%s'." query
+      | _ ->
+          let prefetchedRoot = configuredContentRoot ()
+          let contentRoot = getContentRoot ()
+          if not (String.IsNullOrWhiteSpace contentRoot) && not (String.Equals(contentRoot, prefetchedRoot, StringComparison.OrdinalIgnoreCase)) then
+            ensureContentFresh contentRoot
+          let source =
+            if String.IsNullOrWhiteSpace contentRoot then
+              printfn "No local idlequest-content clone selected. Fetching GitHub shards (slow)."
+              "github"
             else
-              printfn "Partial matches: %d. Caching the first 25. Use a more specific name for the rest." found.Length
-              found |> List.truncate 25
-          let added = mergeIntoCache cache toStore
-          printfn "Wrote %d new item(s) into item-cache.json (%d already present)." added (toStore.Length - added)
-          present source exact found
+              printfn "Scanning local content: %s" contentRoot
+              "local clone"
+          let found, exact = scanContent contentRoot query asId classBit slotBit
+          if not found.IsEmpty then
+            storeAndPresent cache source exact found
+          elif String.IsNullOrWhiteSpace query && asId.IsNone then
+            printfn "No items matched the current filters."
+          elif not (tryUnfilteredFallback found) then
+            printfn "No item matched '%s'." query
+
+if not (String.IsNullOrWhiteSpace itemName) then
+  runLookup {
+    Query = itemName.Trim()
+    ClassFilter = None
+    SlotFilter = None
+    PrefetchedItems = None
+  }
+else
+  let localRoot = resolveLocalRootForPrompt ()
+  let rec session () =
+    match promptLookup localRoot with
+    | None -> printfn "Done."
+    | Some req ->
+        runLookup req
+        printfn ""
+        session ()
+  session ()
