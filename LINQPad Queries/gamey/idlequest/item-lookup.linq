@@ -38,7 +38,15 @@ let jsonOpts =
   o.Converters.Add(JsonStringEnumConverter())
   o
 
+// Item cache only: omit nulls and numeric zeros (and other defaults) to keep the file small.
+let itemCacheJsonOpts =
+  let o = JsonSerializerOptions(WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase)
+  o.DefaultIgnoreCondition <- JsonIgnoreCondition.WhenWritingDefault
+  o.Converters.Add(JsonStringEnumConverter())
+  o
+
 let inline ser value = JsonSerializer.Serialize(value, jsonOpts)
+let inline serItemCache value = JsonSerializer.Serialize(value, itemCacheJsonOpts)
 let inline deser<'T> (text: string) = JsonSerializer.Deserialize<'T>(text, jsonOpts)
 let isNullUnsafe value = Object.Equals(value, null)
 
@@ -110,7 +118,7 @@ let loadCache () =
   ensureDir ()
   if not (File.Exists Paths.itemCachePath) then
     let s = emptyItemCacheFile ()
-    File.WriteAllText(Paths.itemCachePath, ser s)
+    File.WriteAllText(Paths.itemCachePath, serItemCache s)
     s
   else
     let text = File.ReadAllText Paths.itemCachePath
@@ -123,7 +131,7 @@ let loadCache () =
         parsed
 
 let saveItemCache (cache: ItemCacheFile) =
-  File.WriteAllText(Paths.itemCachePath, ser cache)
+  File.WriteAllText(Paths.itemCachePath, serItemCache cache)
 
 // Content-root preference: local path stays in Util.Cache (+ password for the tracker).
 // Choosing GitHub is also cached, but only for a day — never a permanent "never ask again".

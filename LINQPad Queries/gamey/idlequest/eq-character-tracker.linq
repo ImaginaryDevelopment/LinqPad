@@ -31,7 +31,16 @@ let jsonOpts =
   o.Converters.Add(JsonStringEnumConverter())
   o
 
+// >>> BEGIN MERGE: item-cache omit defaults (zeros/nulls) on write
+let itemCacheJsonOpts =
+  let o = JsonSerializerOptions(WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase)
+  o.DefaultIgnoreCondition <- JsonIgnoreCondition.WhenWritingDefault
+  o.Converters.Add(JsonStringEnumConverter())
+  o
+// <<< END MERGE: item-cache omit defaults
+
 let inline ser value = JsonSerializer.Serialize(value, jsonOpts)
+let inline serItemCache value = JsonSerializer.Serialize(value, itemCacheJsonOpts)
 let inline deser<'T> (text: string) = JsonSerializer.Deserialize<'T>(text, jsonOpts)
 
 /// Null check without requiring 'T : null (F# isNull constraint workaround).
@@ -408,7 +417,9 @@ let saveCharacters (chars: CharactersFile) =
   File.WriteAllText(Paths.charactersPath, ser chars)
 
 let saveItemCache (cache: ItemCacheFile) =
-  File.WriteAllText(Paths.itemCachePath, ser cache)
+  // >>> BEGIN MERGE: item-cache omit defaults on write
+  File.WriteAllText(Paths.itemCachePath, serItemCache cache)
+  // <<< END MERGE: item-cache omit defaults on write
 
 let loadAll () =
   let chars = loadOrSeed Paths.charactersPath emptyCharactersFile
