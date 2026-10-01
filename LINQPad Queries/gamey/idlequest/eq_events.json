@@ -1,0 +1,669 @@
+{
+  "characters": [
+    {
+      "characterId": "fe90ad19115d4aeda506aa64c15bbc43",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-01T21:32:12.5987574\u002B00:00",
+          "source": "script",
+          "level": 41,
+          "gear": {
+            "charm": null,
+            "ear1": null,
+            "head": null,
+            "face": null,
+            "ear2": null,
+            "neck": null,
+            "shoulders": null,
+            "arms": null,
+            "back": null,
+            "wrist1": null,
+            "wrist2": null,
+            "range": null,
+            "hands": null,
+            "primary": null,
+            "secondary": null,
+            "fingers1": null,
+            "fingers2": null,
+            "chest": null,
+            "legs": null,
+            "feet": null,
+            "waist": null,
+            "ammo": null
+          }
+        }
+      ]
+    },
+    {
+      "characterId": "8ac8f78a19714c9298b2cb6fa338e863",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-01T21:34:25.9756743\u002B00:00",
+          "source": "script",
+          "level": 17,
+          "gear": {
+            "charm": null,
+            "ear1": null,
+            "head": null,
+            "face": null,
+            "ear2": null,
+            "neck": null,
+            "shoulders": null,
+            "arms": null,
+            "back": null,
+            "wrist1": null,
+            "wrist2": null,
+            "range": null,
+            "hands": null,
+            "primary": null,
+            "secondary": null,
+            "fingers1": null,
+            "fingers2": null,
+            "chest": null,
+            "legs": null,
+            "feet": null,
+            "waist": null,
+            "ammo": null
+          }
+        }
+      ]
+    },
+    {
+      "characterId": "c68105da05e240e2a95e53a4471a29b7",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-01T21:34:49.6081449\u002B00:00",
+          "source": "script",
+          "level": 43,
+          "gear": {
+            "charm": null,
+            "ear1": null,
+            "head": null,
+            "face": null,
+            "ear2": null,
+            "neck": null,
+            "shoulders": null,
+            "arms": null,
+            "back": null,
+            "wrist1": null,
+            "wrist2": null,
+            "range": null,
+            "hands": null,
+            "primary": null,
+            "secondary": null,
+            "fingers1": null,
+            "fingers2": null,
+            "chest": null,
+            "legs": null,
+            "feet": null,
+            "waist": null,
+            "ammo": null
+          }
+        }
+      ]
+    },
+    {
+      "characterId": "3d3bfa8cdf5542189a53354d03ddae01",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-01T21:35:17.9360986\u002B00:00",
+          "source": "script",
+          "level": 40,
+          "gear": {
+            "charm": null,
+            "ear1": null,
+            "head": null,
+            "face": null,
+            "ear2": null,
+            "neck": null,
+            "shoulders": null,
+            "arms": null,
+            "back": null,
+            "wrist1": null,
+            "wrist2": null,
+            "range": null,
+            "hands": null,
+            "primary": null,
+            "secondary": null,
+            "fingers1": null,
+            "fingers2": null,
+            "chest": null,
+            "legs": null,
+            "feet": null,
+            "waist": null,
+            "ammo": null
+          }
+        }
+      ]
+    },
+    {
+      "characterId": "d06a753533684e6aad2cc9d87b214e0a",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-01T21:35:44.6619859\u002B00:00",
+          "source": "script",
+          "level": 42,
+          "gear": {
+            "charm": null,
+            "ear1": null,
+            "head": null,
+            "face": null,
+            "ear2": null,
+            "neck": null,
+            "shoulders": null,
+            "arms": null,
+            "back": null,
+            "wrist1": null,
+            "wrist2": null,
+            "range": null,
+            "hands": null,
+            "primary": null,
+            "secondary": null,
+            "fingers1": null,
+            "fingers2": null,
+            "chest": null,
+            "legs": null,
+            "feet": null,
+            "waist": null,
+            "ammo": null
+          }
+        }
+      ]
+    },
+    {
+      "characterId": "4065622099b84a099e45ca6f6b09101a",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-01T21:36:09.1836926\u002B00:00",
+          "source": "script",
+          "level": 41,
+          "gear": {
+            "charm": null,
+            "ear1": null,
+            "head": null,
+            "face": null,
+            "ear2": null,
+            "neck": null,
+            "shoulders": null,
+            "arms": null,
+            "back": null,
+            "wrist1": null,
+            "wrist2": null,
+            "range": null,
+            "hands": null,
+            "primary": null,
+            "secondary": null,
+            "fingers1": null,
+            "fingers2": null,
+            "chest": null,
+            "legs": null,
+            "feet": null,
+            "waist": null,
+            "ammo": null
+          }
+        }
+      ]
+    },
+    {
+      "characterId": "a55e8e82fa654baaaa8a656bd2c69dc0",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-01T21:36:39.8988770\u002B00:00",
+          "source": "script",
+          "level": 40,
+          "gear": {
+            "charm": null,
+            "ear1": null,
+            "head": null,
+            "face": null,
+            "ear2": null,
+            "neck": null,
+            "shoulders": null,
+            "arms": null,
+            "back": null,
+            "wrist1": null,
+            "wrist2": null,
+            "range": null,
+            "hands": null,
+            "primary": null,
+            "secondary": null,
+            "fingers1": null,
+            "fingers2": null,
+            "chest": null,
+            "legs": null,
+            "feet": null,
+            "waist": null,
+            "ammo": null
+          }
+        }
+      ]
+    },
+    {
+      "characterId": "88c0f32063c0468d8cd8af92c1f0a226",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-01T21:37:13.8333827\u002B00:00",
+          "source": "script",
+          "level": 18,
+          "gear": {
+            "charm": null,
+            "ear1": null,
+            "head": null,
+            "face": null,
+            "ear2": null,
+            "neck": null,
+            "shoulders": null,
+            "arms": null,
+            "back": null,
+            "wrist1": null,
+            "wrist2": null,
+            "range": null,
+            "hands": null,
+            "primary": null,
+            "secondary": null,
+            "fingers1": null,
+            "fingers2": null,
+            "chest": null,
+            "legs": null,
+            "feet": null,
+            "waist": null,
+            "ammo": null
+          }
+        }
+      ]
+    },
+    {
+      "characterId": "5a293b8590c84aa2aa04ee0dd1ab1e7b",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-01T21:37:48.1693783\u002B00:00",
+          "source": "script",
+          "level": 18,
+          "gear": {
+            "charm": null,
+            "ear1": null,
+            "head": null,
+            "face": null,
+            "ear2": null,
+            "neck": null,
+            "shoulders": null,
+            "arms": null,
+            "back": null,
+            "wrist1": null,
+            "wrist2": null,
+            "range": null,
+            "hands": null,
+            "primary": null,
+            "secondary": null,
+            "fingers1": null,
+            "fingers2": null,
+            "chest": null,
+            "legs": null,
+            "feet": null,
+            "waist": null,
+            "ammo": null
+          }
+        }
+      ]
+    },
+    {
+      "characterId": "14cef2cfc1ed4c93808daf6f0e4d2e99",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-01T21:38:12.2420287\u002B00:00",
+          "source": "script",
+          "level": 40,
+          "gear": {
+            "charm": null,
+            "ear1": null,
+            "head": null,
+            "face": null,
+            "ear2": null,
+            "neck": null,
+            "shoulders": null,
+            "arms": null,
+            "back": null,
+            "wrist1": null,
+            "wrist2": null,
+            "range": null,
+            "hands": null,
+            "primary": null,
+            "secondary": null,
+            "fingers1": null,
+            "fingers2": null,
+            "chest": null,
+            "legs": null,
+            "feet": null,
+            "waist": null,
+            "ammo": null
+          }
+        }
+      ]
+    },
+    {
+      "characterId": "37a2786428804372b2a6cb5ec92dd4e7",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-01T21:38:47.6095639\u002B00:00",
+          "source": "script",
+          "level": 36,
+          "gear": {
+            "charm": null,
+            "ear1": null,
+            "head": null,
+            "face": null,
+            "ear2": null,
+            "neck": null,
+            "shoulders": null,
+            "arms": null,
+            "back": null,
+            "wrist1": null,
+            "wrist2": null,
+            "range": null,
+            "hands": null,
+            "primary": null,
+            "secondary": null,
+            "fingers1": null,
+            "fingers2": null,
+            "chest": null,
+            "legs": null,
+            "feet": null,
+            "waist": null,
+            "ammo": null
+          }
+        }
+      ]
+    },
+    {
+      "characterId": "b9a3db1746374154b3e467679a41de9d",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-01T21:39:10.2415688\u002B00:00",
+          "source": "script",
+          "level": 5,
+          "gear": {
+            "charm": null,
+            "ear1": null,
+            "head": null,
+            "face": null,
+            "ear2": null,
+            "neck": null,
+            "shoulders": null,
+            "arms": null,
+            "back": null,
+            "wrist1": null,
+            "wrist2": null,
+            "range": null,
+            "hands": null,
+            "primary": null,
+            "secondary": null,
+            "fingers1": null,
+            "fingers2": null,
+            "chest": null,
+            "legs": null,
+            "feet": null,
+            "waist": null,
+            "ammo": null
+          }
+        }
+      ]
+    },
+    {
+      "characterId": "77d68250044a4c0aa271692ab48247a7",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-01T21:39:33.6412060\u002B00:00",
+          "source": "script",
+          "level": 40,
+          "gear": {
+            "charm": null,
+            "ear1": null,
+            "head": null,
+            "face": null,
+            "ear2": null,
+            "neck": null,
+            "shoulders": null,
+            "arms": null,
+            "back": null,
+            "wrist1": null,
+            "wrist2": null,
+            "range": null,
+            "hands": null,
+            "primary": null,
+            "secondary": null,
+            "fingers1": null,
+            "fingers2": null,
+            "chest": null,
+            "legs": null,
+            "feet": null,
+            "waist": null,
+            "ammo": null
+          }
+        }
+      ]
+    },
+    {
+      "characterId": "5c81db737bea459191913d9c975b3bed",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-01T21:39:56.7833777\u002B00:00",
+          "source": "script",
+          "level": 5,
+          "gear": {
+            "charm": null,
+            "ear1": null,
+            "head": null,
+            "face": null,
+            "ear2": null,
+            "neck": null,
+            "shoulders": null,
+            "arms": null,
+            "back": null,
+            "wrist1": null,
+            "wrist2": null,
+            "range": null,
+            "hands": null,
+            "primary": null,
+            "secondary": null,
+            "fingers1": null,
+            "fingers2": null,
+            "chest": null,
+            "legs": null,
+            "feet": null,
+            "waist": null,
+            "ammo": null
+          }
+        }
+      ]
+    },
+    {
+      "characterId": "284567e2531b44428dc78ccb19053b1c",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-01T21:40:28.2787324\u002B00:00",
+          "source": "script",
+          "level": 41,
+          "gear": {
+            "charm": null,
+            "ear1": null,
+            "head": null,
+            "face": null,
+            "ear2": null,
+            "neck": null,
+            "shoulders": null,
+            "arms": null,
+            "back": null,
+            "wrist1": null,
+            "wrist2": null,
+            "range": null,
+            "hands": null,
+            "primary": null,
+            "secondary": null,
+            "fingers1": null,
+            "fingers2": null,
+            "chest": null,
+            "legs": null,
+            "feet": null,
+            "waist": null,
+            "ammo": null
+          }
+        }
+      ]
+    },
+    {
+      "characterId": "ce0f39a6e6154cb6a36e47b7afa4e48a",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-01T21:40:46.5728410\u002B00:00",
+          "source": "script",
+          "level": 60,
+          "gear": {
+            "charm": null,
+            "ear1": null,
+            "head": null,
+            "face": null,
+            "ear2": null,
+            "neck": null,
+            "shoulders": null,
+            "arms": null,
+            "back": null,
+            "wrist1": null,
+            "wrist2": null,
+            "range": null,
+            "hands": null,
+            "primary": null,
+            "secondary": null,
+            "fingers1": null,
+            "fingers2": null,
+            "chest": null,
+            "legs": null,
+            "feet": null,
+            "waist": null,
+            "ammo": null
+          }
+        }
+      ]
+    },
+    {
+      "characterId": "23ab3e95816941d1ba6eaa65d871beba",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-01T21:41:16.8681977\u002B00:00",
+          "source": "script",
+          "level": 5,
+          "gear": {
+            "charm": null,
+            "ear1": null,
+            "head": null,
+            "face": null,
+            "ear2": null,
+            "neck": null,
+            "shoulders": null,
+            "arms": null,
+            "back": null,
+            "wrist1": null,
+            "wrist2": null,
+            "range": null,
+            "hands": null,
+            "primary": null,
+            "secondary": null,
+            "fingers1": null,
+            "fingers2": null,
+            "chest": null,
+            "legs": null,
+            "feet": null,
+            "waist": null,
+            "ammo": null
+          }
+        }
+      ]
+    },
+    {
+      "characterId": "d090f4de21024ec281caf200e09a15c1",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-01T21:42:17.4016110\u002B00:00",
+          "source": "script",
+          "level": 5,
+          "gear": {
+            "charm": null,
+            "ear1": null,
+            "head": null,
+            "face": null,
+            "ear2": null,
+            "neck": null,
+            "shoulders": null,
+            "arms": null,
+            "back": null,
+            "wrist1": null,
+            "wrist2": null,
+            "range": null,
+            "hands": null,
+            "primary": null,
+            "secondary": null,
+            "fingers1": null,
+            "fingers2": null,
+            "chest": null,
+            "legs": null,
+            "feet": null,
+            "waist": null,
+            "ammo": null
+          }
+        }
+      ]
+    },
+    {
+      "characterId": "2ce00d6bca8e46d6b04dc8945a561e1f",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-01T21:42:39.2017891\u002B00:00",
+          "source": "script",
+          "level": 18,
+          "gear": {
+            "charm": null,
+            "ear1": null,
+            "head": null,
+            "face": null,
+            "ear2": null,
+            "neck": null,
+            "shoulders": null,
+            "arms": null,
+            "back": null,
+            "wrist1": null,
+            "wrist2": null,
+            "range": null,
+            "hands": null,
+            "primary": null,
+            "secondary": null,
+            "fingers1": null,
+            "fingers2": null,
+            "chest": null,
+            "legs": null,
+            "feet": null,
+            "waist": null,
+            "ammo": null
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -3,8 +3,9 @@
   <IncludeUncapsulator>false</IncludeUncapsulator>
 </Query>
 
-// IdleQuest item lookup by name (or numeric id).
+// IdleQuest item lookup by name (or numeric id), with optional class/slot filters.
 // Shares item-cache.json and the idlequestContentRoot LINQPad password with eq-character-tracker.linq.
+// Prompting uses Util.ReadLine with suggestions (LINQPad's interactive prompt API).
 // Cache hit returns immediately. Otherwise scans a local idlequest-content clone, or GitHub raw shards, and writes matches into the cache.
 // A configured local clone is git-pulled when due. Util.Cache stores (last attempt, success). Failures wait 1 day; successes wait 3 days.
 // Content-root choice is also Util.Cache: local path sticks; GitHub cancel only skips the prompt for 1 day (never a permanent password lockout).
@@ -366,16 +367,37 @@ let sameName (query: string) (name: string) =
 let containsName (query: string) (name: string) =
   not (String.IsNullOrEmpty name) && name.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0
 
+let classNames = classBits |> List.map fst |> List.sort
+let slotNames = slotBits |> List.map fst
+
+let tryMatchClass (text: string) =
+  classBits |> List.tryFind (fun (n, _) -> String.Equals(n, text, StringComparison.OrdinalIgnoreCase))
+
+let tryMatchSlot (text: string) =
+  slotBits |> List.tryFind (fun (n, _) -> String.Equals(n, text, StringComparison.OrdinalIgnoreCase))
+
+let itemMatchesFilters (item: CachedItem) (classBit: int option) (slotBit: int option) =
+  let classOk =
+    match classBit with
+    | None -> true
+    | Some bit -> item.Classes = 0 || item.Classes = 65535 || (item.Classes &&& bit) <> 0
+  let slotOk =
+    match slotBit with
+    | None -> true
+    | Some bit -> (item.Slots &&& bit) <> 0
+  classOk && slotOk
+
 let cacheByName (cache: ItemCacheFile) (query: string) (pred: string -> string -> bool) =
   cache.Items.Values
   |> Seq.filter (fun item -> pred query item.Name)
   |> Seq.sortBy (fun item -> item.Id)
   |> Seq.toList
 
-let scanContent (contentRoot: string) (query: string) (byId: int option) =
+let scanContent (contentRoot: string) (query: string) (byId: int option) (classBit: int option) (slotBit: int option) =
   let exact = ResizeArray<CachedItem>()
   let partial = ResizeArray<CachedItem>()
   let seen = HashSet<int>()
+  let wantAll = String.IsNullOrWhiteSpace query && byId.IsNone
   for shard in shards do
     if String.IsNullOrWhiteSpace contentRoot then
       printfn "Scanning GitHub shard %s ..." shard
@@ -384,22 +406,43 @@ let scanContent (contentRoot: string) (query: string) (byId: int option) =
         let worthParsing =
           match byId with
           | Some id -> line.Contains($"\"id\":{id}")
+          | None when wantAll -> true
           | None -> line.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0
         if worthParsing then
           match tryProjectLine line with
-          | Some item when seen.Add item.Id ->
-              match byId with
-              | Some id when item.Id = id -> exact.Add item
-              | Some _ -> ()
-              | None when sameName query item.Name -> exact.Add item
-              | None when containsName query item.Name -> partial.Add item
-              | None -> ()
+          | Some item when seen.Add item.Id && itemMatchesFilters item classBit slotBit ->
+              if wantAll then exact.Add item
+              else
+                match byId with
+                | Some id when item.Id = id -> exact.Add item
+                | Some _ -> ()
+                | None when sameName query item.Name -> exact.Add item
+                | None when containsName query item.Name -> partial.Add item
+                | None -> ()
           | _ -> ()
     with ex ->
       printfn "WARN: shard %s read failed: %s" shard ex.Message
   let exactList = exact |> Seq.sortBy (fun i -> i.Id) |> Seq.toList
   let partialList = partial |> Seq.sortBy (fun i -> i.Id) |> Seq.toList
   if exactList.IsEmpty then partialList, false else exactList, true
+
+/// Load every local item matching the current class/slot filters (for autocomplete).
+let loadItemsMatchingFilters (contentRoot: string) (classBit: int option) (slotBit: int option) =
+  let items = ResizeArray<CachedItem>()
+  let seen = HashSet<int>()
+  printfn "Loading matching item names from local repo (may take a bit)..."
+  for shard in shards do
+    try
+      for line in readShardLines contentRoot shard do
+        match tryProjectLine line with
+        | Some item when seen.Add item.Id && itemMatchesFilters item classBit slotBit ->
+            items.Add item
+        | _ -> ()
+    with ex ->
+      printfn "WARN: shard %s read failed: %s" shard ex.Message
+  let list = items |> Seq.sortBy (fun i -> i.Name, i.Id) |> Seq.toList
+  printfn "Loaded %d matching item(s) for autocomplete." list.Length
+  list
 
 let mergeIntoCache (cache: ItemCacheFile) (items: CachedItem list) =
   let mutable added = 0
@@ -467,66 +510,223 @@ let present (source: string) (exact: bool) (items: CachedItem list) =
   |> Dump
   |> ignore
 
-let promptName () =
-  use form = new Form(Text = "Lookup item", Width = 520, Height = 160, StartPosition = FormStartPosition.CenterScreen, TopMost = true)
-  let lbl = new Label(Text = "Item name or id", Left = 12, Top = 12, Width = 480)
-  let inputBox = new TextBox(Left = 12, Top = 40, Width = 480)
-  let ok = new Button(Text = "OK", DialogResult = DialogResult.OK, Left = 320, Top = 80, Width = 80)
-  let cancel = new Button(Text = "Cancel", DialogResult = DialogResult.Cancel, Left = 412, Top = 80, Width = 80)
-  form.AcceptButton <- ok
-  form.CancelButton <- cancel
-  form.Controls.AddRange [| lbl :> Control; inputBox; ok; cancel |]
-  if form.ShowDialog() = DialogResult.OK then inputBox.Text.Trim() else ""
+// LINQPad interactive prompt with autocomplete suggestions (API name: Util.ReadLine).
+let prompt (message: string) (suggestions: string seq) =
+  let arr =
+    suggestions
+    |> Seq.filter (fun s -> not (String.IsNullOrWhiteSpace s))
+    |> Seq.distinct
+    |> Seq.toArray
+  let raw = Util.ReadLine(message, "", arr)
+  if isNullUnsafe raw then None
+  else Some ((string raw).Trim())
 
-let query =
-  if not (String.IsNullOrWhiteSpace itemName) then itemName.Trim()
-  else promptName ()
+type LookupRequest = {
+  Query: string
+  ClassFilter: (string * int) option
+  SlotFilter: (string * int) option
+  PrefetchedItems: CachedItem list option
+}
 
-if String.IsNullOrWhiteSpace query then
-  printfn "No name entered."
-else
-  printfn "Item cache: %s" Paths.itemCachePath
-  let prefetchedRoot = configuredContentRoot ()
-  if not (String.IsNullOrWhiteSpace prefetchedRoot) then
-    ensureContentFresh prefetchedRoot
+/// Until a class or gear slot is chosen, suggestions are only those filters.
+/// After one is set (and a local repo exists), suggestions add matching item names,
+/// while still offering the other unused filter type.
+let promptLookup (localRoot: string) : LookupRequest option =
+  let mutable classFilter: (string * int) option = None
+  let mutable slotFilter: (string * int) option = None
+  let mutable prefetched: CachedItem list option = None
+
+  let refreshPrefetch () =
+    prefetched <- None
+    match classFilter, slotFilter with
+    | None, None -> ()
+    | _ when String.IsNullOrWhiteSpace localRoot ->
+        printfn "No local idlequest-content clone; item-name autocomplete unavailable until a local root is selected."
+    | _ ->
+        let classBit = classFilter |> Option.map snd
+        let slotBit = slotFilter |> Option.map snd
+        prefetched <- Some (loadItemsMatchingFilters localRoot classBit slotBit)
+
+  let rec loop () =
+    let classSuggestions =
+      match classFilter with
+      | Some _ -> Seq.empty
+      | None -> classNames |> Seq.ofList
+    let slotSuggestions =
+      match slotFilter with
+      | Some _ -> Seq.empty
+      | None -> slotNames |> Seq.ofList
+    let itemSuggestions =
+      match prefetched with
+      | Some items -> items |> Seq.map (fun i -> i.Name)
+      | None -> Seq.empty
+
+    let suggestions =
+      match classFilter, slotFilter with
+      | None, None ->
+          // First step: only classes and gear slots (or free-type a name/id to skip filters).
+          Seq.append classSuggestions slotSuggestions
+      | _ ->
+          Seq.concat [ classSuggestions; slotSuggestions; itemSuggestions ]
+
+    let statusParts = [
+      yield!
+        match classFilter with
+        | Some (n, _) -> [ $"class={n}" ]
+        | None -> []
+      yield!
+        match slotFilter with
+        | Some (n, _) -> [ $"slot={n}" ]
+        | None -> []
+    ]
+    let status = String.Join(", ", statusParts)
+    let message =
+      match classFilter, slotFilter with
+      | None, None ->
+          "Class, gear slot, or item name/id (blank cancels). Until a class/slot is chosen, suggestions are only those filters."
+      | _ ->
+          $"Filters [{status}]. Pick the other filter, or an item name/id (blank = list all filtered)."
+
+    match prompt message suggestions with
+    | None -> None
+    | Some text when String.IsNullOrWhiteSpace text ->
+        match classFilter, slotFilter with
+        | None, None -> None
+        | _ ->
+            Some {
+              Query = ""
+              ClassFilter = classFilter
+              SlotFilter = slotFilter
+              PrefetchedItems = prefetched
+            }
+    | Some text ->
+        match classFilter, tryMatchClass text with
+        | None, Some pair ->
+            classFilter <- Some pair
+            printfn "Filter: class %s" (fst pair)
+            refreshPrefetch ()
+            loop ()
+        | _ ->
+            match slotFilter, tryMatchSlot text with
+            | None, Some pair ->
+                slotFilter <- Some pair
+                printfn "Filter: slot %s" (fst pair)
+                refreshPrefetch ()
+                loop ()
+            | _ ->
+                Some {
+                  Query = text
+                  ClassFilter = classFilter
+                  SlotFilter = slotFilter
+                  PrefetchedItems = prefetched
+                }
+  loop ()
+
+let resolveLocalRootForPrompt () =
+  match decideContentRoot () with
+  | UseLocal root ->
+      ensureContentFresh root
+      root
+  | UseGithub ->
+      printfn "Content preference is GitHub for now; class/slot filters still work, but item-name autocomplete needs a local clone."
+      null
+  | Ask ->
+      // Ask early so autocomplete can use the local repo when the user has one.
+      let root = getContentRoot ()
+      if not (String.IsNullOrWhiteSpace root) then ensureContentFresh root
+      root
+
+printfn "Item cache: %s" Paths.itemCachePath
+
+let request =
+  if not (String.IsNullOrWhiteSpace itemName) then
+    Some {
+      Query = itemName.Trim()
+      ClassFilter = None
+      SlotFilter = None
+      PrefetchedItems = None
+    }
+  else
+    let localRoot = resolveLocalRootForPrompt ()
+    promptLookup localRoot
+
+match request with
+| None -> printfn "No lookup entered."
+| Some req ->
+  let classBit = req.ClassFilter |> Option.map snd
+  let slotBit = req.SlotFilter |> Option.map snd
+  let query = req.Query
   let cache = loadCache ()
   let asId =
     match Int32.TryParse query with
-    | true, id -> Some id
+    | true, id when not (String.IsNullOrWhiteSpace query) -> Some id
     | _ -> None
+
+  let filterList (items: CachedItem list) =
+    items |> List.filter (fun i -> itemMatchesFilters i classBit slotBit)
 
   let cachedHits =
     if rescan then []
+    elif String.IsNullOrWhiteSpace query && asId.IsNone then []
     else
       match asId with
       | Some id ->
           let mutable existing = Unchecked.defaultof<CachedItem>
-          if cache.Items.TryGetValue(string id, &existing) then [ existing ] else []
-      | None -> cacheByName cache query sameName
+          if cache.Items.TryGetValue(string id, &existing) && itemMatchesFilters existing classBit slotBit then
+            [ existing ]
+          else []
+      | None -> cacheByName cache query sameName |> filterList
 
   if not cachedHits.IsEmpty then
     present "item-cache.json" true cachedHits
   else
-    let contentRoot = getContentRoot ()
-    if not (String.IsNullOrWhiteSpace contentRoot) && not (String.Equals(contentRoot, prefetchedRoot, StringComparison.OrdinalIgnoreCase)) then
-      ensureContentFresh contentRoot
-    let source =
-      if String.IsNullOrWhiteSpace contentRoot then
-        printfn "No local idlequest-content clone selected. Fetching GitHub shards (slow)."
-        "github"
-      else
-        printfn "Scanning local content: %s" contentRoot
-        "local clone"
-    let found, exact = scanContent contentRoot query asId
-    if found.IsEmpty then
-      printfn "No item matched '%s'." query
-    else
-      let toStore =
-        if exact then found
-        elif found.Length <= 25 then found
+    match req.PrefetchedItems with
+    | Some items when String.IsNullOrWhiteSpace query && asId.IsNone ->
+        let hits = filterList items
+        let toStore = if hits.Length <= 200 then hits else hits |> List.truncate 200
+        let added = mergeIntoCache cache toStore
+        printfn "Wrote %d new item(s) into item-cache.json (%d already present)." added (toStore.Length - added)
+        present "local clone (filtered)" true hits
+    | Some items when asId.IsNone && not (String.IsNullOrWhiteSpace query) ->
+        let exact = items |> List.filter (fun i -> sameName query i.Name) |> filterList
+        let hits, exactFlag =
+          if not exact.IsEmpty then exact, true
+          else items |> List.filter (fun i -> containsName query i.Name) |> filterList, false
+        if hits.IsEmpty then
+          printfn "No item matched '%s' with the current filters." query
         else
-          printfn "Partial matches: %d. Caching the first 25. Use a more specific name for the rest." found.Length
-          found |> List.truncate 25
-      let added = mergeIntoCache cache toStore
-      printfn "Wrote %d new item(s) into item-cache.json (%d already present)." added (toStore.Length - added)
-      present source exact found
+          let toStore =
+            if exactFlag then hits
+            elif hits.Length <= 25 then hits
+            else
+              printfn "Partial matches: %d. Caching the first 25." hits.Length
+              hits |> List.truncate 25
+          let added = mergeIntoCache cache toStore
+          printfn "Wrote %d new item(s) into item-cache.json (%d already present)." added (toStore.Length - added)
+          present "local clone (filtered)" exactFlag hits
+    | _ ->
+        let prefetchedRoot = configuredContentRoot ()
+        let contentRoot = getContentRoot ()
+        if not (String.IsNullOrWhiteSpace contentRoot) && not (String.Equals(contentRoot, prefetchedRoot, StringComparison.OrdinalIgnoreCase)) then
+          ensureContentFresh contentRoot
+        let source =
+          if String.IsNullOrWhiteSpace contentRoot then
+            printfn "No local idlequest-content clone selected. Fetching GitHub shards (slow)."
+            "github"
+          else
+            printfn "Scanning local content: %s" contentRoot
+            "local clone"
+        let found, exact = scanContent contentRoot query asId classBit slotBit
+        if found.IsEmpty then
+          if String.IsNullOrWhiteSpace query then printfn "No items matched the current filters."
+          else printfn "No item matched '%s'." query
+        else
+          let toStore =
+            if exact then found
+            elif found.Length <= 25 then found
+            else
+              printfn "Partial matches: %d. Caching the first 25. Use a more specific name for the rest." found.Length
+              found |> List.truncate 25
+          let added = mergeIntoCache cache toStore
+          printfn "Wrote %d new item(s) into item-cache.json (%d already present)." added (toStore.Length - added)
+          present source exact found
