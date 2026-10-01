@@ -596,26 +596,45 @@ let isClearCommand (text: string) =
 /// Until a class or gear slot is chosen, suggestions are only those filters.
 /// After one is set (and a local repo exists), suggestions add matching item names,
 /// while still offering the other unused filter type.
-/// Filters persist across lookups in the session; type "clear" to remove them.
-let promptLookup (localRoot: string) (initialClass: (string * int) option) (initialSlot: (string * int) option) : PromptResult =
+/// Filters and the matching content list persist across lookups; type "clear" to remove them.
+let promptLookup
+    (localRoot: string)
+    (initialClass: (string * int) option)
+    (initialSlot: (string * int) option)
+    (initialPrefetched: CachedItem list option)
+    : PromptResult =
   let mutable classFilter = initialClass
   let mutable slotFilter = initialSlot
-  let mutable prefetched: CachedItem list option = None
+  let mutable prefetched = initialPrefetched
 
-  let refreshPrefetch () =
-    prefetched <- None
+  let ensurePrefetch (forceReload: bool) =
     match classFilter, slotFilter with
-    | None, None -> ()
+    | None, None ->
+        prefetched <- None
     | _ when String.IsNullOrWhiteSpace localRoot ->
+        prefetched <- None
         printfn "No local idlequest-content clone; item-name autocomplete unavailable until a local root is selected."
     | _ ->
         let classBit = classFilter |> Option.map snd
         let slotBit = slotFilter |> Option.map snd
-        prefetched <- Some (loadItemsMatchingFilters localRoot classBit slotBit)
+        match prefetched with
+        | Some items when not forceReload ->
+            let narrowed =
+              items
+              |> List.filter (fun item -> itemMatchesFilters item classBit slotBit)
+            prefetched <- Some narrowed
+            printfn "Using cached filter list (%d item(s) after narrow)." narrowed.Length
+        | _ ->
+            prefetched <- Some (loadItemsMatchingFilters localRoot classBit slotBit)
     dumpCachedNamesForFilters classFilter slotFilter
 
-  // Restore autocomplete for filters carried over from the previous lookup.
-  refreshPrefetch ()
+  // Keep the existing content list when filters are unchanged; only dump cache names.
+  match classFilter, slotFilter, prefetched with
+  | None, None, _ -> prefetched <- None
+  | _, _, Some _ ->
+      dumpCachedNamesForFilters classFilter slotFilter
+  | _ ->
+      ensurePrefetch true
 
   let rec loop () =
     let classSuggestions =
@@ -679,14 +698,15 @@ let promptLookup (localRoot: string) (initialClass: (string * int) option) (init
         | None, Some pair ->
             classFilter <- Some pair
             printfn "Added class filter: %s (now %s)" (fst pair) (formatFilters classFilter slotFilter)
-            refreshPrefetch ()
+            // First filter: full load. Second filter later: narrow in memory.
+            ensurePrefetch (prefetched.IsNone)
             loop ()
         | _ ->
             match slotFilter, tryMatchSlot text with
             | None, Some pair ->
                 slotFilter <- Some pair
                 printfn "Added slot filter: %s (now %s)" (fst pair) (formatFilters classFilter slotFilter)
-                refreshPrefetch ()
+                ensurePrefetch (prefetched.IsNone)
                 loop ()
             | _ ->
                 Lookup {
@@ -852,12 +872,14 @@ else
   let localRoot = resolveLocalRootForPrompt ()
   let mutable sessionClass: (string * int) option = None
   let mutable sessionSlot: (string * int) option = None
+  let mutable sessionPrefetched: CachedItem list option = None
   let rec session () =
-    match promptLookup localRoot sessionClass sessionSlot with
+    match promptLookup localRoot sessionClass sessionSlot sessionPrefetched with
     | Exit -> printfn "Done."
     | Lookup req ->
         sessionClass <- req.ClassFilter
         sessionSlot <- req.SlotFilter
+        sessionPrefetched <- req.PrefetchedItems
         runLookup req
         printfn ""
         session ()
