@@ -583,18 +583,44 @@ let formatFilters (classFilter: (string * int) option) (slotFilter: (string * in
     | None -> "(none)"
   $"class={classText}; slot={slotText}"
 
+// Blank "list all filtered" and filter-scan autocomplete live in Util.Cache, not item-cache.json.
+let mutable filterListSlot : string[] = [||]
+
+let filterListCacheKey (classFilter: (string * int) option) (slotFilter: (string * int) option) =
+  "idlequest-filter-items:" + formatFilters classFilter slotFilter
+
+let writeFilterListCache (classFilter: (string * int) option) (slotFilter: (string * int) option) (items: CachedItem list) =
+  let names =
+    items
+    |> Seq.map (fun i -> i.Name)
+    |> Seq.distinct
+    |> Seq.sort
+    |> Array.ofSeq
+  filterListSlot <- names
+  Util.Cache<string[]>((fun () -> filterListSlot), key = filterListCacheKey classFilter slotFilter, forceRefresh = true)
+  |> ignore
+  names
+
+let readFilterListCache (classFilter: (string * int) option) (slotFilter: (string * int) option) =
+  filterListSlot <- [||]
+  Util.Cache<string[]>((fun () -> filterListSlot), key = filterListCacheKey classFilter slotFilter, forceRefresh = false)
+
 let dumpCachedNamesForFilters (classFilter: (string * int) option) (slotFilter: (string * int) option) =
   match classFilter, slotFilter with
   | Some (_, classBit), Some (_, slotBit) ->
-      let cache = loadCache ()
-      let names =
-        cache.Items.Values
+      let filtersText = formatFilters classFilter slotFilter
+      let fromLinqPad = readFilterListCache classFilter slotFilter
+      if fromLinqPad.Length > 0 then
+        fromLinqPad.Dump(description = $"Filter scan / Util.Cache ({fromLinqPad.Length}): {filtersText}")
+        |> ignore
+      let fromJson =
+        loadCache().Items.Values
         |> Seq.filter (fun item -> itemMatchesFilters item (Some classBit) (Some slotBit))
         |> Seq.map (fun item -> item.Name)
         |> Seq.distinct
         |> Seq.sort
         |> Seq.toList
-      names.Dump(description = $"Cached items ({names.Length}): {formatFilters classFilter slotFilter}")
+      fromJson.Dump(description = $"item-cache.json only ({fromJson.Length}): {filtersText}")
       |> ignore
   | _ -> ()
 
@@ -631,9 +657,12 @@ let promptLookup
               items
               |> List.filter (fun item -> itemMatchesFilters item classBit slotBit)
             prefetched <- Some narrowed
+            writeFilterListCache classFilter slotFilter narrowed |> ignore
             printfn "Using cached filter list (%d item(s) after narrow)." narrowed.Length
         | _ ->
-            prefetched <- Some (loadItemsMatchingFilters localRoot classBit slotBit)
+            let loaded = loadItemsMatchingFilters localRoot classBit slotBit
+            prefetched <- Some loaded
+            writeFilterListCache classFilter slotFilter loaded |> ignore
     dumpCachedNamesForFilters classFilter slotFilter
 
   // Keep the existing content list when filters are unchanged; only dump cache names.
@@ -676,11 +705,11 @@ let promptLookup
       | None, None ->
           $"Current filters: {filtersText}. Enter a class, gear slot, or item name/id (blank exits). Suggestions are only classes/slots until a filter is set."
       | Some _, None ->
-          $"Current filters: {filtersText}. Enter a gear slot, item name/id, or 'clear' (blank = list all for this class)."
+          $"Current filters: {filtersText}. Enter a gear slot, item name/id, or 'clear' (blank = list all in Util.Cache, not item-cache.json)."
       | None, Some _ ->
-          $"Current filters: {filtersText}. Enter a class, item name/id, or 'clear' (blank = list all for this slot)."
+          $"Current filters: {filtersText}. Enter a class, item name/id, or 'clear' (blank = list all in Util.Cache, not item-cache.json)."
       | Some _, Some _ ->
-          $"Current filters: {filtersText}. Enter an item name/id, or 'clear' (blank = list all for these filters)."
+          $"Current filters: {filtersText}. Enter an item name/id, or 'clear' (blank = list all in Util.Cache, not item-cache.json)."
 
     printfn "Current filters: %s" filtersText
     match prompt message suggestions with
@@ -838,10 +867,10 @@ let runLookup (req: LookupRequest) =
       match req.PrefetchedItems with
       | Some items when String.IsNullOrWhiteSpace query && asId.IsNone ->
           let hits = filterList items
-          let toStore = if hits.Length <= 200 then hits else hits |> List.truncate 200
-          let added = mergeIntoCache cache toStore
-          printfn "Wrote %d new item(s) into item-cache.json (%d already present)." added (toStore.Length - added)
-          present "local clone (filtered)" true hits
+          let names = writeFilterListCache req.ClassFilter req.SlotFilter hits
+          printfn "Listed %d filtered item(s) into Util.Cache only (not written to item-cache.json)." names.Length
+          names.Dump(description = $"Filter scan / Util.Cache ({names.Length}): {filtersText}") |> ignore
+          present "filter list (Util.Cache only)" true hits
       | Some items when hasNameQuery && asId.IsNone ->
           let named, exactFlag = nameHitsFrom items
           let hits = filterList named
