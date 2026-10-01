@@ -7,6 +7,7 @@
 // Shares item-cache.json and the idlequestContentRoot LINQPad password with eq-character-tracker.linq.
 // Cache hit returns immediately. Otherwise scans a local idlequest-content clone, or GitHub raw shards, and writes matches into the cache.
 // A configured local clone is git-pulled when due. Util.Cache stores (last attempt, success). Failures wait 1 day; successes wait 3 days.
+// Content-root choice is also Util.Cache: local path sticks; GitHub cancel only skips the prompt for 1 day (never a permanent password lockout).
 
 open System
 open System.Collections.Generic
@@ -18,8 +19,10 @@ open System.Text.Json.Serialization
 open System.Windows.Forms
 
 // Leave blank to be prompted. Set rescan to ignore a cache hit and read content again.
+// Set repromptContentRoot to force the idlequest-content folder browser again.
 let itemName = ""
 let rescan = false
+let repromptContentRoot = false
 
 module Paths =
   let dataDir =
@@ -121,8 +124,106 @@ let loadCache () =
 let saveItemCache (cache: ItemCacheFile) =
   File.WriteAllText(Paths.itemCachePath, ser cache)
 
-// Same password entry as eq-character-tracker.linq. "__github__" means skip the local clone.
+// Content-root preference: local path stays in Util.Cache (+ password for the tracker).
+// Choosing GitHub is also cached, but only for a day — never a permanent "never ask again".
 let githubSentinel = "__github__"
+let contentRootPrefKey = "idlequest-content-root-pref"
+let githubPrefCooldown = TimeSpan.FromDays 1.0
+let mutable contentRootSlot : string * DateTime = "", DateTime.MinValue
+
+type ContentRootDecision =
+  | UseLocal of string
+  | UseGithub
+  | Ask
+
+let isValidContentRoot (root: string) =
+  not (String.IsNullOrWhiteSpace root)
+  && root <> githubSentinel
+  && Directory.Exists(Path.Combine(root, "data", "items"))
+
+let clearLegacyGithubPassword () =
+  try
+    if Util.GetPassword("idlequestContentRoot") = githubSentinel then
+      Util.SetPassword("idlequestContentRoot", "")
+      printfn "Cleared permanent GitHub-only password so a local clone can be chosen again."
+  with _ -> ()
+
+let readContentRootPref () =
+  contentRootSlot <- "", DateTime.MinValue
+  Util.Cache<string * DateTime>((fun () -> contentRootSlot), key = contentRootPrefKey, forceRefresh = false)
+
+let writeContentRootPref (root: string) =
+  contentRootSlot <- root, DateTime.UtcNow
+  Util.Cache<string * DateTime>((fun () -> contentRootSlot), key = contentRootPrefKey, forceRefresh = true) |> ignore
+
+let passwordContentRoot () =
+  clearLegacyGithubPassword ()
+  let cached = Util.GetPassword("idlequestContentRoot")
+  if isValidContentRoot cached then cached else null
+
+let rememberLocalRoot (root: string) =
+  writeContentRootPref root
+  Util.SetPassword("idlequestContentRoot", root)
+
+let rememberGithubRoot () =
+  writeContentRootPref githubSentinel
+  // Do not write a permanent password sentinel. Leave any real path alone for later.
+  clearLegacyGithubPassword ()
+
+let promptContentRoot (initial: string) =
+  use browser = new FolderBrowserDialog(Description = "Select idlequest-content repo root (Cancel = use GitHub raw for now)")
+  if isValidContentRoot initial then
+    browser.SelectedPath <- initial
+  elif not (String.IsNullOrWhiteSpace initial) && Directory.Exists initial then
+    browser.SelectedPath <- initial
+  use form = new Form(TopMost = true, TopLevel = true)
+  let result = browser.ShowDialog form
+  if result = DialogResult.OK && isValidContentRoot browser.SelectedPath then
+    rememberLocalRoot browser.SelectedPath
+    UseLocal browser.SelectedPath
+  else
+    rememberGithubRoot ()
+    printfn "Using GitHub raw for now. Will ask again after a day (or set repromptContentRoot = true)."
+    UseGithub
+
+let decideContentRoot () =
+  if repromptContentRoot then Ask
+  else
+    let fromPassword = passwordContentRoot ()
+    if not (isNull fromPassword) then
+      let prefRoot, _ = readContentRootPref ()
+      if prefRoot <> fromPassword then writeContentRootPref fromPassword
+      UseLocal fromPassword
+    else
+      let prefRoot, decidedAt = readContentRootPref ()
+      if isValidContentRoot prefRoot then
+        Util.SetPassword("idlequestContentRoot", prefRoot)
+        UseLocal prefRoot
+      elif prefRoot = githubSentinel && decidedAt > DateTime.MinValue
+           && DateTime.UtcNow - decidedAt.ToUniversalTime() < githubPrefCooldown then
+        UseGithub
+      else
+        Ask
+
+let configuredContentRoot () =
+  match decideContentRoot () with
+  | UseLocal root -> root
+  | UseGithub | Ask -> null
+
+let getContentRoot () =
+  match decideContentRoot () with
+  | UseLocal root -> root
+  | UseGithub -> null
+  | Ask ->
+      let hint =
+        let prefRoot, _ = readContentRootPref ()
+        if isValidContentRoot prefRoot then prefRoot
+        else
+          let pw = Util.GetPassword("idlequestContentRoot")
+          if not (String.IsNullOrWhiteSpace pw) && pw <> githubSentinel then pw else ""
+      match promptContentRoot hint with
+      | UseLocal root -> root
+      | UseGithub | Ask -> null
 
 // Util.Cache value is (last attempt, succeeded). Failure waits a day; success waits a few days.
 let pullFailureCooldown = TimeSpan.FromDays 1.0
@@ -198,31 +299,6 @@ let ensureContentFresh (root: string) =
         printfn "git pull succeeded: %s" note
       else
         printfn "git pull failed: %s" (if String.IsNullOrWhiteSpace detail then "git exited non-zero" else detail)
-
-let configuredContentRoot () =
-  let cached = Util.GetPassword("idlequestContentRoot")
-  if cached = githubSentinel || String.IsNullOrWhiteSpace cached then null
-  elif Directory.Exists(Path.Combine(cached, "data", "items")) then cached
-  else null
-
-let getContentRoot () =
-  let cached = Util.GetPassword("idlequestContentRoot")
-  if cached = githubSentinel then
-    null
-  elif not (String.IsNullOrWhiteSpace cached) && Directory.Exists(Path.Combine(cached, "data", "items")) then
-    cached
-  else
-    use browser = new FolderBrowserDialog(Description = "Select idlequest-content repo root (Cancel = use GitHub raw)")
-    if not (String.IsNullOrWhiteSpace cached) && Directory.Exists cached then
-      browser.InitialDirectory <- cached
-    use form = new Form(TopMost = true, TopLevel = true)
-    let result = browser.ShowDialog form
-    if result = DialogResult.OK && Directory.Exists(Path.Combine(browser.SelectedPath, "data", "items")) then
-      Util.SetPassword("idlequestContentRoot", browser.SelectedPath)
-      browser.SelectedPath
-    else
-      Util.SetPassword("idlequestContentRoot", githubSentinel)
-      null
 
 let shards =
   [| '0'..'9' |] |> Array.map string |> Array.append ([| 'a'..'f' |] |> Array.map string)
