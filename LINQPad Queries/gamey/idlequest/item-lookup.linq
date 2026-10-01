@@ -575,6 +575,21 @@ let formatFilters (classFilter: (string * int) option) (slotFilter: (string * in
     | None -> "(none)"
   $"class={classText}; slot={slotText}"
 
+let dumpCachedNamesForFilters (classFilter: (string * int) option) (slotFilter: (string * int) option) =
+  match classFilter, slotFilter with
+  | Some (_, classBit), Some (_, slotBit) ->
+      let cache = loadCache ()
+      let names =
+        cache.Items.Values
+        |> Seq.filter (fun item -> itemMatchesFilters item (Some classBit) (Some slotBit))
+        |> Seq.map (fun item -> item.Name)
+        |> Seq.distinct
+        |> Seq.sort
+        |> Seq.toList
+      names.Dump(description = $"Cached items ({names.Length}): {formatFilters classFilter slotFilter}")
+      |> ignore
+  | _ -> ()
+
 let isClearCommand (text: string) =
   String.Equals(text.Trim(), "clear", StringComparison.OrdinalIgnoreCase)
 
@@ -597,6 +612,7 @@ let promptLookup (localRoot: string) (initialClass: (string * int) option) (init
         let classBit = classFilter |> Option.map snd
         let slotBit = slotFilter |> Option.map snd
         prefetched <- Some (loadItemsMatchingFilters localRoot classBit slotBit)
+    dumpCachedNamesForFilters classFilter slotFilter
 
   // Restore autocomplete for filters carried over from the previous lookup.
   refreshPrefetch ()
