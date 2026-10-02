@@ -83,6 +83,16 @@
             "waist": null,
             "ammo": null
           }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-02T02:02:24.0929503\u002B00:00",
+          "source": "hand-edit",
+          "gear": {
+            "head": 25514,
+            "arms": 25516,
+            "legs": 25519
+          }
         }
       ]
     },
@@ -152,6 +162,20 @@
             "feet": null,
             "waist": null,
             "ammo": null
+          }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-02T02:02:24.0930735\u002B00:00",
+          "source": "hand-edit",
+          "gear": {
+            "head": 1630,
+            "face": 4505,
+            "neck": 4501,
+            "hands": 4114,
+            "primary": 6692,
+            "chest": 30372,
+            "legs": 3311
           }
         }
       ]
@@ -258,6 +282,20 @@
             "waist": null,
             "ammo": null
           }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-02T02:02:24.0932044\u002B00:00",
+          "source": "hand-edit",
+          "gear": {
+            "shoulders": 1402,
+            "arms": 25488,
+            "hands": 2465,
+            "primary": 6692,
+            "secondary": 25285,
+            "chest": 30372,
+            "feet": 4563
+          }
         }
       ]
     },
@@ -292,6 +330,19 @@
             "feet": null,
             "waist": null,
             "ammo": null
+          }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-02T02:02:24.0933216\u002B00:00",
+          "source": "hand-edit",
+          "gear": {
+            "head": 4504,
+            "range": 8325,
+            "hands": 25576,
+            "primary": 6401,
+            "secondary": 7219,
+            "waist": 1365
           }
         }
       ]
@@ -328,6 +379,20 @@
             "waist": null,
             "ammo": null
           }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-02T02:02:24.0934884\u002B00:00",
+          "source": "hand-edit",
+          "gear": {
+            "arms": 25453,
+            "wrist1": 25454,
+            "hands": 25455,
+            "primary": 25073,
+            "chest": 30372,
+            "legs": 25456,
+            "waist": 30377
+          }
         }
       ]
     },
@@ -362,6 +427,21 @@
             "feet": null,
             "waist": null,
             "ammo": null
+          }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-02T02:02:24.0938099\u002B00:00",
+          "source": "hand-edit",
+          "gear": {
+            "head": 25521,
+            "shoulders": 27944,
+            "arms": 25523,
+            "wrist1": 25524,
+            "wrist2": 25524,
+            "hands": 25525,
+            "chest": 1253,
+            "feet": 25527
           }
         }
       ]
@@ -398,6 +478,18 @@
             "waist": null,
             "ammo": null
           }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-02T02:02:24.0939848\u002B00:00",
+          "source": "hand-edit",
+          "gear": {
+            "head": 10143,
+            "arms": 25530,
+            "chest": 1629,
+            "legs": 25533,
+            "feet": 25534
+          }
         }
       ]
     },
@@ -432,6 +524,17 @@
             "feet": null,
             "waist": null,
             "ammo": null
+          }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-02T02:02:24.0941540\u002B00:00",
+          "source": "hand-edit",
+          "gear": {
+            "head": 25479,
+            "hands": 25483,
+            "primary": 11983,
+            "chest": 4902
           }
         }
       ]
@@ -526,6 +629,18 @@
             "feet": null,
             "waist": null,
             "ammo": null
+          }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-02T02:02:24.0943634\u002B00:00",
+          "source": "hand-edit",
+          "gear": {
+            "head": 10141,
+            "neck": 14753,
+            "secondary": 9206,
+            "chest": 1357,
+            "legs": 25512
           }
         }
       ]
@@ -666,6 +781,15 @@
             "feet": null,
             "waist": null,
             "ammo": null
+          }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-02T02:02:24.0944926\u002B00:00",
+          "source": "hand-edit",
+          "gear": {
+            "chest": 30372,
+            "feet": 4407
           }
         }
       ]
