@@ -502,13 +502,13 @@
           "fingers1": null,
           "fingers2": null,
           "chest": 6879,
-          "legs": null,
+          "legs": 25498,
           "feet": 25499,
           "waist": null,
           "ammo": null
         }
       },
-      "currentAt": "2026-10-02T02:26:14.9664885Z"
+      "currentAt": "2026-10-02T11:12:10.1041600Z"
     },
     {
       "id": "ce0f39a6e6154cb6a36e47b7afa4e48a",
@@ -564,7 +564,7 @@
           "wrist1": null,
           "wrist2": null,
           "range": null,
-          "hands": null,
+          "hands": 25525,
           "primary": null,
           "secondary": null,
           "fingers1": null,
@@ -576,7 +576,7 @@
           "ammo": null
         }
       },
-      "currentAt": "2026-10-01T21:41:16.8681977\u002B00:00"
+      "currentAt": "2026-10-02T11:21:49.1524370Z"
     },
     {
       "id": "d090f4de21024ec281caf200e09a15c1",
