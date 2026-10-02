@@ -197,6 +197,8 @@ type CachedItem = {
   mutable Classes: int
   mutable Races: int
   mutable Reqlevel: int
+  /// zone.id values from idlequest-content (item → loot → npc → spawn → zone).
+  mutable ZoneIds: int[]
 }
 
 [<CLIMutable>]
@@ -595,6 +597,7 @@ let projectItem (doc: JsonElement) : CachedItem option =
       Mr = getInt "mr"; Fr = getInt "fr"; Cr = getInt "cr"; Pr = getInt "pr"; Dr = getInt "dr"
       Slots = getInt "slots"; Itemtype = getInt "itemtype"
       Classes = getInt "classes"; Races = getInt "races"; Reqlevel = getInt "reqlevel"
+      ZoneIds = null
     }
   with _ -> None
 

@@ -152,6 +152,8 @@ type CachedItem = {
   mutable Classes: int
   mutable Races: int
   mutable Reqlevel: int
+  /// zone.id values from idlequest-content (item → loot → npc → spawn → zone).
+  mutable ZoneIds: int[]
 }
 
 [<CLIMutable>]
@@ -412,6 +414,25 @@ let readShardLines (contentRoot: string) (shard: string) =
         line <- reader.ReadLine()
     }
 
+/// Local-only table reader (loot/spawn/zone). GitHub raw for these is too slow for index builds.
+let readTableShardLines (contentRoot: string) (table: string) (shard: string) =
+  if String.IsNullOrWhiteSpace contentRoot then Seq.empty
+  else
+    let path = Path.Combine(contentRoot, "data", table, shard + ".ndjson")
+    if File.Exists path then File.ReadLines path else Seq.empty
+
+let forEachTableRow (contentRoot: string) (table: string) (action: JsonElement -> unit) =
+  for shard in shards do
+    try
+      for line in readTableShardLines contentRoot table shard do
+        if line.Length > 0 then
+          try
+            use doc = JsonDocument.Parse line
+            action doc.RootElement
+          with _ -> ()
+    with ex ->
+      printfn "WARN: %s shard %s read failed: %s" table shard ex.Message
+
 let tryGetProperty (el: JsonElement) (name: string) =
   el.EnumerateObject()
   |> Seq.tryPick (fun p -> if p.NameEquals name then Some p.Value else None)
@@ -437,6 +458,7 @@ let projectItem (doc: JsonElement) : CachedItem option =
       Mr = getInt "mr"; Fr = getInt "fr"; Cr = getInt "cr"; Pr = getInt "pr"; Dr = getInt "dr"
       Slots = getInt "slots"; Itemtype = getInt "itemtype"
       Classes = getInt "classes"; Races = getInt "races"; Reqlevel = getInt "reqlevel"
+      ZoneIds = null
     }
   with _ -> None
 
@@ -479,8 +501,184 @@ let hasNonAcStats (item: CachedItem) =
   || item.Awis <> 0 || item.Aint <> 0 || item.Acha <> 0
   || item.Mr <> 0 || item.Fr <> 0 || item.Cr <> 0 || item.Pr <> 0 || item.Dr <> 0
 
+// Prefer Plane of Growth drops near the top of autocomplete (see ensurePlaneOfGrowthCached).
+let planeOfGrowthZoneId = 143
+let planeOfGrowthShortName = "growthplane"
+
+let itemHasZone (item: CachedItem) (zoneId: int) =
+  not (isNullUnsafe item.ZoneIds) && item.ZoneIds |> Array.exists (fun z -> z = zoneId)
+
 let itemDisplaySortKey (item: CachedItem) =
-  (not (hasNonAcStats item), item.Name, item.Id)
+  // PoG first, then real-stat items, then AC-only / blank.
+  (not (itemHasZone item planeOfGrowthZoneId), not (hasNonAcStats item), item.Name, item.Id)
+
+let jsonInt (el: JsonElement) (name: string) =
+  match tryGetProperty el name with
+  | Some p when p.ValueKind = JsonValueKind.Number -> p.GetInt32()
+  | _ -> 0
+
+let jsonStr (el: JsonElement) (name: string) =
+  match tryGetProperty el name with
+  | Some p when p.ValueKind = JsonValueKind.String -> p.GetString()
+  | _ -> ""
+
+let addToSetMap (map: Dictionary<'K, HashSet<'V>>) (key: 'K) (value: 'V) =
+  let mutable set = Unchecked.defaultof<HashSet<'V>>
+  if not (map.TryGetValue(key, &set)) then
+    set <- HashSet<'V>()
+    map.[key] <- set
+  set.Add value |> ignore
+
+/// item_id → distinct zone.id via lootdrop → loottable → npc → spawn → zone (see .cursor/rules/idlequest-content-lookup.mdc).
+type DropZoneIndex = {
+  ItemToZones: Dictionary<int, int[]>
+  ZoneToItems: Dictionary<int, int[]>
+}
+
+let buildDropZoneIndex (contentRoot: string) : DropZoneIndex =
+  let zoneByShort = Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+  forEachTableRow contentRoot "zone" (fun row ->
+    let shortName = jsonStr row "short_name"
+    let id = jsonInt row "id"
+    if not (String.IsNullOrWhiteSpace shortName) && id > 0 then
+      zoneByShort.[shortName] <- id)
+
+  let groupZones = Dictionary<int, HashSet<int>>()
+  forEachTableRow contentRoot "spawn2" (fun row ->
+    let shortName = jsonStr row "zone"
+    let groupId = jsonInt row "spawngroupID"
+    let mutable zoneId = 0
+    if groupId > 0 && zoneByShort.TryGetValue(shortName, &zoneId) then
+      addToSetMap groupZones groupId zoneId)
+
+  let npcZones = Dictionary<int, HashSet<int>>()
+  forEachTableRow contentRoot "spawnentry" (fun row ->
+    let npcId = jsonInt row "npcID"
+    let groupId = jsonInt row "spawngroupID"
+    let mutable zones = Unchecked.defaultof<HashSet<int>>
+    if npcId > 0 && groupZones.TryGetValue(groupId, &zones) then
+      for z in zones do addToSetMap npcZones npcId z)
+
+  let tableZones = Dictionary<int, HashSet<int>>()
+  forEachTableRow contentRoot "npc_types" (fun row ->
+    let npcId = jsonInt row "id"
+    let loottableId = jsonInt row "loottable_id"
+    let mutable zones = Unchecked.defaultof<HashSet<int>>
+    if loottableId > 0 && npcZones.TryGetValue(npcId, &zones) then
+      for z in zones do addToSetMap tableZones loottableId z)
+
+  let dropZones = Dictionary<int, HashSet<int>>()
+  forEachTableRow contentRoot "loottable_entries" (fun row ->
+    let loottableId = jsonInt row "loottable_id"
+    let lootdropId = jsonInt row "lootdrop_id"
+    let mutable zones = Unchecked.defaultof<HashSet<int>>
+    if lootdropId > 0 && tableZones.TryGetValue(loottableId, &zones) then
+      for z in zones do addToSetMap dropZones lootdropId z)
+
+  let itemZones = Dictionary<int, HashSet<int>>()
+  forEachTableRow contentRoot "lootdrop_entries" (fun row ->
+    let itemId = jsonInt row "item_id"
+    let lootdropId = jsonInt row "lootdrop_id"
+    let mutable zones = Unchecked.defaultof<HashSet<int>>
+    if itemId > 0 && dropZones.TryGetValue(lootdropId, &zones) then
+      for z in zones do addToSetMap itemZones itemId z)
+
+  let itemToZones = Dictionary<int, int[]>()
+  let zoneToItems = Dictionary<int, HashSet<int>>()
+  for KeyValue(itemId, zones) in itemZones do
+    let arr = zones |> Seq.sort |> Seq.toArray
+    itemToZones.[itemId] <- arr
+    for z in arr do addToSetMap zoneToItems z itemId
+
+  let zoneToItemsArr = Dictionary<int, int[]>()
+  for KeyValue(zoneId, items) in zoneToItems do
+    zoneToItemsArr.[zoneId] <- items |> Seq.sort |> Seq.toArray
+
+  {
+    ItemToZones = itemToZones
+    ZoneToItems = zoneToItemsArr
+  }
+
+let mutable dropZoneIndexSlot : DropZoneIndex option = None
+
+let getDropZoneIndex (contentRoot: string) =
+  match dropZoneIndexSlot with
+  | Some idx -> idx
+  | None when String.IsNullOrWhiteSpace contentRoot ->
+      { ItemToZones = Dictionary(); ZoneToItems = Dictionary() }
+  | None ->
+      SessionUi.write "Building item→zone drop index from idlequest-content (one-time this session)..."
+      let idx = buildDropZoneIndex contentRoot
+      dropZoneIndexSlot <- Some idx
+      SessionUi.write (sprintf "Drop-zone index ready (%d items with zones)." idx.ItemToZones.Count)
+      idx
+
+let unionZoneIds (existing: int[]) (incoming: int[]) =
+  let a = if isNullUnsafe existing then [||] else existing
+  let b = if isNullUnsafe incoming then [||] else incoming
+  Seq.append a b |> Seq.distinct |> Seq.sort |> Seq.toArray
+
+let applyZonesFromIndex (index: DropZoneIndex) (item: CachedItem) =
+  let mutable zones = Unchecked.defaultof<int[]>
+  if index.ItemToZones.TryGetValue(item.Id, &zones) then
+    item.ZoneIds <- unionZoneIds item.ZoneIds zones
+  elif isNullUnsafe item.ZoneIds then
+    item.ZoneIds <- [||]
+  item
+
+let findItemByIdInContent (contentRoot: string) (itemId: int) =
+  let needle = $"\"id\":{itemId}"
+  shards
+  |> Seq.tryPick (fun shard ->
+      try
+        readShardLines contentRoot shard
+        |> Seq.tryPick (fun line ->
+            if line.Contains needle then
+              match tryProjectLine line with
+              | Some item when item.Id = itemId -> Some item
+              | _ -> None
+            else None)
+      with _ -> None)
+
+/// Cache every item that drops from NPCs spawning in Plane of Growth (zone.id 143 / growthplane).
+let ensurePlaneOfGrowthCached (contentRoot: string) (cache: ItemCacheFile) =
+  if String.IsNullOrWhiteSpace contentRoot then
+    SessionUi.write "Skipping Plane of Growth prefetch (no local idlequest-content root)."
+    0
+  else
+    let index = getDropZoneIndex contentRoot
+    let mutable itemIds = Unchecked.defaultof<int[]>
+    if not (index.ZoneToItems.TryGetValue(planeOfGrowthZoneId, &itemIds)) || itemIds.Length = 0 then
+      SessionUi.write "No items mapped to Plane of Growth in drop-zone index."
+      0
+    else
+      SessionUi.write (sprintf "Prefetching %d Plane of Growth drop item(s) into item-cache.json..." itemIds.Length)
+      let mutable added = 0
+      let mutable touched = 0
+      for itemId in itemIds do
+        let key = string itemId
+        let mutable existing = Unchecked.defaultof<CachedItem>
+        if cache.Items.TryGetValue(key, &existing) then
+          let mutable fromIndex = Unchecked.defaultof<int[]>
+          let zones =
+            if index.ItemToZones.TryGetValue(itemId, &fromIndex) then fromIndex
+            else [| planeOfGrowthZoneId |]
+          existing.ZoneIds <- unionZoneIds existing.ZoneIds zones
+          cache.Items.[key] <- existing
+          touched <- touched + 1
+        else
+          match findItemByIdInContent contentRoot itemId with
+          | Some item ->
+              applyZonesFromIndex index item |> ignore
+              if not (itemHasZone item planeOfGrowthZoneId) then
+                item.ZoneIds <- unionZoneIds item.ZoneIds [| planeOfGrowthZoneId |]
+              cache.Items.[key] <- item
+              added <- added + 1
+              touched <- touched + 1
+          | None -> ()
+      if touched > 0 then saveItemCache cache
+      SessionUi.write (sprintf "Plane of Growth: %d new item(s), %d total touched in cache." added touched)
+      touched
 
 let cacheByName (cache: ItemCacheFile) (query: string) (pred: string -> string -> bool) =
   cache.Items.Values
@@ -539,11 +737,23 @@ let loadItemsMatchingFilters (contentRoot: string) (classBit: int option) (slotB
   SessionUi.write $"Loaded {list.Length} matching item(s) for autocomplete."
   list
 
+let mutable zoneContentRoot = ""
+
 let mergeIntoCache (cache: ItemCacheFile) (items: CachedItem list) =
+  let indexOpt =
+    if String.IsNullOrWhiteSpace zoneContentRoot then None
+    else Some (getDropZoneIndex zoneContentRoot)
   let mutable added = 0
   for item in items do
+    match indexOpt with
+    | Some idx -> applyZonesFromIndex idx item |> ignore
+    | None -> ()
     let key = string item.Id
-    if not (cache.Items.ContainsKey key) then added <- added + 1
+    let mutable existing = Unchecked.defaultof<CachedItem>
+    if cache.Items.TryGetValue(key, &existing) then
+      item.ZoneIds <- unionZoneIds existing.ZoneIds item.ZoneIds
+    else
+      added <- added + 1
     cache.Items.[key] <- item
   if items.Length > 0 then saveItemCache cache
   added
@@ -602,13 +812,16 @@ let present (source: string) (exact: bool) (items: CachedItem list) =
           Slots = decodeSlots item.Slots
           Classes = decodeMask classBits item.Classes
           Races = decodeMask raceBits item.Races
+          ZoneIds = item.ZoneIds
           Source = source
         |})
   SessionUi.show $"{items.Length} {kind} — {source}" rows
 
 // LINQPad interactive prompt with autocomplete suggestions (API name: Util.ReadLine).
-// LINQPad Util.ReadLine autocomplete gets unreliable / empty with huge suggestion lists.
-let maxItemAutocomplete = 750
+// Cap is empirical, not from LINQPad docs: class-wide suggestion lists made autocomplete
+ // unreliable/empty in practice; no published Util.ReadLine suggestion-count limit was found
+// (forum threads only note that suggestions appear after you start typing).
+let maxItemAutocomplete = 2500
 
 let prompt (message: string) (suggestions: string seq) =
   // Do not truncate here — callers sort then cap item names before composing suggestions.
@@ -1344,6 +1557,13 @@ let runLookup (req: LookupRequest) =
 
 if not (String.IsNullOrWhiteSpace itemName) then
   SessionUi.beginSession ()
+  let root =
+    let r = configuredContentRoot ()
+    if not (String.IsNullOrWhiteSpace r) then r
+    elif Directory.Exists @"D:\projects\idlequest-content" then @"D:\projects\idlequest-content"
+    else getContentRoot ()
+  zoneContentRoot <- root
+  ensurePlaneOfGrowthCached root (loadCache ()) |> ignore
   SessionUi.beginLookup ()
   runLookup {
     Query = itemName.Trim()
@@ -1355,13 +1575,19 @@ if not (String.IsNullOrWhiteSpace itemName) then
 else
   // One-time setup (content root / git pull) prints above; looping output uses the DumpContainer.
   let localRoot = resolveLocalRootForPrompt ()
+  let root =
+    if not (String.IsNullOrWhiteSpace localRoot) then localRoot
+    elif Directory.Exists @"D:\projects\idlequest-content" then @"D:\projects\idlequest-content"
+    else localRoot
+  zoneContentRoot <- if isNull root then "" else root
   SessionUi.beginSession ()
+  ensurePlaneOfGrowthCached zoneContentRoot (loadCache ()) |> ignore
   let mutable sessionClass: (string * int) option = None
   let mutable sessionSlot: (string * int) option = None
   let mutable sessionPrefetched: CachedItem list option = None
   let mutable sessionEquip: string option = None
   let rec session () =
-    match promptLookup localRoot sessionClass sessionSlot sessionPrefetched sessionEquip with
+    match promptLookup (if String.IsNullOrWhiteSpace zoneContentRoot then localRoot else zoneContentRoot) sessionClass sessionSlot sessionPrefetched sessionEquip with
     | Exit ->
         SessionUi.write "Done."
     | Lookup req ->

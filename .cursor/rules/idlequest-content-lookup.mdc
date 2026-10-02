@@ -1,0 +1,64 @@
+---
+description: IdleQuest EQ spawn/loot joins from brynnb/idlequest-content (item cache / lookups)
+globs: LINQPad Queries/gamey/idlequest/**
+alwaysApply: false
+---
+
+# IdleQuest content lookup (spawn / loot truth)
+
+**Master copy:** keep the fuller agent guidance in sync with
+`D:\projects\LustreDamus\.cursor\rules\idlequest-content-lookup.mdc`
+(and the EverQuest sample sheets under `D:\projects\LustreDamus\assets\samples\everquest\`).
+This LinqPad rule is the slim variant for item-lookup / item-cache / character-tracker work.
+
+Prefer [brynnb/idlequest-content](https://github.com/brynnb/idlequest-content) over P99 wiki alone for spawn and loot.
+Wiki is fine for lore; **loot table rows in that repo are what the browser game uses**.
+
+Local clone (when present): `D:\projects\idlequest-content`.
+
+## How to check (no full clone required every time)
+
+Sparse-clone the tables you need into a temp dir:
+
+```powershell
+$tmp = Join-Path $env:TEMP "idlequest-content-lookup"
+git clone --depth 1 --filter=blob:none --sparse https://github.com/brynnb/idlequest-content.git $tmp
+Set-Location $tmp
+git sparse-checkout set data/npc_types data/items data/spawn2 data/spawnentry data/spawngroup data/loottable data/loottable_entries data/lootdrop data/lootdrop_entries data/zone
+```
+
+Data is hex-sharded `*.ndjson` (one JSON object per line). Names use underscores (`Skeletal_Procurator`); `#` prefixes are common for nameds.
+
+## Join path (from their README / LustreDamus master rule)
+
+```
+zone.short_name -> spawn2.zone
+spawn2.spawngroupID -> spawnentry.spawngroupID
+spawnentry.npcID -> npc_types.id
+npc_types.loottable_id -> loottable_entries.loottable_id
+loottable_entries.lootdrop_id -> lootdrop_entries.lootdrop_id
+lootdrop_entries.item_id -> items.id
+```
+
+**Reverse (item → zones)** for `item-cache.json`:
+
+1. `item_id` in `data/lootdrop_entries/` → `lootdrop_id`
+2. that `lootdrop_id` in `data/loottable_entries/` → `loottable_id`
+3. that `loottable_id` on `data/npc_types/` → NPC `id`
+4. that NPC `id` in `data/spawnentry/` → `spawngroupID`
+5. that group in `data/spawn2/` → `zone` (short_name)
+6. `data/zone/` row with matching `short_name` → prefer storing **`zone.id`** (and optionally `short_name` / `zoneidnumber`) on the cached item
+
+Howling Stones short name: **`charasis`**.
+
+## Practical grep order (item-centric)
+
+1. **Item** — `Select-String data/items/*.ndjson -Pattern '"Name":"…"'` → `id`, stats.
+2. **Who drops it** — `'"item_id":<id>,'` in `data/lootdrop_entries/` → `lootdrop_id` + `chance`.
+3. **Which loot tables** — that `lootdrop_id` in `data/loottable_entries/` → `loottable_id`.
+4. **Which NPCs** — `'"loottable_id":<id>,'` in `data/npc_types/` → `name`, `level`, `id`.
+5. **Where they spawn** — `'"npcID":<id>,'` in `data/spawnentry/` → `spawngroupID`; then `data/spawn2/` for `zone` short names → resolve ids via `data/zone/`.
+
+## Gotchas
+
+IdleQuest loot can diverge from P99 wiki attributions (see examples in the LustreDamus master rule). When filling item-cache zone lists, trust the content DB join, not wiki-only drop notes.
