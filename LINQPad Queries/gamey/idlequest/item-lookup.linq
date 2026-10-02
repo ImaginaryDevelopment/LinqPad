@@ -57,7 +57,6 @@ let isNullUnsafe value = Object.Equals(value, null)
 module SessionUi =
   let dc = DumpContainer()
   let logLines = ResizeArray<string>()
-  let mutable status = "waiting for first lookup"
   let mutable panels: (string * obj) list = []
   let mutable active = false
 
@@ -65,7 +64,6 @@ module SessionUi =
     if active then
       dc.Content <-
         {|
-          Status = status
           Log = logLines |> Seq.toArray
           Results =
             panels
@@ -78,22 +76,13 @@ module SessionUi =
     active <- true
     logLines.Clear()
     panels <- []
-    status <- "session ready"
     dc.Dump("lookup session") |> ignore
     refresh ()
 
-  let beginLookup (filtersText: string) (query: string) =
+  let beginLookup () =
     if active then
       logLines.Clear()
       panels <- []
-      let q = if String.IsNullOrWhiteSpace query then "(list / filter only)" else query
-      status <- $"filters: {filtersText} | query: {q}"
-      refresh ()
-
-  let setStatus (filtersText: string) (query: string) =
-    if active then
-      let q = if String.IsNullOrWhiteSpace query then "(list / filter only)" else query
-      status <- $"filters: {filtersText} | query: {q}"
       refresh ()
 
   let write (msg: string) =
@@ -681,6 +670,34 @@ let ensureCharacterGear (ch: Character) =
     if not (ch.Current.Gear.ContainsKey name) then
       ch.Current.Gear.[name] <- Nullable()
 
+let formatGearItem (cache: ItemCacheFile) (itemId: int) =
+  let mutable existing = Unchecked.defaultof<CachedItem>
+  if cache.Items.TryGetValue(string itemId, &existing) && not (String.IsNullOrWhiteSpace existing.Name) then
+    $"{existing.Name}({itemId})"
+  else
+    string itemId
+
+let showCharacterGear (ch: Character) =
+  ensureCharacterGear ch
+  let cache = loadCache ()
+  let priorityFront = [ "primary"; "secondary"; "chest"; "legs"; "back"; "waist" ]
+  let frontSet = priorityFront |> Set.ofList
+  let middle =
+    slotNames
+    |> List.filter (fun s ->
+        not (frontSet.Contains s)
+        && not (String.Equals(s, "charm", StringComparison.OrdinalIgnoreCase)))
+  let displaySlots = priorityFront @ middle @ [ "charm" ]
+  let rows =
+    displaySlots
+    |> List.map (fun slot ->
+        let filled = ch.Current.Gear.ContainsKey slot && ch.Current.Gear.[slot].HasValue
+        {|
+          Slot = slot
+          Item = if filled then formatGearItem cache ch.Current.Gear.[slot].Value else ""
+        |})
+  SessionUi.show $"{ch.Name} gear ({ch.Class})" rows
+
 let tryEquipItemOnCharacter (classFilter: (string * int) option) (equipTargetName: string option) (item: CachedItem) =
   match loadCharacters () with
   | None -> ()
@@ -706,7 +723,9 @@ let tryEquipItemOnCharacter (classFilter: (string * int) option) (equipTargetNam
                   SessionUi.write $"Unknown slot '{s}'; skipping."
                   None
         match slotOpt with
-        | None -> SessionUi.write "Equip skipped."
+        | None ->
+            SessionUi.write "Equip skipped."
+            showCharacterGear ch
         | Some slot ->
             let already =
               ch.Current.Gear.ContainsKey slot
@@ -714,7 +733,6 @@ let tryEquipItemOnCharacter (classFilter: (string * int) option) (equipTargetNam
               && ch.Current.Gear.[slot].Value = item.Id
             if already then
               SessionUi.write (sprintf "%s already has %s in %s; no write." ch.Name (itemLabel item) slot)
-              SessionUi.show $"{ch.Name} gear (raw json)" (ser ch.Current.Gear)
             else
               let prev =
                 if ch.Current.Gear.ContainsKey slot && ch.Current.Gear.[slot].HasValue then
@@ -724,11 +742,19 @@ let tryEquipItemOnCharacter (classFilter: (string * int) option) (equipTargetNam
               ch.CurrentAt <- DateTime.UtcNow.ToString("o")
               saveCharacters chars
               SessionUi.write $"Equipped {item.Name} on {ch.Name} ({ch.Race} / {ch.Class}) in {slot} (was {prev}). Hand-edit sync in the tracker will record this."
-              SessionUi.show $"{ch.Name} gear (raw json)" (ser ch.Current.Gear)
+            showCharacterGear ch
+      let showTargetGear () =
+        match equipTargetName with
+        | None -> ()
+        | Some targetName ->
+            match chars.Characters |> Seq.tryFind (fun c -> String.Equals(c.Name, targetName, StringComparison.OrdinalIgnoreCase)) with
+            | Some ch -> showCharacterGear ch
+            | None -> ()
       match equipTargetName with
       | Some targetName ->
           match chars.Characters |> Seq.tryFind (fun c -> String.Equals(c.Name, targetName, StringComparison.OrdinalIgnoreCase)) with
-          | None -> SessionUi.write $"Equip target '{targetName}' not found in characters file."
+          | None ->
+              SessionUi.write $"Equip target '{targetName}' not found in characters file."
           | Some ch ->
               SessionUi.write $"Auto-equipping {itemLabel item} on {ch.Name} ({ch.Class})."
               proceedWith ch
@@ -748,13 +774,14 @@ let tryEquipItemOnCharacter (classFilter: (string * int) option) (equipTargetNam
                 proceedWith only
               else
                 SessionUi.write "Equip skipped."
+                showCharacterGear only
           | _ ->
               if matching.IsEmpty then
                 match classFilter with
                 | Some (n, _) -> SessionUi.write $"No characters match class filter '{n}'."
                 | None -> SessionUi.write "No characters to equip on."
               elif not (confirmYesNo (sprintf "Equip %s on a character? (y/n)" (itemLabel item))) then
-                ()
+                showTargetGear ()
               else
                 let names =
                   matching
@@ -767,9 +794,12 @@ let tryEquipItemOnCharacter (classFilter: (string * int) option) (equipTargetNam
                   | Some (n, _) -> $"Character to equip ({n} only; blank skips)"
                   | None -> "Character to equip (blank skips)"
                 match prompt promptLabel names with
-                | None -> SessionUi.write "Equip skipped."
+                | None ->
+                    SessionUi.write "Equip skipped."
+                    showTargetGear ()
                 | Some t when String.IsNullOrWhiteSpace t ->
                     SessionUi.write "Equip skipped."
+                    showTargetGear ()
                 | Some picked ->
                     match matching |> List.tryFind (fun c -> String.Equals(c.Name, picked, StringComparison.OrdinalIgnoreCase)) with
                     | None -> SessionUi.write $"Character '{picked}' not found."
@@ -1045,6 +1075,7 @@ let promptLookup
         match tryMatchCharacter text with
         | Some ch ->
             equipTarget <- Some ch.Name
+            showCharacterGear ch
             match tryMatchClass ch.Class with
             | Some pair ->
                 let switching = classFilter |> Option.exists (fun (n, _) -> not (String.Equals(n, fst pair, StringComparison.OrdinalIgnoreCase)))
@@ -1249,7 +1280,7 @@ let runLookup (req: LookupRequest) =
 
 if not (String.IsNullOrWhiteSpace itemName) then
   SessionUi.beginSession ()
-  SessionUi.beginLookup "class=(none); slot=(none); equip=(none)" (itemName.Trim())
+  SessionUi.beginLookup ()
   runLookup {
     Query = itemName.Trim()
     ClassFilter = None
@@ -1266,7 +1297,6 @@ else
   let mutable sessionPrefetched: CachedItem list option = None
   let mutable sessionEquip: string option = None
   let rec session () =
-    SessionUi.setStatus (formatFilters sessionClass sessionSlot sessionEquip) "(awaiting input)"
     match promptLookup localRoot sessionClass sessionSlot sessionPrefetched sessionEquip with
     | Exit ->
         SessionUi.write "Done."
@@ -1275,7 +1305,7 @@ else
         sessionSlot <- req.SlotFilter
         sessionPrefetched <- req.PrefetchedItems
         sessionEquip <- req.EquipTargetName
-        SessionUi.beginLookup (formatFilters req.ClassFilter req.SlotFilter req.EquipTargetName) req.Query
+        SessionUi.beginLookup ()
         runLookup req
         session ()
   session ()
