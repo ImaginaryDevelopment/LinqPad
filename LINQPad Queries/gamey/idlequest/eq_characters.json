@@ -14,25 +14,25 @@
           "face": null,
           "ear2": null,
           "neck": null,
-          "shoulders": null,
+          "shoulders": 4580,
           "arms": 25537,
           "back": null,
           "wrist1": null,
           "wrist2": null,
-          "range": null,
-          "hands": null,
+          "range": 7236,
+          "hands": 25539,
           "primary": 6624,
           "secondary": 11632,
           "fingers1": null,
           "fingers2": null,
           "chest": null,
-          "legs": null,
+          "legs": 25540,
           "feet": null,
-          "waist": null,
+          "waist": 1365,
           "ammo": null
         }
       },
-      "currentAt": "2026-10-02T00:09:43.8077459Z"
+      "currentAt": "2026-10-02T00:19:18.1379809Z"
     },
     {
       "id": "8ac8f78a19714c9298b2cb6fa338e863",

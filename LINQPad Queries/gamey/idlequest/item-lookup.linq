@@ -53,6 +53,65 @@ let inline serItemCache value = JsonSerializer.Serialize(value, itemCacheJsonOpt
 let inline deser<'T> (text: string) = JsonSerializer.Deserialize<'T>(text, jsonOpts)
 let isNullUnsafe value = Object.Equals(value, null)
 
+/// After one-time setup (git pull, content root), looping I/O goes here instead of flooding results.
+module SessionUi =
+  let dc = DumpContainer()
+  let logLines = ResizeArray<string>()
+  let mutable status = "waiting for first lookup"
+  let mutable panels: (string * obj) list = []
+  let mutable active = false
+
+  let refresh () =
+    if active then
+      dc.Content <-
+        {|
+          Status = status
+          Log = logLines |> Seq.toArray
+          Results =
+            panels
+            |> List.mapi (fun i (title, data) ->
+                {| Order = i + 1; Title = title; Data = data |})
+            |> Array.ofList
+        |}
+
+  let beginSession () =
+    active <- true
+    logLines.Clear()
+    panels <- []
+    status <- "session ready"
+    dc.Dump("lookup session") |> ignore
+    refresh ()
+
+  let beginLookup (filtersText: string) (query: string) =
+    if active then
+      logLines.Clear()
+      panels <- []
+      let q = if String.IsNullOrWhiteSpace query then "(list / filter only)" else query
+      status <- $"filters: {filtersText} | query: {q}"
+      refresh ()
+
+  let setStatus (filtersText: string) (query: string) =
+    if active then
+      let q = if String.IsNullOrWhiteSpace query then "(list / filter only)" else query
+      status <- $"filters: {filtersText} | query: {q}"
+      refresh ()
+
+  let write (msg: string) =
+    if not active then
+      printfn "%s" msg
+    else
+      logLines.Add(sprintf "%s  %s" (DateTime.Now.ToString("HH:mm:ss")) msg)
+      while logLines.Count > 50 do
+        logLines.RemoveAt(0)
+      refresh ()
+
+  let show (title: string) (data: obj) =
+    if not active then
+      data.Dump(description = title) |> ignore
+    else
+      panels <- (title, data) :: panels |> List.truncate 4
+      refresh ()
+
 let slotBits: (string * int) list =
   [
     "charm", 1; "ear1", 2; "head", 4; "face", 8; "ear2", 16; "neck", 32
@@ -437,7 +496,7 @@ let scanContent (contentRoot: string) (query: string) (byId: int option) (classB
   let wantAll = String.IsNullOrWhiteSpace query && byId.IsNone
   for shard in shards do
     if String.IsNullOrWhiteSpace contentRoot then
-      printfn "Scanning GitHub shard %s ..." shard
+      SessionUi.write $"Scanning GitHub shard {shard} ..."
     try
       for line in readShardLines contentRoot shard do
         let worthParsing =
@@ -467,7 +526,7 @@ let scanContent (contentRoot: string) (query: string) (byId: int option) (classB
 let loadItemsMatchingFilters (contentRoot: string) (classBit: int option) (slotBit: int option) =
   let items = ResizeArray<CachedItem>()
   let seen = HashSet<int>()
-  printfn "Loading matching item names from local repo (may take a bit)..."
+  SessionUi.write "Loading matching item names from local repo (may take a bit)..."
   for shard in shards do
     try
       for line in readShardLines contentRoot shard do
@@ -478,7 +537,7 @@ let loadItemsMatchingFilters (contentRoot: string) (classBit: int option) (slotB
     with ex ->
       printfn "WARN: shard %s read failed: %s" shard ex.Message
   let list = items |> Seq.sortBy (fun i -> i.Name, i.Id) |> Seq.toList
-  printfn "Loaded %d matching item(s) for autocomplete." list.Length
+  SessionUi.write $"Loaded {list.Length} matching item(s) for autocomplete."
   list
 
 let mergeIntoCache (cache: ItemCacheFile) (items: CachedItem list) =
@@ -513,39 +572,39 @@ let decodeSlots (mask: int) =
 
 let present (source: string) (exact: bool) (items: CachedItem list) =
   let kind = if exact then "exact" else "partial"
-  printfn "%d %s match(es) from %s" items.Length kind source
-  items
-  |> List.map (fun item ->
-      {|
-        Id = item.Id
-        Name = item.Name
-        Ac = item.Ac
-        Hp = item.Hp
-        Mana = item.Mana
-        Damage = item.Damage
-        Delay = item.Delay
-        Attack = item.Attack
-        Str = item.Astr
-        Sta = item.Asta
-        Agi = item.Aagi
-        Dex = item.Adex
-        Wis = item.Awis
-        Int = item.Aint
-        Cha = item.Acha
-        Mr = item.Mr
-        Fr = item.Fr
-        Cr = item.Cr
-        Pr = item.Pr
-        Dr = item.Dr
-        ReqLevel = item.Reqlevel
-        ItemType = item.Itemtype
-        Slots = decodeSlots item.Slots
-        Classes = decodeMask classBits item.Classes
-        Races = decodeMask raceBits item.Races
-        Source = source
-      |})
-  |> Dump
-  |> ignore
+  SessionUi.write $"{items.Length} {kind} match(es) from {source}"
+  let rows =
+    items
+    |> List.map (fun item ->
+        {|
+          Id = item.Id
+          Name = item.Name
+          Ac = item.Ac
+          Hp = item.Hp
+          Mana = item.Mana
+          Damage = item.Damage
+          Delay = item.Delay
+          Attack = item.Attack
+          Str = item.Astr
+          Sta = item.Asta
+          Agi = item.Aagi
+          Dex = item.Adex
+          Wis = item.Awis
+          Int = item.Aint
+          Cha = item.Acha
+          Mr = item.Mr
+          Fr = item.Fr
+          Cr = item.Cr
+          Pr = item.Pr
+          Dr = item.Dr
+          ReqLevel = item.Reqlevel
+          ItemType = item.Itemtype
+          Slots = decodeSlots item.Slots
+          Classes = decodeMask classBits item.Classes
+          Races = decodeMask raceBits item.Races
+          Source = source
+        |})
+  SessionUi.show $"{items.Length} {kind} — {source}" rows
 
 // LINQPad interactive prompt with autocomplete suggestions (API name: Util.ReadLine).
 let prompt (message: string) (suggestions: string seq) =
@@ -573,7 +632,7 @@ let slotsForItem (item: CachedItem) =
 
 let loadCharacters () =
   if not (File.Exists Paths.charactersPath) then
-    printfn "No characters file at %s" Paths.charactersPath
+    SessionUi.write $"No characters file at {Paths.charactersPath}"
     None
   else
     try
@@ -581,7 +640,7 @@ let loadCharacters () =
       if isNullUnsafe parsed || isNullUnsafe parsed.Characters then None
       else Some parsed
     with ex ->
-      printfn "Failed to read characters: %s" ex.Message
+      SessionUi.write $"Failed to read characters: {ex.Message}"
       None
 
 let saveCharacters (chars: CharactersFile) =
@@ -600,9 +659,9 @@ let tryEquipItemOnCharacter (classFilter: (string * int) option) (item: CachedIt
   match loadCharacters () with
   | None -> ()
   | Some chars when chars.Characters.Count = 0 ->
-      printfn "No characters to equip on."
+      SessionUi.write "No characters to equip on."
   | Some chars ->
-      if not (confirmYesNo $"Equip {itemLabel item} on a character? (y/n)") then ()
+      if not (confirmYesNo (sprintf "Equip %s on a character? (y/n)" (itemLabel item))) then ()
       else
         let names =
           chars.Characters
@@ -618,27 +677,27 @@ let tryEquipItemOnCharacter (classFilter: (string * int) option) (item: CachedIt
           |> Seq.toArray
         if names.Length = 0 then
           match classFilter with
-          | Some (n, _) -> printfn "No characters match class filter '%s'." n
-          | None -> printfn "No characters to equip on."
+          | Some (n, _) -> SessionUi.write $"No characters match class filter '{n}'."
+          | None -> SessionUi.write "No characters to equip on."
         else
           let promptLabel =
             match classFilter with
             | Some (n, _) -> $"Character to equip ({n} only; blank skips)"
             | None -> "Character to equip (blank skips)"
           match prompt promptLabel names with
-          | None -> printfn "Equip skipped."
+          | None -> SessionUi.write "Equip skipped."
           | Some t when String.IsNullOrWhiteSpace t ->
-              printfn "Equip skipped."
+              SessionUi.write "Equip skipped."
           | Some picked ->
               match chars.Characters |> Seq.tryFind (fun c -> String.Equals(c.Name, picked, StringComparison.OrdinalIgnoreCase)) with
-              | None -> printfn "Character '%s' not found." picked
+              | None -> SessionUi.write $"Character '{picked}' not found."
               | Some ch ->
                   ensureCharacterGear ch
                   let possible = slotsForItem item
                   let slotOpt =
                     match possible with
                     | [] ->
-                        printfn "Item has no equip slots (slots=%d); skipping." item.Slots
+                        SessionUi.write $"Item has no equip slots (slots={item.Slots}); skipping."
                         None
                     | [ one ] -> Some one
                     | many ->
@@ -648,17 +707,17 @@ let tryEquipItemOnCharacter (classFilter: (string * int) option) (item: CachedIt
                         | Some s when many |> List.exists (fun m -> String.Equals(m, s, StringComparison.OrdinalIgnoreCase)) ->
                             many |> List.find (fun m -> String.Equals(m, s, StringComparison.OrdinalIgnoreCase)) |> Some
                         | Some s ->
-                            printfn "Unknown slot '%s'; skipping." s
+                            SessionUi.write $"Unknown slot '{s}'; skipping."
                             None
                   match slotOpt with
-                  | None -> printfn "Equip skipped."
+                  | None -> SessionUi.write "Equip skipped."
                   | Some slot ->
                       let already =
                         ch.Current.Gear.ContainsKey slot
                         && ch.Current.Gear.[slot].HasValue
                         && ch.Current.Gear.[slot].Value = item.Id
                       if already then
-                        printfn "%s already has %s in %s; no write." ch.Name (itemLabel item) slot
+                        SessionUi.write (sprintf "%s already has %s in %s; no write." ch.Name (itemLabel item) slot)
                       else
                         let prev =
                           if ch.Current.Gear.ContainsKey slot && ch.Current.Gear.[slot].HasValue then
@@ -667,8 +726,7 @@ let tryEquipItemOnCharacter (classFilter: (string * int) option) (item: CachedIt
                         ch.Current.Gear.[slot] <- Nullable(item.Id)
                         ch.CurrentAt <- DateTime.UtcNow.ToString("o")
                         saveCharacters chars
-                        printfn "Equipped %s on %s (%s / %s) in %s (was %s). Hand-edit sync in the tracker will record this."
-                          item.Name ch.Name ch.Race ch.Class slot prev
+                        SessionUi.write $"Equipped {item.Name} on {ch.Name} ({ch.Race} / {ch.Class}) in {slot} (was {prev}). Hand-edit sync in the tracker will record this."
 
 let maybePromptEquip (classFilter: (string * int) option) (hits: CachedItem list) =
   // Runs after adding an item or looking up one that already exists in item-cache.json.
@@ -688,8 +746,8 @@ let maybePromptEquip (classFilter: (string * int) option) (hits: CachedItem list
               | true, id ->
                   match many |> List.tryFind (fun i -> i.Id = id) with
                   | Some item -> tryEquipItemOnCharacter classFilter item
-                  | None -> printfn "Could not match '%s' to an item." picked
-              | _ -> printfn "Could not match '%s' to an item." picked
+                  | None -> SessionUi.write $"Could not match '{picked}' to an item."
+              | _ -> SessionUi.write $"Could not match '{picked}' to an item."
 // end TODO: remove this
 
 let storeAndPresent (cache: ItemCacheFile) (source: string) (exact: bool) (hits: CachedItem list) (classFilter: (string * int) option) =
@@ -697,10 +755,10 @@ let storeAndPresent (cache: ItemCacheFile) (source: string) (exact: bool) (hits:
     if exact then hits
     elif hits.Length <= 25 then hits
     else
-      printfn "Partial matches: %d. Caching the first 25." hits.Length
+      SessionUi.write $"Partial matches: {hits.Length}. Caching the first 25."
       hits |> List.truncate 25
   let added = mergeIntoCache cache toStore
-  printfn "Wrote %d new item(s) into item-cache.json (%d already present)." added (toStore.Length - added)
+  SessionUi.write (sprintf "Wrote %d new item(s) into item-cache.json (%d already present)." added (toStore.Length - added))
   present source exact hits
   // TODO: remove this — temporary equip prompt after add/lookup (until tracker merge).
   maybePromptEquip classFilter toStore
@@ -710,13 +768,13 @@ let storeAndPresent (cache: ItemCacheFile) (source: string) (exact: bool) (hits:
 let offerUnfilteredMatches (cache: ItemCacheFile) (source: string) (exact: bool) (hits: CachedItem list) (filtersText: string) (classFilter: (string * int) option) =
   if hits.IsEmpty then false
   else
-    printfn "No match with current filters (%s). Candidates without filters (%d %s):" filtersText hits.Length (if exact then "exact" else "partial")
-    hits |> List.map itemLabel |> Dump |> ignore
+    SessionUi.write (sprintf "No match with current filters (%s). Candidates without filters (%d %s)." filtersText hits.Length (if exact then "exact" else "partial"))
+    SessionUi.show $"Unfiltered candidates ({hits.Length})" (hits |> List.map itemLabel)
     if confirmYesNo $"Accept these unfiltered matches? Filters were: {filtersText} (y/n)" then
       storeAndPresent cache source exact hits classFilter
       true
     else
-      printfn "Rejected unfiltered matches."
+      SessionUi.write "Rejected unfiltered matches."
       false
 
 type LookupRequest = {
@@ -769,8 +827,7 @@ let dumpCachedNamesForFilters (classFilter: (string * int) option) (slotFilter: 
       let filtersText = formatFilters classFilter slotFilter
       let fromLinqPad = readFilterListCache classFilter slotFilter
       if fromLinqPad.Length > 0 then
-        fromLinqPad.Dump(description = $"Filter scan / Util.Cache ({fromLinqPad.Length}): {filtersText}")
-        |> ignore
+        SessionUi.show $"Filter scan / Util.Cache ({fromLinqPad.Length}): {filtersText}" fromLinqPad
       let fromJson =
         loadCache().Items.Values
         |> Seq.filter (fun item -> itemMatchesFilters item (Some classBit) (Some slotBit))
@@ -778,8 +835,7 @@ let dumpCachedNamesForFilters (classFilter: (string * int) option) (slotFilter: 
         |> Seq.distinct
         |> Seq.sort
         |> Seq.toList
-      fromJson.Dump(description = $"item-cache.json only ({fromJson.Length}): {filtersText}")
-      |> ignore
+      SessionUi.show $"item-cache.json only ({fromJson.Length}): {filtersText}" fromJson
   | _ -> ()
 
 let isClearCommand (text: string) =
@@ -805,7 +861,7 @@ let promptLookup
         prefetched <- None
     | _ when String.IsNullOrWhiteSpace localRoot ->
         prefetched <- None
-        printfn "No local idlequest-content clone; item-name autocomplete unavailable until a local root is selected."
+        SessionUi.write "No local idlequest-content clone; item-name autocomplete unavailable until a local root is selected."
     | _ ->
         let classBit = classFilter |> Option.map snd
         let slotBit = slotFilter |> Option.map snd
@@ -816,7 +872,7 @@ let promptLookup
               |> List.filter (fun item -> itemMatchesFilters item classBit slotBit)
             prefetched <- Some narrowed
             writeFilterListCache classFilter slotFilter narrowed |> ignore
-            printfn "Using cached filter list (%d item(s) after narrow)." narrowed.Length
+            SessionUi.write $"Using cached filter list ({narrowed.Length} item(s) after narrow)."
         | _ ->
             let loaded = loadItemsMatchingFilters localRoot classBit slotBit
             prefetched <- Some loaded
@@ -869,7 +925,7 @@ let promptLookup
       | Some _, Some _ ->
           $"Current filters: {filtersText}. Enter an item name/id, or 'clear' (blank = list all in Util.Cache, not item-cache.json)."
 
-    printfn "Current filters: %s" filtersText
+    SessionUi.write $"Current filters: {filtersText}"
     match prompt message suggestions with
     | None -> Exit
     | Some text when String.IsNullOrWhiteSpace text ->
@@ -886,13 +942,13 @@ let promptLookup
         classFilter <- None
         slotFilter <- None
         prefetched <- None
-        printfn "Cleared filters (now %s)." (formatFilters classFilter slotFilter)
+        SessionUi.write (sprintf "Cleared filters (now %s)." (formatFilters classFilter slotFilter))
         loop ()
     | Some text ->
         match classFilter, tryMatchClass text with
         | None, Some pair ->
             classFilter <- Some pair
-            printfn "Added class filter: %s (now %s)" (fst pair) (formatFilters classFilter slotFilter)
+            SessionUi.write (sprintf "Added class filter: %s (now %s)." (fst pair) (formatFilters classFilter slotFilter))
             // First filter: full load. Second filter later: narrow in memory.
             ensurePrefetch (prefetched.IsNone)
             loop ()
@@ -900,7 +956,7 @@ let promptLookup
             match slotFilter, tryMatchSlot text with
             | None, Some pair ->
                 slotFilter <- Some pair
-                printfn "Added slot filter: %s (now %s)" (fst pair) (formatFilters classFilter slotFilter)
+                SessionUi.write (sprintf "Added slot filter: %s (now %s)." (fst pair) (formatFilters classFilter slotFilter))
                 ensurePrefetch (prefetched.IsNone)
                 loop ()
             | _ ->
@@ -935,7 +991,8 @@ let runLookup (req: LookupRequest) =
   let filtersText = formatFilters req.ClassFilter req.SlotFilter
   let query = req.Query
   let cache = loadCache ()
-  printfn "Lookup with filters: %s; query=%s" filtersText (if String.IsNullOrWhiteSpace query then "(all filtered)" else query)
+  let qText = if String.IsNullOrWhiteSpace query then "(all filtered)" else query
+  SessionUi.write $"Lookup with filters: {filtersText}; query={qText}"
   let asId =
     match Int32.TryParse query with
     | true, id when not (String.IsNullOrWhiteSpace query) -> Some id
@@ -978,7 +1035,7 @@ let runLookup (req: LookupRequest) =
     if not (hasFilters && hasNameQuery) then
       false
     else
-      printfn "No item matched '%s' with current filters (%s); retrying without filters." query filtersText
+      SessionUi.write $"No item matched '{query}' with current filters ({filtersText}); retrying without filters."
       let fromCache =
         let hits = cachedUnfiltered ()
         let exact = hits |> List.forall (fun i -> asId.IsSome || sameName query i.Name)
@@ -994,7 +1051,7 @@ let runLookup (req: LookupRequest) =
               let r = configuredContentRoot ()
               if String.IsNullOrWhiteSpace r then getContentRoot () else r
             if String.IsNullOrWhiteSpace contentRoot then
-              printfn "No local content root available for an unfiltered retry."
+              SessionUi.write "No local content root available for an unfiltered retry."
               false
             else
               let found, exact = scanContent contentRoot query asId None None
@@ -1006,7 +1063,7 @@ let runLookup (req: LookupRequest) =
             if not (String.IsNullOrWhiteSpace contentRoot) && not (String.Equals(contentRoot, prefetchedRoot, StringComparison.OrdinalIgnoreCase)) then
               ensureContentFresh contentRoot
             if String.IsNullOrWhiteSpace contentRoot then
-              printfn "No content source available for an unfiltered retry."
+              SessionUi.write "No content source available for an unfiltered retry."
               false
             else
               let source = if String.IsNullOrWhiteSpace (configuredContentRoot ()) then "github (unfiltered)" else "local clone (unfiltered)"
@@ -1029,8 +1086,8 @@ let runLookup (req: LookupRequest) =
       | Some items when String.IsNullOrWhiteSpace query && asId.IsNone ->
           let hits = filterList items
           let names = writeFilterListCache req.ClassFilter req.SlotFilter hits
-          printfn "Listed %d filtered item(s) into Util.Cache only (not written to item-cache.json)." names.Length
-          names.Dump(description = $"Filter scan / Util.Cache ({names.Length}): {filtersText}") |> ignore
+          SessionUi.write $"Listed {names.Length} filtered item(s) into Util.Cache only (not written to item-cache.json)."
+          SessionUi.show $"Filter scan / Util.Cache ({names.Length}): {filtersText}" names
           present "filter list (Util.Cache only)" true hits
       | Some items when hasNameQuery && asId.IsNone ->
           let named, exactFlag = nameHitsFrom items
@@ -1038,7 +1095,7 @@ let runLookup (req: LookupRequest) =
           if not hits.IsEmpty then
             storeAndPresent cache "local clone (filtered)" exactFlag hits req.ClassFilter
           elif not (tryUnfilteredFallback named) then
-            printfn "No item matched '%s'." query
+            SessionUi.write $"No item matched '{query}'."
       | _ ->
           let prefetchedRoot = configuredContentRoot ()
           let contentRoot = getContentRoot ()
@@ -1046,20 +1103,22 @@ let runLookup (req: LookupRequest) =
             ensureContentFresh contentRoot
           let source =
             if String.IsNullOrWhiteSpace contentRoot then
-              printfn "No local idlequest-content clone selected. Fetching GitHub shards (slow)."
+              SessionUi.write "No local idlequest-content clone selected. Fetching GitHub shards (slow)."
               "github"
             else
-              printfn "Scanning local content: %s" contentRoot
+              SessionUi.write $"Scanning local content: {contentRoot}"
               "local clone"
           let found, exact = scanContent contentRoot query asId classBit slotBit
           if not found.IsEmpty then
             storeAndPresent cache source exact found req.ClassFilter
           elif String.IsNullOrWhiteSpace query && asId.IsNone then
-            printfn "No items matched the current filters."
+            SessionUi.write "No items matched the current filters."
           elif not (tryUnfilteredFallback found) then
-            printfn "No item matched '%s'." query
+            SessionUi.write $"No item matched '{query}'."
 
 if not (String.IsNullOrWhiteSpace itemName) then
+  SessionUi.beginSession ()
+  SessionUi.beginLookup "class=(none); slot=(none)" itemName.Trim()
   runLookup {
     Query = itemName.Trim()
     ClassFilter = None
@@ -1067,18 +1126,22 @@ if not (String.IsNullOrWhiteSpace itemName) then
     PrefetchedItems = None
   }
 else
+  // One-time setup (content root / git pull) prints above; looping output uses the DumpContainer.
   let localRoot = resolveLocalRootForPrompt ()
+  SessionUi.beginSession ()
   let mutable sessionClass: (string * int) option = None
   let mutable sessionSlot: (string * int) option = None
   let mutable sessionPrefetched: CachedItem list option = None
   let rec session () =
+    SessionUi.setStatus (formatFilters sessionClass sessionSlot) "(awaiting input)"
     match promptLookup localRoot sessionClass sessionSlot sessionPrefetched with
-    | Exit -> printfn "Done."
+    | Exit ->
+        SessionUi.write "Done."
     | Lookup req ->
         sessionClass <- req.ClassFilter
         sessionSlot <- req.SlotFilter
         sessionPrefetched <- req.PrefetchedItems
+        SessionUi.beginLookup (formatFilters req.ClassFilter req.SlotFilter) req.Query
         runLookup req
-        printfn ""
         session ()
   session ()
