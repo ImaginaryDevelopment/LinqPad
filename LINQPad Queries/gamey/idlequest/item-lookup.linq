@@ -681,21 +681,12 @@ let ensureCharacterGear (ch: Character) =
     if not (ch.Current.Gear.ContainsKey name) then
       ch.Current.Gear.[name] <- Nullable()
 
-let tryEquipItemOnCharacter (classFilter: (string * int) option) (item: CachedItem) =
+let tryEquipItemOnCharacter (classFilter: (string * int) option) (equipTargetName: string option) (item: CachedItem) =
   match loadCharacters () with
   | None -> ()
   | Some chars when chars.Characters.Count = 0 ->
       SessionUi.write "No characters to equip on."
   | Some chars ->
-      let matching =
-        chars.Characters
-        |> Seq.filter (fun c ->
-            match classFilter with
-            | None -> true
-            | Some (className, _) ->
-                String.Equals(c.Class, className, StringComparison.OrdinalIgnoreCase))
-        |> Seq.filter (fun c -> not (String.IsNullOrWhiteSpace c.Name))
-        |> Seq.toList
       let proceedWith (ch: Character) =
         ensureCharacterGear ch
         let possible = slotsForItem item
@@ -723,6 +714,7 @@ let tryEquipItemOnCharacter (classFilter: (string * int) option) (item: CachedIt
               && ch.Current.Gear.[slot].Value = item.Id
             if already then
               SessionUi.write (sprintf "%s already has %s in %s; no write." ch.Name (itemLabel item) slot)
+              SessionUi.show $"{ch.Name} gear (raw json)" (ser ch.Current.Gear)
             else
               let prev =
                 if ch.Current.Gear.ContainsKey slot && ch.Current.Gear.[slot].HasValue then
@@ -733,40 +725,57 @@ let tryEquipItemOnCharacter (classFilter: (string * int) option) (item: CachedIt
               saveCharacters chars
               SessionUi.write $"Equipped {item.Name} on {ch.Name} ({ch.Race} / {ch.Class}) in {slot} (was {prev}). Hand-edit sync in the tracker will record this."
               SessionUi.show $"{ch.Name} gear (raw json)" (ser ch.Current.Gear)
-      match classFilter, matching with
-      | Some (className, _), [ only ] ->
-          if confirmYesNo (sprintf "Equip %s to the only %s, %s? (y/n)" (itemLabel item) className only.Name) then
-            proceedWith only
-          else
-            SessionUi.write "Equip skipped."
-      | _ ->
-          if matching.IsEmpty then
-            match classFilter with
-            | Some (n, _) -> SessionUi.write $"No characters match class filter '{n}'."
-            | None -> SessionUi.write "No characters to equip on."
-          elif not (confirmYesNo (sprintf "Equip %s on a character? (y/n)" (itemLabel item))) then
-            ()
-          else
-            let names =
-              matching
-              |> List.map (fun c -> c.Name)
-              |> List.distinct
-              |> List.sort
-              |> Array.ofList
-            let promptLabel =
-              match classFilter with
-              | Some (n, _) -> $"Character to equip ({n} only; blank skips)"
-              | None -> "Character to equip (blank skips)"
-            match prompt promptLabel names with
-            | None -> SessionUi.write "Equip skipped."
-            | Some t when String.IsNullOrWhiteSpace t ->
+      match equipTargetName with
+      | Some targetName ->
+          match chars.Characters |> Seq.tryFind (fun c -> String.Equals(c.Name, targetName, StringComparison.OrdinalIgnoreCase)) with
+          | None -> SessionUi.write $"Equip target '{targetName}' not found in characters file."
+          | Some ch ->
+              SessionUi.write $"Auto-equipping {itemLabel item} on {ch.Name} ({ch.Class})."
+              proceedWith ch
+      | None ->
+          let matching =
+            chars.Characters
+            |> Seq.filter (fun c ->
+                match classFilter with
+                | None -> true
+                | Some (className, _) ->
+                    String.Equals(c.Class, className, StringComparison.OrdinalIgnoreCase))
+            |> Seq.filter (fun c -> not (String.IsNullOrWhiteSpace c.Name))
+            |> Seq.toList
+          match classFilter, matching with
+          | Some (className, _), [ only ] ->
+              if confirmYesNo (sprintf "Equip %s to the only %s, %s? (y/n)" (itemLabel item) className only.Name) then
+                proceedWith only
+              else
                 SessionUi.write "Equip skipped."
-            | Some picked ->
-                match matching |> List.tryFind (fun c -> String.Equals(c.Name, picked, StringComparison.OrdinalIgnoreCase)) with
-                | None -> SessionUi.write $"Character '{picked}' not found."
-                | Some ch -> proceedWith ch
+          | _ ->
+              if matching.IsEmpty then
+                match classFilter with
+                | Some (n, _) -> SessionUi.write $"No characters match class filter '{n}'."
+                | None -> SessionUi.write "No characters to equip on."
+              elif not (confirmYesNo (sprintf "Equip %s on a character? (y/n)" (itemLabel item))) then
+                ()
+              else
+                let names =
+                  matching
+                  |> List.map (fun c -> c.Name)
+                  |> List.distinct
+                  |> List.sort
+                  |> Array.ofList
+                let promptLabel =
+                  match classFilter with
+                  | Some (n, _) -> $"Character to equip ({n} only; blank skips)"
+                  | None -> "Character to equip (blank skips)"
+                match prompt promptLabel names with
+                | None -> SessionUi.write "Equip skipped."
+                | Some t when String.IsNullOrWhiteSpace t ->
+                    SessionUi.write "Equip skipped."
+                | Some picked ->
+                    match matching |> List.tryFind (fun c -> String.Equals(c.Name, picked, StringComparison.OrdinalIgnoreCase)) with
+                    | None -> SessionUi.write $"Character '{picked}' not found."
+                    | Some ch -> proceedWith ch
 
-let maybePromptEquip (cache: ItemCacheFile) (classFilter: (string * int) option) (hits: CachedItem list) =
+let maybePromptEquip (cache: ItemCacheFile) (classFilter: (string * int) option) (equipTargetName: string option) (hits: CachedItem list) =
   // Runs after adding an item or looking up one that already exists in item-cache.json.
   let ensureCached (item: CachedItem) =
     let added = mergeIntoCache cache [ item ]
@@ -776,16 +785,16 @@ let maybePromptEquip (cache: ItemCacheFile) (classFilter: (string * int) option)
   | [] -> ()
   | [ item ] ->
       ensureCached item
-      tryEquipItemOnCharacter classFilter item
+      tryEquipItemOnCharacter classFilter equipTargetName item
   | many ->
       match pickWhichItem "Equip which item? (only the chosen item is written to item-cache.json)" many with
       | Some item ->
           ensureCached item
-          tryEquipItemOnCharacter classFilter item
+          tryEquipItemOnCharacter classFilter equipTargetName item
       | None -> SessionUi.write "Equip aborted."
 // end TODO: remove this
 
-let storeAndPresent (cache: ItemCacheFile) (source: string) (exact: bool) (hits: CachedItem list) (classFilter: (string * int) option) =
+let storeAndPresent (cache: ItemCacheFile) (source: string) (exact: bool) (hits: CachedItem list) (classFilter: (string * int) option) (equipTargetName: string option) =
   present source exact hits
   let chosen =
     match hits with
@@ -805,11 +814,11 @@ let storeAndPresent (cache: ItemCacheFile) (source: string) (exact: bool) (hits:
       let added = mergeIntoCache cache [ item ]
       SessionUi.write (sprintf "Wrote %d new item(s) into item-cache.json (%d already present)." added (1 - added))
       // TODO: remove this — temporary equip prompt after add/lookup (until tracker merge).
-      maybePromptEquip cache classFilter [ item ]
+      maybePromptEquip cache classFilter equipTargetName [ item ]
       // end TODO: remove this
 
 /// Show unfiltered candidates and only cache/accept if the user picks one.
-let offerUnfilteredMatches (cache: ItemCacheFile) (source: string) (exact: bool) (hits: CachedItem list) (filtersText: string) (classFilter: (string * int) option) =
+let offerUnfilteredMatches (cache: ItemCacheFile) (source: string) (exact: bool) (hits: CachedItem list) (filtersText: string) (classFilter: (string * int) option) (equipTargetName: string option) =
   if hits.IsEmpty then false
   else
     let kind = if exact then "exact" else "partial"
@@ -825,7 +834,7 @@ let offerUnfilteredMatches (cache: ItemCacheFile) (source: string) (exact: bool)
         SessionUi.write "Aborted; unfiltered candidates rejected."
         false
     | Some item ->
-        storeAndPresent cache source true [ item ] classFilter
+        storeAndPresent cache source true [ item ] classFilter equipTargetName
         true
 
 type LookupRequest = {
@@ -833,13 +842,14 @@ type LookupRequest = {
   ClassFilter: (string * int) option
   SlotFilter: (string * int) option
   PrefetchedItems: CachedItem list option
+  EquipTargetName: string option
 }
 
 type PromptResult =
   | Exit
   | Lookup of LookupRequest
 
-let formatFilters (classFilter: (string * int) option) (slotFilter: (string * int) option) =
+let formatClassSlot (classFilter: (string * int) option) (slotFilter: (string * int) option) =
   let classText =
     match classFilter with
     | Some (n, _) -> n
@@ -850,11 +860,18 @@ let formatFilters (classFilter: (string * int) option) (slotFilter: (string * in
     | None -> "(none)"
   $"class={classText}; slot={slotText}"
 
+let formatFilters (classFilter: (string * int) option) (slotFilter: (string * int) option) (equipTargetName: string option) =
+  let equipText =
+    match equipTargetName with
+    | Some n -> n
+    | None -> "(none)"
+  $"{formatClassSlot classFilter slotFilter}; equip={equipText}"
+
 // Blank "list all filtered" and filter-scan autocomplete live in Util.Cache, not item-cache.json.
 let mutable filterListSlot : string[] = [||]
 
 let filterListCacheKey (classFilter: (string * int) option) (slotFilter: (string * int) option) =
-  "idlequest-filter-items:" + formatFilters classFilter slotFilter
+  "idlequest-filter-items:" + formatClassSlot classFilter slotFilter
 
 let writeFilterListCache (classFilter: (string * int) option) (slotFilter: (string * int) option) (items: CachedItem list) =
   let names =
@@ -875,7 +892,7 @@ let readFilterListCache (classFilter: (string * int) option) (slotFilter: (strin
 let dumpCachedNamesForFilters (classFilter: (string * int) option) (slotFilter: (string * int) option) =
   match classFilter, slotFilter with
   | Some (_, classBit), Some (_, slotBit) ->
-      let filtersText = formatFilters classFilter slotFilter
+      let filtersText = formatClassSlot classFilter slotFilter
       let fromLinqPad = readFilterListCache classFilter slotFilter
       if fromLinqPad.Length > 0 then
         SessionUi.show $"Filter scan / Util.Cache ({fromLinqPad.Length}): {filtersText}" fromLinqPad
@@ -892,19 +909,43 @@ let dumpCachedNamesForFilters (classFilter: (string * int) option) (slotFilter: 
 let isClearCommand (text: string) =
   String.Equals(text.Trim(), "clear", StringComparison.OrdinalIgnoreCase)
 
-/// Until a class or gear slot is chosen, suggestions are only those filters.
+let listCharacterNames () =
+  match loadCharacters () with
+  | None -> [||]
+  | Some chars ->
+      chars.Characters
+      |> Seq.map (fun c -> c.Name)
+      |> Seq.filter (fun n -> not (String.IsNullOrWhiteSpace n))
+      |> Seq.distinct
+      |> Seq.sort
+      |> Seq.toArray
+
+let tryMatchCharacter (text: string) =
+  match loadCharacters () with
+  | None -> None
+  | Some chars ->
+      chars.Characters
+      |> Seq.tryFind (fun c ->
+          not (String.IsNullOrWhiteSpace c.Name)
+          && String.Equals(c.Name, text, StringComparison.OrdinalIgnoreCase))
+
+/// Until a class or gear slot is chosen, suggestions are classes/slots/character names.
 /// After one is set (and a local repo exists), suggestions add matching item names,
 /// while still offering the other unused filter type.
+/// Type a character name to set class filter + auto-equip target for lookups.
 /// Filters and the matching content list persist across lookups; type "clear" to remove them.
 let promptLookup
     (localRoot: string)
     (initialClass: (string * int) option)
     (initialSlot: (string * int) option)
     (initialPrefetched: CachedItem list option)
+    (initialEquipTarget: string option)
     : PromptResult =
   let mutable classFilter = initialClass
   let mutable slotFilter = initialSlot
   let mutable prefetched = initialPrefetched
+  let mutable equipTarget = initialEquipTarget
+  let characterNames = listCharacterNames ()
 
   let ensurePrefetch (forceReload: bool) =
     match classFilter, slotFilter with
@@ -952,29 +993,32 @@ let promptLookup
       | Some items -> items |> Seq.map (fun i -> i.Name)
       | None -> Seq.empty
     let clearSuggestion =
-      match classFilter, slotFilter with
-      | None, None -> Seq.empty
+      match classFilter, slotFilter, equipTarget with
+      | None, None, None -> Seq.empty
       | _ -> seq { "clear" }
+    let characterSuggestions = characterNames |> Seq.ofArray
 
     let suggestions =
       match classFilter, slotFilter with
       | None, None ->
-          // First step: only classes and gear slots (or free-type a name/id to skip filters).
-          Seq.append classSuggestions slotSuggestions
+          // First step: classes, slots, and character names (or free-type an item name/id).
+          Seq.concat [ classSuggestions; slotSuggestions; characterSuggestions ]
       | _ ->
-          Seq.concat [ clearSuggestion; classSuggestions; slotSuggestions; itemSuggestions ]
+          Seq.concat [ clearSuggestion; classSuggestions; slotSuggestions; characterSuggestions; itemSuggestions ]
 
-    let filtersText = formatFilters classFilter slotFilter
+    let filtersText = formatFilters classFilter slotFilter equipTarget
     let message =
-      match classFilter, slotFilter with
-      | None, None ->
-          $"Current filters: {filtersText}. Enter a class, gear slot, or item name/id (blank exits). Suggestions are only classes/slots until a filter is set."
-      | Some _, None ->
-          $"Current filters: {filtersText}. Enter a gear slot, item name/id, or 'clear' (blank = list all in Util.Cache, not item-cache.json)."
-      | None, Some _ ->
-          $"Current filters: {filtersText}. Enter a class, item name/id, or 'clear' (blank = list all in Util.Cache, not item-cache.json)."
-      | Some _, Some _ ->
-          $"Current filters: {filtersText}. Enter an item name/id, or 'clear' (blank = list all in Util.Cache, not item-cache.json)."
+      match classFilter, slotFilter, equipTarget with
+      | None, None, None ->
+          $"Current filters: {filtersText}. Enter a class, gear slot, character name, or item name/id (blank exits)."
+      | _, _, Some name ->
+          $"Current filters: {filtersText}. Lookups auto-equip on {name} (multi-slot items still ask). Enter item name/id, slot, another character, or 'clear' (blank = list all in Util.Cache)."
+      | Some _, None, _ ->
+          $"Current filters: {filtersText}. Enter a gear slot, character name, item name/id, or 'clear' (blank = list all in Util.Cache, not item-cache.json)."
+      | None, Some _, _ ->
+          $"Current filters: {filtersText}. Enter a class, character name, item name/id, or 'clear' (blank = list all in Util.Cache, not item-cache.json)."
+      | Some _, Some _, _ ->
+          $"Current filters: {filtersText}. Enter an item name/id, character name, or 'clear' (blank = list all in Util.Cache, not item-cache.json)."
 
     SessionUi.write $"Current filters: {filtersText}"
     match prompt message suggestions with
@@ -988,45 +1032,71 @@ let promptLookup
               ClassFilter = classFilter
               SlotFilter = slotFilter
               PrefetchedItems = prefetched
+              EquipTargetName = equipTarget
             }
     | Some text when isClearCommand text ->
         classFilter <- None
         slotFilter <- None
         prefetched <- None
-        SessionUi.write (sprintf "Cleared filters (now %s)." (formatFilters classFilter slotFilter))
+        equipTarget <- None
+        SessionUi.write (sprintf "Cleared filters (now %s)." (formatFilters classFilter slotFilter equipTarget))
         loop ()
     | Some text ->
-        match tryMatchClass text with
-        | Some pair ->
-            // Allow switching class even when one is already set (otherwise "Wizard" is treated as an item name).
-            let switching = classFilter |> Option.exists (fun (n, _) -> not (String.Equals(n, fst pair, StringComparison.OrdinalIgnoreCase)))
-            classFilter <- Some pair
-            if switching then
-              prefetched <- None
-              SessionUi.write (sprintf "Switched class filter to %s (now %s)." (fst pair) (formatFilters classFilter slotFilter))
-            else
-              SessionUi.write (sprintf "Added class filter: %s (now %s)." (fst pair) (formatFilters classFilter slotFilter))
-            ensurePrefetch true
+        match tryMatchCharacter text with
+        | Some ch ->
+            equipTarget <- Some ch.Name
+            match tryMatchClass ch.Class with
+            | Some pair ->
+                let switching = classFilter |> Option.exists (fun (n, _) -> not (String.Equals(n, fst pair, StringComparison.OrdinalIgnoreCase)))
+                classFilter <- Some pair
+                if switching then prefetched <- None
+                SessionUi.write (sprintf "Equip target %s (%s); class filter set. Lookups will auto-equip (now %s)." ch.Name ch.Class (formatFilters classFilter slotFilter equipTarget))
+                ensurePrefetch true
+            | None ->
+                SessionUi.write (sprintf "Equip target %s, but class '%s' is not in classBits; set a class filter manually. (now %s)" ch.Name ch.Class (formatFilters classFilter slotFilter equipTarget))
             loop ()
         | None ->
-            match tryMatchSlot text with
+            match tryMatchClass text with
             | Some pair ->
-                let switching = slotFilter |> Option.exists (fun (n, _) -> not (String.Equals(n, fst pair, StringComparison.OrdinalIgnoreCase)))
-                slotFilter <- Some pair
+                // Allow switching class even when one is already set (otherwise "Wizard" is treated as an item name).
+                let switching = classFilter |> Option.exists (fun (n, _) -> not (String.Equals(n, fst pair, StringComparison.OrdinalIgnoreCase)))
+                classFilter <- Some pair
+                // Manual class change drops character auto-equip unless the target already has this class.
+                match equipTarget with
+                | Some name ->
+                    match tryMatchCharacter name with
+                    | Some ch when String.Equals(ch.Class, fst pair, StringComparison.OrdinalIgnoreCase) -> ()
+                    | _ ->
+                        equipTarget <- None
+                        SessionUi.write "Cleared equip target (class filter no longer matches that character)."
+                | None -> ()
                 if switching then
                   prefetched <- None
-                  SessionUi.write (sprintf "Switched slot filter to %s (now %s)." (fst pair) (formatFilters classFilter slotFilter))
+                  SessionUi.write (sprintf "Switched class filter to %s (now %s)." (fst pair) (formatFilters classFilter slotFilter equipTarget))
                 else
-                  SessionUi.write (sprintf "Added slot filter: %s (now %s)." (fst pair) (formatFilters classFilter slotFilter))
+                  SessionUi.write (sprintf "Added class filter: %s (now %s)." (fst pair) (formatFilters classFilter slotFilter equipTarget))
                 ensurePrefetch true
                 loop ()
             | None ->
-                Lookup {
-                  Query = text
-                  ClassFilter = classFilter
-                  SlotFilter = slotFilter
-                  PrefetchedItems = prefetched
-                }
+                match tryMatchSlot text with
+                | Some pair ->
+                    let switching = slotFilter |> Option.exists (fun (n, _) -> not (String.Equals(n, fst pair, StringComparison.OrdinalIgnoreCase)))
+                    slotFilter <- Some pair
+                    if switching then
+                      prefetched <- None
+                      SessionUi.write (sprintf "Switched slot filter to %s (now %s)." (fst pair) (formatFilters classFilter slotFilter equipTarget))
+                    else
+                      SessionUi.write (sprintf "Added slot filter: %s (now %s)." (fst pair) (formatFilters classFilter slotFilter equipTarget))
+                    ensurePrefetch true
+                    loop ()
+                | None ->
+                    Lookup {
+                      Query = text
+                      ClassFilter = classFilter
+                      SlotFilter = slotFilter
+                      PrefetchedItems = prefetched
+                      EquipTargetName = equipTarget
+                    }
   loop ()
 
 let resolveLocalRootForPrompt () =
@@ -1049,7 +1119,7 @@ let runLookup (req: LookupRequest) =
   let classBit = req.ClassFilter |> Option.map snd
   let slotBit = req.SlotFilter |> Option.map snd
   let hasFilters = classBit.IsSome || slotBit.IsSome
-  let filtersText = formatFilters req.ClassFilter req.SlotFilter
+  let filtersText = formatFilters req.ClassFilter req.SlotFilter req.EquipTargetName
   let query = req.Query
   let cache = loadCache ()
   let qText = if String.IsNullOrWhiteSpace query then "(all filtered)" else query
@@ -1103,7 +1173,7 @@ let runLookup (req: LookupRequest) =
         hits, exact
       let cacheHits, cacheExact = fromCache
       if not cacheHits.IsEmpty then
-        offerUnfilteredMatches cache "item-cache.json (unfiltered)" cacheExact cacheHits filtersText req.ClassFilter
+        offerUnfilteredMatches cache "item-cache.json (unfiltered)" cacheExact cacheHits filtersText req.ClassFilter req.EquipTargetName
       else
         match req.PrefetchedItems with
         | Some filtered when not (String.IsNullOrWhiteSpace query) ->
@@ -1117,7 +1187,7 @@ let runLookup (req: LookupRequest) =
             else
               let found, exact = scanContent contentRoot query asId None None
               let novel = found |> List.filter (fun i -> alreadyTried |> List.forall (fun t -> t.Id <> i.Id))
-              offerUnfilteredMatches cache "local clone (unfiltered)" exact (if novel.IsEmpty then found else novel) filtersText req.ClassFilter
+              offerUnfilteredMatches cache "local clone (unfiltered)" exact (if novel.IsEmpty then found else novel) filtersText req.ClassFilter req.EquipTargetName
         | _ ->
             let prefetchedRoot = configuredContentRoot ()
             let contentRoot = getContentRoot ()
@@ -1129,19 +1199,19 @@ let runLookup (req: LookupRequest) =
             else
               let source = if String.IsNullOrWhiteSpace (configuredContentRoot ()) then "github (unfiltered)" else "local clone (unfiltered)"
               let found, exact = scanContent contentRoot query asId None None
-              offerUnfilteredMatches cache source exact found filtersText req.ClassFilter
+              offerUnfilteredMatches cache source exact found filtersText req.ClassFilter req.EquipTargetName
 
   if not cachedFiltered.IsEmpty then
     present "item-cache.json" true cachedFiltered
     // TODO: remove this — temporary equip prompt after lookup of existing cache item (until tracker merge).
-    maybePromptEquip cache req.ClassFilter cachedFiltered
+    maybePromptEquip cache req.ClassFilter req.EquipTargetName cachedFiltered
     // end TODO: remove this
   else
     let unfilteredCacheHits =
       if hasFilters && hasNameQuery then cachedUnfiltered () else []
     if not unfilteredCacheHits.IsEmpty then
       let exact = unfilteredCacheHits |> List.forall (fun i -> asId.IsSome || sameName query i.Name)
-      offerUnfilteredMatches cache "item-cache.json (unfiltered)" exact unfilteredCacheHits filtersText req.ClassFilter |> ignore
+      offerUnfilteredMatches cache "item-cache.json (unfiltered)" exact unfilteredCacheHits filtersText req.ClassFilter req.EquipTargetName |> ignore
     else
       match req.PrefetchedItems with
       | Some items when String.IsNullOrWhiteSpace query && asId.IsNone ->
@@ -1154,7 +1224,7 @@ let runLookup (req: LookupRequest) =
           let named, exactFlag = nameHitsFrom items
           let hits = filterList named
           if not hits.IsEmpty then
-            storeAndPresent cache "local clone (filtered)" exactFlag hits req.ClassFilter
+            storeAndPresent cache "local clone (filtered)" exactFlag hits req.ClassFilter req.EquipTargetName
           elif not (tryUnfilteredFallback named) then
             SessionUi.write $"No item matched '{query}'."
       | _ ->
@@ -1171,7 +1241,7 @@ let runLookup (req: LookupRequest) =
               "local clone"
           let found, exact = scanContent contentRoot query asId classBit slotBit
           if not found.IsEmpty then
-            storeAndPresent cache source exact found req.ClassFilter
+            storeAndPresent cache source exact found req.ClassFilter req.EquipTargetName
           elif String.IsNullOrWhiteSpace query && asId.IsNone then
             SessionUi.write "No items matched the current filters."
           elif not (tryUnfilteredFallback found) then
@@ -1179,12 +1249,13 @@ let runLookup (req: LookupRequest) =
 
 if not (String.IsNullOrWhiteSpace itemName) then
   SessionUi.beginSession ()
-  SessionUi.beginLookup "class=(none); slot=(none)" (itemName.Trim())
+  SessionUi.beginLookup "class=(none); slot=(none); equip=(none)" (itemName.Trim())
   runLookup {
     Query = itemName.Trim()
     ClassFilter = None
     SlotFilter = None
     PrefetchedItems = None
+    EquipTargetName = None
   }
 else
   // One-time setup (content root / git pull) prints above; looping output uses the DumpContainer.
@@ -1193,16 +1264,18 @@ else
   let mutable sessionClass: (string * int) option = None
   let mutable sessionSlot: (string * int) option = None
   let mutable sessionPrefetched: CachedItem list option = None
+  let mutable sessionEquip: string option = None
   let rec session () =
-    SessionUi.setStatus (formatFilters sessionClass sessionSlot) "(awaiting input)"
-    match promptLookup localRoot sessionClass sessionSlot sessionPrefetched with
+    SessionUi.setStatus (formatFilters sessionClass sessionSlot sessionEquip) "(awaiting input)"
+    match promptLookup localRoot sessionClass sessionSlot sessionPrefetched sessionEquip with
     | Exit ->
         SessionUi.write "Done."
     | Lookup req ->
         sessionClass <- req.ClassFilter
         sessionSlot <- req.SlotFilter
         sessionPrefetched <- req.PrefetchedItems
-        SessionUi.beginLookup (formatFilters req.ClassFilter req.SlotFilter) req.Query
+        sessionEquip <- req.EquipTargetName
+        SessionUi.beginLookup (formatFilters req.ClassFilter req.SlotFilter req.EquipTargetName) req.Query
         runLookup req
         session ()
   session ()
