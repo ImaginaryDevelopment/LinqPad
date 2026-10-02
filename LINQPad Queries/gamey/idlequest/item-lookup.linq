@@ -817,18 +817,18 @@ let present (source: string) (exact: bool) (items: CachedItem list) =
         |})
   SessionUi.show $"{items.Length} {kind} — {source}" rows
 
-// LINQPad interactive prompt with autocomplete suggestions (API name: Util.ReadLine).
-// Cap is empirical, not from LINQPad docs: class-wide suggestion lists made autocomplete
- // unreliable/empty in practice; no published Util.ReadLine suggestion-count limit was found
-// (forum threads only note that suggestions appear after you start typing).
-let maxItemAutocomplete = 2500
+// LINQPad Util.ReadLine autocomplete: measured limit is 9999 suggestions
+// (see auto_complete_test.linq — lists stop after index 9998 / count 9999).
+let maxUtilReadLineSuggestions = 9999
+let maxItemAutocomplete = maxUtilReadLineSuggestions
 
 let prompt (message: string) (suggestions: string seq) =
-  // Do not truncate here — callers sort then cap item names before composing suggestions.
+  // Cap here so meta (clear/class/slot/character, listed first) + items never exceed the measured limit.
   let arr =
     suggestions
     |> Seq.filter (fun s -> not (String.IsNullOrWhiteSpace s))
     |> Seq.distinct
+    |> Seq.truncate maxUtilReadLineSuggestions
     |> Seq.toArray
   let raw = Util.ReadLine(message, "", arr)
   if isNullUnsafe raw then None
