@@ -31,6 +31,9 @@ module Paths =
     if String.IsNullOrWhiteSpace q then Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "LINQPad Queries", "idlequest")
     else Path.GetDirectoryName q
   let itemCachePath = Path.Combine(dataDir, "item-cache.json")
+  // TODO: remove this — temporary equip helpers (until tracker merge)
+  let charactersPath = Path.Combine(dataDir, "eq_characters.json")
+  // end TODO: remove this
 
 let jsonOpts =
   let o = JsonSerializerOptions(WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase)
@@ -107,6 +110,32 @@ type CachedItem = {
 type ItemCacheFile = {
   mutable Items: Dictionary<string, CachedItem>
 }
+
+// TODO: remove this — temporary equip-into-character helpers until eq-character-tracker merge.
+type Gear = Dictionary<string, Nullable<int>>
+
+[<CLIMutable>]
+type Sheet = {
+  mutable Level: Nullable<int>
+  mutable Gear: Gear
+}
+
+[<CLIMutable>]
+type Character = {
+  mutable Id: string
+  mutable Name: string
+  mutable Race: string
+  [<JsonPropertyName("class")>]
+  mutable Class: string
+  mutable Current: Sheet
+  mutable CurrentAt: string
+}
+
+[<CLIMutable>]
+type CharactersFile = {
+  mutable Characters: ResizeArray<Character>
+}
+// end TODO: remove this
 
 let emptyItemCacheFile () : ItemCacheFile = { Items = Dictionary<string, CachedItem>() }
 
@@ -537,6 +566,118 @@ let confirmYesNo (message: string) =
 
 let itemLabel (item: CachedItem) = $"{item.Id} — {item.Name}"
 
+// TODO: remove this — temporary equip prompt after adding or looking up an item (until tracker merge).
+let slotsForItem (item: CachedItem) =
+  slotBits
+  |> List.choose (fun (name, bit) -> if item.Slots &&& bit <> 0 then Some name else None)
+
+let loadCharacters () =
+  if not (File.Exists Paths.charactersPath) then
+    printfn "No characters file at %s" Paths.charactersPath
+    None
+  else
+    try
+      let parsed = deser<CharactersFile> (File.ReadAllText Paths.charactersPath)
+      if isNullUnsafe parsed || isNullUnsafe parsed.Characters then None
+      else Some parsed
+    with ex ->
+      printfn "Failed to read characters: %s" ex.Message
+      None
+
+let saveCharacters (chars: CharactersFile) =
+  File.WriteAllText(Paths.charactersPath, ser chars)
+
+let ensureCharacterGear (ch: Character) =
+  if isNullUnsafe ch.Current then
+    ch.Current <- { Level = Nullable(); Gear = Dictionary<string, Nullable<int>>() }
+  if isNullUnsafe ch.Current.Gear then
+    ch.Current.Gear <- Dictionary<string, Nullable<int>>()
+  for name in slotNames do
+    if not (ch.Current.Gear.ContainsKey name) then
+      ch.Current.Gear.[name] <- Nullable()
+
+let tryEquipItemOnCharacter (item: CachedItem) =
+  match loadCharacters () with
+  | None -> ()
+  | Some chars when chars.Characters.Count = 0 ->
+      printfn "No characters to equip on."
+  | Some chars ->
+      if not (confirmYesNo $"Equip {itemLabel item} on a character? (y/n)") then ()
+      else
+        let names =
+          chars.Characters
+          |> Seq.map (fun c -> c.Name)
+          |> Seq.filter (fun n -> not (String.IsNullOrWhiteSpace n))
+          |> Seq.distinct
+          |> Seq.sort
+          |> Seq.toArray
+        match prompt "Character to equip (blank skips)" names with
+        | None -> printfn "Equip skipped."
+        | Some t when String.IsNullOrWhiteSpace t ->
+            printfn "Equip skipped."
+        | Some picked ->
+            match chars.Characters |> Seq.tryFind (fun c -> String.Equals(c.Name, picked, StringComparison.OrdinalIgnoreCase)) with
+            | None -> printfn "Character '%s' not found." picked
+            | Some ch ->
+                ensureCharacterGear ch
+                let possible = slotsForItem item
+                let slotOpt =
+                  match possible with
+                  | [] ->
+                      printfn "Item has no equip slots (slots=%d); skipping." item.Slots
+                      None
+                  | [ one ] -> Some one
+                  | many ->
+                      match prompt $"Slot for {item.Name} (blank skips)" many with
+                      | None -> None
+                      | Some t when String.IsNullOrWhiteSpace t -> None
+                      | Some s when many |> List.exists (fun m -> String.Equals(m, s, StringComparison.OrdinalIgnoreCase)) ->
+                          many |> List.find (fun m -> String.Equals(m, s, StringComparison.OrdinalIgnoreCase)) |> Some
+                      | Some s ->
+                          printfn "Unknown slot '%s'; skipping." s
+                          None
+                match slotOpt with
+                | None -> printfn "Equip skipped."
+                | Some slot ->
+                    let already =
+                      ch.Current.Gear.ContainsKey slot
+                      && ch.Current.Gear.[slot].HasValue
+                      && ch.Current.Gear.[slot].Value = item.Id
+                    if already then
+                      printfn "%s already has %s in %s; no write." ch.Name (itemLabel item) slot
+                    else
+                      let prev =
+                        if ch.Current.Gear.ContainsKey slot && ch.Current.Gear.[slot].HasValue then
+                          string ch.Current.Gear.[slot].Value
+                        else "empty"
+                      ch.Current.Gear.[slot] <- Nullable(item.Id)
+                      ch.CurrentAt <- DateTime.UtcNow.ToString("o")
+                      saveCharacters chars
+                      printfn "Equipped %s on %s (%s / %s) in %s (was %s). Hand-edit sync in the tracker will record this."
+                        item.Name ch.Name ch.Race ch.Class slot prev
+
+let maybePromptEquip (hits: CachedItem list) =
+  // Runs after adding an item or looking up one that already exists in item-cache.json.
+  match hits with
+  | [] -> ()
+  | [ item ] -> tryEquipItemOnCharacter item
+  | many ->
+      let labels = many |> List.map itemLabel |> Array.ofList
+      match prompt "Equip which item? (blank skips)" labels with
+      | None -> ()
+      | Some t when String.IsNullOrWhiteSpace t -> ()
+      | Some picked ->
+          match many |> List.tryFind (fun i -> itemLabel i = picked || sameName picked i.Name || string i.Id = picked) with
+          | Some item -> tryEquipItemOnCharacter item
+          | None ->
+              match Int32.TryParse (picked.Split('—').[0].Trim()) with
+              | true, id ->
+                  match many |> List.tryFind (fun i -> i.Id = id) with
+                  | Some item -> tryEquipItemOnCharacter item
+                  | None -> printfn "Could not match '%s' to an item." picked
+              | _ -> printfn "Could not match '%s' to an item." picked
+// end TODO: remove this
+
 let storeAndPresent (cache: ItemCacheFile) (source: string) (exact: bool) (hits: CachedItem list) =
   let toStore =
     if exact then hits
@@ -547,6 +688,9 @@ let storeAndPresent (cache: ItemCacheFile) (source: string) (exact: bool) (hits:
   let added = mergeIntoCache cache toStore
   printfn "Wrote %d new item(s) into item-cache.json (%d already present)." added (toStore.Length - added)
   present source exact hits
+  // TODO: remove this — temporary equip prompt after add/lookup (until tracker merge).
+  maybePromptEquip toStore
+  // end TODO: remove this
 
 /// Show unfiltered candidates and only cache/accept if the user says yes.
 let offerUnfilteredMatches (cache: ItemCacheFile) (source: string) (exact: bool) (hits: CachedItem list) (filtersText: string) =
@@ -857,6 +1001,9 @@ let runLookup (req: LookupRequest) =
 
   if not cachedFiltered.IsEmpty then
     present "item-cache.json" true cachedFiltered
+    // TODO: remove this — temporary equip prompt after lookup of existing cache item (until tracker merge).
+    maybePromptEquip cachedFiltered
+    // end TODO: remove this
   else
     let unfilteredCacheHits =
       if hasFilters && hasNameQuery then cachedUnfiltered () else []
