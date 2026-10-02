@@ -732,6 +732,7 @@ let tryEquipItemOnCharacter (classFilter: (string * int) option) (item: CachedIt
               ch.CurrentAt <- DateTime.UtcNow.ToString("o")
               saveCharacters chars
               SessionUi.write $"Equipped {item.Name} on {ch.Name} ({ch.Race} / {ch.Class}) in {slot} (was {prev}). Hand-edit sync in the tracker will record this."
+              SessionUi.show $"{ch.Name} gear (raw json)" (ser ch.Current.Gear)
       match classFilter, matching with
       | Some (className, _), [ only ] ->
           if confirmYesNo (sprintf "Equip %s to the only %s, %s? (y/n)" (itemLabel item) className only.Name) then
