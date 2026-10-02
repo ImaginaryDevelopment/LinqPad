@@ -468,6 +468,30 @@
             "waist": null,
             "ammo": null
           }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-02T01:08:02.2336929\u002B00:00",
+          "source": "hand-edit",
+          "gear": {
+            "head": 10143,
+            "shoulders": 1401,
+            "arms": 1362,
+            "wrist1": 10408,
+            "wrist2": 12268,
+            "primary": 13400,
+            "secondary": 14045,
+            "fingers1": 10150,
+            "chest": 1644,
+            "waist": 1364
+          }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-02T01:08:25.1992306\u002B00:00",
+          "source": "script",
+          "level": 41,
+          "gear": {}
         }
       ]
     },
