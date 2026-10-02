@@ -1254,48 +1254,63 @@ let promptLookup
       | _ -> seq { "clear" }
     let characterSuggestions = characterNames |> Seq.ofArray
 
-    // Class/character-only filters often match thousands of items; Util.ReadLine autocomplete
-    // falls apart on huge lists. Sort fully (AC-only last), then truncate.
+    // Autocomplete: class/slot filter → PoG-first sort → truncate (never boost PoG that fails the class filter).
     let itemSuggestions: string[] =
       match classFilter, slotFilter with
       | None, None -> [||]
       | _ ->
           let classBit = classFilter |> Option.map snd
           let slotBit = slotFilter |> Option.map snd
-          let fromJson =
-            loadCache().Items.Values
-            |> Seq.filter (fun i -> itemMatchesFilters i classBit slotBit)
-          let fromPrefetch =
+          let prefetchItems =
             match prefetched with
-            | Some items -> items :> seq<_>
-            | None -> Seq.empty
-          let rankedNames =
-            Seq.append fromJson fromPrefetch
+            | Some items -> items
+            | None -> []
+          let filteredItems =
+            Seq.append (loadCache().Items.Values) prefetchItems
             |> Seq.filter (fun i -> not (String.IsNullOrWhiteSpace i.Name))
+            |> Seq.filter (fun i -> itemMatchesFilters i classBit slotBit)
+            |> Seq.toList
+          let rankedNames =
+            filteredItems
             |> Seq.groupBy (fun i -> i.Name)
             |> Seq.map (fun (name, group) ->
+                // best among class/slot-filtered variants only (PoG preference cannot revive wrong-class ids)
                 let best = group |> Seq.minBy itemDisplaySortKey
                 name, itemDisplaySortKey best)
             |> Seq.sortBy snd
             |> Seq.map fst
             |> Seq.toArray
+          let pogCount =
+            filteredItems
+            |> Seq.filter (fun i -> itemHasZone i planeOfGrowthZoneId)
+            |> Seq.map (fun i -> i.Name)
+            |> Seq.distinct
+            |> Seq.length
+          let capped =
+            if rankedNames.Length > maxItemAutocomplete then
+              SessionUi.write (sprintf "Autocomplete: %d class/slot matches (%d PoG names); capped at %d after PoG-first sort." rankedNames.Length pogCount maxItemAutocomplete)
+              rankedNames |> Array.truncate maxItemAutocomplete
+            else
+              SessionUi.write (sprintf "Autocomplete: %d class/slot matches (%d PoG names)." rankedNames.Length pogCount)
+              rankedNames
+          // Util.Cache names are already for this filter key; fill remaining slots only (no reordering ahead of PoG).
           let fromUtil =
             let cached = readFilterListCache classFilter slotFilter
             if isNullUnsafe cached then [||] else cached
-          // Util.Cache list is already AC-sorted when written; keep that order (do not re-sort A–Z).
+          let remaining = maxItemAutocomplete - capped.Length
           let utilOnly =
-            fromUtil
-            |> Seq.filter (fun s -> not (String.IsNullOrWhiteSpace s))
-            |> Seq.filter (fun s -> rankedNames |> Array.exists (fun n -> String.Equals(n, s, StringComparison.OrdinalIgnoreCase)) |> not)
-            |> Seq.distinct
-            |> Seq.toArray
-          let sortedAll = Array.append rankedNames utilOnly
+            if remaining <= 0 then [||]
+            else
+              fromUtil
+              |> Seq.filter (fun s -> not (String.IsNullOrWhiteSpace s))
+              |> Seq.filter (fun s -> capped |> Array.exists (fun n -> String.Equals(n, s, StringComparison.OrdinalIgnoreCase)) |> not)
+              |> Seq.distinct
+              |> Seq.truncate remaining
+              |> Seq.toArray
+          let sortedAll = Array.append capped utilOnly
           if sortedAll.Length = 0 then
             SessionUi.write "No item names available for autocomplete yet (need a local content scan and/or items in item-cache.json)."
             [||]
-          elif sortedAll.Length > maxItemAutocomplete then
-            SessionUi.write (sprintf "Autocomplete capped at %d of %d item names after AC-aware sort (slot filter narrows further)." maxItemAutocomplete sortedAll.Length)
-            sortedAll |> Array.truncate maxItemAutocomplete
           else
             sortedAll
 
