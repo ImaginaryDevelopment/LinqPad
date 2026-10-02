@@ -596,7 +596,7 @@ let ensureCharacterGear (ch: Character) =
     if not (ch.Current.Gear.ContainsKey name) then
       ch.Current.Gear.[name] <- Nullable()
 
-let tryEquipItemOnCharacter (item: CachedItem) =
+let tryEquipItemOnCharacter (classFilter: (string * int) option) (item: CachedItem) =
   match loadCharacters () with
   | None -> ()
   | Some chars when chars.Characters.Count = 0 ->
@@ -606,61 +606,75 @@ let tryEquipItemOnCharacter (item: CachedItem) =
       else
         let names =
           chars.Characters
+          |> Seq.filter (fun c ->
+              match classFilter with
+              | None -> true
+              | Some (className, _) ->
+                  String.Equals(c.Class, className, StringComparison.OrdinalIgnoreCase))
           |> Seq.map (fun c -> c.Name)
           |> Seq.filter (fun n -> not (String.IsNullOrWhiteSpace n))
           |> Seq.distinct
           |> Seq.sort
           |> Seq.toArray
-        match prompt "Character to equip (blank skips)" names with
-        | None -> printfn "Equip skipped."
-        | Some t when String.IsNullOrWhiteSpace t ->
-            printfn "Equip skipped."
-        | Some picked ->
-            match chars.Characters |> Seq.tryFind (fun c -> String.Equals(c.Name, picked, StringComparison.OrdinalIgnoreCase)) with
-            | None -> printfn "Character '%s' not found." picked
-            | Some ch ->
-                ensureCharacterGear ch
-                let possible = slotsForItem item
-                let slotOpt =
-                  match possible with
-                  | [] ->
-                      printfn "Item has no equip slots (slots=%d); skipping." item.Slots
-                      None
-                  | [ one ] -> Some one
-                  | many ->
-                      match prompt $"Slot for {item.Name} (blank skips)" many with
-                      | None -> None
-                      | Some t when String.IsNullOrWhiteSpace t -> None
-                      | Some s when many |> List.exists (fun m -> String.Equals(m, s, StringComparison.OrdinalIgnoreCase)) ->
-                          many |> List.find (fun m -> String.Equals(m, s, StringComparison.OrdinalIgnoreCase)) |> Some
-                      | Some s ->
-                          printfn "Unknown slot '%s'; skipping." s
-                          None
-                match slotOpt with
-                | None -> printfn "Equip skipped."
-                | Some slot ->
-                    let already =
-                      ch.Current.Gear.ContainsKey slot
-                      && ch.Current.Gear.[slot].HasValue
-                      && ch.Current.Gear.[slot].Value = item.Id
-                    if already then
-                      printfn "%s already has %s in %s; no write." ch.Name (itemLabel item) slot
-                    else
-                      let prev =
-                        if ch.Current.Gear.ContainsKey slot && ch.Current.Gear.[slot].HasValue then
-                          string ch.Current.Gear.[slot].Value
-                        else "empty"
-                      ch.Current.Gear.[slot] <- Nullable(item.Id)
-                      ch.CurrentAt <- DateTime.UtcNow.ToString("o")
-                      saveCharacters chars
-                      printfn "Equipped %s on %s (%s / %s) in %s (was %s). Hand-edit sync in the tracker will record this."
-                        item.Name ch.Name ch.Race ch.Class slot prev
+        if names.Length = 0 then
+          match classFilter with
+          | Some (n, _) -> printfn "No characters match class filter '%s'." n
+          | None -> printfn "No characters to equip on."
+        else
+          let promptLabel =
+            match classFilter with
+            | Some (n, _) -> $"Character to equip ({n} only; blank skips)"
+            | None -> "Character to equip (blank skips)"
+          match prompt promptLabel names with
+          | None -> printfn "Equip skipped."
+          | Some t when String.IsNullOrWhiteSpace t ->
+              printfn "Equip skipped."
+          | Some picked ->
+              match chars.Characters |> Seq.tryFind (fun c -> String.Equals(c.Name, picked, StringComparison.OrdinalIgnoreCase)) with
+              | None -> printfn "Character '%s' not found." picked
+              | Some ch ->
+                  ensureCharacterGear ch
+                  let possible = slotsForItem item
+                  let slotOpt =
+                    match possible with
+                    | [] ->
+                        printfn "Item has no equip slots (slots=%d); skipping." item.Slots
+                        None
+                    | [ one ] -> Some one
+                    | many ->
+                        match prompt $"Slot for {item.Name} (blank skips)" many with
+                        | None -> None
+                        | Some t when String.IsNullOrWhiteSpace t -> None
+                        | Some s when many |> List.exists (fun m -> String.Equals(m, s, StringComparison.OrdinalIgnoreCase)) ->
+                            many |> List.find (fun m -> String.Equals(m, s, StringComparison.OrdinalIgnoreCase)) |> Some
+                        | Some s ->
+                            printfn "Unknown slot '%s'; skipping." s
+                            None
+                  match slotOpt with
+                  | None -> printfn "Equip skipped."
+                  | Some slot ->
+                      let already =
+                        ch.Current.Gear.ContainsKey slot
+                        && ch.Current.Gear.[slot].HasValue
+                        && ch.Current.Gear.[slot].Value = item.Id
+                      if already then
+                        printfn "%s already has %s in %s; no write." ch.Name (itemLabel item) slot
+                      else
+                        let prev =
+                          if ch.Current.Gear.ContainsKey slot && ch.Current.Gear.[slot].HasValue then
+                            string ch.Current.Gear.[slot].Value
+                          else "empty"
+                        ch.Current.Gear.[slot] <- Nullable(item.Id)
+                        ch.CurrentAt <- DateTime.UtcNow.ToString("o")
+                        saveCharacters chars
+                        printfn "Equipped %s on %s (%s / %s) in %s (was %s). Hand-edit sync in the tracker will record this."
+                          item.Name ch.Name ch.Race ch.Class slot prev
 
-let maybePromptEquip (hits: CachedItem list) =
+let maybePromptEquip (classFilter: (string * int) option) (hits: CachedItem list) =
   // Runs after adding an item or looking up one that already exists in item-cache.json.
   match hits with
   | [] -> ()
-  | [ item ] -> tryEquipItemOnCharacter item
+  | [ item ] -> tryEquipItemOnCharacter classFilter item
   | many ->
       let labels = many |> List.map itemLabel |> Array.ofList
       match prompt "Equip which item? (blank skips)" labels with
@@ -668,17 +682,17 @@ let maybePromptEquip (hits: CachedItem list) =
       | Some t when String.IsNullOrWhiteSpace t -> ()
       | Some picked ->
           match many |> List.tryFind (fun i -> itemLabel i = picked || sameName picked i.Name || string i.Id = picked) with
-          | Some item -> tryEquipItemOnCharacter item
+          | Some item -> tryEquipItemOnCharacter classFilter item
           | None ->
               match Int32.TryParse (picked.Split('—').[0].Trim()) with
               | true, id ->
                   match many |> List.tryFind (fun i -> i.Id = id) with
-                  | Some item -> tryEquipItemOnCharacter item
+                  | Some item -> tryEquipItemOnCharacter classFilter item
                   | None -> printfn "Could not match '%s' to an item." picked
               | _ -> printfn "Could not match '%s' to an item." picked
 // end TODO: remove this
 
-let storeAndPresent (cache: ItemCacheFile) (source: string) (exact: bool) (hits: CachedItem list) =
+let storeAndPresent (cache: ItemCacheFile) (source: string) (exact: bool) (hits: CachedItem list) (classFilter: (string * int) option) =
   let toStore =
     if exact then hits
     elif hits.Length <= 25 then hits
@@ -689,17 +703,17 @@ let storeAndPresent (cache: ItemCacheFile) (source: string) (exact: bool) (hits:
   printfn "Wrote %d new item(s) into item-cache.json (%d already present)." added (toStore.Length - added)
   present source exact hits
   // TODO: remove this — temporary equip prompt after add/lookup (until tracker merge).
-  maybePromptEquip toStore
+  maybePromptEquip classFilter toStore
   // end TODO: remove this
 
 /// Show unfiltered candidates and only cache/accept if the user says yes.
-let offerUnfilteredMatches (cache: ItemCacheFile) (source: string) (exact: bool) (hits: CachedItem list) (filtersText: string) =
+let offerUnfilteredMatches (cache: ItemCacheFile) (source: string) (exact: bool) (hits: CachedItem list) (filtersText: string) (classFilter: (string * int) option) =
   if hits.IsEmpty then false
   else
     printfn "No match with current filters (%s). Candidates without filters (%d %s):" filtersText hits.Length (if exact then "exact" else "partial")
     hits |> List.map itemLabel |> Dump |> ignore
     if confirmYesNo $"Accept these unfiltered matches? Filters were: {filtersText} (y/n)" then
-      storeAndPresent cache source exact hits
+      storeAndPresent cache source exact hits classFilter
       true
     else
       printfn "Rejected unfiltered matches."
@@ -971,7 +985,7 @@ let runLookup (req: LookupRequest) =
         hits, exact
       let cacheHits, cacheExact = fromCache
       if not cacheHits.IsEmpty then
-        offerUnfilteredMatches cache "item-cache.json (unfiltered)" cacheExact cacheHits filtersText
+        offerUnfilteredMatches cache "item-cache.json (unfiltered)" cacheExact cacheHits filtersText req.ClassFilter
       else
         match req.PrefetchedItems with
         | Some filtered when not (String.IsNullOrWhiteSpace query) ->
@@ -985,7 +999,7 @@ let runLookup (req: LookupRequest) =
             else
               let found, exact = scanContent contentRoot query asId None None
               let novel = found |> List.filter (fun i -> alreadyTried |> List.forall (fun t -> t.Id <> i.Id))
-              offerUnfilteredMatches cache "local clone (unfiltered)" exact (if novel.IsEmpty then found else novel) filtersText
+              offerUnfilteredMatches cache "local clone (unfiltered)" exact (if novel.IsEmpty then found else novel) filtersText req.ClassFilter
         | _ ->
             let prefetchedRoot = configuredContentRoot ()
             let contentRoot = getContentRoot ()
@@ -997,19 +1011,19 @@ let runLookup (req: LookupRequest) =
             else
               let source = if String.IsNullOrWhiteSpace (configuredContentRoot ()) then "github (unfiltered)" else "local clone (unfiltered)"
               let found, exact = scanContent contentRoot query asId None None
-              offerUnfilteredMatches cache source exact found filtersText
+              offerUnfilteredMatches cache source exact found filtersText req.ClassFilter
 
   if not cachedFiltered.IsEmpty then
     present "item-cache.json" true cachedFiltered
     // TODO: remove this — temporary equip prompt after lookup of existing cache item (until tracker merge).
-    maybePromptEquip cachedFiltered
+    maybePromptEquip req.ClassFilter cachedFiltered
     // end TODO: remove this
   else
     let unfilteredCacheHits =
       if hasFilters && hasNameQuery then cachedUnfiltered () else []
     if not unfilteredCacheHits.IsEmpty then
       let exact = unfilteredCacheHits |> List.forall (fun i -> asId.IsSome || sameName query i.Name)
-      offerUnfilteredMatches cache "item-cache.json (unfiltered)" exact unfilteredCacheHits filtersText |> ignore
+      offerUnfilteredMatches cache "item-cache.json (unfiltered)" exact unfilteredCacheHits filtersText req.ClassFilter |> ignore
     else
       match req.PrefetchedItems with
       | Some items when String.IsNullOrWhiteSpace query && asId.IsNone ->
@@ -1022,7 +1036,7 @@ let runLookup (req: LookupRequest) =
           let named, exactFlag = nameHitsFrom items
           let hits = filterList named
           if not hits.IsEmpty then
-            storeAndPresent cache "local clone (filtered)" exactFlag hits
+            storeAndPresent cache "local clone (filtered)" exactFlag hits req.ClassFilter
           elif not (tryUnfilteredFallback named) then
             printfn "No item matched '%s'." query
       | _ ->
@@ -1039,7 +1053,7 @@ let runLookup (req: LookupRequest) =
               "local clone"
           let found, exact = scanContent contentRoot query asId classBit slotBit
           if not found.IsEmpty then
-            storeAndPresent cache source exact found
+            storeAndPresent cache source exact found req.ClassFilter
           elif String.IsNullOrWhiteSpace query && asId.IsNone then
             printfn "No items matched the current filters."
           elif not (tryUnfilteredFallback found) then

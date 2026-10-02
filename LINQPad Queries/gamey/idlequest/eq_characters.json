@@ -10,19 +10,19 @@
         "gear": {
           "charm": null,
           "ear1": null,
-          "head": null,
+          "head": 25535,
           "face": null,
           "ear2": null,
           "neck": null,
           "shoulders": null,
-          "arms": null,
+          "arms": 25537,
           "back": null,
           "wrist1": null,
           "wrist2": null,
           "range": null,
           "hands": null,
-          "primary": null,
-          "secondary": null,
+          "primary": 6624,
+          "secondary": 11632,
           "fingers1": null,
           "fingers2": null,
           "chest": null,
@@ -32,7 +32,7 @@
           "ammo": null
         }
       },
-      "currentAt": "2026-10-01T21:34:05.0238356\u002B00:00"
+      "currentAt": "2026-10-02T00:09:43.8077459Z"
     },
     {
       "id": "8ac8f78a19714c9298b2cb6fa338e863",
