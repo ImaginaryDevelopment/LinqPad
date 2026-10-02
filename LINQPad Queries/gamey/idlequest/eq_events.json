@@ -32,6 +32,22 @@
             "waist": null,
             "ammo": null
           }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-02T00:20:00.6194535\u002B00:00",
+          "source": "hand-edit",
+          "gear": {
+            "head": 25535,
+            "shoulders": 4580,
+            "arms": 25537,
+            "range": 7236,
+            "hands": 25539,
+            "primary": 6624,
+            "secondary": 11632,
+            "legs": 25540,
+            "waist": 1365
+          }
         }
       ]
     },
