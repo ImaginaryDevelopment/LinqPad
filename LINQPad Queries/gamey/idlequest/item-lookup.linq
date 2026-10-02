@@ -472,6 +472,16 @@ let itemMatchesFilters (item: CachedItem) (classBit: int option) (slotBit: int o
     | Some bit -> (item.Slots &&& bit) <> 0
   classOk && slotOk
 
+/// Anything beyond plain AC (HP/mana/damage/stats/resists). AC-only junk sorts last.
+let hasNonAcStats (item: CachedItem) =
+  item.Hp <> 0 || item.Mana <> 0 || item.Damage <> 0 || item.Delay <> 0 || item.Attack <> 0
+  || item.Astr <> 0 || item.Asta <> 0 || item.Aagi <> 0 || item.Adex <> 0
+  || item.Awis <> 0 || item.Aint <> 0 || item.Acha <> 0
+  || item.Mr <> 0 || item.Fr <> 0 || item.Cr <> 0 || item.Pr <> 0 || item.Dr <> 0
+
+let itemDisplaySortKey (item: CachedItem) =
+  (not (hasNonAcStats item), item.Name, item.Id)
+
 let cacheByName (cache: ItemCacheFile) (query: string) (pred: string -> string -> bool) =
   cache.Items.Values
   |> Seq.filter (fun item -> pred query item.Name)
@@ -525,7 +535,7 @@ let loadItemsMatchingFilters (contentRoot: string) (classBit: int option) (slotB
         | _ -> ()
     with ex ->
       printfn "WARN: shard %s read failed: %s" shard ex.Message
-  let list = items |> Seq.sortBy (fun i -> i.Name, i.Id) |> Seq.toList
+  let list = items |> Seq.sortBy itemDisplaySortKey |> Seq.toList
   SessionUi.write $"Loaded {list.Length} matching item(s) for autocomplete."
   list
 
@@ -562,8 +572,9 @@ let decodeSlots (mask: int) =
 let present (source: string) (exact: bool) (items: CachedItem list) =
   let kind = if exact then "exact" else "partial"
   SessionUi.write $"{items.Length} {kind} match(es) from {source}"
+  let ordered = items |> List.sortBy itemDisplaySortKey
   let rows =
-    items
+    ordered
     |> List.map (fun item ->
         {|
           Id = item.Id
@@ -596,7 +607,11 @@ let present (source: string) (exact: bool) (items: CachedItem list) =
   SessionUi.show $"{items.Length} {kind} — {source}" rows
 
 // LINQPad interactive prompt with autocomplete suggestions (API name: Util.ReadLine).
+// LINQPad Util.ReadLine autocomplete gets unreliable / empty with huge suggestion lists.
+let maxItemAutocomplete = 750
+
 let prompt (message: string) (suggestions: string seq) =
+  // Do not truncate here — callers sort then cap item names before composing suggestions.
   let arr =
     suggestions
     |> Seq.filter (fun s -> not (String.IsNullOrWhiteSpace s))
@@ -906,9 +921,11 @@ let filterListCacheKey (classFilter: (string * int) option) (slotFilter: (string
 let writeFilterListCache (classFilter: (string * int) option) (slotFilter: (string * int) option) (items: CachedItem list) =
   let names =
     items
-    |> Seq.map (fun i -> i.Name)
-    |> Seq.distinct
-    |> Seq.sort
+    |> Seq.filter (fun i -> not (String.IsNullOrWhiteSpace i.Name))
+    |> Seq.groupBy (fun i -> i.Name)
+    |> Seq.map (fun (name, group) -> name, group |> Seq.minBy itemDisplaySortKey |> itemDisplaySortKey)
+    |> Seq.sortBy snd
+    |> Seq.map fst
     |> Array.ofSeq
   filterListSlot <- names
   Util.Cache<string[]>((fun () -> filterListSlot), key = filterListCacheKey classFilter slotFilter, forceRefresh = true)
@@ -1018,23 +1035,70 @@ let promptLookup
       match slotFilter with
       | Some _ -> Seq.empty
       | None -> slotNames |> Seq.ofList
-    let itemSuggestions =
-      match prefetched with
-      | Some items -> items |> Seq.map (fun i -> i.Name)
-      | None -> Seq.empty
     let clearSuggestion =
       match classFilter, slotFilter, equipTarget with
       | None, None, None -> Seq.empty
       | _ -> seq { "clear" }
     let characterSuggestions = characterNames |> Seq.ofArray
 
+    // Class/character-only filters often match thousands of items; Util.ReadLine autocomplete
+    // falls apart on huge lists. Sort fully (AC-only last), then truncate.
+    let itemSuggestions: string[] =
+      match classFilter, slotFilter with
+      | None, None -> [||]
+      | _ ->
+          let classBit = classFilter |> Option.map snd
+          let slotBit = slotFilter |> Option.map snd
+          let fromJson =
+            loadCache().Items.Values
+            |> Seq.filter (fun i -> itemMatchesFilters i classBit slotBit)
+          let fromPrefetch =
+            match prefetched with
+            | Some items -> items :> seq<_>
+            | None -> Seq.empty
+          let rankedNames =
+            Seq.append fromJson fromPrefetch
+            |> Seq.filter (fun i -> not (String.IsNullOrWhiteSpace i.Name))
+            |> Seq.groupBy (fun i -> i.Name)
+            |> Seq.map (fun (name, group) ->
+                let best = group |> Seq.minBy itemDisplaySortKey
+                name, itemDisplaySortKey best)
+            |> Seq.sortBy snd
+            |> Seq.map fst
+            |> Seq.toArray
+          let fromUtil =
+            let cached = readFilterListCache classFilter slotFilter
+            if isNullUnsafe cached then [||] else cached
+          // Util.Cache list is already AC-sorted when written; keep that order (do not re-sort A–Z).
+          let utilOnly =
+            fromUtil
+            |> Seq.filter (fun s -> not (String.IsNullOrWhiteSpace s))
+            |> Seq.filter (fun s -> rankedNames |> Array.exists (fun n -> String.Equals(n, s, StringComparison.OrdinalIgnoreCase)) |> not)
+            |> Seq.distinct
+            |> Seq.toArray
+          let sortedAll = Array.append rankedNames utilOnly
+          if sortedAll.Length = 0 then
+            SessionUi.write "No item names available for autocomplete yet (need a local content scan and/or items in item-cache.json)."
+            [||]
+          elif sortedAll.Length > maxItemAutocomplete then
+            SessionUi.write (sprintf "Autocomplete capped at %d of %d item names after AC-aware sort (slot filter narrows further)." maxItemAutocomplete sortedAll.Length)
+            sortedAll |> Array.truncate maxItemAutocomplete
+          else
+            sortedAll
+
     let suggestions =
       match classFilter, slotFilter with
       | None, None ->
-          // First step: classes, slots, and character names (or free-type an item name/id).
           Seq.concat [ classSuggestions; slotSuggestions; characterSuggestions ]
       | _ ->
-          Seq.concat [ clearSuggestion; classSuggestions; slotSuggestions; characterSuggestions; itemSuggestions ]
+          // Short meta lists first (class/slot/character/clear), then capped item names.
+          Seq.concat [
+            clearSuggestion
+            classSuggestions
+            slotSuggestions
+            characterSuggestions
+            itemSuggestions |> Seq.ofArray
+          ]
 
     let filtersText = formatFilters classFilter slotFilter equipTarget
     let message =
@@ -1042,15 +1106,15 @@ let promptLookup
       | None, None, None ->
           $"Current filters: {filtersText}. Enter a class, gear slot, character name, or item name/id (blank exits)."
       | _, _, Some name ->
-          $"Current filters: {filtersText}. Lookups auto-equip on {name} (multi-slot items still ask). Enter item name/id, slot, another character, or 'clear' (blank = list all in Util.Cache)."
+          $"Current filters: {filtersText}. Auto-equip on {name}. Item autocomplete: {itemSuggestions.Length} names (start typing). Or slot / clear / blank=list."
       | Some _, None, _ ->
-          $"Current filters: {filtersText}. Enter a gear slot, character name, item name/id, or 'clear' (blank = list all in Util.Cache, not item-cache.json)."
+          $"Current filters: {filtersText}. Item autocomplete: {itemSuggestions.Length} names (start typing). Enter slot, character, item, or clear."
       | None, Some _, _ ->
-          $"Current filters: {filtersText}. Enter a class, character name, item name/id, or 'clear' (blank = list all in Util.Cache, not item-cache.json)."
+          $"Current filters: {filtersText}. Item autocomplete: {itemSuggestions.Length} names (start typing). Enter class, character, item, or clear."
       | Some _, Some _, _ ->
-          $"Current filters: {filtersText}. Enter an item name/id, character name, or 'clear' (blank = list all in Util.Cache, not item-cache.json)."
+          $"Current filters: {filtersText}. Item autocomplete: {itemSuggestions.Length} names (start typing). Enter item, character, or clear."
 
-    SessionUi.write $"Current filters: {filtersText}"
+    SessionUi.write $"Current filters: {filtersText}; item autocomplete names: {itemSuggestions.Length}"
     match prompt message suggestions with
     | None -> Exit
     | Some text when String.IsNullOrWhiteSpace text ->
