@@ -1,11 +1,12 @@
 <Query Kind="FSharpProgram">
-  <Namespace>System.Windows.Forms</Namespace>
   <IncludeUncapsulator>false</IncludeUncapsulator>
 </Query>
 
 // IdleQuest character tracker — Classic/Kunark/Velious (no AA).
 // Data: eq_characters.json, eq_events.json, item-cache.json (same folder as this script).
 // Item lookups use a local idlequest-content clone or GitHub raw shards.
+// Content-root preference: Util.Cache + password; GitHub cancel cooldown ~1 day.
+// UI: LINQPad DumpContainers + Util.ReadLine suggestions (no WinForms).
 
 open System
 open System.Collections.Generic
@@ -14,8 +15,14 @@ open System.Net.Http
 open System.Text
 open System.Text.Json
 open System.Text.Json.Serialization
-open System.Windows.Forms
 
+type CharRowDisplay = {
+    Name:string
+    Race:string
+    Class:string
+    CurrentAt:string
+    Gear: obj
+}
 module Paths =
   let dataDir =
     let q = Util.CurrentQueryPath
@@ -31,13 +38,12 @@ let jsonOpts =
   o.Converters.Add(JsonStringEnumConverter())
   o
 
-// >>> BEGIN MERGE: item-cache omit defaults (zeros/nulls) on write
+// Item-cache writes omit default zeros/nulls (slim JSON).
 let itemCacheJsonOpts =
   let o = JsonSerializerOptions(WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase)
   o.DefaultIgnoreCondition <- JsonIgnoreCondition.WhenWritingDefault
   o.Converters.Add(JsonStringEnumConverter())
   o
-// <<< END MERGE: item-cache omit defaults
 
 let inline ser value = JsonSerializer.Serialize(value, jsonOpts)
 let inline serItemCache value = JsonSerializer.Serialize(value, itemCacheJsonOpts)
@@ -45,6 +51,17 @@ let inline deser<'T> (text: string) = JsonSerializer.Deserialize<'T>(text, jsonO
 
 /// Null check without requiring 'T : null (F# isNull constraint workaround).
 let isNullUnsafe value = Object.Equals(value, null)
+
+// Live option panels — created here; Dump after startup sync so they stay near Util.ReadLine.
+let optionsDump = DumpContainer(Content = "(options appear here)")
+let contextDump = DumpContainer(Content = "(context appears here)")
+
+let showOptions (title: string) (options: string[]) =
+  let opts = if isNullUnsafe options then Array.empty else options
+  contextDump.Content <- title
+  optionsDump.Content <-
+    opts
+    |> Array.mapi (fun i o -> {| N = i + 1; Option = o |})
 
 // --- EQEmu slot bitmasks ---
 let slotBits: (string * int) list =
@@ -419,9 +436,7 @@ let saveCharacters (chars: CharactersFile) =
   File.WriteAllText(Paths.charactersPath, ser chars)
 
 let saveItemCache (cache: ItemCacheFile) =
-  // >>> BEGIN MERGE: item-cache omit defaults on write
   File.WriteAllText(Paths.itemCachePath, serItemCache cache)
-  // <<< END MERGE: item-cache omit defaults on write
 
 let loadAll () =
   let chars = loadOrSeed Paths.charactersPath emptyCharactersFile
@@ -463,10 +478,9 @@ let persistAfterMutation (chars: CharactersFile) (events: EventsFile) =
 // Items export has no PRIMARY key, so shards are hashed from the full row.
 // Lookup scans shards 0-f (local is fine; GitHub is slower — prefer a local clone).
 
-// >>> BEGIN MERGE: content-root Util.Cache pref (from item-lookup work, replaces password-only getContentRoot)
-// Intent: remember local path in Util.Cache + password; GitHub cancel is cache-only for ~1 day.
+// Content-root Util.Cache pref (shared shape with item-lookup.linq when present).
+// Remember local path in Util.Cache + password; GitHub cancel is cache-only for ~1 day.
 // Do NOT reintroduce Util.SetPassword(..., "__github__") as a permanent lockout.
-// Sibling: item-lookup.linq uses the same contentRootPrefKey / decision shape.
 let githubSentinel = "__github__"
 let contentRootPrefKey = "idlequest-content-root-pref"
 let githubPrefCooldown = TimeSpan.FromDays 1.0
@@ -511,16 +525,18 @@ let rememberGithubRoot () =
   clearLegacyGithubPassword ()
 
 let promptContentRoot (initial: string) =
-  use browser = new FolderBrowserDialog(Description = "Select idlequest-content repo root (Cancel = use GitHub raw for now)")
-  if isValidContentRoot initial then
-    browser.SelectedPath <- initial
-  elif not (String.IsNullOrWhiteSpace initial) && Directory.Exists initial then
-    browser.SelectedPath <- initial
-  use form = new Form(TopMost = true, TopLevel = true)
-  let result = browser.ShowDialog form
-  if result = DialogResult.OK && isValidContentRoot browser.SelectedPath then
-    rememberLocalRoot browser.SelectedPath
-    UseLocal browser.SelectedPath
+  let defaultPath = if isNullUnsafe initial then "" else initial
+  let suggestions =
+    if isValidContentRoot defaultPath then [| defaultPath |]
+    else Array.empty
+  showOptions "idlequest-content root (blank = GitHub raw for now)" suggestions
+  let entered =
+    if suggestions.Length = 0 then Util.ReadLine("Path to idlequest-content (blank = GitHub)", defaultPath)
+    else Util.ReadLine("Path to idlequest-content (blank = GitHub)", defaultPath, suggestions)
+  let path = if isNullUnsafe entered then "" else entered.Trim()
+  if isValidContentRoot path then
+    rememberLocalRoot path
+    UseLocal path
   else
     rememberGithubRoot ()
     printfn "Using GitHub raw for now. Will ask again after a day."
@@ -528,7 +544,7 @@ let promptContentRoot (initial: string) =
 
 let decideContentRoot () =
   let fromPassword = passwordContentRoot ()
-  if not (isNull fromPassword) then
+  if not (isNullUnsafe fromPassword) then
     let prefRoot, _ = readContentRootPref ()
     if prefRoot <> fromPassword then writeContentRootPref fromPassword
     UseLocal fromPassword
@@ -557,7 +573,6 @@ let getContentRoot () =
       match promptContentRoot hint with
       | UseLocal root -> root
       | UseGithub | Ask -> null
-// <<< END MERGE: content-root Util.Cache pref
 
 let readShardLines (contentRoot: string) (shard: string) =
   if not (String.IsNullOrWhiteSpace contentRoot) then
@@ -671,32 +686,27 @@ let tryParseItemSelection (text: string) =
         | true, id -> Some id
         | _ -> None
 
-// --- WinForms prompts ---
+// --- LINQPad prompts (Util.ReadLine + DumpContainers) ---
 let promptText (title: string) (label: string) (suggestions: string[]) (defaultText: string) =
-  use form = new Form(Text = title, Width = 520, Height = 160, StartPosition = FormStartPosition.CenterScreen, TopMost = true)
-  let lbl = new Label(Text = label, Left = 12, Top = 12, Width = 480)
-  let inputBox = new TextBox(Left = 12, Top = 40, Width = 480)
-  inputBox.Text <- defaultText
-  if not (isNullUnsafe suggestions) && suggestions.Length > 0 then
-    inputBox.AutoCompleteMode <- AutoCompleteMode.SuggestAppend
-    inputBox.AutoCompleteSource <- AutoCompleteSource.CustomSource
-    let col = new AutoCompleteStringCollection()
-    col.AddRange suggestions
-    inputBox.AutoCompleteCustomSource <- col
-  let ok = new Button(Text = "OK", DialogResult = DialogResult.OK, Left = 320, Top = 80, Width = 80)
-  let cancel = new Button(Text = "Cancel", DialogResult = DialogResult.Cancel, Left = 412, Top = 80, Width = 80)
-  form.AcceptButton <- ok
-  form.CancelButton <- cancel
-  form.Controls.AddRange([| lbl :> Control; inputBox :> Control; ok :> Control; cancel :> Control |])
-  if form.ShowDialog() = DialogResult.OK then Some (inputBox.Text.Trim()) else None
+  let opts = if isNullUnsafe suggestions then Array.empty else suggestions
+  let prompt =
+    if String.IsNullOrWhiteSpace label then title
+    else $"{title} — {label} (type cancel to abort)"
+  showOptions title opts
+  let raw =
+    if opts.Length = 0 then Util.ReadLine(prompt, defaultText)
+    else Util.ReadLine(prompt, defaultText, opts)
+  let text = if isNullUnsafe raw then "" else raw.Trim()
+  if String.Equals(text, "cancel", StringComparison.OrdinalIgnoreCase) then None
+  else Some text
 
 let promptChoice (title: string) (options: string[]) =
-  if options.Length = 0 then None
+  if isNullUnsafe options || options.Length = 0 then None
   else
-    printfn "%s" title
-    options |> Array.iteri (fun i o -> printfn "  [%d] %s" (i + 1) o)
-    match promptText title "Enter number or exact text" options "" with
+    showOptions title options
+    match promptText title "number, text, or suggestion" options "" with
     | None -> None
+    | Some t when String.IsNullOrWhiteSpace t -> None
     | Some t ->
         match Int32.TryParse t with
         | true, n when n >= 1 && n <= options.Length -> Some options.[n - 1]
@@ -713,7 +723,7 @@ let promptMenu (title: string) (options: (string * string) list) =
   | None -> None
   | Some picked ->
       options
-      |> List.tryFind (fun (k, v) -> picked.StartsWith(k + " —") || picked = k)
+      |> List.tryFind (fun (k, _) -> picked.StartsWith(k + " —") || picked = k)
       |> Option.map fst
 
 // --- Hand-edit sync ---
@@ -754,28 +764,37 @@ let syncHandEdits (chars: CharactersFile) (events: EventsFile) =
 // --- Display helpers ---
 let formatNullable (v: Nullable<int>) = if v.HasValue then string v.Value else "-"
 
-let dumpSheet (cache: ItemCacheFile) (ch: Character) =
+let resolveGearName (cache: ItemCacheFile) (itemId: Nullable<int>) =
+  if not itemId.HasValue then ""
+  else
+    let mutable item = Unchecked.defaultof<CachedItem>
+    if cache.Items.TryGetValue(string itemId.Value, &item) then item.Name
+    else "?"
+    
+let prepDump (cache: ItemCacheFile) (ch: Character) =
   let s = ch.Current
-  printfn "=== %s (%s %s) id=%s ===" ch.Name ch.Race ch.Class ch.Id
-  printfn "currentAt: %s" ch.CurrentAt
-  printfn "level=%s hp=%s mana=%s ac=%s atk=%s" (formatNullable s.Level) (formatNullable s.Hp) (formatNullable s.Mana) (formatNullable s.Ac) (formatNullable s.Atk)
-  printfn "str=%s sta=%s agi=%s dex=%s wis=%s int=%s cha=%s"
-    (formatNullable s.Str) (formatNullable s.Sta) (formatNullable s.Agi) (formatNullable s.Dex)
-    (formatNullable s.Wis) (formatNullable s.Int) (formatNullable s.Cha)
-  printfn "mr=%s fr=%s cr=%s pr=%s dr=%s"
-    (formatNullable s.Mr) (formatNullable s.Fr) (formatNullable s.Cr) (formatNullable s.Pr) (formatNullable s.Dr)
-  printfn "gear:"
-  for slot in slotNames do
-    let id = if s.Gear.ContainsKey slot then s.Gear.[slot] else Nullable()
-    if id.HasValue then
-      let key = string id.Value
-      let mutable item = Unchecked.defaultof<CachedItem>
-      let name =
-        if cache.Items.TryGetValue(key, &item) then item.Name
-        else "?"
-      printfn "  %-10s %d — %s" slot id.Value name
-    else
-      printfn "  %-10s (empty)" slot
+  let gearRows =
+    slotNames
+    |> Array.map (fun slot ->
+        let id = if s.Gear.ContainsKey slot then s.Gear.[slot] else Nullable()
+        {|
+          Slot = slot
+          ItemId = if id.HasValue then Some id.Value else None
+          Item = if id.HasValue then resolveGearName cache id else "(empty)"
+        |})
+  //let title = $"{ch.Name} ({ch.Race} {ch.Class})"
+  {
+    Name= ch.Name
+    Race= ch.Race
+    Class= ch.Class
+    CurrentAt= ch.CurrentAt
+    Gear= gearRows
+  }
+
+let dumpSheet (cache: ItemCacheFile) (ch: Character) =
+    let data = prepDump cache ch
+    data.Dump(0)
+    |> ignore
 
 let pickCharacter (chars: CharactersFile) =
   if chars.Characters.Count = 0 then
@@ -823,22 +842,28 @@ let modeStatus (chars: CharactersFile) (cache: ItemCacheFile) =
   match promptChoice "Status — select target" opts with
   | None -> ()
   | Some "ALL characters" ->
-      for ch in chars.Characters do dumpSheet cache ch
+      //for ch in chars.Characters do dumpSheet cache ch
+      chars.Characters
+      |> Seq.map(prepDump cache)
+      |> fun rows -> rows.Dump()
+      |> ignore
   | Some name ->
       match chars.Characters |> Seq.tryFind (fun c -> c.Name = name) with
       | Some ch -> dumpSheet cache ch
       | None -> printfn "Not found."
 
-let modeAddCharacter (chars: CharactersFile) (events: EventsFile) =
+let modeAddCharacter (chars: CharactersFile) (events: EventsFile) : Character option =
   match promptText "Add character" "Name" Array.empty "" with
-  | None -> ()
-  | Some name when String.IsNullOrWhiteSpace name -> printfn "Cancelled."
+  | None -> None
+  | Some name when String.IsNullOrWhiteSpace name ->
+      printfn "Cancelled."
+      None
   | Some name ->
       match promptChoice "Race" raceNames with
-      | None -> ()
+      | None -> None
       | Some race ->
           match promptChoice "Class" classNames with
-          | None -> ()
+          | None -> None
           | Some cls ->
               let id = Guid.NewGuid().ToString("N")
               let sheet = emptySheet ()
@@ -863,6 +888,73 @@ let modeAddCharacter (chars: CharactersFile) (events: EventsFile) =
               appendEvent events id (eventFromFullSheet at "script" sheet)
               persistAfterMutation chars events
               printfn "Added %s (%s %s)." name race cls
+              match promptChoice "After create" [| "Enter gear now"; "Back to main menu" |] with
+              | Some s when s.StartsWith("Enter gear", StringComparison.OrdinalIgnoreCase) -> Some ch
+              | _ -> None
+
+let applyGearChange (ch: Character) (events: EventsFile) (chars: CharactersFile) (cache: ItemCacheFile) (contentRoot: string option ref) (slot: string) (text: string) =
+  if String.IsNullOrWhiteSpace text then
+    let at = utcNow ()
+    let delta = emptyDeltaEvent at "script"
+    delta.Gear.[slot] <- Nullable()
+    appendEvent events ch.Id delta
+    refreshCurrent ch events
+    persistAfterMutation chars events
+    printfn "Unequipped %s." slot
+  else
+    match tryParseItemSelection text with
+    | None ->
+        let hits =
+          cache.Items.Values
+          |> Seq.filter (fun it -> it.Name.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0)
+          |> Seq.map itemLabel
+          |> Array.ofSeq
+        match promptChoice "Matching items" hits with
+        | None -> ()
+        | Some pick ->
+            match tryParseItemSelection pick with
+            | Some itemId ->
+                let root = ensureContentRoot contentRoot
+                let expectedName =
+                  let parts = pick.Split('—')
+                  if parts.Length > 1 then Some (parts.[1].Trim()) else None
+                let item = resolveItem cache root itemId expectedName
+                let at = utcNow ()
+                let delta = emptyDeltaEvent at "script"
+                delta.Gear.[slot] <- nInt item.Id
+                appendEvent events ch.Id delta
+                refreshCurrent ch events
+                persistAfterMutation chars events
+                printfn "Equipped %s: %s" slot (itemLabel item)
+            | None -> printfn "Could not parse item."
+    | Some itemId ->
+        let root = ensureContentRoot contentRoot
+        let item = resolveItem cache root itemId None
+        let at = utcNow ()
+        let delta = emptyDeltaEvent at "script"
+        delta.Gear.[slot] <- nInt item.Id
+        appendEvent events ch.Id delta
+        refreshCurrent ch events
+        persistAfterMutation chars events
+        printfn "Equipped %s: %s" slot (itemLabel item)
+
+let promptOneGearSlot (ch: Character) (events: EventsFile) (chars: CharactersFile) (cache: ItemCacheFile) (contentRoot: string option ref) =
+  match promptChoice $"Gear for {ch.Name} — slot" slotNames with
+  | None -> ()
+  | Some slot ->
+      let suggestions = filterCachedItems cache ch.Race ch.Class (Some slot)
+      match promptText $"Gear — {slot}" "Item id or 'id — name' (blank = unequip)" suggestions "" with
+      | None -> ()
+      | Some text -> applyGearChange ch events chars cache contentRoot slot text
+
+let modeEnterGear (ch: Character) (events: EventsFile) (chars: CharactersFile) (cache: ItemCacheFile) (contentRoot: string option ref) =
+  let rec loop () =
+    match promptChoice $"Gear entry — {ch.Name}" [| "equip / change a slot"; "done — back to main menu" |] with
+    | Some s when s.StartsWith("equip", StringComparison.OrdinalIgnoreCase) ->
+        promptOneGearSlot ch events chars cache contentRoot
+        loop ()
+    | _ -> ()
+  loop ()
 
 let modeUpdate (chars: CharactersFile) (events: EventsFile) (cache: ItemCacheFile) (contentRoot: string option ref) =
   match pickCharacter chars with
@@ -877,55 +969,7 @@ let modeUpdate (chars: CharactersFile) (events: EventsFile) (cache: ItemCacheFil
       ]
       match promptMenu "Update type" kinds with
       | None -> ()
-      | Some "gear" ->
-          match promptChoice "Slot" slotNames with
-          | None -> ()
-          | Some slot ->
-              let suggestions = filterCachedItems cache ch.Race ch.Class (Some slot)
-              match promptText $"Gear — {slot}" "Item id or 'id — name' (blank = unequip)" suggestions "" with
-              | None -> ()
-              | Some text when String.IsNullOrWhiteSpace text ->
-                  let at = utcNow ()
-                  let delta = emptyDeltaEvent at "script"
-                  delta.Gear.[slot] <- Nullable()
-                  appendEvent events ch.Id delta
-                  refreshCurrent ch events
-                  persistAfterMutation chars events
-                  printfn "Unequipped %s." slot
-              | Some text ->
-                  match tryParseItemSelection text with
-                  | None ->
-                      // name-only: search cache
-                      let hits =
-                        cache.Items.Values
-                        |> Seq.filter (fun it -> it.Name.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0)
-                        |> Seq.map itemLabel
-                        |> Array.ofSeq
-                      match promptChoice "Matching items" hits with
-                      | None -> ()
-                      | Some pick ->
-                          match tryParseItemSelection pick with
-                          | Some itemId ->
-                              let root = ensureContentRoot contentRoot
-                              let item = resolveItem cache root itemId (Some (pick.Split('—').[1].Trim()))
-                              let at = utcNow ()
-                              let delta = emptyDeltaEvent at "script"
-                              delta.Gear.[slot] <- nInt item.Id
-                              appendEvent events ch.Id delta
-                              refreshCurrent ch events
-                              persistAfterMutation chars events
-                              printfn "Equipped %s: %s" slot (itemLabel item)
-                          | None -> printfn "Could not parse item."
-                  | Some itemId ->
-                      let root = ensureContentRoot contentRoot
-                      let item = resolveItem cache root itemId None
-                      let at = utcNow ()
-                      let delta = emptyDeltaEvent at "script"
-                      delta.Gear.[slot] <- nInt item.Id
-                      appendEvent events ch.Id delta
-                      refreshCurrent ch events
-                      persistAfterMutation chars events
-                      printfn "Equipped %s: %s" slot (itemLabel item)
+      | Some "gear" -> promptOneGearSlot ch events chars cache contentRoot
       | Some "level" ->
           match promptText "Level" "New level" Array.empty (formatNullable ch.Current.Level) with
           | Some t ->
@@ -1101,6 +1145,10 @@ printfn "Data: %s" Paths.dataDir
 let chars, events, cache = loadAll ()
 syncHandEdits chars events
 
+// Dump prompt panels after sync logs so Options/Context sit next to Util.ReadLine.
+optionsDump.Dump("Options")
+contextDump.Dump("Context")
+
 let contentRoot: string option ref = ref None
 
 let menu = [
@@ -1115,14 +1163,21 @@ let menu = [
   "quit", "Exit"
 ]
 
-match promptMenu "Mode" menu with
-| Some "status" -> modeStatus chars cache
-| Some "add" -> modeAddCharacter chars events
-| Some "update" -> modeUpdate chars events cache contentRoot
-| Some "raceclass" -> modeRaceClass chars
-| Some "baseline" -> modeFullBaseline chars events
-| Some "progress" -> modeProgress chars events
-| Some "resolve" -> modeResolveCache chars events cache contentRoot
-| Some "lookup" -> modeLookupItem cache contentRoot
-| Some "quit" | None -> printfn "Done."
-| Some other -> printfn "Unknown mode: %s" other
+let mutable running = true
+while running do
+  match promptMenu "Mode" menu with
+  | Some "status" -> modeStatus chars cache
+  | Some "add" ->
+      match modeAddCharacter chars events with
+      | Some ch -> modeEnterGear ch events chars cache contentRoot
+      | None -> ()
+  | Some "update" -> modeUpdate chars events cache contentRoot
+  | Some "raceclass" -> modeRaceClass chars
+  | Some "baseline" -> modeFullBaseline chars events
+  | Some "progress" -> modeProgress chars events
+  | Some "resolve" -> modeResolveCache chars events cache contentRoot
+  | Some "lookup" -> modeLookupItem cache contentRoot
+  | Some "quit" | None ->
+      running <- false
+      printfn "Done."
+  | Some other -> printfn "Unknown mode: %s" other
