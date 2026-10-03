@@ -25,14 +25,14 @@
           "secondary": 11632,
           "fingers1": null,
           "fingers2": null,
-          "chest": null,
+          "chest": 30372,
           "legs": 25540,
           "feet": null,
           "waist": 1365,
           "ammo": null
         }
       },
-      "currentAt": "2026-10-03T19:25:56.7917193\u002B00:00"
+      "currentAt": "2026-10-03T19:45:52.8179833\u002B00:00"
     },
     {
       "id": "8ac8f78a19714c9298b2cb6fa338e863",

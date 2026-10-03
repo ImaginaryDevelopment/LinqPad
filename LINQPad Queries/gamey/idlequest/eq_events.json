@@ -62,6 +62,14 @@
           "source": "hand-edit",
           "level": 44,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-03T19:45:52.8179833\u002B00:00",
+          "source": "script",
+          "gear": {
+            "chest": 30372
+          }
         }
       ]
     },

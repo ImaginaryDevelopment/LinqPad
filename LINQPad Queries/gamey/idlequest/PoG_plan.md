@@ -1,97 +1,131 @@
-# Plane of Growth farm plan (roster 40+)
+# Plane of Growth farm plan (roster redo)
 
-Based on `eq_characters.json` gear gaps and IdleQuest / LustreDamus PoG loot (`growthplane`). Non-raid focus.
+Fresh pass against current `eq_characters.json` (names resolved via `item-cache.json`) and IdleQuest / LustreDamus PoG loot (`growthplane`, zone.id **143**). Non-raid focus.
 
-PoG is labeled hunt **55+** / zone min **46+** — treat as group content for the 40–43s.
+PoG is hunt **55+** / zone min **46+** — group content for most of this sheet.
 
-**Skipped:** Drasham (Nec L17). **Low PoG priority:** Steelin (Rog L60, mostly Assassin-set).
+**In scope (40+):** Bartlebea WAR 44, Jenniper MNK 45, Jenaviev DRU 44, Atrapost SHM 44, Gettwell CLR 44, Blowinn WIZ 43, Beholdiin PAL 40, Bruize BRD 40, Boomin MAG 40, Steelin ROG 60.
 
-## Roster snapshot (empty priorities)
+**Watch / pre-PoG (under 40, already wearing PoG scraps):** Bashfull SHD 25 (Noctivagant + Stonewood), Holdiin ENC 37 (Resplendent), Drasham NEC 24 / Whammy·Yeee WIZ / Fallin RNG — feed them set trash when it drops, but don’t plan camps around them yet.
 
-| Character | Class | Lvl | Notable empties / needs |
-| --- | --- | ---: | --- |
-| Bartlebea | Warrior | 41 | chest, feet, wrists, ears, neck, back, rings |
-| Jenniper | Monk | 43 | most slots; has chest + weapons |
-| Beholdiin | Paladin | 40 | arms, shoulders, back, wrists, secondary, feet, waist |
-| Jenaviev | Druid | 42 | nearly naked (sec + waist only) |
-| Atrapost | Shaman | 41 | chest, legs, feet, hands, wrists, back |
-| Bruize | Bard | 40 | head, neck, back, wrists, legs, waist |
-| Boomin | Magician | 40 | legs, waist, neck, back, weapons |
-| Blowinn | Wizard | 41 | legs, feet, hands, neck, back |
-| Gettwell | Cleric | 41 | has Stability chest + boots; needs rest of set / weapons |
-| Steelin | Rogue | 60 | mostly geared; ears / fingers2 |
+**Skip for PoG efficiency:** Steelin (almost full Assassin set; only ears / fingers2 empty).
+
+---
+
+## Roster gaps (charm/ammo omitted)
+
+| Character | Class | Lvl | Already wearing (PoG-relevant) | Still empty / weak vs PoG |
+| --- | --- | ---: | --- | --- |
+| Bartlebea | WAR | 44 | Bladesman’s helm/arms/hands/legs, **Stonewood** chest | feet, wrists, ears, neck, back, rings; chest upgrade → Berserker’s BP |
+| Jenniper | MNK | 45 | **Silver Moon Chest Wraps** | head, arms, legs, feet, hands, wrists1, shoulders, neck, ears, back, rings |
+| Gettwell | CLR | 44 | **Stability** chest / greaves / boots (chest is twin id **6879**) | head, arms, wrists, hands, shoulders, back, waist, weapons; prefer chest **25494** if upgrading twin |
+| Atrapost | SHM | 44 | Spirit Weaver **arms** | chest, legs, feet, hands, wrists, shoulders, back, ears, rings |
+| Jenaviev | DRU | 44 | **Oakleaf Girdle** + shield | almost everything else (PoG has little full Druid armor) |
+| Blowinn | WIZ | 43 | misc midgear | legs, feet, hands, neck, back, ears (Sorcerer set) |
+| Boomin | MAG | 40 | Conjuration circlet/arms/wrists/hands/boots | legs, waist, neck, back, ears, weapons (Conjuration pants + Robe of Conjuration later) |
+| Bruize | BRD | 40 | Melodic **arms**, **Stonewood** chest | head, legs, wrists, neck, back, waist, ears (Melodic set + Melodic BP upgrade) |
+| Beholdiin | PAL | 40 | **Stonewood** chest | arms, shoulders, wrists, feet, waist, secondary, ears, rings (Bladesman’s BP / set) |
+| Steelin | ROG | 60 | full Assassin core | ear1/ear2, fingers2 only |
+
+---
 
 ## Best bang-for-buck (non-raid)
 
-### 1. Gale wolves / spirit flux wolves (~50–56) — best shared camp
+### 1. Gale wolves / spirit flux wolves (~50–56) — default camp
 
-Drops set **boots / bracer / helm / gauntlets** for WAR, CLR, SHD, ROG.
+Set **boots / bracer / helm / gauntlets** for WAR, CLR, SHD, ROG.
 
-Helps **Bartlebea** (feet), **Gettwell** (rest of Stability), **Bruize** fillers, leftover Assassin scraps for **Steelin**. Dense trash → most gear/hour.
+- **Gettwell:** Circlet / Vambraces / Bracer / Gauntlets of Stability (biggest open set holes).
+- **Bartlebea:** Bladesman’s / Berserker’s boots + bracers.
+- **Bashfull** (if tagging along): Noctivagant fillers.
+- Dense → best gear/hour for this sheet.
 
 ### 2. Feral amalgams (~52+) — high-value trash
 
-**Berserker** / **Assassin** legs & sleeves, **Stonewood Mail**, chest lottery odds.
+Legs/sleeves lottery, **Stonewood**, chest odds (Berserker’s / Assassin / Bladesman’s).
 
-Priority for **Bartlebea** (chest empty), **Bruize**, plate hybrids.
+- **Bartlebea:** Berserker’s Breastplate upgrade over Stonewood.
+- **Beholdiin:** Bladesman’s Breastplate path.
+- **Bruize:** Melodic BP is more named-gated; amalgams still help plate/chain scraps.
 
 ### 3. Galiel Spirithoof (~55) — legs named
 
 Legs for WAR / CLR / BRD / ROG / SHD / SHM / MNK / cloth.
 
-Biggest hit for **Jenaviev**, **Atrapost**, **Jenniper**, **Blowinn**, **Boomin**, **Bruize**.
+Priority peels for **Atrapost** (Spirit Weaver greaves), **Jenniper** (Silver Moon pants), **Bruize** (Melodic greaves), **Blowinn** (Sorcerer pants), **Boomin** (Conjuration pantaloons). Gettwell already has Stability greaves — skip unless upgrading.
 
 ### 4. Grahl Strongback / Sarik the Fang (~55–57) — arms nameds
 
-Arms for WAR / BRD / ROG / MNK / SHM / ENC.
-
-**Jenniper** (arms empty), **Atrapost**, **Bruize**, **Beholdiin**.
+- **Jenniper:** Silver Moon Arm Wraps (arms empty).
+- **Atrapost:** already has SW vambraces — only if upgrade.
+- **Bruize / Beholdiin:** Melodic / Bladesman’s arms.
 
 ### 5. Rolling plains steeds (~48–52) — cloth camp
 
-WIZ / NEC / MAG set fillers (and unicorn hair).
+WIZ / NEC / MAG fillers.
 
-**Blowinn** / **Boomin** while melee camps run.
+- **Blowinn:** Sorcerer boots / gloves / remaining cloth.
+- **Boomin:** Conjuration pantaloons + any missing conjuration bits.
+- Tag **Drasham / Whammy / Yeee / Blammo** for Bonecaster / Sorcerer / Conjuration scraps when present.
 
 ### 6. Glade stalkers / sanguine kodiaks
 
-SHM / BRD / MNK / ENC fillers — **Atrapost**, **Jenniper**, **Bruize**.
+- **Atrapost:** Spirit Weaver boots / bracer / coif / gauntlets (glade stalkers).
+- **Jenniper:** Silver Moon headband / slippers / wrist / gauntlets (kodiaks).
+- **Holdiin:** Resplendent gloves / crown / wrist (kodiaks) when online.
 
-## Nameds worth a rotate (still non-raid)
+### 7. Thifling sprites / contemplative thiflings
 
-| Mob | Why for this sheet |
+- **Gettwell:** Stability chest twin **25494** (replace **6879** if desired) + greaves backups.
+- Less important now that Gettwell already has greaves + boots.
+
+---
+
+## Nameds worth a rotate (non-raid)
+
+| Mob | Why now |
 | --- | --- |
-| **Farstride Unicorn** | **Oakleaf Girdle** (ALL) — empty/weak waists (Beholdiin, Atrapost, etc.) |
-| **Ordro** (+ assistant) | **Stonewood Mail** — Bartlebea / Bruize / Beholdiin chests |
-| **Thifling sprites / contemplative thiflings** | **Stability** chest/legs — Gettwell (prefer id **25494** over twin **6879** if upgrading) |
-| **Prince Thirneg** | Mistletoe waist / vine wrist — broad upgrades; not a raid |
-| **Sylvan protectors / phase pumas** | Stonewood + MNK/ENC legs — Jenniper / Bruize |
+| **Farstride Unicorn** | Oakleaf — Jenaviev already has one; still useful for **Beholdiin** / others with empty waist |
+| **Ordro** (+ assistant) | Stonewood — Bartlebea/Beholdiin/Bruize already have it; lower priority unless replacing |
+| **Prince Thirneg** | Mistletoe waist / vine wrist — **Gettwell**, **Jenaviev**, **Atrapost**, **Blowinn** |
+| **Sylvan protectors / phase pumas** | Stonewood + MNK/ENC legs — **Jenniper**, **Holdiin** |
+| **Serene forest spirit** | Spirit Weaver / Melodic greaves + chest odds — **Atrapost**, **Bruize** |
+| **Entoling essence channeler** | Robe of Conjuration / MAG set — **Boomin** |
 
-## Deprioritize for efficient farm
+### Deprioritize
 
 - **Tunare / Guardian of Tunare** — raid.
-- **Ail / Rumbleroot / Fayl / Treah** — chest lottery, but 150k–215k HP; worse gear/hour than wolves + amalgams + Galiel/Grahl.
-- **Quest LEAVE NPCs** (Tunarean Earthmelder, Guardian of Takish, Ancient Totem, gleaming sphere of light).
+- **Ail / Rumbleroot / Fayl / Treah** — chest lottery (needed for Jenniper already has SM chest; still relevant for **Atrapost** Spirit Weaver BP, **Bruize** Melodic BP, **Blowinn** Sorcerer robe, **Bartlebea** Berserker BP) but poor gear/hour vs wolves + Galiel/Grahl.
+- **Quest LEAVE** NPCs (Earthmelder, Takish, Ancient Totem, gleaming sphere).
 
-## Per-character focus
+---
 
-- **Bartlebea (WAR):** amalgams + Ordro (chest), wolves (feet), Galiel if greaves upgrade.
-- **Jenniper (MNK):** kodiaks + Grahl (arms) + Galiel/sylvan (legs) + Silver Moon fillers.
-- **Gettwell (CLR):** thiflings + wolves (Stability set).
-- **Atrapost (SHM):** glade stalkers + Galiel + Sarik (Spirit Weaver).
-- **Jenaviev (DRU):** almost naked — Oakleaf (Unicorn), Thirneg wrist/waist; PoG has little full Druid armor vs other classes.
-- **Bruize (BRD):** amalgams/Ordro (chest/Stonewood) + Galiel/Grahl Melodic.
-- **Blowinn / Boomin:** steeds + Galiel cloth legs.
-- **Beholdiin (PAL):** Stonewood / Bladesman’s from amalgams–Ail path; wolves less ideal (SHD/WAR-tagged fillers).
-- **Steelin (ROG 60):** mostly set — only chase missing ears/rings elsewhere; PoG is low priority.
+## Per-character focus (updated)
+
+- **Gettwell (CLR 44):** wolves for Stability helm/arms/wrists/hands; Thirneg for waist; optional thifling for chest **25494**.
+- **Jenniper (MNK 45):** kodiaks (head/feet/hands/wrist) + Grahl (arms) + Galiel/sylvan (legs). Chest done.
+- **Atrapost (SHM 44):** glade stalkers (boots/hands/wrists/coif) + Galiel (greaves) + serene spirit / treants for Spirit Weaver BP.
+- **Bartlebea (WAR 44):** wolves (feet/bracers) + amalgams for Berserker’s BP over Stonewood.
+- **Blowinn (WIZ 43):** steeds + Galiel Sorcerer pants; treant/named for Sorcerer robe later.
+- **Boomin (MAG 40):** steeds + Galiel for Conjuration pants; essence channeler / Ail for Robe of Conjuration.
+- **Bruize (BRD 40):** Galiel Melodic greaves + Grahl/glade Melodic helm/bracer; Melodic BP via serene spirit / treants.
+- **Beholdiin (PAL 40):** amalgams / Bladesman’s path (BP + arms); Unicorn/Thirneg for waist; wolves less ideal.
+- **Jenaviev (DRU 44):** Thirneg wrist + Maple Leaf Mask; Oakleaf done. Don’t expect a full PoG armor set — park her on utility drops while others gear.
+- **Steelin (ROG 60):** ignore PoG unless Assassin ear/ring somehow appears; gear ears/rings elsewhere.
+
+---
 
 ## Practical loop
 
-1. **Wolves / amalgams** as the default farm.
-2. Peel for **Galiel** (legs) and **Grahl / Sarik** (arms) on timers.
-3. **Unicorn / Ordro / thiflings** when those camps are free.
+1. **Wolves** as the default (Gettwell + Bartlebea feet/bracers).
+2. Peel **Galiel** (legs night for SHM/MNK/BRD/cloth) and **Grahl / Sarik** (Jenniper arms).
+3. Side camps: **steeds** (cloth), **glade stalkers / kodiaks** (SHM/MNK), **thiflings** only if chasing CLR chest twin.
+4. **Thirneg / Unicorn** when free for waist/wrist across casters.
+5. Treant chest lottery only after set fillers are largely done.
+
+---
 
 ## Sources
 
-- Character gear: `eq_characters.json`
-- Loot / nameds: LustreDamus `assets/samples/everquest/zone/Plane-of-Growth.md` + idlequest-content `growthplane` (zone.id **143**)
+- Gear state: `eq_characters.json` + `item-cache.json`
+- Loot / nameds: LustreDamus `assets/samples/everquest/zone/Plane-of-Growth.md` + idlequest-content `growthplane`
