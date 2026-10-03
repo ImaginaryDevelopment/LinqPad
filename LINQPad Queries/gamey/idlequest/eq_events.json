@@ -177,6 +177,14 @@
             "chest": 25543,
             "waist": 1620
           }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-03T20:29:41.9445247\u002B00:00",
+          "source": "script",
+          "gear": {
+            "arms": 25544
+          }
         }
       ]
     },
@@ -605,6 +613,14 @@
           "source": "hand-edit",
           "level": 37,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-03T20:38:15.1111009\u002B00:00",
+          "source": "script",
+          "gear": {
+            "head": 25528
+          }
         }
       ]
     },

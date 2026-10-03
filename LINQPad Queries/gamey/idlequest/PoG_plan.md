@@ -31,98 +31,162 @@ PoG is hunt **55+** / zone min **46+** — group content for most of this sheet.
 
 ---
 
-## Best bang-for-buck (non-raid)
+## Best bang-for-buck (non-raid, idle hunt targets)
 
-### 1. Gale wolves / spirit flux wolves (~50–56) — default camp
+Idle hunts one **exact NPC name** and clears every spawn of that name. Do **not** treat similar mobs as one camp — loot tables differ.
 
-Set **boots / bracer / helm / gauntlets** for WAR, CLR, SHD, ROG.
+Loot notes from idlequest-content (`growthplane`). Chances are per-kill table odds (approx).
 
-- **Gettwell:** Circlet / Vambraces / Bracer / Gauntlets of Stability (biggest open set holes).
-- **Bartlebea:** Bladesman’s boots + bracers.
-- **Bashfull** (if tagging along): Noctivagant fillers.
-- Dense → best gear/hour for this sheet.
+### Tier A — default fillers (pick one name at a time)
 
-### 2. Feral amalgams (~52+) — high-value trash
+#### 1. `a_gale_wolf` (~48–52) — CLR / SHD extremities
 
-Legs/sleeves lottery, **Stonewood**, chest odds (Bladesman’s / Assassin / other BPs).
+Drops **only** Stability + Noctivagant **boots / bracer / crown / gauntlets** (~2.5% each). No WAR/ROG set, no Stonewood.
 
-- **Bartlebea:** Bladesman’s Breastplate upgrade over Stonewood.
-- **Bruize:** Melodic BP is more named-gated; amalgams still help chain scraps / Stonewood dupes.
+- **Hunt when:** Gettwell / Beewell / Bashfull still need those slots.
+- **Skip when:** those four slots are filled on Stability + Noctivagant sinks.
 
-### 3. Galiel Spirithoof (~55) — legs named
+#### 2. `a_spirit_flux_wolf` (~50–54) — WAR / ROG extremities (+ multi)
 
-Legs for WAR / CLR / BRD / ROG / SHD / SHM / MNK / cloth.
+Drops Assassin’s + Bladesman’s **boots / bracer / helm·coif / gauntlets** (~2% each), plus low **Oakleaf** / **Stonewood**.
 
-Priority peels for **Atrapost** (Spirit Weaver greaves), **Jenniper** (Silver Moon pants), **Bruize** (Melodic greaves), **Blowinn** (Sorcerer pants), **Boomin** (Conjuration pantaloons). Gettwell already has Stability greaves — skip unless upgrading.
+- **Hunt when:** Bartlebea needs feet/bracers; Steelin wants Assassin’s Boots; Mcstabbins needs Assassin fillers.
+- **Not a substitute for gale wolf** — no Stability / Noctivagant here.
 
-### 4. Grahl Strongback / Sarik the Fang (~55–57) — arms nameds
+#### 3. `a_glade_stalker` (~51–53) — BRD / SHM extremities
 
-- **Jenniper:** Silver Moon Arm Wraps (arms empty).
-- **Atrapost:** already has SW vambraces — only if upgrade.
-- **Bruize:** Melodic arms (has one — dupe → bank). **Bartlebea:** Bladesman’s arms if upgrading.
+Drops Melodic + Spirit Weaver’s **boots / bracer / helm·coif / gauntlets** (~2–3% each).
 
-### 5. Rolling plains steeds (~48–52) — cloth camp
+- **Hunt when:** Atrapost (most SW extremities empty) or Bruize (Melodic helm/bracer/boots/gaunts).
 
-WIZ / NEC / MAG fillers.
+#### 4. `a_sanguine_kodiak` (~51–53) — MNK / ENC extremities (+ multi)
 
-- **Blowinn:** Sorcerer boots / gloves / remaining cloth.
-- **Boomin:** Conjuration pantaloons + any missing conjuration bits.
-- Tag **Drasham / Whammy / Yeee / Blammo** for Bonecaster / Sorcerer / Conjuration scraps when present.
+Drops Silver Moon **headband / slippers / wrist / Fist**; Resplendent **crown / gloves / slippers / wrist**; Bestial extremities; plus Oakleaf / Stonewood.
 
-### 6. Glade stalkers / sanguine kodiaks
+- **Hunt when:** Jenniper (head/feet/wrist/hands) or Holdiin (Resplendent crown/gloves/wrist).
+- **Not a substitute for glade stalker.**
 
-- **Atrapost:** Spirit Weaver boots / bracer / coif / gauntlets (glade stalkers).
-- **Jenniper:** Silver Moon headband / slippers / wrist / gauntlets (kodiaks).
-- **Holdiin:** Resplendent gloves / crown / wrist (kodiaks) when online.
+#### 5. `a_rolling_plains_steed` (~48–52) — cloth extremities (WIZ / NEC / MAG)
 
-### 7. Thifling sprites / contemplative thiflings
+Drops Sorcerer / Bonecaster / Conjuration **circlet·crown / boots / gloves / wristband** (~1.5–1.75%; Sorcerer gloves rarer ~0.5%). **No pantaloons / robes** on this table.
 
-- **Gettwell:** Stability chest twin **25494** (replace **6879** if desired) + greaves backups.
-- Less important now that Gettwell already has greaves + boots.
+- **Hunt when:** Blowinn, Boomin, Drasham, Yeee, Whammy, Blammo need those slots.
+- Legs/robes → Galiel / essence channeler / chest nameds (below), not steeds.
 
----
+### Tier B — high-value single names
 
-## Nameds worth a rotate (non-raid)
+#### 6. `a_feral_amalgam` (~52–56) — WAR / ROG mid + Stonewood
 
-| Mob | Why now |
+Assassin’s **sleeves / legs / chest**, Bladesman’s **greaves / breastplate**, **Stonewood** (~3.5%), low Oakleaf.
+
+- **Hunt when:** Bartlebea chasing Bladesman’s BP over Stonewood; Mcstabbins needs Assassin sleeves/legs/chest.
+
+#### 7. `Galiel_Spirithoof` (~55) — legs named (all sets)
+
+One name, legs for nearly every set (Stability / Bladesman / Noctivagant / Assassin / Melodic / Spirit Weaver / Silver Moon / Sorcerer / Conjuration / Bonecaster / Resplendent) ~4.5–5% each.
+
+- **Hunt when:** Atrapost SW greaves, Jenniper SM pants, Bruize Melodic greaves, Blowinn / Boomin / Drasham / Holdiin pants. Gettwell already has Stability greaves → dupe to Beewell.
+
+#### 8. `Grahl_Strongback` (~57) — arms named (includes SHM)
+
+Arms ~10% each for Stability / Bladesman / Noctivagant / Assassin / Melodic / Spirit Weaver / Silver Moon / Sorcerer / Conjuration / Bonecaster / Resplendent.
+
+- **Prefer over Sarik** when Atrapost still wants SW vambraces (Sarik’s table has **no** Spirit Weaver arms).
+
+#### 9. `Sarik_the_Fang` (~55) — arms named (+ Bestial / Oakleaf)
+
+Same arms lottery as Grahl for most sets, **plus** Bestial sleeves + Oakleaf (~10%). **No** Spirit Weaver vambraces.
+
+- **Hunt when:** Jenniper arms / cloth sleeves / Oakleaf waist — and Atrapost arms already done.
+
+### Tier C — thifling / cloth-adjacent (separate names)
+
+#### 10. `a_contemplative_thifling` (~52) — CLR / SHD chest·legs·arms
+
+Stability **chest / greaves / vambraces** + Noctivagant **BP / greaves / vambraces** (~3.5%). No Stonewood on this table.
+
+- **Hunt when:** Gettwell wants chest twin **25494** or arms; Bashfull needs Noctivagant BP/shoulders-equivalent holes (vambraces/greaves/BP).
+
+#### 11. `a_thifling_sprite` (~52) — same CLR/SHD mid + Stonewood/Oakleaf
+
+Same Stability / Noctivagant mid pieces as contemplative, **plus** Stonewood (~3.5%) and Oakleaf.
+
+- Prefer over contemplative if you also want Stonewood dupes for plate/chain alts.
+- Other thifling names (`a_thifling_chanter`, `a_thifling_orator`, `a_thifling_focuser`) — **no** tracked set armor in content DB; don’t idle them for gear.
+
+#### 12. `a_sylvan_protector` (~53–57) — MNK / ENC mid + Stonewood
+
+Silver Moon **arms / chest / pants**, Resplendent **sleeves / trousers / robe**, Bestial mid, Stonewood / Oakleaf.
+
+- **Hunt when:** Jenniper needs arms/pants (chest done — SM chest is still a dupe sink if any); Holdiin needs Resplendent mid.
+
+#### 13. `an_entoling_essence_channeler` (~60) — MAG robe path
+
+Robe / sleeves / pantaloons of Conjuration (strong on loottable **11730**; weaker on **99113** variant). Plus crumbs of Stonewood/Oakleaf.
+
+- **Hunt when:** Boomin needs Robe of Conjuration or pants (steeds don’t drop pants/robe).
+
+#### 14. `an_entoling_culler` (~56) — WIZ mid crumbs
+
+Low Sorcerer sleeves / robe / pantaloons + Stonewood/Oakleaf. Worse than Galiel for pants; use if specifically starving Sorcerer sleeves/robe.
+
+#### 15. `an_entoling_harvester` (~56) — NEC mid crumbs
+
+Bonecaster sleeves / robe / pantaloons + Stonewood. Same idea for Drasham.
+
+### Tier D — named utility / chests (one name each)
+
+| Idle target | Why |
 | --- | --- |
-| **Farstride Unicorn** | Oakleaf — Jenaviev already has one; still useful for **Beholdiin** / others with empty waist |
-| **Ordro** (+ assistant) | Stonewood — Bartlebea/Beholdiin/Bruize already have it; lower priority unless replacing |
-| **Prince Thirneg** | Mistletoe waist / vine wrist — **Gettwell**, **Jenaviev**, **Atrapost**, **Blowinn** |
-| **Sylvan protectors / phase pumas** | Stonewood + MNK/ENC legs — **Jenniper**, **Holdiin** |
-| **Serene forest spirit** | Spirit Weaver / Melodic greaves + chest odds — **Atrapost**, **Bruize** |
-| **Entoling essence channeler** | Robe of Conjuration / MAG set — **Boomin** |
+| **`Prince_Thirneg`** | Maple Leaf Mask, Woven Cord of Mistletoe, Woven Vine Wristband (~6.25% each) — **Gettwell**, **Jenaviev**, **Atrapost**, **Blowinn**, **Holdiin** (mask) |
+| **`a_spirit_stalker`** | Dull Metallic Cloak (~50%) — cloth backs (Blowinn / Boomin / Drasham / Holdiin / Yeee / Whammy / Blammo) |
+| **`Ordro`** | Stonewood Mail (~25%) — fastest dedicated Stonewood named (roster mostly already wearing it) |
+| **`Farstride_Unicorn`** | Content DB: Stonewood + Conjuration/Bonecaster sleeves (~2%) — **not** the Oakleaf fountain wiki implies; Oakleaf is better from trash (`a_spirit_flux_wolf`, `a_sanguine_kodiak`, amalgams, etc.) |
+| **`a_serene_forest_spirit`** | Melodic + Spirit Weaver **BP / greaves / vambraces** (~5%) — **Atrapost**, **Bruize** chest/legs |
+| **`a_phase_puma`** | Big chest lottery (~10% each set BP/robe) — same table family as Ail/Rumbleroot/Fayl/Treah |
+| **`Ail_the_Elder`** / **`Rumbleroot`** / **`Fayl_Everstrong`** / **`Treah_Greenroot`** | Same chest lottery (~10% each BP/robe). Pick **one** name; don’t rotate expecting different loot. Still relevant for Atrapost SW BP, Bruize Melodic BP, Blowinn Sorcerer robe, Bartlebea Bladesman’s BP |
+| **`a_reverent_treant`** | Low-rate chest lottery + Stonewood — worse than phase_puma / Ail-line |
+| **`a_tranquil_treant`** | Legs crumbs; oddly high Sorcerer pantaloons (~12.5%) — optional Blowinn/Yeee/Whammy pants camp if Galiel contested |
+| **`an_agitated_forest_spirit`** / **`a_skittering_forest_spirit`** | Oakleaf / Stonewood only — skip unless specifically farming waists |
 
-### Deprioritize
+### Deprioritize / skip for gear
 
-- **Tunare / Guardian of Tunare** — raid.
-- **Ail / Rumbleroot / Fayl / Treah** — chest lottery (Jenniper SM chest done; still relevant for **Atrapost** Spirit Weaver BP, **Bruize** Melodic BP, **Blowinn** Sorcerer robe, **Bartlebea** Bladesman’s BP) but poor gear/hour vs wolves + Galiel/Grahl.
-- **Quest LEAVE** NPCs (Earthmelder, Takish, Ancient Totem, gleaming sphere).
-
----
-
-## Per-character focus (updated)
-
-- **Gettwell (CLR 44):** wolves for Stability helm/arms/wrists/hands; Thirneg for waist; optional thifling for chest **25494**.
-- **Jenniper (MNK 45):** kodiaks (head/feet/hands/wrist) + Grahl (arms) + Galiel/sylvan (legs). Chest done.
-- **Atrapost (SHM 44):** glade stalkers (boots/hands/wrists/coif) + Galiel (greaves) + serene spirit / treants for Spirit Weaver BP.
-- **Bartlebea (WAR 44):** wolves (feet/bracers) + amalgams for Bladesman’s BP over Stonewood.
-- **Blowinn (WIZ 43):** steeds + Galiel Sorcerer pants; treant/named for Sorcerer robe later.
-- **Boomin (MAG 40):** steeds + Galiel for Conjuration pants; essence channeler / Ail for Robe of Conjuration.
-- **Bruize (BRD 40):** Galiel Melodic greaves + Grahl/glade Melodic helm/bracer; Melodic BP via serene spirit / treants.
-- **Beholdiin (PAL 40):** Stonewood already on; Unicorn/Thirneg for waist; no Bladesman’s (WAR only) — Hate for real PAL plane armor.
-- **Jenaviev (DRU 44):** Thirneg wrist + Maple Leaf Mask; Oakleaf done. Don’t expect a full PoG armor set — park her on utility drops while others gear.
-- **Steelin (ROG 60):** only real PoG pickup left is **Assassin’s Boots** (replace Tribal War Boots). Skip gauntlets (GFM stays). Skip second Assassin bracer (Dragon Hero stays). ear1 / ear2 / fingers2 stay empty until non-PoG jewelry. All other Assassin drops → **Mcstabbins**.
+- **`Tunare` / `Guardian_of_Tunare` / `Guardian_of_Takish`** — raid / not efficiency.
+- **Quest LEAVE** names: `Tunarean_Earthmelder`, `Ancient_Totem`, `a_gleaming_sphere_of_light`, etc.
+- **`a_thifling_chanter` / `a_thifling_orator` / `a_thifling_focuser` / `a_mosscovered_treant`** — no useful set armor in content DB.
+- **`Ordros_assistant`** — not the Ordro Stonewood table.
 
 ---
 
-## Practical loop
+## Per-character focus (idle target names)
 
-1. **Wolves** as the default (Gettwell + Bartlebea feet/bracers).
-2. Peel **Galiel** (legs night for SHM/MNK/BRD/cloth) and **Grahl / Sarik** (Jenniper arms).
-3. Side camps: **steeds** (cloth), **glade stalkers / kodiaks** (SHM/MNK), **thiflings** only if chasing CLR chest twin.
-4. **Thirneg / Unicorn** when free for waist/wrist across casters.
-5. Treant chest lottery only after set fillers are largely done.
+- **Gettwell (CLR 44):** `a_gale_wolf` (crown/bracer/gaunts) → `a_contemplative_thifling` or `a_thifling_sprite` (arms/chest twin) → `Prince_Thirneg` (waist).
+- **Jenniper (MNK 45):** `a_sanguine_kodiak` (head/feet/wrist/fist) → `Grahl_Strongback` or `Sarik_the_Fang` (arms) → `Galiel_Spirithoof` or `a_sylvan_protector` (pants). Chest done.
+- **Atrapost (SHM 44):** `a_glade_stalker` (boots/bracer/coif/gaunts) → `Galiel_Spirithoof` (greaves) → `Grahl_Strongback` (vambraces if upgrading) → `a_serene_forest_spirit` or `Ail_the_Elder` (SW BP).
+- **Bartlebea (WAR 44):** `a_spirit_flux_wolf` (boots/bracers) → `a_feral_amalgam` (Bladesman’s BP / greaves).
+- **Blowinn (WIZ 43):** `a_rolling_plains_steed` (extremities) → `Galiel_Spirithoof` (pants) → `an_entoling_culler` or chest named (`Ail_the_Elder`) for robe → `a_spirit_stalker` (cloak).
+- **Boomin (MAG 40):** `a_rolling_plains_steed` → `Galiel_Spirithoof` or `an_entoling_essence_channeler` (pants/robe).
+- **Bruize (BRD 40):** `a_glade_stalker` (Melodic extremities) → `Galiel_Spirithoof` (greaves) → `Grahl_Strongback` (arms) → `a_serene_forest_spirit` / `Ail_the_Elder` (Melodic BP).
+- **Beholdiin (PAL 40):** no exclusive set — `Prince_Thirneg` (waist/wrist) / Stonewood already on; Hate for real PAL armor. `Ordro` only if replacing Stonewood.
+- **Jenaviev (DRU 44):** `Prince_Thirneg` (Maple Leaf Mask + vine wrist); Oakleaf done. No exclusive PoG armor.
+- **Bashfull (SHD 25):** `a_gale_wolf` (crown/boots if missing) → `a_contemplative_thifling` / `a_thifling_sprite` (BP/greaves/vambraces).
+- **Holdiin (ENC 37):** `a_sanguine_kodiak` → `a_sylvan_protector` / `Galiel_Spirithoof` → `Prince_Thirneg` (mask).
+- **Drasham / Yeee / Whammy / Blammo:** `a_rolling_plains_steed` first; pants via `Galiel_Spirithoof`; Drasham robe via `an_entoling_harvester` or chest nameds.
+- **Mcstabbins (ROG 16):** `a_spirit_flux_wolf` → `a_feral_amalgam` (Assassin mid/chest).
+- **Steelin (ROG 60):** only `a_spirit_flux_wolf` for **Assassin’s Boots**; skip gauntlets; all other Assassin → Mcstabbins.
+- **Beewell (CLR 15):** Stability overflow from Gettwell’s `a_gale_wolf` / thifling hunts.
+
+---
+
+## Practical idle loop (one name at a time)
+
+1. **`a_gale_wolf`** until Gettwell/Beewell/Bashfull extremities dry up.
+2. **`a_spirit_flux_wolf`** until Bartlebea feet/bracers + Steelin boots + Mcstabbins Assassin scraps slow down.
+3. **`Galiel_Spirithoof`** for account legs debt (Atrapost / Jenniper / Bruize / cloth).
+4. **`Grahl_Strongback`** (or **`Sarik_the_Fang`** if SW arms done and you want Oakleaf).
+5. Side names by hole mass: **`a_glade_stalker`** (SHM/BRD) · **`a_sanguine_kodiak`** (MNK/ENC) · **`a_rolling_plains_steed`** (cloth extremities) · **`a_feral_amalgam`** (Bart BP) · **`a_thifling_sprite`** (CLR/SHD mid + Stonewood).
+6. Utility: **`Prince_Thirneg`** · **`a_spirit_stalker`**.
+7. Chests last: pick **one** of `a_phase_puma` / `Ail_the_Elder` / `Rumbleroot` / `Fayl_Everstrong` / `Treah_Greenroot` / `a_serene_forest_spirit` (BRD/SHM-focused).
 
 ---
 
@@ -154,8 +218,8 @@ Statless gem drops (Star Ruby Earring, Fire Emerald Ring, Sapphire Necklace, Rub
 
 | Item | Slot | Classes | Stats | Drops from |
 | --- | --- | --- | --- | --- |
-| **Stonewood Mail** | chest | WAR / CLR / PAL / SHD / BRD | AC 30, HP +50, STR +10 | Trash lottery (feral amalgams, spirit flux wolves, sylvan protectors, phase pumas, treants, kodiaks, thiflings, entolings, forest spirits); nameds **Farstride Unicorn**, **Ordro**, keeper of the glades |
-| **Oakleaf Girdle** | waist | ALL | AC 4, HP +40, Mana +40 | Same trash pool as Stonewood (plus **Sarik the Fang**); best named chase **Farstride Unicorn** |
+| **Stonewood Mail** | chest | WAR / CLR / PAL / SHD / BRD | AC 30, HP +50, STR +10 | Best dedicated: **`Ordro`** (~25%). Also: `a_feral_amalgam` (~3.5%), `a_thifling_sprite`, `a_spirit_flux_wolf`, `a_sanguine_kodiak`, `a_sylvan_protector`, treants/entolings, `Farstride_Unicorn` (~2%) |
+| **Oakleaf Girdle** | waist | ALL | AC 4, HP +40, Mana +40 | **`Sarik_the_Fang`** (~10%); also `a_spirit_flux_wolf`, `a_sanguine_kodiak`, `a_feral_amalgam`, `a_thifling_sprite`, forest spirits, etc. (Unicorn does **not** drop Oakleaf in content DB) |
 | **Woven Cord of Mistletoe** | waist | ALL | AC 6, WIS +10, CHA +15, PR +7, DR +7 | **Prince Thirneg** |
 | **Woven Vine Wristband** | wrist | ALL except NEC / WIZ / MAG / ENC | AC 6, STR +7, AGI +10, DEX +10, CHA +5, FR +10 | **Prince Thirneg** |
 | **Maple Leaf Mask** | face | DRU / ENC | AC 4, STA +8, WIS +6, CHA +8, PR +10, DR +10 | **Prince Thirneg** |
@@ -197,33 +261,21 @@ On this server, PoG NO DROP can go to **any char on the account**. Optimize for 
 
 ### Fastest overall account loop (priority order)
 
-Goal: maximize **slots filled per hour across all 19 chars**, assuming you can redistribute loot.
+Goal: maximize **slots filled per hour across all 19 chars**, assuming you can redistribute loot. One idle target name at a time.
 
-1. **Gale wolves (default camp) — highest account ROI**  
-   Boots / bracer / helm / gauntlets for plate+chain sets.  
-   **Fills:** Gettwell Stability holes, Bartlebea feet/bracers, Bashfull Noctivagant fillers, Mcstabbins Assassin scraps.  
-   Stay here until Stability + Bladesman’s extremities and Noctivagant/Assassin overflow stop dropping useful empties.
-
-2. **Galiel Spirithoof — account legs night**  
-   One named feeds legs for WAR/CLR/BRD/ROG/SHD/SHM/MNK/cloth.  
-   **Fills:** Atrapost SW greaves, Jenniper SM pants, Bruize Melodic greaves, Blowinn/Boomin cloth pants, Bashfull/Mcstabbins if still missing legs.  
-   Gettwell already has Stability greaves — send dupes to Beewell.
-
-3. **Grahl Strongback / Sarik the Fang — arms night**  
-   **Fills:** Jenniper SM arms (empty), Bruize Melodic arms (dupe ok), Bartlebea Bladesman’s arms if needed, overflow to Bashfull/Mcstabbins/Beewell.
-
-4. **Split side camps by missing-slot mass (not by who’s online)**  
-   - **Glade stalkers** → Atrapost SW boots/bracer/coif/gaunts (biggest SHM hole set).  
-   - **Sanguine kodiaks** → Jenniper SM head/feet/hands/wrist **and** Holdiin Resplendent gloves/crown/wrist.  
-   - **Rolling plains steeds** → Blowinn + Boomin + Yeee/Whammy/Drasham/Blammo cloth extremities.  
-   Rotate these after wolves/Galiel/Grahl stop yielding new empties for the 40+ core.
-
-5. **Utility nameds (bank to whoever’s waist/wrist is empty)**  
-   Thirneg (Mistletoe / vine) → Gettwell, Jenaviev, Atrapost, Blowinn first.  
-   Farstride Unicorn (Oakleaf) → Beholdiin / any empty waist (Jenaviev + Bashfull already have girdles).
-
-6. **Chest lottery last**  
-   Treants / Ail / serene spirit / essence channeler — only after extremities are largely distributed. Priority chests still missing: Atrapost SW BP, Bruize Melodic BP, Blowinn Sorcerer robe, Boomin Robe of Conjuration, Bartlebea Bladesman’s BP (upgrade). Jenniper SM chest and Gettwell Stability chest are already done (optional twin **25494** for Gettwell).
+1. **`a_gale_wolf`** — Gettwell / Beewell Stability extremities + Bashfull Noctivagant extremities.  
+2. **`a_spirit_flux_wolf`** — Bartlebea Bladesman’s extremities + Steelin Assassin’s Boots + Mcstabbins Assassin scraps (+ Oakleaf/Stonewood crumbs).  
+   These two are **not** interchangeable.
+3. **`Galiel_Spirithoof`** — account legs (Atrapost / Jenniper / Bruize / cloth / overflow). Stability greave dupes → Beewell.
+4. **`Grahl_Strongback`** — arms (use **`Sarik_the_Fang`** instead only if SW arms done and you want Oakleaf/Bestial).
+5. Side names by hole mass (separate hunts):  
+   - **`a_glade_stalker`** → Atrapost / Bruize extremities  
+   - **`a_sanguine_kodiak`** → Jenniper / Holdiin extremities  
+   - **`a_rolling_plains_steed`** → Blowinn / Boomin / Yeee / Whammy / Drasham / Blammo extremities (not pants/robes)  
+   - **`a_feral_amalgam`** → Bartlebea Bladesman’s BP + Mcstabbins Assassin mid  
+   - **`a_thifling_sprite`** → Gettwell chest twin / Bashfull Noctivagant mid + Stonewood
+6. Utility: **`Prince_Thirneg`** (waists/wrist/mask) · **`a_spirit_stalker`** (cloth backs). Oakleaf from trash names above, not Unicorn.
+7. Chests last — pick **one**: `a_serene_forest_spirit` (SHM/BRD) or `Ail_the_Elder` / `a_phase_puma` / `Rumbleroot` / `Fayl_Everstrong` / `Treah_Greenroot` (full BP lottery). MAG robe: **`an_entoling_essence_channeler`**.
 
 ### Account “empty slot debt” (rough — ammo ignored)
 
@@ -244,27 +296,30 @@ When two chars can wear the same piece: give it to the **lower filled-slot count
 | --- | --- |
 | Skip Noctivagant / Assassin / Bonecaster / Resplendent camps | **Keep killing those tables** — Bashfull, Mcstabbins, Drasham, Holdiin are sinks |
 | Park under-40 gearing for later | **Ship them set pieces now** while 40+ farm |
-| Rotate camps to match online class | Stay on **wolves → Galiel → Grahl** until account extremities dry up |
+| Rotate camps to match online class | Idle **`a_gale_wolf` → `a_spirit_flux_wolf` → `Galiel_Spirithoof` → `Grahl_Strongback`** until extremities dry up |
 | Jenaviev “Park on utility” only | PoG utility + **Hate for Druid armor**; don’t burn PoG hours hoping for a DRU set |
 
 ### Suggested weekly split (account)
 
-| Time share | Camp | Account targets |
+| Time share | Idle target (exact name) | Account targets |
 | ---: | --- | --- |
-| ~40% | Gale wolves | Gettwell, Bartlebea, Bashfull, Mcstabbins, Beewell |
-| ~15% | Galiel | Atrapost, Jenniper, Bruize, cloth alts |
-| ~10% | Grahl / Sarik | Jenniper, Bruize, Bartlebea + overflow |
-| ~10% | Glade stalkers | Atrapost |
-| ~10% | Kodiaks | Jenniper + Holdiin |
-| ~10% | Steeds | Blowinn, Boomin, Yeee, Whammy, Drasham, Blammo |
-| ~5% | Thirneg / Unicorn / thiflings / chests | Waists (Beholdiin / casters) + remaining BPs |
+| ~20% | `a_gale_wolf` | Gettwell, Beewell, Bashfull |
+| ~20% | `a_spirit_flux_wolf` | Bartlebea, Steelin (boots), Mcstabbins |
+| ~15% | `Galiel_Spirithoof` | Atrapost, Jenniper, Bruize, cloth alts |
+| ~10% | `Grahl_Strongback` (or `Sarik_the_Fang`) | Jenniper, Bruize, Atrapost/Bart + overflow |
+| ~8% | `a_glade_stalker` | Atrapost, Bruize |
+| ~8% | `a_sanguine_kodiak` | Jenniper, Holdiin |
+| ~8% | `a_rolling_plains_steed` | Blowinn, Boomin, Yeee, Whammy, Drasham, Blammo |
+| ~5% | `a_feral_amalgam` / `a_thifling_sprite` | Bart BP / Gettwell chest twin / Bashfull mid |
+| ~6% | `Prince_Thirneg` / `a_spirit_stalker` / one chest named | Waists, cloth backs, remaining BPs/robes |
 
-Adjust percentages when a band’s empty slots for that camp hit zero — then dump that share into the next highest-debt camp.
+Adjust when a name’s empty-slot sinks hit zero — move that share to the next highest-debt **exact** name.
 
 ---
 
 ## Sources
 
 - Gear state: `eq_characters.json` + `item-cache.json`
-- Loot / nameds: LustreDamus `assets/samples/everquest/zone/Plane-of-Growth.md` + idlequest-content `growthplane`
+- Loot / nameds: idlequest-content `growthplane` NPC loottables (primary); LustreDamus / wiki cross-check only
 - Account rule: same-account NO DROP transfers enabled on this server
+- Idle constraint: one NPC name per hunt — never collapse distinct loot tables

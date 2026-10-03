@@ -16,13 +16,6 @@ open System.Text
 open System.Text.Json
 open System.Text.Json.Serialization
 
-type CharRowDisplay = {
-    Name:string
-    Race:string
-    Class:string
-    CurrentAt:string
-    Gear: obj
-}
 module Paths =
   let dataDir =
     let q = Util.CurrentQueryPath
@@ -764,37 +757,54 @@ let syncHandEdits (chars: CharactersFile) (events: EventsFile) =
 // --- Display helpers ---
 let formatNullable (v: Nullable<int>) = if v.HasValue then string v.Value else "-"
 
-let resolveGearName (cache: ItemCacheFile) (itemId: Nullable<int>) =
-  if not itemId.HasValue then ""
+let formatAt (at: string) =
+  if String.IsNullOrWhiteSpace at then "-"
   else
+    match DateTimeOffset.TryParse(at) with
+    | true, dto -> dto.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+    | _ -> at
+
+/// Display form used across status/progress: Name(id) or (empty).
+let formatItemRef (cache: ItemCacheFile) (itemId: Nullable<int>) =
+  if not itemId.HasValue then "(empty)"
+  else
+    let id = itemId.Value
     let mutable item = Unchecked.defaultof<CachedItem>
-    if cache.Items.TryGetValue(string itemId.Value, &item) then item.Name
-    else "?"
-    
-let prepDump (cache: ItemCacheFile) (ch: Character) =
-  let s = ch.Current
-  let gearRows =
-    slotNames
-    |> Array.map (fun slot ->
-        let id = if s.Gear.ContainsKey slot then s.Gear.[slot] else Nullable()
-        {|
-          Slot = slot
-          ItemId = if id.HasValue then Some id.Value else None
-          Item = if id.HasValue then resolveGearName cache id else "(empty)"
-        |})
-  //let title = $"{ch.Name} ({ch.Race} {ch.Class})"
-  {
-    Name= ch.Name
-    Race= ch.Race
-    Class= ch.Class
-    CurrentAt= ch.CurrentAt
-    Gear= gearRows
-  }
+    if cache.Items.TryGetValue(string id, &item) then $"{item.Name}({id})"
+    else $"?({id})"
 
 let dumpSheet (cache: ItemCacheFile) (ch: Character) =
-    let data = prepDump cache ch
-    data.Dump(0)
-    |> ignore
+  printfn "%s — %s %s — updated %s" ch.Name ch.Race ch.Class (formatAt ch.CurrentAt)
+  let s = ch.Current
+  slotNames
+  |> Array.map (fun slot ->
+      let id = if not (isNullUnsafe s.Gear) && s.Gear.ContainsKey slot then s.Gear.[slot] else Nullable()
+      {| Slot = slot; Item = formatItemRef cache id |})
+  |> Dump
+  |> ignore
+
+let dumpAllStatus (cache: ItemCacheFile) (chars: CharactersFile) =
+  // Flat rows so LINQPad does not wrap nested gear in Util.OnDemand mid-run.
+  chars.Characters
+  |> Seq.collect (fun ch ->
+      let s = ch.Current
+      slotNames
+      |> Seq.choose (fun slot ->
+          let id = if not (isNullUnsafe s.Gear) && s.Gear.ContainsKey slot then s.Gear.[slot] else Nullable()
+          if not id.HasValue then None
+          else
+            Some
+              {|
+                Character = ch.Name
+                Race = ch.Race
+                Class = ch.Class
+                At = formatAt ch.CurrentAt
+                Slot = slot
+                Item = formatItemRef cache id
+              |}))
+  |> Seq.toArray
+  |> Dump
+  |> ignore
 
 let pickCharacter (chars: CharactersFile) =
   if chars.Characters.Count = 0 then
@@ -841,12 +851,7 @@ let modeStatus (chars: CharactersFile) (cache: ItemCacheFile) =
   let opts = Array.append [| "ALL characters" |] (chars.Characters |> Seq.map (fun c -> c.Name) |> Array.ofSeq)
   match promptChoice "Status — select target" opts with
   | None -> ()
-  | Some "ALL characters" ->
-      //for ch in chars.Characters do dumpSheet cache ch
-      chars.Characters
-      |> Seq.map(prepDump cache)
-      |> fun rows -> rows.Dump()
-      |> ignore
+  | Some "ALL characters" -> dumpAllStatus cache chars
   | Some name ->
       match chars.Characters |> Seq.tryFind (fun c -> c.Name = name) with
       | Some ch -> dumpSheet cache ch
@@ -1082,31 +1087,66 @@ let modeFullBaseline (chars: CharactersFile) (events: EventsFile) =
       persistAfterMutation chars events
       printfn "Full baseline recorded for %s at %s" ch.Name at
 
-let modeProgress (chars: CharactersFile) (events: EventsFile) =
+let modeProgress (chars: CharactersFile) (events: EventsFile) (cache: ItemCacheFile) =
   let targets =
     match promptChoice "Progress — select target" (Array.append [| "ALL" |] (chars.Characters |> Seq.map (fun c -> c.Name) |> Array.ofSeq)) with
     | None -> Array.empty
     | Some "ALL" -> chars.Characters |> Seq.toArray
     | Some name -> chars.Characters |> Seq.filter (fun c -> c.Name = name) |> Seq.toArray
+  // Stat fields worth showing as progress rows (not ac/atk/hp).
+  let progressStatFields =
+    [
+      "level", fun (e: EventRecord) -> e.Level
+      "mana", fun (e: EventRecord) -> e.Mana
+      "str", fun (e: EventRecord) -> e.Str
+      "sta", fun (e: EventRecord) -> e.Sta
+      "agi", fun (e: EventRecord) -> e.Agi
+      "dex", fun (e: EventRecord) -> e.Dex
+      "wis", fun (e: EventRecord) -> e.Wis
+      "int", fun (e: EventRecord) -> e.Int
+      "cha", fun (e: EventRecord) -> e.Cha
+      "mr", fun (e: EventRecord) -> e.Mr
+      "fr", fun (e: EventRecord) -> e.Fr
+      "cr", fun (e: EventRecord) -> e.Cr
+      "pr", fun (e: EventRecord) -> e.Pr
+      "dr", fun (e: EventRecord) -> e.Dr
+    ]
   for ch in targets do
     let evs = eventsFor events ch.Id
     let rows = ResizeArray<_>()
-    for i in 1 .. evs.Count do
-      let sheet = foldThrough evs i
-      let e = evs.[i - 1]
-      rows.Add
-        {|
-          At = e.At
-          Kind = e.Kind
-          Source = e.Source
-          Level = formatNullable sheet.Level
-          Ac = formatNullable sheet.Ac
-          Hp = formatNullable sheet.Hp
-          Mana = formatNullable sheet.Mana
-          Atk = formatNullable sheet.Atk
-          Primary = if sheet.Gear.ContainsKey "primary" && sheet.Gear.["primary"].HasValue then string sheet.Gear.["primary"].Value else "-"
-        |}
-    printfn "Progress: %s" ch.Name
+    for e in evs do
+      let at = formatAt e.At
+      let kind = if isNullUnsafe e.Kind then "delta" else e.Kind
+      let source = if isNullUnsafe e.Source then "" else e.Source
+      for field, getter in progressStatFields do
+        let v = getter e
+        if v.HasValue then
+          rows.Add
+            {|
+              Character = ch.Name
+              At = at
+              Kind = kind
+              Source = source
+              Slot = field
+              Item = string v.Value
+            |}
+      if not (isNullUnsafe e.Gear) then
+        let isFull = kind.Equals("full", StringComparison.OrdinalIgnoreCase)
+        // Stable slot order. Deltas include clears (empty); full baselines omit empty slots.
+        for slot in slotNames do
+          if e.Gear.ContainsKey slot then
+            let id = e.Gear.[slot]
+            if (not isFull) || id.HasValue then
+              rows.Add
+                {|
+                  Character = ch.Name
+                  At = at
+                  Kind = kind
+                  Source = source
+                  Slot = slot
+                  Item = formatItemRef cache id
+                |}
+    printfn "Progress: %s (%d change rows)" ch.Name rows.Count
     rows |> Dump |> ignore
 
 let modeResolveCache (chars: CharactersFile) (events: EventsFile) (cache: ItemCacheFile) (contentRoot: string option ref) =
@@ -1174,7 +1214,7 @@ while running do
   | Some "update" -> modeUpdate chars events cache contentRoot
   | Some "raceclass" -> modeRaceClass chars
   | Some "baseline" -> modeFullBaseline chars events
-  | Some "progress" -> modeProgress chars events
+  | Some "progress" -> modeProgress chars events cache
   | Some "resolve" -> modeResolveCache chars events cache contentRoot
   | Some "lookup" -> modeLookupItem cache contentRoot
   | Some "quit" | None ->
