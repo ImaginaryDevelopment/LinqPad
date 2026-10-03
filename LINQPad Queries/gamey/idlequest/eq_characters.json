@@ -144,31 +144,38 @@
       "current": {
         "level": 44,
         "gear": {
-          "ear1": null,
-          "head": null,
-          "face": null,
-          "ear2": null,
-          "neck": null,
-          "shoulders": null,
-          "arms": null,
-          "back": null,
-          "wrist1": null,
-          "wrist2": null,
-          "range": null,
-          "hands": null,
           "primary": null,
           "secondary": 9311,
+          "chest": null,
+          "waist": 30377,
+          "legs": null,
+          "arms": null,
+          "hands": null,
+          "head": null,
+          "shoulders": null,
+          "face": null,
+          "feet": null,
+          "wrist1": 25013,
+          "wrist2": 25065,
           "fingers1": null,
           "fingers2": null,
-          "chest": null,
-          "legs": null,
-          "feet": null,
-          "waist": 30377,
+          "range": null,
+          "ear1": null,
+          "ear2": null,
+          "neck": null,
+          "back": null,
           "ammo": null
         },
-        "inventory": []
+        "inventory": [
+          {
+            "itemId": 25187,
+            "tag": "gear",
+            "inBank": false,
+            "note": ""
+          }
+        ]
       },
-      "currentAt": "2026-10-03T10:57:28.6803511\u002B00:00"
+      "currentAt": "2026-10-03T23:50:35.6967422\u002B00:00"
     },
     {
       "id": "4065622099b84a099e45ca6f6b09101a",
@@ -348,31 +355,38 @@
       "current": {
         "level": 37,
         "gear": {
-          "ear1": null,
-          "head": 25528,
-          "face": null,
-          "ear2": null,
-          "neck": null,
-          "shoulders": null,
-          "arms": 25530,
-          "back": null,
-          "wrist1": null,
-          "wrist2": null,
-          "range": null,
-          "hands": null,
           "primary": null,
           "secondary": null,
+          "chest": 1629,
+          "waist": null,
+          "legs": 25533,
+          "arms": 25530,
+          "hands": null,
+          "head": 25528,
+          "shoulders": null,
+          "face": null,
+          "feet": 25534,
+          "wrist1": null,
+          "wrist2": null,
           "fingers1": null,
           "fingers2": null,
-          "chest": 1629,
-          "legs": 25533,
-          "feet": 25534,
-          "waist": null,
+          "range": null,
+          "ear1": null,
+          "ear2": null,
+          "neck": null,
+          "back": null,
           "ammo": null
         },
-        "inventory": []
+        "inventory": [
+          {
+            "itemId": 25533,
+            "tag": "gear",
+            "inBank": false,
+            "note": ""
+          }
+        ]
       },
-      "currentAt": "2026-10-03T20:38:15.1111009\u002B00:00"
+      "currentAt": "2026-10-03T22:44:51.3665169\u002B00:00"
     },
     {
       "id": "b9a3db1746374154b3e467679a41de9d",

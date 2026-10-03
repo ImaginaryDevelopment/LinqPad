@@ -1,14 +1,22 @@
 # Kael Drakkel farm plan
 
-Source of truth: LustreDamus `assets/samples/everquest/zone/Kael-Drakkel.md` (IdleQuest shortname **`kael`**), plus Thurgadin class-chest sheets and `Quest-Gear.md`. Cross-links: `PoG_plan.md`, `PoH_plan.md`, `Thurgadin.md`.
+**Sources (priority):** LustreDamus for which camps are worth hunting → local [brynnb/idlequest-content](https://github.com/brynnb/idlequest-content) (`D:\projects\idlequest-content`) for loot % **and spawnentry chance**. Zone shortname **`kael`**. Related: `PoG_plan.md`, `PoH_plan.md`.
 
-Velious giant city. ZEM **1.13×**. Hunt **40–60+**. City nameds are **group**; **King Tormax** and **Derakor the Vindicator** are **RAID**. Arena / veterans / **Armor of Zek** drop **Corroded / Eroded / Torn Enchanted** molds → **Thurgadin** class armor (+ 3 gems, Kindly Coldain). **Ancient Tarnished** Kael armor is ToV-west RAID — skip.
+Velious giant city. ZEM **1.13×**. Hunt **40–60+**. City nameds are **group**; **King Tormax** and **Derakor the Vindicator** are **RAID**. **Corroded / Eroded / Torn Enchanted** molds → **Thurgadin** class armor (+ 3 gems, Kindly Coldain). **Ancient Tarnished** Kael armor is ToV-west RAID — skip.
 
 **Server rule:** same-account NO DROP transfers. Idle hunts one **exact NPC name**.
 
-**Why this sheet exists:** PoG and Hate have **no exclusive armor sets** for **DRU / PAL / RNG**. Kael is the groupable Velious path that actually feeds **Thurgadin** armor (Rowyl’s for DRU, Champion’s / Forbidden Rites / etc. for others) plus strong hybrid uniques for PAL/RNG.
+**Why this sheet exists:** PoG and Hate have **no exclusive armor sets** for **DRU / PAL / RNG**. Kael is the groupable Velious path that feeds **Thurgadin** armor plus hybrid uniques for PAL/RNG.
 
-**Faction note:** Keep **Coldain** for Thurgadin turn-ins — do **not** idle-kill Thurgadin city dwarves (`Thurgadin.md`). Kromzek / Tormax hits are expected while farming Kael.
+### Name gotcha (LustreDamus vs brynn registry)
+
+LustreDamus lists **Armor of Zek** and says molds come from “arena / veterans” generically — it does **not** list individual `#Veteran_*` names (and tells you to skip Adjutant / Sentinel / `#Guard` spam).
+
+Content DB has `#Veteran_Hjrek`, `#Trooper_Nyorll`, etc. with fat loot tables — but every Kael **`spawnentry.chance` for those `#Veteran_*` / `#Trooper_*` / `#Adjutant_*` / `#Sentinel_*` rows is `0`**. They will not show up as idle hunt targets. **Do not idle `Veteran_Hjrek`.**
+
+**Spawnable mold/cloak farms (chance &gt; 0):** `Armor_of_Zek`, `a_guardian_of_Zek`, `High_Priest_of_Vallon_Zek`, `High_Priest_of_Tallon_Zek` (plus LustreDamus city nameds that actually spawn).
+
+**Faction note:** Keep **Coldain** for Thurgadin turn-ins — do **not** idle-kill Thurgadin city dwarves. Kromzek / Tormax hits are expected while farming Kael.
 
 ---
 
@@ -18,9 +26,9 @@ Velious giant city. ZEM **1.13×**. Hunt **40–60+**. City nameds are **group**
 
 | Character | Class | Lvl | Why Kael | Reality check |
 | --- | --- | ---: | --- | --- |
-| **Jenaviev** | DRU | 44 | Best groupable DRU chest is **Rowyl’s Chestguard of Nature** | Farm **Eroded Leather Tunic** (Kael veterans / arena) + **3 Black Marble** → **Cobi Frostbeard** (Thurgadin, Kindly Coldain). HUM ELF HEF HFL |
-| **Beholdiin** | PAL | 40 | No PoG/Hate PAL plate set; Kael has real PAL uniques | **White Bear Pelt Cloak**, Thunder Etched hands/shoulders, Avoidance arms/legs, Bladesman weapons. Full Deepwater plate is **Sebilis / Karnor** (group pieces + Trak RAID BP) — not this sheet’s main loop |
-| **Fallin** | RNG | 26 | No PoG/Hate RNG set | Level first (~45+). Then **Gleed Dragonhunter** → **Bow of the Huntsman**. Hybrid Kael crumbs meanwhile; no dedicated RNG Thurgadin chest sheet in LustreDamus byClass |
+| **Jenaviev** | DRU | 44 | Best groupable DRU chest is **Rowyl’s Chestguard of Nature** | Idle **`Armor_of_Zek`** (or **`a_guardian_of_Zek`**) for **Eroded Leather Tunic** (id **24942**, ~0.5%/kill — grind) + **3 Black Marble** → **Cobi Frostbeard**. HUM ELF HEF HFL |
+| **Beholdiin** | PAL | 40 | No PoG/Hate PAL plate set; Kael has real PAL uniques | Same **`Armor_of_Zek`** camp for **White Bear Pelt Cloak** (id **31201**, ~0.16%) + Thunder Etched. Deepwater plate → Sebilis / Karnor (side path) |
+| **Fallin** | RNG | 26 | No PoG/Hate RNG set | Level first (~45+). Then **`Gleed_Dragonhunter`** → **Bow of the Huntsman** (id **25033**, ~**80%**). No dedicated RNG Thurgadin chest on byClass sheets |
 
 ### Secondary — already have PoG sets; Kael / Thurgadin is a peer or upgrade
 
@@ -32,55 +40,64 @@ Velious giant city. ZEM **1.13×**. Hunt **40–60+**. City nameds are **group**
 | **Jenniper** MNK | Silver Moon | **Grand Master’s** wraps / slippers | Eroded Leather Tunic (+ 3 Flawless Diamonds); Eroded Leather Boots (+ 3 Crushed Black Marble) | **Lorekeeper Einar**. HUM IKS. Fungi still wins worn regen |
 | **Blowinn** / cloth WIZ | Sorcerer | **Sage’s Robe** | Torn Enchanted Silk Robe + 3 Pristine Emeralds | **Mauren Frostbeard**. HUM ERU HIE DEF GNM |
 | **Bruize** BRD | Melodic | Hybrid Kael uniques (no BRD Thurgadin chest on byClass sheets here) | — | Prefer Hate **Imbrued** / PoG Melodic over Kael for a full set |
-| **Bashfull** SHD | Noctivagant | **Black Bear Pelt Cloak** + Thunder Etched | Armor of Zek | Overflow while farming arena |
+| **Bashfull** SHD | Noctivagant | **Black Bear Pelt Cloak** + Thunder Etched | `Armor_of_Zek` / high nameds | Overflow while farming arena |
 | **Steelin** / **Mcstabbins** ROG | Assassin’s | **Eyepatch of the Shadows**, Silvery Mask, Barbed Dragonscale feet | Nameds below | Face/feet upgrades, not a full Kael ROG set |
 
 **Gems** for all Thurgadin combines: Velketor’s / Siren’s Grotto / Dragon Necropolis (and related Velious camps). **Bank every crushed / flawed / flawless gem** (`Quest-Gear.md`).
 
 ---
 
-## Exact idle targets (group nameds)
+## Exact idle targets
 
-Do **not** collapse similar names. Prefer **KILL** rows; skip **FACTION** unless you accept the hit; skip **LEAVE** armor-hall NPCs; skip **RAID** until trash/named debt is gone.
+Do **not** collapse similar names. Only list names with **spawnentry.chance &gt; 0** in `kael` (plus LustreDamus notables that idle can resolve). Loot % = content join.
 
-### Tier A — default Kael loop (molds + PAL back)
+### Tier A — Thurgadin molds + PAL cloak (spawnable)
 
-| Idle target | Why | Roster sinks |
+| Idle target | Spawn | Best for | Content notes | Roster sinks |
+| --- | --- | --- | ---: | --- |
+| **`Armor_of_Zek`** | **100%** | All molds + cloak + Thunder Etched | ~28 mold types; Eroded Tunic ~**0.47%**; White Bear ~**0.16%**; Corr BP ~0.63%; Corr Chain Tunic ~0.94%; Corr Plate Boots ~3.5%; Torn Robe ~0.31% | **Default Kael idle** — Jenaviev / Beholdiin / account molds |
+| **`a_guardian_of_Zek`** | **100%** | Same mold suite (harder) | ~66. Slightly better tunic/cloak % than Armor (~0.48% / ~0.27%) | When group can sit it |
+| **`High_Priest_of_Vallon_Zek`** | **50%** | **Corroded Chain Tunic** | ~**50%** (id **24935**) | **Atrapost** Rune Crafter BP |
+| **`High_Priest_of_Tallon_Zek`** | **50%** | **Corroded Plate Boots** | ~**36%** (id **24931**) | **Bartlebea** Champion’s Boots |
+| **`protector_of_Zek`** / **`a_Protector_of_Zek`** | **100%** | Hammer of Rage / Shield of Battle | Arena peer to Armor of Zek | Hybrid 2HB / shield |
+
+### Do not idle (loot DB only — spawn chance 0)
+
+These exist as `#…` npc_types with good loot tables, but **every Kael spawnentry chance is 0**, so idle will not find them (this is why **`Veteran_Hjrek`** is missing):
+
+`#Veteran_Hjrek` (~9% tunic on paper), other `#Veteran_*`, `#Trooper_Nyorll` / `#Trooper_*`, `#Adjutant_*`, `#Sentinel_*`, `#Drendar_Blackblade` / `#Irrek_Bloodfist` / `#Klraggek_the_Slayer` (LustreDamus still lists some high nameds — if idle resolves a non-`#` variant later, treat as bonus; don’t plan around `#` zero-chance rows).
+
+### Tier B — slot fillers / class uniques (LustreDamus nameds)
+
+Confirm in idle before long parks. Content confirms Gleed bow table.
+
+| Idle target | Loot | Who cares |
 | --- | --- | --- |
-| **`Armor of Zek`** | Arena named ~55. **Corroded** molds, Thunder Runed / Etched, **White Bear Pelt Cloak** (PAL), Black Bear (SHD) | **Jenaviev / Bart / Gettwell / Atrapost / Jenniper / Blowinn** molds; **Beholdiin** cloak; Bashfull cloak |
-| **`protector of Zek`** | Arena ~56. Hammer of Rage / Shield of Battle | Hybrid tanks / casters needing 2HB or shield crumbs |
-
-LustreDamus also attributes Corroded / Eroded / Torn to **arena / veterans / storm giants** generically — if idle has a denser exact trash name that drops molds, swap to it; **`Armor of Zek`** is the confirmed named on the Kael sheet.
-
-### Tier B — slot fillers / class uniques
-
-| Idle target | Loot (LustreDamus) | Who cares |
-| --- | --- | --- |
-| **`Gleed Dragonhunter`** | **Bow of the Huntsman** | **Fallin** (when ~52+ group can sit it); also WAR/PAL/SHD/ROG |
-| **`Fjokar Frozenshard`** | **Eyepatch of the Shadows**; Frozen Shard | Account face (esp. ROG); ~60 |
-| **`Kyenka`** | Barbed Dragonscale pauldrons / boots | Multi-class tank slots (PAL/RNG/DRU/MNK/…) |
+| **`Gleed_Dragonhunter`** | **Bow of the Huntsman** (~**80%**, id **25033**; spawn weight 25% on its PH) | **Fallin** (when ready); WAR/PAL/SHD/ROG |
+| **`Fjokar_Frozenshard`** | Eyepatch of the Shadows; Frozen Shard | Account face (esp. ROG) |
+| **`Kyenka`** | Barbed Dragonscale pauldrons / boots | Multi-class tank slots |
 | **`Yetarr`** | Coldain Skin Gloves / Boots | Caster/hybrid extremities |
-| **`Klaggan Iceshard`** | Greaves of Avoidance | WAR CLR PAL RNG SHD BRD |
-| **`Vorken Iceshard`** | Vambraces of Avoidance; Dragonhide Belt | Same hybrids + belt |
-| **`Bjrakor the Cold`** | Gladiator’s Chain Leggings; Bladesman weapons | Legs + 1HS for plate/chain |
-| **`Reivaj the Battlerager`** | Vehement Sword; Antlered Mask | PAL/WAR 2HS; RNG face |
-| **`Dlammaz Stormslayer`** | Cloak of the Maelstrom | ALL back |
-| **`Noble Helssen`** | Always Scale of Hsagra; Silvery Mask | Face HP; quest reagent |
-| **`Gkrean Prophet of Tallon`** / **`Semkak Prophet of Vallon`** | Idols of Corruption / Disease; SHM hands / Shield of Battle | PoG Tunare idol path; Atrapost hands |
+| **`Klaggan_Iceshard`** | Greaves of Avoidance | WAR CLR PAL RNG SHD BRD |
+| **`Vorken_Iceshard`** | Vambraces of Avoidance; Dragonhide Belt | Same hybrids + belt |
+| **`Bjrakor_the_Cold`** | Gladiator’s Chain Leggings; Bladesman weapons | Legs + 1HS |
+| **`Reivaj_the_Battlerager`** | Vehement Sword; Antlered Mask | PAL/WAR 2HS; RNG face |
+| **`Dlammaz_Stormslayer`** | Cloak of the Maelstrom | ALL back |
+| **`Noble_Helssen`** | Always Scale of Hsagra; Silvery Mask | Face HP; quest reagent |
+| **`Gkrean_Prophet_of_Tallon`** / **`Semkak_Prophet_of_Vallon`** | Idols; SHM hands / Shield of Battle | PoG Tunare idols; Atrapost |
 
 ### Tier C — RAID only when free
 
 | Idle target | Notes |
 | --- | --- |
-| **`Derakor the Vindicator`** | Chestplate / Boots of the Vindicator; Living Thunder Earring — hybrid plate |
-| **`King Tormax`** | Crown / boots / gaunts / rings / sash — huge unique pool + head turn-ins |
+| **`Derakor_the_Vindicator`** | Chestplate / Boots of the Vindicator; Living Thunder Earring |
+| **`King_Tormax`** | Crown / boots / gaunts / rings / sash + head turn-ins |
 
 ### Skip / deprioritize
 
-- Kael **armor-hall** NPCs (**LEAVE**) — Ancient Tarnished needs ToV west RAID.
-- **Captain Bvellos** / **Wenglawks Kkeak** — **FACTION** (Mask of War / Cobalt Scar paths); only if you accept the hit.
-- Watchman / Adjutant / Sentinel / `#Guard` trash (LustreDamus: skip).
-- Expecting a **full Hate-style DRU/PAL set to drop as a set** — Kael’s answer is **Thurgadin combines** (DRU) and **uniques + Sebilis Deepwater** (PAL), not a single trash armor table.
+- Kael **armor-hall** NPCs (e.g. `Weyen_Stonetrader` / `Pollos_Stormkeeper` may show White Bear on a loot table — **LEAVE**, not mold camps).
+- **Captain_Bvellos** / **Wenglawks_Kkeak** — faction quest NPCs.
+- Planning around `#Veteran_*` / `#Trooper_*` loot % without checking **spawnentry.chance**.
+- Expecting a Hate-style full DRU/PAL drop set — use Thurgadin combines + PAL uniques / Sebilis Deepwater instead.
 
 ---
 
@@ -107,32 +124,32 @@ Other Corroded / Eroded / Torn **slots** exist for full Thurgadin sets — bank 
 
 ### Jenaviev (DRU 44) — primary
 
-1. Default Kael idle: **`Armor of Zek`** (and densest mold trash if you find a better exact name) for **Eroded Leather** pieces — chest first.
-2. Farm / buy / bank **3 Black Marble** → Thurgadin **Cobi Frostbeard** → **Rowyl’s**.
-3. Side pulls: **`Kyenka`** boots, **`Yetarr`** Coldain Skin, **`Dlammaz`** cloak, Spore King / Droga / Hole only if leaving Kael.
-4. Hate only for **Tunarian Scimitar** (`Master of Spite`) — not for armor.
+1. Default Kael idle: **`Armor_of_Zek`** until **Eroded Leather Tunic** (slow ~0.5%/kill).
+2. Upgrade camp to **`a_guardian_of_Zek`** when the group can.
+3. Farm / bank **3 Black Marble** → Thurgadin **Cobi Frostbeard** → **Rowyl’s**.
+4. Side pulls: **`Kyenka`**, **`Yetarr`**, **`Dlammaz_Stormslayer`**. Hate only for **Tunarian Scimitar** — not armor.
 
 ### Beholdiin (PAL 40) — primary
 
-1. Default: **`Armor of Zek`** until **White Bear Pelt Cloak** + Thunder Etched hands/shoulders land.
-2. Rotate: **`Klaggan Iceshard`** / **`Vorken Iceshard`** (Avoidance legs/arms), **`Kyenka`**, **`Bjrakor the Cold`** / Bladesman weapon nameds, **`Reivaj`**.
-3. Keep Stonewood chest until a real upgrade (Sebilis Deepwater extremities are groupable; BP is Trakanon RAID — separate sheet).
-4. Hate **`an ire ghast`** still wins for **Trueheart Shield** if secondary is empty — short Hate side trip, not a Kael substitute.
+1. Same **`Armor_of_Zek`** park for **White Bear Pelt Cloak** + Thunder Etched (cloak is rare; molds for the account while waiting).
+2. Uniques: **`Klaggan_Iceshard`** / **`Vorken_Iceshard`**; **`Kyenka`**; **`Bjrakor_the_Cold`**; **`Reivaj_the_Battlerager`**.
+3. Keep Stonewood until Deepwater / better chest (Sebilis group extremities; Trak RAID BP).
+4. Hate **`an ire ghast`** still wins for **Trueheart Shield** if secondary empty.
 
 ### Fallin (RNG 26) — primary but gated by level
 
-1. Do **not** park a 26 on Kael nameds expecting a set. Level / PoG crumbs / Hole Underfoot / EW Talisen first (see `Ranger-Bows.md`).
-2. When the account group can: **`Gleed Dragonhunter`** → **Bow of the Huntsman**.
-3. Accept hybrid drops (Avoidance, Barbed Dragonscale, Antlered Mask) as overflow while others farm molds.
+1. Don’t park a 26 on Kael for a set. Level / Hole Underfoot / EW Talisen first (`Ranger-Bows.md`).
+2. When ready: **`Gleed_Dragonhunter`** (~80% Huntsman bow).
+3. Hybrid overflow (Avoidance, Barbed Dragonscale, Antlered Mask) while others mold-farm.
 
 ### Secondary sinks
 
-- **Bartlebea:** Corroded plate → Champion’s BP over Stonewood / peer to Bladesman’s; Champion’s Boots for empty feet.
-- **Gettwell:** Forbidden Rites vs finishing Stability — same AC band, different camp.
-- **Atrapost:** Rune Crafter’s vs Spirit Weaver BP — peer; farm molds while in Kael either way.
-- **Jenniper:** Grand Master’s wraps peer Silver Moon; keep Sebilis **Fungus Covered Scale Tunic** if she ever gets it (worn regen wins).
-- **Blowinn:** Sage’s Robe when Torn Enchanted silk + emeralds line up.
-- **Steelin / Mcstabbins:** **`Fjokar Frozenshard`** for Eyepatch when face is empty.
+- **Bartlebea:** Corroded Breastplate on `Armor_of_Zek`; **`High_Priest_of_Tallon_Zek`** for Corroded Plate Boots (~36%).
+- **Gettwell:** Forbidden Rites mold (Corroded Breastplate) vs finishing Stability.
+- **Atrapost:** **`High_Priest_of_Vallon_Zek`** for Corroded Chain Tunic (~50%) → Rune Crafter’s.
+- **Jenniper:** same Eroded tunic path as Jenaviev (`Armor_of_Zek`); Fungi scale tunic still wins worn regen if she gets it later.
+- **Blowinn:** Torn Enchanted Silk Robe off `Armor_of_Zek` / `a_guardian_of_Zek`.
+- **Steelin / Mcstabbins:** **`Fjokar_Frozenshard`** for Eyepatch.
 
 ---
 
@@ -140,44 +157,44 @@ Other Corroded / Eroded / Torn **slots** exist for full Thurgadin sets — bank 
 
 Weighted toward **no-PoG-set** armor path, then Thurgadin molds for everyone.
 
-1. **`Armor of Zek`** until Jenaviev has Eroded tunic path started **and** Beholdiin has White Bear cloak (or mold bag is fat).
-2. Split mold pressure: keep Armor of Zek / arena density until Champion’s / Forbidden Rites / Rune Crafter / Grand Master / Sage molds are banked for the needy.
-3. Named peels when free: **`Gleed Dragonhunter`** (Fallin bow) · **`Fjokar Frozenshard`** (Eyepatch) · **`Kyenka`** · **`Klaggan` / `Vorken`** · **`Bjrakor`** · **`Dlammaz`**.
-4. Prophets (**Gkrean** / **Semkak**) only if idol / Shield of Battle debt remains.
-5. **Derakor** / **Tormax** RAID only after mold + primary unique debt is down.
-6. Parallel (other zones, not this idle): Black Marble / gem camps; Thurgadin turn-ins; Hate Trueheart if Beholdiin secondary still empty; Sebilis Deepwater for PAL extremities.
+1. **`Armor_of_Zek`** as the default park (Jenaviev tunic + Beholdiin cloak + account molds + Thunder Etched).
+2. Targeted: **`High_Priest_of_Vallon_Zek`** (Atrapost) · **`High_Priest_of_Tallon_Zek`** (Bart boots) · **`a_guardian_of_Zek`** when ready.
+3. Named peels: **`Gleed_Dragonhunter`** · **`Fjokar_Frozenshard`** · **`Kyenka`** · **`Klaggan_Iceshard`** / **`Vorken_Iceshard`** · **`Bjrakor_the_Cold`** · **`Dlammaz_Stormslayer`**.
+4. **`Derakor_the_Vindicator`** / **`King_Tormax`** only after mold + primary unique debt is down.
+5. Parallel: gem camps; Thurgadin turn-ins; Hate Trueheart; Sebilis Deepwater extremities.
 
 ### Suggested time split
 
 | Share | Exact idle name | Main sinks |
 | ---: | --- | --- |
-| ~40% | `Armor of Zek` | **Jenaviev** molds · **Beholdiin** cloak · account Corroded/Eroded/Torn |
-| ~10% | `protector of Zek` | Hammer / Shield of Battle overflow |
-| ~10% | `Gleed Dragonhunter` | **Fallin** bow (when ready) |
-| ~8% | `Fjokar Frozenshard` | Eyepatch (Steelin / account) |
-| ~8% | `Kyenka` | Barbed Dragonscale multi |
-| ~8% | `Klaggan Iceshard` / `Vorken Iceshard` | Avoidance · belt — **Beholdiin** |
-| ~6% | `Bjrakor the Cold` / Bladesman nameds | Legs / 1HS |
-| ~5% | `Dlammaz Stormslayer` / `Yetarr` / `Reivaj` | Cloak / Coldain Skin / PAL 2HS |
-| ~5% | `Derakor` / `King Tormax` | RAID uniques when formed |
+| ~45% | `Armor_of_Zek` | **Jenaviev** tunic · **Beholdiin** cloak · account molds |
+| ~12% | `a_guardian_of_Zek` | Same molds, harder / slightly better % |
+| ~10% | `High_Priest_of_Vallon_Zek` | **Atrapost** chain tunic |
+| ~5% | `High_Priest_of_Tallon_Zek` | **Bartlebea** plate boots |
+| ~8% | `Gleed_Dragonhunter` | **Fallin** bow (when ready) |
+| ~7% | `Fjokar_Frozenshard` | Eyepatch |
+| ~8% | `Kyenka` / `Klaggan_Iceshard` / `Vorken_Iceshard` | Multi + Avoidance — **Beholdiin** |
+| ~3% | `Bjrakor_the_Cold` / `Dlammaz_Stormslayer` / `Reivaj_the_Battlerager` | Legs / cloak / 2HS |
+| ~2% | `Derakor_the_Vindicator` / `King_Tormax` | RAID when formed |
 
 ---
 
 ## Multi-class / unique notables (not full sets)
 
-| Item | Idle / named | Who cares |
+| Item | Idle / named (spawnable) | Who cares |
 | --- | --- | --- |
-| White Bear Pelt Cloak | `Armor of Zek`; Drendar / Irrek / Klraggek | **Beholdiin** |
-| Black Bear Pelt Cloak | `Armor of Zek` | Bashfull |
-| Bow of the Huntsman | `Gleed Dragonhunter` | **Fallin** |
-| Eyepatch of the Shadows | `Fjokar Frozenshard` | Account face |
+| Eroded Leather Tunic (24942) | **`Armor_of_Zek`** ~0.47%; **`a_guardian_of_Zek`** ~0.48% | **Jenaviev** → Rowyl’s; Jenniper wraps |
+| White Bear Pelt Cloak (31201) | **`Armor_of_Zek`** ~0.16%; **`a_guardian_of_Zek`** ~0.27% | **Beholdiin** |
+| Corroded Chain Tunic (24935) | **`High_Priest_of_Vallon_Zek`** ~50% | **Atrapost** |
+| Corroded Plate Boots (24931) | **`High_Priest_of_Tallon_Zek`** ~36%; also on Armor of Zek ~3.5% | **Bartlebea** |
+| Bow of the Huntsman (25033) | **`Gleed_Dragonhunter`** ~80% | **Fallin** |
+| Black Bear Pelt Cloak | `Armor_of_Zek` (LustreDamus) | Bashfull |
+| Eyepatch of the Shadows | `Fjokar_Frozenshard` | Account face |
 | Barbed Dragonscale Boots / Pauldrons | `Kyenka` | Multi (incl. DRU/PAL/RNG) |
-| Greaves / Vambraces of Avoidance | Klaggan / Vorken | Hybrid plate/chain |
-| Cloak of the Maelstrom | `Dlammaz Stormslayer` | ALL |
-| Coldain Skin Gloves / Boots | `Yetarr` | Casters / hybrids |
-| Thunder Etched Gauntlets / Pauldrons | `Armor of Zek` | CLR PAL SHD (+ BRD shoulders) |
-| Shield of Battle | `protector of Zek`; Semkak | WAR CLR PAL RNG SHD DRU BRD SHM |
-| Idol of Corruption / Disease | Gkrean / Semkak | PoG Tunare path |
+| Greaves / Vambraces of Avoidance | `Klaggan_Iceshard` / `Vorken_Iceshard` | Hybrid plate/chain |
+| Cloak of the Maelstrom | `Dlammaz_Stormslayer` | ALL |
+| Thunder Etched Gauntlets / Pauldrons | `Armor_of_Zek` | CLR PAL SHD (+ BRD shoulders) |
+| Shield of Battle | `protector_of_Zek`; Semkak | WAR CLR PAL RNG SHD DRU BRD SHM |
 
 ### Outside Kael but on the same “no set” path
 
@@ -193,8 +210,8 @@ Weighted toward **no-PoG-set** armor path, then Thurgadin molds for everyone.
 
 ## Sources
 
-- LustreDamus: `zone/Kael-Drakkel.md`, `zone/Thurgadin.md`, `Quest-Gear.md`
-- Class chests/boots/bows: `byClass/Druid-Chests.md`, `Warrior-Chests.md`, `Warrior-Boots.md`, `Cleric-Chests.md`, `Shaman-Chests.md`, `Monk-Chests.md`, `Monk-Boots.md`, `Wizard-Chests.md`, `Ranger-Bows.md`, `Rogue-Face.md`
+- **Loot + spawn:** `D:\projects\idlequest-content` (items → loot… → npc_types → **spawnentry.chance** → spawn2 `zone=kael`). Loot without spawn chance &gt; 0 is not an idle target.
+- LustreDamus framing: `zone/Kael-Drakkel.md` (lists Armor of Zek; omits individual Veterans on purpose), Thurgadin / Quest-Gear / class chest sheets
 - Sebilis Deepwater nameds: `zone/Sebilis.md` (PAL side path)
 - Roster: `eq_characters.json` + `item-cache.json`
 - Account NO DROP sharing; idle = one exact NPC name per hunt

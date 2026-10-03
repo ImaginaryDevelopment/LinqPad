@@ -901,40 +901,49 @@ let promptChoice (title: string) (options: string[]) =
                 |> Array.tryFind (fun o -> o.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0))
 
 /// Shared item picker: id / cache suggestions / content name search (item-lookup style).
+/// Retries on no match / bad id / abandoned multi-pick until the user types cancel.
 let pickItemInteractive (cache: ItemCacheFile) (contentRoot: string) (title: string) (suggestions: string[]) : CachedItem option =
-  match promptText title "Item id, name fragment, or 'id — name'" suggestions "" with
-  | None -> None
-  | Some text when String.IsNullOrWhiteSpace text -> None
-  | Some text ->
-      match tryParseItemSelection text with
-      | Some id ->
-          try Some (resolveItem cache contentRoot id None)
-          with ex ->
-            showResult title ex.Message
-            None
-      | None ->
-          showResult title $"Searching for '{text}'..."
-          let hits = findItemsByName cache contentRoot text 80
-          match hits with
-          | [] ->
-              showResult title $"No items matching '{text}' (cache + content)."
-              None
-          | [ one ] ->
-              cache.Items.[string one.Id] <- one
-              saveItemCache cache
-              Some one
-          | many ->
-              let labels = many |> List.map itemLabel |> Array.ofList
-              match promptChoice $"{title} — {many.Length} matches" labels with
-              | None -> None
-              | Some pick ->
-                  match tryParseItemSelection pick with
-                  | Some id ->
-                      try Some (resolveItem cache contentRoot id None)
-                      with ex ->
-                        showResult title ex.Message
-                        None
-                  | None -> None
+  let rec loop () =
+    match promptText title "Item id, name fragment, or 'id — name'" suggestions "" with
+    | None -> None
+    | Some text when String.IsNullOrWhiteSpace text ->
+        showResult title "Empty input — type an id/name, or cancel."
+        loop ()
+    | Some text ->
+        match tryParseItemSelection text with
+        | Some id ->
+            try Some (resolveItem cache contentRoot id None)
+            with ex ->
+              showResult title $"{ex.Message} — try again or cancel."
+              loop ()
+        | None ->
+            showResult title $"Searching for '{text}'..."
+            let hits = findItemsByName cache contentRoot text 80
+            match hits with
+            | [] ->
+                showResult title $"No items matching '{text}' (cache + content) — try again or cancel."
+                loop ()
+            | [ one ] ->
+                cache.Items.[string one.Id] <- one
+                saveItemCache cache
+                Some one
+            | many ->
+                let labels = many |> List.map itemLabel |> Array.ofList
+                match promptChoice $"{title} — {many.Length} matches" labels with
+                | None ->
+                    showResult title "No pick — search again or cancel."
+                    loop ()
+                | Some pick ->
+                    match tryParseItemSelection pick with
+                    | Some id ->
+                        try Some (resolveItem cache contentRoot id None)
+                        with ex ->
+                          showResult title $"{ex.Message} — try again or cancel."
+                          loop ()
+                    | None ->
+                        showResult title "Could not parse selection — try again or cancel."
+                        loop ()
+  loop ()
 
 
 let promptMenu (title: string) (options: (string * string) list) =
@@ -1217,23 +1226,35 @@ let promptOneGearSlot (ch: Character) (events: EventsFile) (chars: CharactersFil
   | Some slot ->
       let root = ensureContentRoot contentRoot
       let suggestions = filterCachedItems cache ch.Race ch.Class (Some slot)
-      match promptText $"Gear — {slot}" "Item id/name (blank = unequip)" suggestions "" with
-      | None -> ()
-      | Some text when String.IsNullOrWhiteSpace text ->
-          applyGearChange ch events chars cache contentRoot slot ""
-      | Some text ->
-          match tryParseItemSelection text with
-          | Some _ -> applyGearChange ch events chars cache contentRoot slot text
-          | None ->
-              let hits = findItemsByName cache root text 80
-              match hits with
-              | [] -> showResult $"Gear — {ch.Name}" $"No items matching '{text}'."
-              | [ one ] -> applyGearChange ch events chars cache contentRoot slot (itemLabel one)
-              | many ->
-                  let labels = many |> List.map itemLabel |> Array.ofList
-                  match promptChoice $"Gear — {slot} matches" labels with
-                  | Some pick -> applyGearChange ch events chars cache contentRoot slot pick
-                  | None -> ()
+      let title = $"Gear — {slot}"
+      let rec loop () =
+        match promptText title "Item id/name (blank = unequip)" suggestions "" with
+        | None -> ()
+        | Some text when String.IsNullOrWhiteSpace text ->
+            applyGearChange ch events chars cache contentRoot slot ""
+        | Some text ->
+            match tryParseItemSelection text with
+            | Some _ ->
+                try applyGearChange ch events chars cache contentRoot slot text
+                with ex ->
+                  showResult title $"{ex.Message} — try again or cancel."
+                  loop ()
+            | None ->
+                showResult title $"Searching for '{text}'..."
+                let hits = findItemsByName cache root text 80
+                match hits with
+                | [] ->
+                    showResult title $"No items matching '{text}' — try again or cancel."
+                    loop ()
+                | [ one ] -> applyGearChange ch events chars cache contentRoot slot (itemLabel one)
+                | many ->
+                    let labels = many |> List.map itemLabel |> Array.ofList
+                    match promptChoice $"{title} matches" labels with
+                    | Some pick -> applyGearChange ch events chars cache contentRoot slot pick
+                    | None ->
+                        showResult title "No pick — search again or cancel."
+                        loop ()
+      loop ()
 
 let modeEnterGear (ch: Character) (events: EventsFile) (chars: CharactersFile) (cache: ItemCacheFile) (contentRoot: string option ref) =
   let rec loop () =
@@ -1268,6 +1289,7 @@ let modeInventory (ch: Character) (events: EventsFile) (chars: CharactersFile) (
         showInventoryResult cache ch $"Inventory — {ch.Name} ({ch.Current.Inventory.Count} stacks)"
         loop ()
     | Some s when s.StartsWith("add", StringComparison.OrdinalIgnoreCase) ->
+        showInventoryResult cache ch $"Inventory — {ch.Name} ({ch.Current.Inventory.Count} stacks)"
         let root = ensureContentRoot contentRoot
         let suggestions =
           cache.Items.Values

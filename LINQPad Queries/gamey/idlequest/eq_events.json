@@ -279,6 +279,36 @@
             "secondary": 9311,
             "waist": 30377
           }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-03T23:42:48.8977680\u002B00:00",
+          "source": "script",
+          "gear": {
+            "wrist2": 25065
+          }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-03T23:43:13.1693726\u002B00:00",
+          "source": "script",
+          "gear": {
+            "wrist1": 25013
+          }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-03T23:50:35.6967422\u002B00:00",
+          "source": "script",
+          "gear": {},
+          "inventoryAdd": [
+            {
+              "itemId": 25187,
+              "tag": "gear",
+              "inBank": false,
+              "note": ""
+            }
+          ]
         }
       ]
     },
@@ -629,6 +659,20 @@
           "gear": {
             "head": 25528
           }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-03T22:44:51.3665169\u002B00:00",
+          "source": "script",
+          "gear": {},
+          "inventoryAdd": [
+            {
+              "itemId": 25533,
+              "tag": "gear",
+              "inBank": false,
+              "note": ""
+            }
+          ]
         }
       ]
     },
