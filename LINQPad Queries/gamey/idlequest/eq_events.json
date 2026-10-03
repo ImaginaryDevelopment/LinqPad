@@ -384,6 +384,14 @@
             "chest": 30372,
             "feet": 4563
           }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-03T21:31:29.6552615\u002B00:00",
+          "source": "script",
+          "gear": {
+            "primary": 11555
+          }
         }
       ]
     },
@@ -681,6 +689,14 @@
           "source": "hand-edit",
           "level": 16,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-03T21:05:18.8312284\u002B00:00",
+          "source": "script",
+          "gear": {
+            "chest": 25480
+          }
         }
       ]
     },

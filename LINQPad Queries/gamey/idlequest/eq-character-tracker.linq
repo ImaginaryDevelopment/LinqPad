@@ -869,6 +869,36 @@ let tryParseItemSelection (text: string) =
         match Int32.TryParse t with
         | true, id -> Some id
         | _ -> None
+// --- LINQPad prompts (Util.ReadLine + DumpContainers) ---
+let promptText (title: string) (label: string) (suggestions: string[]) (defaultText: string) =
+  let opts = if isNullUnsafe suggestions then Array.empty else suggestions
+  let prompt =
+    if String.IsNullOrWhiteSpace label then title
+    else $"{title} — {label} (type cancel to abort)"
+  showOptions title opts
+  let raw =
+    if opts.Length = 0 then Util.ReadLine(prompt, defaultText)
+    else Util.ReadLine(prompt, defaultText, opts)
+  let text = if isNullUnsafe raw then "" else raw.Trim()
+  if String.Equals(text, "cancel", StringComparison.OrdinalIgnoreCase) then None
+  else Some text
+
+let promptChoice (title: string) (options: string[]) =
+  if isNullUnsafe options || options.Length = 0 then None
+  else
+    showOptions title options
+    match promptText title "number, text, or suggestion" options "" with
+    | None -> None
+    | Some t when String.IsNullOrWhiteSpace t -> None
+    | Some t ->
+        match Int32.TryParse t with
+        | true, n when n >= 1 && n <= options.Length -> Some options.[n - 1]
+        | _ ->
+            options
+            |> Array.tryFind (fun o -> String.Equals(o, t, StringComparison.OrdinalIgnoreCase))
+            |> Option.orElseWith (fun () ->
+                options
+                |> Array.tryFind (fun o -> o.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0))
 
 /// Shared item picker: id / cache suggestions / content name search (item-lookup style).
 let pickItemInteractive (cache: ItemCacheFile) (contentRoot: string) (title: string) (suggestions: string[]) : CachedItem option =
@@ -906,36 +936,6 @@ let pickItemInteractive (cache: ItemCacheFile) (contentRoot: string) (title: str
                         None
                   | None -> None
 
-// --- LINQPad prompts (Util.ReadLine + DumpContainers) ---
-let promptText (title: string) (label: string) (suggestions: string[]) (defaultText: string) =
-  let opts = if isNullUnsafe suggestions then Array.empty else suggestions
-  let prompt =
-    if String.IsNullOrWhiteSpace label then title
-    else $"{title} — {label} (type cancel to abort)"
-  showOptions title opts
-  let raw =
-    if opts.Length = 0 then Util.ReadLine(prompt, defaultText)
-    else Util.ReadLine(prompt, defaultText, opts)
-  let text = if isNullUnsafe raw then "" else raw.Trim()
-  if String.Equals(text, "cancel", StringComparison.OrdinalIgnoreCase) then None
-  else Some text
-
-let promptChoice (title: string) (options: string[]) =
-  if isNullUnsafe options || options.Length = 0 then None
-  else
-    showOptions title options
-    match promptText title "number, text, or suggestion" options "" with
-    | None -> None
-    | Some t when String.IsNullOrWhiteSpace t -> None
-    | Some t ->
-        match Int32.TryParse t with
-        | true, n when n >= 1 && n <= options.Length -> Some options.[n - 1]
-        | _ ->
-            options
-            |> Array.tryFind (fun o -> String.Equals(o, t, StringComparison.OrdinalIgnoreCase))
-            |> Option.orElseWith (fun () ->
-                options
-                |> Array.tryFind (fun o -> o.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0))
 
 let promptMenu (title: string) (options: (string * string) list) =
   let labels = options |> List.map (fun (k, v) -> $"{k} — {v}") |> Array.ofList

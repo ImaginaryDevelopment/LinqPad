@@ -8,7 +8,6 @@
       "current": {
         "level": 44,
         "gear": {
-          "charm": null,
           "ear1": null,
           "head": 25535,
           "face": null,
@@ -30,7 +29,8 @@
           "feet": null,
           "waist": 1365,
           "ammo": null
-        }
+        },
+        "inventory": []
       },
       "currentAt": "2026-10-03T19:45:52.8179833\u002B00:00"
     },
@@ -42,7 +42,6 @@
       "current": {
         "level": 24,
         "gear": {
-          "charm": null,
           "ear1": null,
           "head": 25514,
           "face": null,
@@ -64,7 +63,8 @@
           "feet": null,
           "waist": null,
           "ammo": null
-        }
+        },
+        "inventory": []
       },
       "currentAt": "2026-10-03T19:25:56.7917701\u002B00:00"
     },
@@ -76,7 +76,6 @@
       "current": {
         "level": 45,
         "gear": {
-          "charm": null,
           "ear1": null,
           "head": null,
           "face": null,
@@ -98,7 +97,8 @@
           "feet": null,
           "waist": 1620,
           "ammo": null
-        }
+        },
+        "inventory": []
       },
       "currentAt": "2026-10-03T20:29:41.9445247\u002B00:00"
     },
@@ -110,7 +110,6 @@
       "current": {
         "level": 40,
         "gear": {
-          "charm": null,
           "ear1": null,
           "head": 1630,
           "face": 4505,
@@ -132,7 +131,8 @@
           "feet": null,
           "waist": null,
           "ammo": null
-        }
+        },
+        "inventory": []
       },
       "currentAt": "2026-10-02T02:02:24.0930735\u002B00:00"
     },
@@ -144,7 +144,6 @@
       "current": {
         "level": 44,
         "gear": {
-          "charm": null,
           "ear1": null,
           "head": null,
           "face": null,
@@ -166,7 +165,8 @@
           "feet": null,
           "waist": 30377,
           "ammo": null
-        }
+        },
+        "inventory": []
       },
       "currentAt": "2026-10-03T10:57:28.6803511\u002B00:00"
     },
@@ -178,7 +178,6 @@
       "current": {
         "level": 44,
         "gear": {
-          "charm": null,
           "ear1": null,
           "head": 4504,
           "face": null,
@@ -200,7 +199,8 @@
           "feet": null,
           "waist": 1365,
           "ammo": null
-        }
+        },
+        "inventory": []
       },
       "currentAt": "2026-10-03T19:25:56.7918368\u002B00:00"
     },
@@ -212,31 +212,31 @@
       "current": {
         "level": 40,
         "gear": {
-          "charm": null,
-          "ear1": null,
-          "head": null,
-          "face": null,
-          "ear2": null,
-          "neck": null,
-          "shoulders": 1402,
+          "primary": 11555,
+          "secondary": 25285,
+          "chest": 30372,
+          "waist": null,
+          "legs": null,
           "arms": 25488,
-          "back": null,
+          "hands": 2465,
+          "head": null,
+          "shoulders": 1402,
+          "face": null,
+          "feet": 4563,
           "wrist1": null,
           "wrist2": null,
-          "range": null,
-          "hands": 2465,
-          "primary": 6692,
-          "secondary": 25285,
           "fingers1": null,
           "fingers2": null,
-          "chest": 30372,
-          "legs": null,
-          "feet": 4563,
-          "waist": null,
+          "range": null,
+          "ear1": null,
+          "ear2": null,
+          "neck": null,
+          "back": null,
           "ammo": null
-        }
+        },
+        "inventory": []
       },
-      "currentAt": "2026-10-02T02:02:24.0932044\u002B00:00"
+      "currentAt": "2026-10-03T21:31:29.6552615\u002B00:00"
     },
     {
       "id": "88c0f32063c0468d8cd8af92c1f0a226",
@@ -246,7 +246,6 @@
       "current": {
         "level": 26,
         "gear": {
-          "charm": null,
           "ear1": null,
           "head": 4504,
           "face": null,
@@ -268,7 +267,8 @@
           "feet": null,
           "waist": 1365,
           "ammo": null
-        }
+        },
+        "inventory": []
       },
       "currentAt": "2026-10-03T19:25:56.7918836\u002B00:00"
     },
@@ -280,7 +280,6 @@
       "current": {
         "level": 25,
         "gear": {
-          "charm": null,
           "ear1": null,
           "head": null,
           "face": null,
@@ -302,7 +301,8 @@
           "feet": null,
           "waist": 30377,
           "ammo": null
-        }
+        },
+        "inventory": []
       },
       "currentAt": "2026-10-03T19:25:56.7919219\u002B00:00"
     },
@@ -314,7 +314,6 @@
       "current": {
         "level": 40,
         "gear": {
-          "charm": null,
           "ear1": null,
           "head": 25521,
           "face": null,
@@ -336,7 +335,8 @@
           "feet": 25527,
           "waist": null,
           "ammo": null
-        }
+        },
+        "inventory": []
       },
       "currentAt": "2026-10-02T02:02:24.0938099\u002B00:00"
     },
@@ -348,7 +348,6 @@
       "current": {
         "level": 37,
         "gear": {
-          "charm": null,
           "ear1": null,
           "head": 25528,
           "face": null,
@@ -370,7 +369,8 @@
           "feet": 25534,
           "waist": null,
           "ammo": null
-        }
+        },
+        "inventory": []
       },
       "currentAt": "2026-10-03T20:38:15.1111009\u002B00:00"
     },
@@ -382,31 +382,31 @@
       "current": {
         "level": 16,
         "gear": {
-          "charm": null,
-          "ear1": null,
-          "head": 25479,
-          "face": null,
-          "ear2": null,
-          "neck": null,
-          "shoulders": null,
-          "arms": null,
-          "back": null,
-          "wrist1": null,
-          "wrist2": null,
-          "range": null,
-          "hands": 25483,
           "primary": 11983,
           "secondary": null,
+          "chest": 25480,
+          "waist": null,
+          "legs": null,
+          "arms": null,
+          "hands": 25483,
+          "head": 25479,
+          "shoulders": null,
+          "face": null,
+          "feet": null,
+          "wrist1": null,
+          "wrist2": null,
           "fingers1": null,
           "fingers2": null,
-          "chest": 4902,
-          "legs": null,
-          "feet": null,
-          "waist": null,
+          "range": null,
+          "ear1": null,
+          "ear2": null,
+          "neck": null,
+          "back": null,
           "ammo": null
-        }
+        },
+        "inventory": []
       },
-      "currentAt": "2026-10-03T19:25:56.7919948\u002B00:00"
+      "currentAt": "2026-10-03T21:05:18.8312284\u002B00:00"
     },
     {
       "id": "77d68250044a4c0aa271692ab48247a7",
@@ -416,7 +416,6 @@
       "current": {
         "level": 43,
         "gear": {
-          "charm": null,
           "ear1": null,
           "head": 10143,
           "face": null,
@@ -438,7 +437,8 @@
           "feet": null,
           "waist": 1364,
           "ammo": null
-        }
+        },
+        "inventory": []
       },
       "currentAt": "2026-10-03T10:57:28.6809581\u002B00:00"
     },
@@ -450,7 +450,6 @@
       "current": {
         "level": 15,
         "gear": {
-          "charm": null,
           "ear1": null,
           "head": 10141,
           "face": null,
@@ -472,7 +471,8 @@
           "feet": null,
           "waist": null,
           "ammo": null
-        }
+        },
+        "inventory": []
       },
       "currentAt": "2026-10-03T19:25:56.7921265\u002B00:00"
     },
@@ -484,7 +484,6 @@
       "current": {
         "level": 44,
         "gear": {
-          "charm": null,
           "ear1": null,
           "head": null,
           "face": null,
@@ -506,7 +505,8 @@
           "feet": 25499,
           "waist": null,
           "ammo": null
-        }
+        },
+        "inventory": []
       },
       "currentAt": "2026-10-03T19:25:56.7921897\u002B00:00"
     },
@@ -518,7 +518,6 @@
       "current": {
         "level": 60,
         "gear": {
-          "charm": null,
           "ear1": null,
           "head": 25479,
           "face": 25031,
@@ -540,7 +539,8 @@
           "feet": 4920,
           "waist": 11601,
           "ammo": null
-        }
+        },
+        "inventory": []
       },
       "currentAt": "2026-10-03T10:57:28.6814005\u002B00:00"
     },
@@ -552,7 +552,6 @@
       "current": {
         "level": 15,
         "gear": {
-          "charm": null,
           "ear1": null,
           "head": null,
           "face": null,
@@ -574,7 +573,8 @@
           "feet": null,
           "waist": null,
           "ammo": null
-        }
+        },
+        "inventory": []
       },
       "currentAt": "2026-10-03T19:25:56.7922737\u002B00:00"
     },
@@ -586,7 +586,6 @@
       "current": {
         "level": 15,
         "gear": {
-          "charm": null,
           "ear1": null,
           "head": null,
           "face": null,
@@ -608,7 +607,8 @@
           "feet": 4407,
           "waist": null,
           "ammo": null
-        }
+        },
+        "inventory": []
       },
       "currentAt": "2026-10-03T19:25:56.7923159\u002B00:00"
     },
@@ -620,7 +620,6 @@
       "current": {
         "level": 26,
         "gear": {
-          "charm": null,
           "ear1": null,
           "head": 10141,
           "face": null,
@@ -642,7 +641,8 @@
           "feet": null,
           "waist": null,
           "ammo": null
-        }
+        },
+        "inventory": []
       },
       "currentAt": "2026-10-03T19:25:56.7924023\u002B00:00"
     }
