@@ -6,7 +6,7 @@
       "race": "Troll",
       "class": "Warrior",
       "current": {
-        "level": 43,
+        "level": 44,
         "gear": {
           "charm": null,
           "ear1": null,
@@ -32,7 +32,7 @@
           "ammo": null
         }
       },
-      "currentAt": "2026-10-03T10:57:28.6745068\u002B00:00"
+      "currentAt": "2026-10-03T19:25:56.7917193\u002B00:00"
     },
     {
       "id": "8ac8f78a19714c9298b2cb6fa338e863",
@@ -40,7 +40,7 @@
       "race": "Iksar",
       "class": "Necromancer",
       "current": {
-        "level": 21,
+        "level": 24,
         "gear": {
           "charm": null,
           "ear1": null,
@@ -66,7 +66,7 @@
           "ammo": null
         }
       },
-      "currentAt": "2026-10-03T10:57:28.6764084\u002B00:00"
+      "currentAt": "2026-10-03T19:25:56.7917701\u002B00:00"
     },
     {
       "id": "c68105da05e240e2a95e53a4471a29b7",
@@ -176,7 +176,7 @@
       "race": "Iksar",
       "class": "Shaman",
       "current": {
-        "level": 43,
+        "level": 44,
         "gear": {
           "charm": null,
           "ear1": null,
@@ -202,7 +202,7 @@
           "ammo": null
         }
       },
-      "currentAt": "2026-10-03T10:57:28.6807064\u002B00:00"
+      "currentAt": "2026-10-03T19:25:56.7918368\u002B00:00"
     },
     {
       "id": "a55e8e82fa654baaaa8a656bd2c69dc0",
@@ -244,7 +244,7 @@
       "race": "Wood Elf",
       "class": "Ranger",
       "current": {
-        "level": 23,
+        "level": 26,
         "gear": {
           "charm": null,
           "ear1": null,
@@ -270,7 +270,7 @@
           "ammo": null
         }
       },
-      "currentAt": "2026-10-03T10:57:28.6807796\u002B00:00"
+      "currentAt": "2026-10-03T19:25:56.7918836\u002B00:00"
     },
     {
       "id": "5a293b8590c84aa2aa04ee0dd1ab1e7b",
@@ -278,7 +278,7 @@
       "race": "Ogre",
       "class": "Shadow Knight",
       "current": {
-        "level": 23,
+        "level": 25,
         "gear": {
           "charm": null,
           "ear1": null,
@@ -304,7 +304,7 @@
           "ammo": null
         }
       },
-      "currentAt": "2026-10-03T10:57:28.6808226\u002B00:00"
+      "currentAt": "2026-10-03T19:25:56.7919219\u002B00:00"
     },
     {
       "id": "14cef2cfc1ed4c93808daf6f0e4d2e99",
@@ -380,7 +380,7 @@
       "race": "Dark Elf",
       "class": "Rogue",
       "current": {
-        "level": 14,
+        "level": 16,
         "gear": {
           "charm": null,
           "ear1": null,
@@ -406,7 +406,7 @@
           "ammo": null
         }
       },
-      "currentAt": "2026-10-03T10:57:28.6809116\u002B00:00"
+      "currentAt": "2026-10-03T19:25:56.7919948\u002B00:00"
     },
     {
       "id": "77d68250044a4c0aa271692ab48247a7",
@@ -448,7 +448,7 @@
       "race": "Erudite",
       "class": "Wizard",
       "current": {
-        "level": 14,
+        "level": 15,
         "gear": {
           "charm": null,
           "ear1": null,
@@ -474,7 +474,7 @@
           "ammo": null
         }
       },
-      "currentAt": "2026-10-03T10:57:28.6809967\u002B00:00"
+      "currentAt": "2026-10-03T19:25:56.7921265\u002B00:00"
     },
     {
       "id": "284567e2531b44428dc78ccb19053b1c",
@@ -482,7 +482,7 @@
       "race": "Halfling",
       "class": "Cleric",
       "current": {
-        "level": 43,
+        "level": 44,
         "gear": {
           "charm": null,
           "ear1": null,
@@ -508,7 +508,7 @@
           "ammo": null
         }
       },
-      "currentAt": "2026-10-03T10:57:28.6810911\u002B00:00"
+      "currentAt": "2026-10-03T19:25:56.7921897\u002B00:00"
     },
     {
       "id": "ce0f39a6e6154cb6a36e47b7afa4e48a",
@@ -550,7 +550,7 @@
       "race": "Dark Elf",
       "class": "Magician",
       "current": {
-        "level": 14,
+        "level": 15,
         "gear": {
           "charm": null,
           "ear1": null,
@@ -576,7 +576,7 @@
           "ammo": null
         }
       },
-      "currentAt": "2026-10-03T10:57:28.6814623\u002B00:00"
+      "currentAt": "2026-10-03T19:25:56.7922737\u002B00:00"
     },
     {
       "id": "d090f4de21024ec281caf200e09a15c1",
@@ -584,7 +584,7 @@
       "race": "Gnome",
       "class": "Cleric",
       "current": {
-        "level": 14,
+        "level": 15,
         "gear": {
           "charm": null,
           "ear1": null,
@@ -610,7 +610,7 @@
           "ammo": null
         }
       },
-      "currentAt": "2026-10-03T10:57:28.6815092\u002B00:00"
+      "currentAt": "2026-10-03T19:25:56.7923159\u002B00:00"
     },
     {
       "id": "2ce00d6bca8e46d6b04dc8945a561e1f",
@@ -618,7 +618,7 @@
       "race": "Erudite",
       "class": "Wizard",
       "current": {
-        "level": 23,
+        "level": 26,
         "gear": {
           "charm": null,
           "ear1": null,
@@ -644,7 +644,7 @@
           "ammo": null
         }
       },
-      "currentAt": "2026-10-03T10:57:28.6816251\u002B00:00"
+      "currentAt": "2026-10-03T19:25:56.7924023\u002B00:00"
     }
   ]
 }
