@@ -101,13 +101,16 @@ module SessionUi =
       panels <- (title, data) :: panels |> List.truncate 4
       refresh ()
 
+// Display / entry order (no charm on this server). Bit values are EQEmu masks.
+// Unlisted keepers (ears/neck/back) sit after range; ammo always last.
 let slotBits: (string * int) list =
   [
-    "charm", 1; "ear1", 2; "head", 4; "face", 8; "ear2", 16; "neck", 32
-    "shoulders", 64; "arms", 128; "back", 256; "wrist1", 512; "wrist2", 1024
-    "range", 2048; "hands", 4096; "primary", 8192; "secondary", 16384
-    "fingers1", 32768; "fingers2", 65536; "chest", 131072; "legs", 262144
-    "feet", 524288; "waist", 1048576; "ammo", 2097152
+    "primary", 8192; "secondary", 16384; "chest", 131072; "waist", 1048576
+    "legs", 262144; "arms", 128; "hands", 4096; "head", 4; "shoulders", 64
+    "face", 8; "feet", 524288; "wrist1", 512; "wrist2", 1024
+    "fingers1", 32768; "fingers2", 65536; "range", 2048
+    "ear1", 2; "ear2", 16; "neck", 32; "back", 256
+    "ammo", 2097152
   ]
 
 let raceBits =
@@ -165,9 +168,19 @@ type ItemCacheFile = {
 type Gear = Dictionary<string, Nullable<int>>
 
 [<CLIMutable>]
+type InventoryEntry = {
+  mutable ItemId: int
+  mutable Tag: string
+  mutable Note: string
+  mutable Qty: Nullable<int>
+}
+
+[<CLIMutable>]
 type Sheet = {
   mutable Level: Nullable<int>
   mutable Gear: Gear
+  /// Spare gear / quest / epic bag (see eq-character-tracker).
+  mutable Inventory: ResizeArray<InventoryEntry>
 }
 
 [<CLIMutable>]
@@ -891,9 +904,16 @@ let saveCharacters (chars: CharactersFile) =
 
 let ensureCharacterGear (ch: Character) =
   if isNullUnsafe ch.Current then
-    ch.Current <- { Level = Nullable(); Gear = Dictionary<string, Nullable<int>>() }
+    ch.Current <-
+      {
+        Level = Nullable()
+        Gear = Dictionary<string, Nullable<int>>()
+        Inventory = ResizeArray()
+      }
   if isNullUnsafe ch.Current.Gear then
     ch.Current.Gear <- Dictionary<string, Nullable<int>>()
+  if isNullUnsafe ch.Current.Inventory then
+    ch.Current.Inventory <- ResizeArray()
   for name in slotNames do
     if not (ch.Current.Gear.ContainsKey name) then
       ch.Current.Gear.[name] <- Nullable()
@@ -907,24 +927,30 @@ let formatGearItem (cache: ItemCacheFile) (itemId: int) =
 
 let showCharacterGear (ch: Character) =
   ensureCharacterGear ch
+  if ch.Current.Gear.ContainsKey "charm" then ch.Current.Gear.Remove "charm" |> ignore
   let cache = loadCache ()
-  let priorityFront = [ "primary"; "secondary"; "chest"; "legs"; "back"; "waist" ]
-  let frontSet = priorityFront |> Set.ofList
-  let middle =
+  // slotNames already follows server priority (ammo last; no charm).
+  let gearRows =
     slotNames
-    |> List.filter (fun s ->
-        not (frontSet.Contains s)
-        && not (String.Equals(s, "charm", StringComparison.OrdinalIgnoreCase)))
-  let displaySlots = priorityFront @ middle @ [ "charm" ]
-  let rows =
-    displaySlots
     |> List.map (fun slot ->
         let filled = ch.Current.Gear.ContainsKey slot && ch.Current.Gear.[slot].HasValue
         {|
           Slot = slot
           Item = if filled then formatGearItem cache ch.Current.Gear.[slot].Value else ""
+          Note = ""
         |})
-  SessionUi.show $"{ch.Name} gear ({ch.Class})" rows
+  let bagRows =
+    ch.Current.Inventory
+    |> Seq.map (fun e ->
+        let qty = if e.Qty.HasValue then max 1 e.Qty.Value else 1
+        let item = formatGearItem cache e.ItemId
+        {|
+          Slot = $"bag:{e.Tag}"
+          Item = if qty > 1 then $"{item} x{qty}" else item
+          Note = if isNullUnsafe e.Note then "" else e.Note
+        |})
+    |> Seq.toList
+  SessionUi.show $"{ch.Name} gear/bag ({ch.Class})" (gearRows @ bagRows)
 
 let tryEquipItemOnCharacter (classFilter: (string * int) option) (equipTargetName: string option) (item: CachedItem) =
   match loadCharacters () with

@@ -4,9 +4,10 @@
 
 // IdleQuest character tracker — Classic/Kunark/Velious (no AA).
 // Data: eq_characters.json, eq_events.json, item-cache.json (same folder as this script).
+// Tracks equipped gear + inventory bag (spare gear / quest / epic items).
 // Item lookups use a local idlequest-content clone or GitHub raw shards.
 // Content-root preference: Util.Cache + password; GitHub cancel cooldown ~1 day.
-// UI: LINQPad DumpContainers + Util.ReadLine suggestions (no WinForms).
+// UI: one DumpContainer (PromptUi) for current prompt/options + last result; Util.ReadLine suggestions (no WinForms).
 
 open System
 open System.Collections.Generic
@@ -45,41 +46,61 @@ let inline deser<'T> (text: string) = JsonSerializer.Deserialize<'T>(text, jsonO
 /// Null check without requiring 'T : null (F# isNull constraint workaround).
 let isNullUnsafe value = Object.Equals(value, null)
 
-// Live option panels — created here; Dump after startup sync so they stay near Util.ReadLine.
-let optionsDump = DumpContainer(Content = "(options appear here)")
-let contextDump = DumpContainer(Content = "(context appears here)")
+/// Single live panel: last result + current options (prompt text lives on Util.ReadLine).
+module PromptUi =
+  let dc = DumpContainer(Content = "(ready)")
+  let mutable options: string[] = Array.empty
+  let mutable resultTitle = "(none yet)"
+  let mutable resultData: obj = null
 
-let showOptions (title: string) (options: string[]) =
-  let opts = if isNullUnsafe options then Array.empty else options
-  contextDump.Content <- title
-  optionsDump.Content <-
-    opts
-    |> Array.mapi (fun i o -> {| N = i + 1; Option = o |})
+  let refresh () =
+    let optionsPanel: obj =
+      let rows =
+        if options.Length = 0 then [| {| N = 0; Option = "(none)" |} |]
+        else options |> Array.mapi (fun i o -> {| N = i + 1; Option = o |})
+      box {| Options = rows |}
+    let resultPanel: obj = box {| LastResult = (resultTitle, resultData) |}
+    // Options | LastResult as siblings in one horizontal run (not nested fields).
+    dc.Content <- Util.HorizontalRun(true, [ optionsPanel; resultPanel ])
+
+  /// title is only for the ReadLine prompt (caller); not shown here — avoids duplicating Util.ReadLine's label.
+  let showOptions (_title: string) (opts: string[]) =
+    options <- if isNullUnsafe opts then Array.empty else opts
+    refresh ()
+
+  let showResult (title: string) (data: obj) =
+    resultTitle <- title
+    resultData <- data
+    refresh ()
+
+let showOptions title options = PromptUi.showOptions title options
+let showResult title data = PromptUi.showResult title data
 
 // --- EQEmu slot bitmasks ---
+// Display / entry order (no charm on this server). Bit values are EQEmu masks.
+// Unlisted keepers (ears/neck/back) sit after range; ammo always last.
 let slotBits: (string * int) list =
   [
-    "charm", 1
-    "ear1", 2
-    "head", 4
-    "face", 8
-    "ear2", 16
-    "neck", 32
-    "shoulders", 64
-    "arms", 128
-    "back", 256
-    "wrist1", 512
-    "wrist2", 1024
-    "range", 2048
-    "hands", 4096
     "primary", 8192
     "secondary", 16384
+    "chest", 131072
+    "waist", 1048576
+    "legs", 262144
+    "arms", 128
+    "hands", 4096 // gauntlets
+    "head", 4
+    "shoulders", 64
+    "face", 8
+    "feet", 524288
+    "wrist1", 512
+    "wrist2", 1024
     "fingers1", 32768
     "fingers2", 65536
-    "chest", 131072
-    "legs", 262144
-    "feet", 524288
-    "waist", 1048576
+    "range", 2048
+    "ear1", 2
+    "ear2", 16
+    "neck", 32
+    "back", 256
     "ammo", 2097152
   ]
 
@@ -106,6 +127,17 @@ let classNames = classBits.Keys |> Seq.sort |> Array.ofSeq
 
 type Gear = Dictionary<string, Nullable<int>>
 
+/// Bag / bank extras — spare gear, quest turn-ins, epic pieces, etc.
+[<CLIMutable>]
+type InventoryEntry = {
+  mutable ItemId: int
+  /// gear | quest | epic | other
+  mutable Tag: string
+  mutable Note: string
+  /// Stack size; null/absent means 1.
+  mutable Qty: Nullable<int>
+}
+
 [<CLIMutable>]
 type Sheet = {
   mutable Level: Nullable<int>
@@ -126,6 +158,7 @@ type Sheet = {
   mutable Pr: Nullable<int>
   mutable Dr: Nullable<int>
   mutable Gear: Gear
+  mutable Inventory: ResizeArray<InventoryEntry>
 }
 
 [<CLIMutable>]
@@ -167,6 +200,12 @@ type EventRecord = {
   mutable Pr: Nullable<int>
   mutable Dr: Nullable<int>
   mutable Gear: Gear
+  /// When set, replaces the entire inventory bag (full baselines + hand-edit sync).
+  mutable InventorySet: ResizeArray<InventoryEntry>
+  /// Delta: append / stack these entries.
+  mutable InventoryAdd: ResizeArray<InventoryEntry>
+  /// Delta: remove one stack unit per item id (first match).
+  mutable InventoryRemove: ResizeArray<int>
 }
 
 [<CLIMutable>]
@@ -216,11 +255,44 @@ type ItemCacheFile = {
   mutable Items: Dictionary<string, CachedItem>
 }
 
+let inventoryTags = [| "gear"; "quest"; "epic"; "other" |]
+
 let emptyGear () =
   let g = Gear()
   for name in slotNames do
     g.[name] <- Nullable()
   g
+
+let emptyInventory () = ResizeArray<InventoryEntry>()
+
+let entryQty (e: InventoryEntry) =
+  if isNullUnsafe e then 1
+  elif e.Qty.HasValue then max 1 e.Qty.Value
+  else 1
+
+let cloneInventoryEntry (e: InventoryEntry) : InventoryEntry =
+  {
+    ItemId = e.ItemId
+    Tag = if isNullUnsafe e.Tag then "other" else e.Tag
+    Note = if isNullUnsafe e.Note then "" else e.Note
+    Qty = if e.Qty.HasValue then Nullable<int>(entryQty e) else Nullable()
+  }
+
+let cloneInventory (src: ResizeArray<InventoryEntry>) =
+  let dst = emptyInventory ()
+  if not (isNullUnsafe src) then
+    for e in src do dst.Add(cloneInventoryEntry e)
+  dst
+
+let ensureInventory (sheet: Sheet) =
+  if isNullUnsafe sheet.Inventory then sheet.Inventory <- emptyInventory ()
+
+let inventoryFingerprint (inv: ResizeArray<InventoryEntry>) =
+  if isNullUnsafe inv || inv.Count = 0 then ""
+  else
+    inv
+    |> Seq.map (fun e -> $"{e.ItemId}\t{e.Tag}\t{e.Note}\t{entryQty e}")
+    |> String.concat "\n"
 
 let emptySheet () : Sheet =
   {
@@ -230,6 +302,7 @@ let emptySheet () : Sheet =
     Wis = Nullable(); Int = Nullable(); Cha = Nullable()
     Mr = Nullable(); Fr = Nullable(); Cr = Nullable(); Pr = Nullable(); Dr = Nullable()
     Gear = emptyGear ()
+    Inventory = emptyInventory ()
   }
 
 let cloneGear (src: Gear) =
@@ -247,6 +320,7 @@ let cloneSheet (s: Sheet) : Sheet =
     Wis = s.Wis; Int = s.Int; Cha = s.Cha
     Mr = s.Mr; Fr = s.Fr; Cr = s.Cr; Pr = s.Pr; Dr = s.Dr
     Gear = cloneGear s.Gear
+    Inventory = cloneInventory s.Inventory
   }
 
 let utcNow () = DateTimeOffset.UtcNow.ToString("o")
@@ -276,7 +350,55 @@ let sheetFieldGetters: (string * (Sheet -> Nullable<int>) * (Sheet -> Nullable<i
     "dr", (fun s -> s.Dr), (fun s v -> s.Dr <- v)
   ]
 
+let removeInventoryItemId (inv: ResizeArray<InventoryEntry>) (itemId: int) =
+  let idx =
+    inv
+    |> Seq.tryFindIndex (fun e -> e.ItemId = itemId)
+  match idx with
+  | None -> false
+  | Some i ->
+      let e = inv.[i]
+      let q = entryQty e
+      if q <= 1 then inv.RemoveAt i
+      else e.Qty <- Nullable<int>(q - 1)
+      true
+
+let addInventoryEntry (inv: ResizeArray<InventoryEntry>) (entry: InventoryEntry) =
+  let tag = if isNullUnsafe entry.Tag || String.IsNullOrWhiteSpace entry.Tag then "other" else entry.Tag
+  let note = if isNullUnsafe entry.Note then "" else entry.Note
+  let addQty = entryQty entry
+  match
+    inv
+    |> Seq.tryFindIndex (fun e ->
+        e.ItemId = entry.ItemId
+        && String.Equals(e.Tag, tag, StringComparison.OrdinalIgnoreCase)
+        && String.Equals((if isNullUnsafe e.Note then "" else e.Note), note, StringComparison.Ordinal))
+  with
+  | Some i ->
+      let e = inv.[i]
+      e.Qty <- Nullable<int>(entryQty e + addQty)
+  | None ->
+      inv.Add
+        {
+          ItemId = entry.ItemId
+          Tag = tag
+          Note = note
+          Qty = if addQty = 1 then Nullable() else Nullable<int>(addQty)
+        }
+
 let applyEvent (sheet: Sheet) (e: EventRecord) =
+  let applyInventory (src: EventRecord) =
+    ensureInventory sheet
+    if not (isNullUnsafe src.InventorySet) then
+      sheet.Inventory <- cloneInventory src.InventorySet
+    else
+      if not (isNullUnsafe src.InventoryRemove) then
+        for itemId in src.InventoryRemove do
+          removeInventoryItemId sheet.Inventory itemId |> ignore
+      if not (isNullUnsafe src.InventoryAdd) then
+        for entry in src.InventoryAdd do
+          addInventoryEntry sheet.Inventory entry
+
   let applyFields (src: EventRecord) =
     if hasN src.Level then sheet.Level <- src.Level
     if hasN src.Hp then sheet.Hp <- src.Hp
@@ -299,6 +421,7 @@ let applyEvent (sheet: Sheet) (e: EventRecord) =
       for KeyValue(slot, itemId) in src.Gear do
         if sheet.Gear.ContainsKey slot then
           sheet.Gear.[slot] <- itemId
+    applyInventory src
 
   match (if isNullUnsafe e.Kind then "delta" else e.Kind).ToLowerInvariant() with
   | "full" ->
@@ -310,6 +433,7 @@ let applyEvent (sheet: Sheet) (e: EventRecord) =
       sheet.Mr <- cleared.Mr; sheet.Fr <- cleared.Fr; sheet.Cr <- cleared.Cr; sheet.Pr <- cleared.Pr; sheet.Dr <- cleared.Dr
       if isNullUnsafe sheet.Gear then sheet.Gear <- emptyGear ()
       for name in slotNames do sheet.Gear.[name] <- Nullable()
+      sheet.Inventory <- emptyInventory ()
       applyFields e
   | _ ->
       applyFields e
@@ -333,6 +457,9 @@ let eventFromFullSheet (at: string) (source: string) (sheet: Sheet) : EventRecor
     Wis = sheet.Wis; Int = sheet.Int; Cha = sheet.Cha
     Mr = sheet.Mr; Fr = sheet.Fr; Cr = sheet.Cr; Pr = sheet.Pr; Dr = sheet.Dr
     Gear = cloneGear sheet.Gear
+    InventorySet = cloneInventory sheet.Inventory
+    InventoryAdd = null
+    InventoryRemove = null
   }
 
 let emptyDeltaEvent (at: string) (source: string) : EventRecord =
@@ -345,6 +472,9 @@ let emptyDeltaEvent (at: string) (source: string) : EventRecord =
     Wis = Nullable(); Int = Nullable(); Cha = Nullable()
     Mr = Nullable(); Fr = Nullable(); Cr = Nullable(); Pr = Nullable(); Dr = Nullable()
     Gear = Gear()
+    InventorySet = null
+    InventoryAdd = null
+    InventoryRemove = null
   }
 
 let emptyCharactersFile () : CharactersFile = { Characters = ResizeArray() }
@@ -370,6 +500,10 @@ let diffSheets (expected: Sheet) (actual: Sheet) =
     let b = if actual.Gear.ContainsKey slot then actual.Gear.[slot] else Nullable()
     if not (nEq a b) then
       changes.Add("gear." + slot, nFmt a, nFmt b)
+  ensureInventory expected
+  ensureInventory actual
+  if inventoryFingerprint expected.Inventory <> inventoryFingerprint actual.Inventory then
+    changes.Add("inventory", inventoryFingerprint expected.Inventory, inventoryFingerprint actual.Inventory)
   changes
 
 let buildDeltaFromDiff (at: string) (source: string) (expected: Sheet) (actual: Sheet) =
@@ -402,6 +536,10 @@ let buildDeltaFromDiff (at: string) (source: string) (expected: Sheet) (actual: 
     let b = if actual.Gear.ContainsKey slot then actual.Gear.[slot] else Nullable()
     if not (nEq a b) then
       e.Gear.[slot] <- b
+  ensureInventory expected
+  ensureInventory actual
+  if inventoryFingerprint expected.Inventory <> inventoryFingerprint actual.Inventory then
+    e.InventorySet <- cloneInventory actual.Inventory
   e
 
 let ensureDir () =
@@ -725,8 +863,10 @@ let syncHandEdits (chars: CharactersFile) (events: EventsFile) =
   for ch in chars.Characters do
     if isNullUnsafe ch.Current then ch.Current <- emptySheet ()
     if isNullUnsafe ch.Current.Gear then ch.Current.Gear <- emptyGear ()
+    if ch.Current.Gear.ContainsKey "charm" then ch.Current.Gear.Remove "charm" |> ignore
     for slot in slotNames do
       if not (ch.Current.Gear.ContainsKey slot) then ch.Current.Gear.[slot] <- Nullable()
+    ensureInventory ch.Current
 
     let evs = eventsFor events ch.Id
     if evs.Count = 0 then
@@ -773,42 +913,71 @@ let formatItemRef (cache: ItemCacheFile) (itemId: Nullable<int>) =
     if cache.Items.TryGetValue(string id, &item) then $"{item.Name}({id})"
     else $"?({id})"
 
+let inventoryStatusRows (cache: ItemCacheFile) (ch: Character) =
+  ensureInventory ch.Current
+  ch.Current.Inventory
+  |> Seq.map (fun e ->
+      let qty = entryQty e
+      let item = formatItemRef cache (nInt e.ItemId)
+      let itemTxt = if qty > 1 then $"{item} x{qty}" else item
+      {|
+        Slot = $"bag:{e.Tag}"
+        Item = itemTxt
+        Note = if isNullUnsafe e.Note then "" else e.Note
+      |})
+  |> Seq.toArray
+
 let dumpSheet (cache: ItemCacheFile) (ch: Character) =
-  printfn "%s — %s %s — updated %s" ch.Name ch.Race ch.Class (formatAt ch.CurrentAt)
   let s = ch.Current
-  slotNames
-  |> Array.map (fun slot ->
-      let id = if not (isNullUnsafe s.Gear) && s.Gear.ContainsKey slot then s.Gear.[slot] else Nullable()
-      {| Slot = slot; Item = formatItemRef cache id |})
-  |> Dump
-  |> ignore
+  let gearRows =
+    slotNames
+    |> Array.map (fun slot ->
+        let id = if not (isNullUnsafe s.Gear) && s.Gear.ContainsKey slot then s.Gear.[slot] else Nullable()
+        {| Slot = slot; Item = formatItemRef cache id; Note = "" |})
+  let bagRows = inventoryStatusRows cache ch
+  let rows = Array.append gearRows bagRows
+  showResult $"{ch.Name} — {ch.Race} {ch.Class} — updated {formatAt ch.CurrentAt}" rows
 
 let dumpAllStatus (cache: ItemCacheFile) (chars: CharactersFile) =
-  // Flat rows so LINQPad does not wrap nested gear in Util.OnDemand mid-run.
-  chars.Characters
-  |> Seq.collect (fun ch ->
-      let s = ch.Current
-      slotNames
-      |> Seq.choose (fun slot ->
-          let id = if not (isNullUnsafe s.Gear) && s.Gear.ContainsKey slot then s.Gear.[slot] else Nullable()
-          if not id.HasValue then None
-          else
-            Some
+  let rows =
+    chars.Characters
+    |> Seq.collect (fun ch ->
+        let s = ch.Current
+        let gear =
+          slotNames
+          |> Seq.choose (fun slot ->
+              let id = if not (isNullUnsafe s.Gear) && s.Gear.ContainsKey slot then s.Gear.[slot] else Nullable()
+              if not id.HasValue then None
+              else
+                Some
+                  {|
+                    Character = ch.Name
+                    Race = ch.Race
+                    Class = ch.Class
+                    At = formatAt ch.CurrentAt
+                    Slot = slot
+                    Item = formatItemRef cache id
+                    Note = ""
+                  |})
+        let bag =
+          inventoryStatusRows cache ch
+          |> Seq.map (fun r ->
               {|
                 Character = ch.Name
                 Race = ch.Race
                 Class = ch.Class
                 At = formatAt ch.CurrentAt
-                Slot = slot
-                Item = formatItemRef cache id
-              |}))
-  |> Seq.toArray
-  |> Dump
-  |> ignore
+                Slot = r.Slot
+                Item = r.Item
+                Note = r.Note
+              |})
+        Seq.append gear bag)
+    |> Seq.toArray
+  showResult $"Status — ALL ({rows.Length} gear/bag rows)" rows
 
 let pickCharacter (chars: CharactersFile) =
   if chars.Characters.Count = 0 then
-    printfn "No characters yet."
+    showResult "Select character" "No characters yet."
     None
   else
     let opts = chars.Characters |> Seq.map (fun c -> $"{c.Name} ({c.Race} {c.Class})") |> Array.ofSeq
@@ -855,7 +1024,7 @@ let modeStatus (chars: CharactersFile) (cache: ItemCacheFile) =
   | Some name ->
       match chars.Characters |> Seq.tryFind (fun c -> c.Name = name) with
       | Some ch -> dumpSheet cache ch
-      | None -> printfn "Not found."
+      | None -> showResult "Status" $"Not found: {name}"
 
 let modeAddCharacter (chars: CharactersFile) (events: EventsFile) : Character option =
   match promptText "Add character" "Name" Array.empty "" with
@@ -892,7 +1061,7 @@ let modeAddCharacter (chars: CharactersFile) (events: EventsFile) : Character op
               chars.Characters.Add ch
               appendEvent events id (eventFromFullSheet at "script" sheet)
               persistAfterMutation chars events
-              printfn "Added %s (%s %s)." name race cls
+              showResult "Add character" $"Added {name} ({race} {cls})."
               match promptChoice "After create" [| "Enter gear now"; "Back to main menu" |] with
               | Some s when s.StartsWith("Enter gear", StringComparison.OrdinalIgnoreCase) -> Some ch
               | _ -> None
@@ -905,7 +1074,7 @@ let applyGearChange (ch: Character) (events: EventsFile) (chars: CharactersFile)
     appendEvent events ch.Id delta
     refreshCurrent ch events
     persistAfterMutation chars events
-    printfn "Unequipped %s." slot
+    showResult $"Gear — {ch.Name}" $"Unequipped {slot}."
   else
     match tryParseItemSelection text with
     | None ->
@@ -930,8 +1099,8 @@ let applyGearChange (ch: Character) (events: EventsFile) (chars: CharactersFile)
                 appendEvent events ch.Id delta
                 refreshCurrent ch events
                 persistAfterMutation chars events
-                printfn "Equipped %s: %s" slot (itemLabel item)
-            | None -> printfn "Could not parse item."
+                showResult $"Gear — {ch.Name}" $"{slot} -> {formatItemRef cache (nInt item.Id)}"
+            | None -> showResult $"Gear — {ch.Name}" "Could not parse item."
     | Some itemId ->
         let root = ensureContentRoot contentRoot
         let item = resolveItem cache root itemId None
@@ -941,7 +1110,7 @@ let applyGearChange (ch: Character) (events: EventsFile) (chars: CharactersFile)
         appendEvent events ch.Id delta
         refreshCurrent ch events
         persistAfterMutation chars events
-        printfn "Equipped %s: %s" slot (itemLabel item)
+        showResult $"Gear — {ch.Name}" $"{slot} -> {formatItemRef cache (nInt item.Id)}"
 
 let promptOneGearSlot (ch: Character) (events: EventsFile) (chars: CharactersFile) (cache: ItemCacheFile) (contentRoot: string option ref) =
   match promptChoice $"Gear for {ch.Name} — slot" slotNames with
@@ -961,12 +1130,127 @@ let modeEnterGear (ch: Character) (events: EventsFile) (chars: CharactersFile) (
     | _ -> ()
   loop ()
 
+let formatInventoryPick (cache: ItemCacheFile) (e: InventoryEntry) =
+  let qty = entryQty e
+  let note = if isNullUnsafe e.Note || String.IsNullOrWhiteSpace e.Note then "" else $" — {e.Note}"
+  let qtyTxt = if qty > 1 then $" x{qty}" else ""
+  $"[{e.Tag}] {formatItemRef cache (nInt e.ItemId)}{qtyTxt}{note}"
+
+let showInventoryResult (cache: ItemCacheFile) (ch: Character) (title: string) =
+  ensureInventory ch.Current
+  showResult title (inventoryStatusRows cache ch)
+
+let modeInventory (ch: Character) (events: EventsFile) (chars: CharactersFile) (cache: ItemCacheFile) (contentRoot: string option ref) =
+  ensureInventory ch.Current
+  let rec loop () =
+    match
+      promptChoice
+        $"Inventory — {ch.Name}"
+        [| "list bag"; "add item"; "remove item"; "done — back" |]
+    with
+    | None -> ()
+    | Some s when s.StartsWith("done", StringComparison.OrdinalIgnoreCase) -> ()
+    | Some s when s.StartsWith("list", StringComparison.OrdinalIgnoreCase) ->
+        showInventoryResult cache ch $"Inventory — {ch.Name} ({ch.Current.Inventory.Count} stacks)"
+        loop ()
+    | Some s when s.StartsWith("add", StringComparison.OrdinalIgnoreCase) ->
+        match promptChoice "Inventory tag" inventoryTags with
+        | None -> loop ()
+        | Some tag ->
+            let suggestions =
+              cache.Items.Values
+              |> Seq.map itemLabel
+              |> Seq.sort
+              |> Array.ofSeq
+            match promptText "Inventory add" "Item id or 'id — name'" suggestions "" with
+            | None -> loop ()
+            | Some text when String.IsNullOrWhiteSpace text -> loop ()
+            | Some text ->
+                let resolveId () =
+                  match tryParseItemSelection text with
+                  | Some id -> Some id
+                  | None ->
+                      let hits =
+                        cache.Items.Values
+                        |> Seq.filter (fun it -> it.Name.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0)
+                        |> Seq.map itemLabel
+                        |> Array.ofSeq
+                      match promptChoice "Matching items" hits with
+                      | None -> None
+                      | Some pick -> tryParseItemSelection pick
+                match resolveId () with
+                | None ->
+                    showResult $"Inventory — {ch.Name}" "Could not resolve item."
+                    loop ()
+                | Some itemId ->
+                    let root = ensureContentRoot contentRoot
+                    try resolveItem cache root itemId None |> ignore with _ -> ()
+                    let note =
+                      match promptText "Note (optional)" "e.g. epic turn-in / spare BP" Array.empty "" with
+                      | None -> ""
+                      | Some n -> n.Trim()
+                    let qty =
+                      match promptText "Qty" "Stack size" Array.empty "1" with
+                      | Some t ->
+                          match Int32.TryParse t with
+                          | true, q when q > 0 -> q
+                          | _ -> 1
+                      | None -> 1
+                    let entry =
+                      {
+                        ItemId = itemId
+                        Tag = tag
+                        Note = note
+                        Qty = if qty = 1 then Nullable() else nInt qty
+                      }
+                    let at = utcNow ()
+                    let delta = emptyDeltaEvent at "script"
+                    delta.InventoryAdd <- ResizeArray([ entry ])
+                    appendEvent events ch.Id delta
+                    refreshCurrent ch events
+                    persistAfterMutation chars events
+                    showInventoryResult cache ch $"Inventory — added {formatItemRef cache (nInt itemId)} [{tag}]"
+                    loop ()
+    | Some s when s.StartsWith("remove", StringComparison.OrdinalIgnoreCase) ->
+        if ch.Current.Inventory.Count = 0 then
+          showResult $"Inventory — {ch.Name}" "Bag is empty."
+          loop ()
+        else
+          let picks =
+            ch.Current.Inventory
+            |> Seq.map (formatInventoryPick cache)
+            |> Array.ofSeq
+          match promptChoice "Remove which stack? (removes 1 qty)" picks with
+          | None -> loop ()
+          | Some pick ->
+              let next = cloneInventory ch.Current.Inventory
+              match next |> Seq.tryFindIndex (fun e -> formatInventoryPick cache e = pick) with
+              | None -> loop ()
+              | Some idx ->
+                  let entry = next.[idx]
+                  let removedId = entry.ItemId
+                  let q = entryQty entry
+                  if q <= 1 then next.RemoveAt idx
+                  else entry.Qty <- Nullable<int>(q - 1)
+                  let at = utcNow ()
+                  let delta = emptyDeltaEvent at "script"
+                  // Set (not Remove-by-id) so duplicate itemIds with different tags stay correct.
+                  delta.InventorySet <- next
+                  appendEvent events ch.Id delta
+                  refreshCurrent ch events
+                  persistAfterMutation chars events
+                  showInventoryResult cache ch $"Inventory — removed 1× {formatItemRef cache (nInt removedId)}"
+                  loop ()
+    | _ -> loop ()
+  loop ()
+
 let modeUpdate (chars: CharactersFile) (events: EventsFile) (cache: ItemCacheFile) (contentRoot: string option ref) =
   match pickCharacter chars with
   | None -> ()
   | Some ch ->
       let kinds = [
         "gear", "Change one gear slot"
+        "inventory", "Bag: spare gear / quest / epic items"
         "level", "Set level"
         "stats", "Set primary stats / AC / HP / Mana / ATK"
         "resists", "Set resists"
@@ -975,6 +1259,7 @@ let modeUpdate (chars: CharactersFile) (events: EventsFile) (cache: ItemCacheFil
       match promptMenu "Update type" kinds with
       | None -> ()
       | Some "gear" -> promptOneGearSlot ch events chars cache contentRoot
+      | Some "inventory" -> modeInventory ch events chars cache contentRoot
       | Some "level" ->
           match promptText "Level" "New level" Array.empty (formatNullable ch.Current.Level) with
           | Some t ->
@@ -986,8 +1271,8 @@ let modeUpdate (chars: CharactersFile) (events: EventsFile) (cache: ItemCacheFil
                   appendEvent events ch.Id delta
                   refreshCurrent ch events
                   persistAfterMutation chars events
-                  printfn "Level -> %d" lvl
-              | _ -> printfn "Invalid number."
+                  showResult $"Update — {ch.Name}" $"level -> {lvl}"
+              | _ -> showResult $"Update — {ch.Name}" "Invalid number."
           | None -> ()
       | Some "stats" ->
           let fields = [| "hp"; "mana"; "ac"; "atk"; "str"; "sta"; "agi"; "dex"; "wis"; "int"; "cha" |]
@@ -1015,8 +1300,8 @@ let modeUpdate (chars: CharactersFile) (events: EventsFile) (cache: ItemCacheFil
                       appendEvent events ch.Id delta
                       refreshCurrent ch events
                       persistAfterMutation chars events
-                      printfn "%s -> %d" field v
-                  | _ -> printfn "Invalid number."
+                      showResult $"Update — {ch.Name}" $"{field} -> {v}"
+                  | _ -> showResult $"Update — {ch.Name}" "Invalid number."
               | None -> ()
           | None -> ()
       | Some "resists" ->
@@ -1039,8 +1324,8 @@ let modeUpdate (chars: CharactersFile) (events: EventsFile) (cache: ItemCacheFil
                       appendEvent events ch.Id delta
                       refreshCurrent ch events
                       persistAfterMutation chars events
-                      printfn "%s -> %d" field v
-                  | _ -> printfn "Invalid number."
+                      showResult $"Update — {ch.Name}" $"{field} -> {v}"
+                  | _ -> showResult $"Update — {ch.Name}" "Invalid number."
               | None -> ()
           | None -> ()
       | Some "field" ->
@@ -1061,20 +1346,21 @@ let modeUpdate (chars: CharactersFile) (events: EventsFile) (cache: ItemCacheFil
                       appendEvent events ch.Id delta
                       refreshCurrent ch events
                       persistAfterMutation chars events
-                      printfn "%s -> %d" field v
-                  | _ -> printfn "Invalid number."
+                      showResult $"Update — {ch.Name}" $"{field} -> {v}"
+                  | _ -> showResult $"Update — {ch.Name}" "Invalid number."
               | None -> ()
           | None -> ()
       | _ -> ()
 
 let modeRaceClass (chars: CharactersFile) =
-  chars.Characters
-  |> Seq.groupBy (fun c -> c.Race, c.Class)
-  |> Seq.sortBy fst
-  |> Seq.map (fun ((race, cls), group) ->
-      {| Race = race; Class = cls; Count = Seq.length group; Names = group |> Seq.map (fun c -> c.Name) |> Array.ofSeq |})
-  |> Dump
-  |> ignore
+  let rows =
+    chars.Characters
+    |> Seq.groupBy (fun c -> c.Race, c.Class)
+    |> Seq.sortBy fst
+    |> Seq.map (fun ((race, cls), group) ->
+        {| Race = race; Class = cls; Count = Seq.length group; Names = group |> Seq.map (fun c -> c.Name) |> Array.ofSeq |})
+    |> Seq.toArray
+  showResult $"Race/class matrix ({rows.Length} groups)" rows
 
 let modeFullBaseline (chars: CharactersFile) (events: EventsFile) =
   match pickCharacter chars with
@@ -1085,7 +1371,7 @@ let modeFullBaseline (chars: CharactersFile) (events: EventsFile) =
       appendEvent events ch.Id (eventFromFullSheet at "baseline" ch.Current)
       ch.CurrentAt <- at
       persistAfterMutation chars events
-      printfn "Full baseline recorded for %s at %s" ch.Name at
+      showResult "Baseline" $"Full baseline recorded for {ch.Name} at {formatAt at}"
 
 let modeProgress (chars: CharactersFile) (events: EventsFile) (cache: ItemCacheFile) =
   let targets =
@@ -1111,9 +1397,9 @@ let modeProgress (chars: CharactersFile) (events: EventsFile) (cache: ItemCacheF
       "pr", fun (e: EventRecord) -> e.Pr
       "dr", fun (e: EventRecord) -> e.Dr
     ]
+  let rows = ResizeArray<_>()
   for ch in targets do
     let evs = eventsFor events ch.Id
-    let rows = ResizeArray<_>()
     for e in evs do
       let at = formatAt e.At
       let kind = if isNullUnsafe e.Kind then "delta" else e.Kind
@@ -1146,25 +1432,78 @@ let modeProgress (chars: CharactersFile) (events: EventsFile) (cache: ItemCacheF
                   Slot = slot
                   Item = formatItemRef cache id
                 |}
-    printfn "Progress: %s (%d change rows)" ch.Name rows.Count
-    rows |> Dump |> ignore
+      if not (isNullUnsafe e.InventorySet) then
+        for inv in e.InventorySet do
+          let qty = entryQty inv
+          let item = formatItemRef cache (nInt inv.ItemId)
+          rows.Add
+            {|
+              Character = ch.Name
+              At = at
+              Kind = kind
+              Source = source
+              Slot = $"bag={inv.Tag}"
+              Item = if qty > 1 then $"{item} x{qty}" else item
+            |}
+      else
+        if not (isNullUnsafe e.InventoryAdd) then
+          for inv in e.InventoryAdd do
+            let qty = entryQty inv
+            let item = formatItemRef cache (nInt inv.ItemId)
+            rows.Add
+              {|
+                Character = ch.Name
+                At = at
+                Kind = kind
+                Source = source
+                Slot = $"bag+{inv.Tag}"
+                Item = if qty > 1 then $"{item} x{qty}" else item
+              |}
+        if not (isNullUnsafe e.InventoryRemove) then
+          for itemId in e.InventoryRemove do
+            rows.Add
+              {|
+                Character = ch.Name
+                At = at
+                Kind = kind
+                Source = source
+                Slot = "bag-"
+                Item = formatItemRef cache (nInt itemId)
+              |}
+  let label =
+    match targets.Length with
+    | 0 -> "Progress (cancelled)"
+    | 1 -> $"Progress — {targets.[0].Name} ({rows.Count} rows)"
+    | n -> $"Progress — {n} characters ({rows.Count} rows)"
+  showResult label (rows.ToArray())
 
 let modeResolveCache (chars: CharactersFile) (events: EventsFile) (cache: ItemCacheFile) (contentRoot: string option ref) =
   let ids = HashSet<int>()
+  let addInv (inv: ResizeArray<InventoryEntry>) =
+    if not (isNullUnsafe inv) then
+      for e in inv do ids.Add e.ItemId |> ignore
   for ch in chars.Characters do
     for KeyValue(_, v) in ch.Current.Gear do
       if v.HasValue then ids.Add v.Value |> ignore
+    ensureInventory ch.Current
+    addInv ch.Current.Inventory
     for e in eventsFor events ch.Id do
       if not (isNullUnsafe e.Gear) then
         for KeyValue(_, v) in e.Gear do
           if v.HasValue then ids.Add v.Value |> ignore
+      addInv e.InventorySet
+      addInv e.InventoryAdd
+      if not (isNullUnsafe e.InventoryRemove) then
+        for itemId in e.InventoryRemove do ids.Add itemId |> ignore
   let root = ensureContentRoot contentRoot
+  let lines = ResizeArray<string>()
   for id in ids do
     try
       let item = resolveItem cache root id None
-      printfn "Cached %s" (itemLabel item)
+      lines.Add($"Cached {itemLabel item}")
     with ex ->
-      printfn "Failed %d: %s" id ex.Message
+      lines.Add($"Failed {id}: {ex.Message}")
+  showResult $"Resolve cache ({lines.Count} ids)" (lines.ToArray())
 
 let modeLookupItem (cache: ItemCacheFile) (contentRoot: string option ref) =
   match promptText "Lookup item" "Item id" Array.empty "" with
@@ -1173,9 +1512,10 @@ let modeLookupItem (cache: ItemCacheFile) (contentRoot: string option ref) =
       | true, id ->
           let root = ensureContentRoot contentRoot
           try
-            resolveItem cache root id None |> Dump |> ignore
-          with ex -> printfn "%s" ex.Message
-      | _ -> printfn "Invalid id."
+            let item = resolveItem cache root id None
+            showResult $"Lookup — {itemLabel item}" item
+          with ex -> showResult $"Lookup — {id}" ex.Message
+      | _ -> showResult "Lookup item" "Invalid id."
   | None -> ()
 
 // --- Main ---
@@ -1185,16 +1525,16 @@ printfn "Data: %s" Paths.dataDir
 let chars, events, cache = loadAll ()
 syncHandEdits chars events
 
-// Dump prompt panels after sync logs so Options/Context sit next to Util.ReadLine.
-optionsDump.Dump("Options")
-contextDump.Dump("Context")
+// One panel for prompt + options + last result (stays visible while ReadLine waits).
+PromptUi.dc.Dump("Tracker")
+showResult "Startup" $"Data: {Paths.dataDir}"
 
 let contentRoot: string option ref = ref None
 
 let menu = [
   "status", "Dump character status"
   "add", "Add character"
-  "update", "Interactive update (gear/stats/level)"
+  "update", "Interactive update (gear/inventory/stats/level)"
   "raceclass", "Race/class matrix"
   "baseline", "Append full baseline snapshot"
   "progress", "Progress history"
@@ -1219,5 +1559,5 @@ while running do
   | Some "lookup" -> modeLookupItem cache contentRoot
   | Some "quit" | None ->
       running <- false
-      printfn "Done."
-  | Some other -> printfn "Unknown mode: %s" other
+      showResult "Done" "Exited."
+  | Some other -> showResult "Mode" $"Unknown mode: {other}"
