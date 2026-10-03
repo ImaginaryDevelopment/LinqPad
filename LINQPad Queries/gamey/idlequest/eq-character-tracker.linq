@@ -127,12 +127,15 @@ let classNames = classBits.Keys |> Seq.sort |> Array.ofSeq
 
 type Gear = Dictionary<string, Nullable<int>>
 
-/// Bag / bank extras — spare gear, quest turn-ins, epic pieces, etc.
+/// Items with the character but not worn — spare gear, quest/epic pieces, etc.
+/// No bag/slot index; only carried vs bank.
 [<CLIMutable>]
 type InventoryEntry = {
   mutable ItemId: int
-  /// gear | quest | epic | other
+  /// gear | quest | epic | other (purpose — not a bag slot)
   mutable Tag: string
+  /// true = in bank; false = on character (inventory)
+  mutable InBank: bool
   mutable Note: string
   /// Stack size; null/absent means 1.
   mutable Qty: Nullable<int>
@@ -274,6 +277,7 @@ let cloneInventoryEntry (e: InventoryEntry) : InventoryEntry =
   {
     ItemId = e.ItemId
     Tag = if isNullUnsafe e.Tag then "other" else e.Tag
+    InBank = e.InBank
     Note = if isNullUnsafe e.Note then "" else e.Note
     Qty = if e.Qty.HasValue then Nullable<int>(entryQty e) else Nullable()
   }
@@ -291,7 +295,7 @@ let inventoryFingerprint (inv: ResizeArray<InventoryEntry>) =
   if isNullUnsafe inv || inv.Count = 0 then ""
   else
     inv
-    |> Seq.map (fun e -> $"{e.ItemId}\t{e.Tag}\t{e.Note}\t{entryQty e}")
+    |> Seq.map (fun e -> $"{e.ItemId}\t{e.Tag}\t{e.InBank}\t{e.Note}\t{entryQty e}")
     |> String.concat "\n"
 
 let emptySheet () : Sheet =
@@ -371,6 +375,7 @@ let addInventoryEntry (inv: ResizeArray<InventoryEntry>) (entry: InventoryEntry)
     inv
     |> Seq.tryFindIndex (fun e ->
         e.ItemId = entry.ItemId
+        && e.InBank = entry.InBank
         && String.Equals(e.Tag, tag, StringComparison.OrdinalIgnoreCase)
         && String.Equals((if isNullUnsafe e.Note then "" else e.Note), note, StringComparison.Ordinal))
   with
@@ -382,6 +387,7 @@ let addInventoryEntry (inv: ResizeArray<InventoryEntry>) (entry: InventoryEntry)
         {
           ItemId = entry.ItemId
           Tag = tag
+          InBank = entry.InBank
           Note = note
           Qty = if addQty = 1 then Nullable() else Nullable<int>(addQty)
         }
@@ -747,10 +753,14 @@ let projectItem (doc: JsonElement) : CachedItem option =
     }
   with _ -> None
 
+let itemShards =
+  [| '0'..'9' |]
+  |> Array.map string
+  |> Array.append ([| 'a'..'f' |] |> Array.map string)
+
 let findItemInContent (contentRoot: string) (itemId: int) =
   let needle = $"\"id\":{itemId}"
-  let shards = [| '0'..'9' |] |> Array.map string |> Array.append ([| 'a'..'f' |] |> Array.map string)
-  shards
+  itemShards
   |> Seq.tryPick (fun shard ->
       try
         readShardLines contentRoot shard
@@ -768,6 +778,49 @@ let findItemInContent (contentRoot: string) (itemId: int) =
       with ex ->
         printfn "WARN: shard %s read failed: %s" shard ex.Message
         None)
+
+/// Name search: cache first, then idlequest-content shards (same data as item-lookup).
+let findItemsByName (cache: ItemCacheFile) (contentRoot: string) (query: string) (limit: int) =
+  let q = if isNullUnsafe query then "" else query.Trim()
+  if String.IsNullOrWhiteSpace q then []
+  else
+    let exact = ResizeArray<CachedItem>()
+    let partial = ResizeArray<CachedItem>()
+    let seen = HashSet<int>()
+    let consider (item: CachedItem) =
+      if seen.Add item.Id then
+        if String.Equals(item.Name, q, StringComparison.OrdinalIgnoreCase) then exact.Add item
+        elif item.Name.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0 then partial.Add item
+    for item in cache.Items.Values do consider item
+    let needContent =
+      exact.Count = 0
+      && (String.IsNullOrWhiteSpace contentRoot |> not || partial.Count < 5)
+    if needContent || exact.Count = 0 then
+      if String.IsNullOrWhiteSpace contentRoot then
+        printfn "Item name search: no local idlequest-content root — cache-only (prefer a local clone)."
+      for shard in itemShards do
+        if exact.Count + partial.Count >= limit then ()
+        else
+          try
+            for line in readShardLines contentRoot shard do
+              if exact.Count + partial.Count >= limit then ()
+              elif line.IndexOf(q, StringComparison.OrdinalIgnoreCase) < 0 then ()
+              else
+                try
+                  use doc = JsonDocument.Parse line
+                  match projectItem doc.RootElement with
+                  | Some item ->
+                      consider item
+                      cache.Items.[string item.Id] <- item
+                  | None -> ()
+                with _ -> ()
+          with ex ->
+            printfn "WARN: shard %s read failed: %s" shard ex.Message
+      if exact.Count > 0 || partial.Count > 0 then saveItemCache cache
+    let list =
+      if exact.Count > 0 then exact |> Seq.sortBy (fun i -> i.Id) |> Seq.toList
+      else partial |> Seq.sortBy (fun i -> i.Id) |> Seq.truncate limit |> Seq.toList
+    list
 
 let resolveItem (cache: ItemCacheFile) (contentRoot: string) (itemId: int) (expectedName: string option) =
   let key = string itemId
@@ -816,6 +869,42 @@ let tryParseItemSelection (text: string) =
         match Int32.TryParse t with
         | true, id -> Some id
         | _ -> None
+
+/// Shared item picker: id / cache suggestions / content name search (item-lookup style).
+let pickItemInteractive (cache: ItemCacheFile) (contentRoot: string) (title: string) (suggestions: string[]) : CachedItem option =
+  match promptText title "Item id, name fragment, or 'id — name'" suggestions "" with
+  | None -> None
+  | Some text when String.IsNullOrWhiteSpace text -> None
+  | Some text ->
+      match tryParseItemSelection text with
+      | Some id ->
+          try Some (resolveItem cache contentRoot id None)
+          with ex ->
+            showResult title ex.Message
+            None
+      | None ->
+          showResult title $"Searching for '{text}'..."
+          let hits = findItemsByName cache contentRoot text 80
+          match hits with
+          | [] ->
+              showResult title $"No items matching '{text}' (cache + content)."
+              None
+          | [ one ] ->
+              cache.Items.[string one.Id] <- one
+              saveItemCache cache
+              Some one
+          | many ->
+              let labels = many |> List.map itemLabel |> Array.ofList
+              match promptChoice $"{title} — {many.Length} matches" labels with
+              | None -> None
+              | Some pick ->
+                  match tryParseItemSelection pick with
+                  | Some id ->
+                      try Some (resolveItem cache contentRoot id None)
+                      with ex ->
+                        showResult title ex.Message
+                        None
+                  | None -> None
 
 // --- LINQPad prompts (Util.ReadLine + DumpContainers) ---
 let promptText (title: string) (label: string) (suggestions: string[]) (defaultText: string) =
@@ -913,6 +1002,8 @@ let formatItemRef (cache: ItemCacheFile) (itemId: Nullable<int>) =
     if cache.Items.TryGetValue(string id, &item) then $"{item.Name}({id})"
     else $"?({id})"
 
+let inventoryWhere (e: InventoryEntry) = if e.InBank then "bank" else "carried"
+
 let inventoryStatusRows (cache: ItemCacheFile) (ch: Character) =
   ensureInventory ch.Current
   ch.Current.Inventory
@@ -921,7 +1012,8 @@ let inventoryStatusRows (cache: ItemCacheFile) (ch: Character) =
       let item = formatItemRef cache (nInt e.ItemId)
       let itemTxt = if qty > 1 then $"{item} x{qty}" else item
       {|
-        Slot = $"bag:{e.Tag}"
+        Where = inventoryWhere e
+        Kind = e.Tag
         Item = itemTxt
         Note = if isNullUnsafe e.Note then "" else e.Note
       |})
@@ -933,7 +1025,12 @@ let dumpSheet (cache: ItemCacheFile) (ch: Character) =
     slotNames
     |> Array.map (fun slot ->
         let id = if not (isNullUnsafe s.Gear) && s.Gear.ContainsKey slot then s.Gear.[slot] else Nullable()
-        {| Slot = slot; Item = formatItemRef cache id; Note = "" |})
+        {|
+          Where = "worn"
+          Kind = slot
+          Item = formatItemRef cache id
+          Note = ""
+        |})
   let bagRows = inventoryStatusRows cache ch
   let rows = Array.append gearRows bagRows
   showResult $"{ch.Name} — {ch.Race} {ch.Class} — updated {formatAt ch.CurrentAt}" rows
@@ -955,7 +1052,8 @@ let dumpAllStatus (cache: ItemCacheFile) (chars: CharactersFile) =
                     Race = ch.Race
                     Class = ch.Class
                     At = formatAt ch.CurrentAt
-                    Slot = slot
+                    Where = "worn"
+                    Kind = slot
                     Item = formatItemRef cache id
                     Note = ""
                   |})
@@ -967,13 +1065,14 @@ let dumpAllStatus (cache: ItemCacheFile) (chars: CharactersFile) =
                 Race = ch.Race
                 Class = ch.Class
                 At = formatAt ch.CurrentAt
-                Slot = r.Slot
+                Where = r.Where
+                Kind = r.Kind
                 Item = r.Item
                 Note = r.Note
               |})
         Seq.append gear bag)
     |> Seq.toArray
-  showResult $"Status — ALL ({rows.Length} gear/bag rows)" rows
+  showResult $"Status — ALL ({rows.Length} worn/carried/bank rows)" rows
 
 let pickCharacter (chars: CharactersFile) =
   if chars.Characters.Count = 0 then
@@ -1116,10 +1215,25 @@ let promptOneGearSlot (ch: Character) (events: EventsFile) (chars: CharactersFil
   match promptChoice $"Gear for {ch.Name} — slot" slotNames with
   | None -> ()
   | Some slot ->
+      let root = ensureContentRoot contentRoot
       let suggestions = filterCachedItems cache ch.Race ch.Class (Some slot)
-      match promptText $"Gear — {slot}" "Item id or 'id — name' (blank = unequip)" suggestions "" with
+      match promptText $"Gear — {slot}" "Item id/name (blank = unequip)" suggestions "" with
       | None -> ()
-      | Some text -> applyGearChange ch events chars cache contentRoot slot text
+      | Some text when String.IsNullOrWhiteSpace text ->
+          applyGearChange ch events chars cache contentRoot slot ""
+      | Some text ->
+          match tryParseItemSelection text with
+          | Some _ -> applyGearChange ch events chars cache contentRoot slot text
+          | None ->
+              let hits = findItemsByName cache root text 80
+              match hits with
+              | [] -> showResult $"Gear — {ch.Name}" $"No items matching '{text}'."
+              | [ one ] -> applyGearChange ch events chars cache contentRoot slot (itemLabel one)
+              | many ->
+                  let labels = many |> List.map itemLabel |> Array.ofList
+                  match promptChoice $"Gear — {slot} matches" labels with
+                  | Some pick -> applyGearChange ch events chars cache contentRoot slot pick
+                  | None -> ()
 
 let modeEnterGear (ch: Character) (events: EventsFile) (chars: CharactersFile) (cache: ItemCacheFile) (contentRoot: string option ref) =
   let rec loop () =
@@ -1134,7 +1248,7 @@ let formatInventoryPick (cache: ItemCacheFile) (e: InventoryEntry) =
   let qty = entryQty e
   let note = if isNullUnsafe e.Note || String.IsNullOrWhiteSpace e.Note then "" else $" — {e.Note}"
   let qtyTxt = if qty > 1 then $" x{qty}" else ""
-  $"[{e.Tag}] {formatItemRef cache (nInt e.ItemId)}{qtyTxt}{note}"
+  $"{inventoryWhere e} | {e.Tag} | {formatItemRef cache (nInt e.ItemId)}{qtyTxt}{note}"
 
 let showInventoryResult (cache: ItemCacheFile) (ch: Character) (title: string) =
   ensureInventory ch.Current
@@ -1146,7 +1260,7 @@ let modeInventory (ch: Character) (events: EventsFile) (chars: CharactersFile) (
     match
       promptChoice
         $"Inventory — {ch.Name}"
-        [| "list bag"; "add item"; "remove item"; "done — back" |]
+        [| "list"; "add item"; "remove item"; "done — back" |]
     with
     | None -> ()
     | Some s when s.StartsWith("done", StringComparison.OrdinalIgnoreCase) -> ()
@@ -1154,63 +1268,51 @@ let modeInventory (ch: Character) (events: EventsFile) (chars: CharactersFile) (
         showInventoryResult cache ch $"Inventory — {ch.Name} ({ch.Current.Inventory.Count} stacks)"
         loop ()
     | Some s when s.StartsWith("add", StringComparison.OrdinalIgnoreCase) ->
-        match promptChoice "Inventory tag" inventoryTags with
+        let root = ensureContentRoot contentRoot
+        let suggestions =
+          cache.Items.Values
+          |> Seq.map itemLabel
+          |> Seq.sort
+          |> Seq.truncate 9999
+          |> Array.ofSeq
+        match pickItemInteractive cache root $"Inventory add — {ch.Name}" suggestions with
         | None -> loop ()
-        | Some tag ->
-            let suggestions =
-              cache.Items.Values
-              |> Seq.map itemLabel
-              |> Seq.sort
-              |> Array.ofSeq
-            match promptText "Inventory add" "Item id or 'id — name'" suggestions "" with
+        | Some item ->
+            let inBank =
+              match promptChoice "Location" [| "carried (on character)"; "bank" |] with
+              | Some loc when loc.StartsWith("bank", StringComparison.OrdinalIgnoreCase) -> true
+              | Some _ -> false
+              | None -> false
+            match promptChoice "Kind" inventoryTags with
             | None -> loop ()
-            | Some text when String.IsNullOrWhiteSpace text -> loop ()
-            | Some text ->
-                let resolveId () =
-                  match tryParseItemSelection text with
-                  | Some id -> Some id
-                  | None ->
-                      let hits =
-                        cache.Items.Values
-                        |> Seq.filter (fun it -> it.Name.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0)
-                        |> Seq.map itemLabel
-                        |> Array.ofSeq
-                      match promptChoice "Matching items" hits with
-                      | None -> None
-                      | Some pick -> tryParseItemSelection pick
-                match resolveId () with
-                | None ->
-                    showResult $"Inventory — {ch.Name}" "Could not resolve item."
-                    loop ()
-                | Some itemId ->
-                    let root = ensureContentRoot contentRoot
-                    try resolveItem cache root itemId None |> ignore with _ -> ()
-                    let note =
-                      match promptText "Note (optional)" "e.g. epic turn-in / spare BP" Array.empty "" with
-                      | None -> ""
-                      | Some n -> n.Trim()
-                    let qty =
-                      match promptText "Qty" "Stack size" Array.empty "1" with
-                      | Some t ->
-                          match Int32.TryParse t with
-                          | true, q when q > 0 -> q
-                          | _ -> 1
-                      | None -> 1
-                    let entry =
-                      {
-                        ItemId = itemId
-                        Tag = tag
-                        Note = note
-                        Qty = if qty = 1 then Nullable() else nInt qty
-                      }
-                    let at = utcNow ()
-                    let delta = emptyDeltaEvent at "script"
-                    delta.InventoryAdd <- ResizeArray([ entry ])
-                    appendEvent events ch.Id delta
-                    refreshCurrent ch events
-                    persistAfterMutation chars events
-                    showInventoryResult cache ch $"Inventory — added {formatItemRef cache (nInt itemId)} [{tag}]"
-                    loop ()
+            | Some tag ->
+                let note =
+                  match promptText "Note (optional)" "e.g. epic 1.5 turn-in / spare BP" Array.empty "" with
+                  | None -> ""
+                  | Some n -> n.Trim()
+                let qty =
+                  match promptText "Qty" "Stack size" Array.empty "1" with
+                  | Some t ->
+                      match Int32.TryParse t with
+                      | true, q when q > 0 -> q
+                      | _ -> 1
+                  | None -> 1
+                let entry =
+                  {
+                    ItemId = item.Id
+                    Tag = tag
+                    InBank = inBank
+                    Note = note
+                    Qty = if qty = 1 then Nullable() else nInt qty
+                  }
+                let at = utcNow ()
+                let delta = emptyDeltaEvent at "script"
+                delta.InventoryAdd <- ResizeArray([ entry ])
+                appendEvent events ch.Id delta
+                refreshCurrent ch events
+                persistAfterMutation chars events
+                showInventoryResult cache ch $"Inventory — added {formatItemRef cache (nInt item.Id)} ({inventoryWhere entry}, {tag})"
+                loop ()
     | Some s when s.StartsWith("remove", StringComparison.OrdinalIgnoreCase) ->
         if ch.Current.Inventory.Count = 0 then
           showResult $"Inventory — {ch.Name}" "Bag is empty."
@@ -1442,7 +1544,7 @@ let modeProgress (chars: CharactersFile) (events: EventsFile) (cache: ItemCacheF
               At = at
               Kind = kind
               Source = source
-              Slot = $"bag={inv.Tag}"
+              Slot = $"{inventoryWhere inv}/{inv.Tag}"
               Item = if qty > 1 then $"{item} x{qty}" else item
             |}
       else
@@ -1456,7 +1558,7 @@ let modeProgress (chars: CharactersFile) (events: EventsFile) (cache: ItemCacheF
                 At = at
                 Kind = kind
                 Source = source
-                Slot = $"bag+{inv.Tag}"
+                Slot = $"+{inventoryWhere inv}/{inv.Tag}"
                 Item = if qty > 1 then $"{item} x{qty}" else item
               |}
         if not (isNullUnsafe e.InventoryRemove) then
@@ -1467,7 +1569,7 @@ let modeProgress (chars: CharactersFile) (events: EventsFile) (cache: ItemCacheF
                 At = at
                 Kind = kind
                 Source = source
-                Slot = "bag-"
+                Slot = "inv-"
                 Item = formatItemRef cache (nInt itemId)
               |}
   let label =

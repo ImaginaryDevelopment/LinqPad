@@ -171,6 +171,7 @@ type Gear = Dictionary<string, Nullable<int>>
 type InventoryEntry = {
   mutable ItemId: int
   mutable Tag: string
+  mutable InBank: bool
   mutable Note: string
   mutable Qty: Nullable<int>
 }
@@ -944,13 +945,14 @@ let showCharacterGear (ch: Character) =
     |> Seq.map (fun e ->
         let qty = if e.Qty.HasValue then max 1 e.Qty.Value else 1
         let item = formatGearItem cache e.ItemId
+        let where = if e.InBank then "bank" else "carried"
         {|
-          Slot = $"bag:{e.Tag}"
+          Slot = $"{where}:{e.Tag}"
           Item = if qty > 1 then $"{item} x{qty}" else item
           Note = if isNullUnsafe e.Note then "" else e.Note
         |})
     |> Seq.toList
-  SessionUi.show $"{ch.Name} gear/bag ({ch.Class})" (gearRows @ bagRows)
+  SessionUi.show $"{ch.Name} gear/inv ({ch.Class})" (gearRows @ bagRows)
 
 let tryEquipItemOnCharacter (classFilter: (string * int) option) (equipTargetName: string option) (item: CachedItem) =
   match loadCharacters () with
