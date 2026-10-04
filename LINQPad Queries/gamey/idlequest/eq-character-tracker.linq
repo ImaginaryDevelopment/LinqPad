@@ -5,6 +5,7 @@
 // IdleQuest character tracker — Classic/Kunark/Velious (no AA).
 // Data: eq_characters.json, eq_events.json, item-cache.json (same folder as this script).
 // Tracks equipped gear + inventory bag (spare gear / quest / epic items).
+// Mode "share": bag items others can use (empty slots / higher AC / better weapon ratio).
 // Item lookups use a local idlequest-content clone or GitHub raw shards.
 // Content-root preference: Util.Cache + password; GitHub cancel cooldown ~1 day.
 // UI: one DumpContainer (PromptUi) for current prompt/options + last result; Util.ReadLine suggestions (no WinForms).
@@ -1083,6 +1084,40 @@ let dumpAllStatus (cache: ItemCacheFile) (chars: CharactersFile) =
     |> Seq.toArray
   showResult $"Status — ALL ({rows.Length} worn/carried/bank rows)" rows
 
+/// All bag/bank stacks (not worn) — who has what. Optional single holder; None = everyone.
+let dumpExtraInventory (cache: ItemCacheFile) (chars: CharactersFile) (holderFilter: Character option) =
+  let holders =
+    match holderFilter with
+    | Some ch -> [ ch ]
+    | None -> chars.Characters |> Seq.toList
+  let rows =
+    holders
+    |> Seq.collect (fun ch ->
+        ensureInventory ch.Current
+        ch.Current.Inventory
+        |> Seq.map (fun e ->
+            let qty = entryQty e
+            {|
+              Character = ch.Name
+              Race = ch.Race
+              Class = ch.Class
+              Where = inventoryWhere e
+              Tag = if isNullUnsafe e.Tag then "other" else e.Tag
+              Item = formatItemRef cache (nInt e.ItemId)
+              Qty = qty
+              Note = if isNullUnsafe e.Note then "" else e.Note
+            |}))
+    |> Seq.sortBy (fun r -> r.Item, r.Character, r.Where, r.Tag)
+    |> Seq.toArray
+  let who =
+    match holderFilter with
+    | Some ch -> ch.Name
+    | None -> "ALL"
+  if rows.Length = 0 then
+    showResult $"EXTRA inventory — {who}" "No bag/bank stacks."
+  else
+    showResult $"EXTRA inventory — {who} ({rows.Length} stacks)" rows
+
 let pickCharacter (chars: CharactersFile) =
   if chars.Characters.Count = 0 then
     showResult "Select character" "No characters yet."
@@ -1125,10 +1160,23 @@ let ensureContentRoot (lazyRoot: string option ref) =
 
 // --- Modes ---
 let modeStatus (chars: CharactersFile) (cache: ItemCacheFile) =
-  let opts = Array.append [| "ALL characters" |] (chars.Characters |> Seq.map (fun c -> c.Name) |> Array.ofSeq)
+  let opts =
+    Array.append
+      [| "ALL characters"; "EXTRA inventory (bags/banks)" |]
+      (chars.Characters |> Seq.map (fun c -> c.Name) |> Array.ofSeq)
   match promptChoice "Status — select target" opts with
   | None -> ()
   | Some "ALL characters" -> dumpAllStatus cache chars
+  | Some s when s.StartsWith("EXTRA inventory", StringComparison.OrdinalIgnoreCase) ->
+      let whoOpts =
+        Array.append [| "ALL characters" |] (chars.Characters |> Seq.map (fun c -> c.Name) |> Array.ofSeq)
+      match promptChoice "EXTRA inventory — whose bags?" whoOpts with
+      | None -> ()
+      | Some "ALL characters" -> dumpExtraInventory cache chars None
+      | Some name ->
+          match chars.Characters |> Seq.tryFind (fun c -> c.Name = name) with
+          | Some ch -> dumpExtraInventory cache chars (Some ch)
+          | None -> showResult "Status" $"Not found: {name}"
   | Some name ->
       match chars.Characters |> Seq.tryFind (fun c -> c.Name = name) with
       | Some ch -> dumpSheet cache ch
@@ -1642,6 +1690,212 @@ let modeLookupItem (cache: ItemCacheFile) (contentRoot: string option ref) =
       | _ -> showResult "Lookup item" "Invalid id."
   | None -> ()
 
+let tryGetCachedItem (cache: ItemCacheFile) (itemId: int) =
+  let mutable item = Unchecked.defaultof<CachedItem>
+  if cache.Items.TryGetValue(string itemId, &item) then Some item else None
+
+let characterLevel (ch: Character) =
+  if isNullUnsafe ch.Current || not ch.Current.Level.HasValue then 0
+  else ch.Current.Level.Value
+
+let wornInSlot (ch: Character) (slot: string) =
+  if isNullUnsafe ch.Current || isNullUnsafe ch.Current.Gear then Nullable()
+  elif ch.Current.Gear.ContainsKey slot then ch.Current.Gear.[slot]
+  else Nullable()
+
+let itemFitsRaceClass (item: CachedItem) (race: string) (cls: string) =
+  let mutable raceBit = 0
+  let mutable classBit = 0
+  let raceOk =
+    (not (raceBits.TryGetValue(race, &raceBit)))
+    || item.Races = 0 || item.Races = 65535 || (item.Races &&& raceBit) <> 0
+  let classOk =
+    (not (classBits.TryGetValue(cls, &classBit)))
+    || item.Classes = 0 || item.Classes = 65535 || (item.Classes &&& classBit) <> 0
+  raceOk && classOk
+
+let slotsItemCanFill (item: CachedItem) =
+  slotBits
+  |> List.choose (fun (name, bit) -> if (item.Slots &&& bit) <> 0 then Some name else None)
+
+let alreadyWearsItemId (ch: Character) (itemId: int) =
+  if isNullUnsafe ch.Current || isNullUnsafe ch.Current.Gear then false
+  else
+    ch.Current.Gear.Values
+    |> Seq.exists (fun v -> v.HasValue && v.Value = itemId)
+
+let isWeaponHandSlot (slot: string) =
+  slot = "primary" || slot = "secondary" || slot = "range"
+
+/// Damage/delay ratio when the item looks like a weapon; None for shields / non-weapons.
+let weaponRatio (item: CachedItem) =
+  if item.Damage > 0 && item.Delay > 0 then Some (float item.Damage / float item.Delay)
+  else None
+
+let formatRatio (r: float) = r.ToString("0.00")
+
+/// Upgrade reason for a filled slot, if any (weapon ratio and/or AC).
+let upgradeReason (slot: string) (bag: CachedItem) (worn: CachedItem) (includeAc: bool) (includeWeaponRatio: bool) =
+  let ratioWhy =
+    if not includeWeaponRatio || not (isWeaponHandSlot slot) then None
+    else
+      match weaponRatio bag, weaponRatio worn with
+      | Some bagR, Some wornR when bagR > wornR + 0.0001 ->
+          Some
+            $"ratio {formatRatio wornR}→{formatRatio bagR} ({worn.Damage}/{worn.Delay}→{bag.Damage}/{bag.Delay})"
+      | Some bagR, None ->
+          Some $"ratio {formatRatio bagR} ({bag.Damage}/{bag.Delay}) vs non-weapon"
+      | _ -> None
+  let acWhy =
+    if includeAc && bag.Ac > worn.Ac then Some $"AC {worn.Ac}→{bag.Ac}"
+    else None
+  match ratioWhy, acWhy with
+  | Some r, Some a -> Some $"{r}; {a}"
+  | Some r, None -> Some r
+  | None, Some a -> Some a
+  | None, None -> None
+
+/// Why another character "wants" a bag item for a slot.
+let wantReasonsForCharacter
+  (cache: ItemCacheFile)
+  (ch: Character)
+  (item: CachedItem)
+  (includeAcUpgrades: bool)
+  (includeWeaponRatioUpgrades: bool)
+  =
+  if not (itemFitsRaceClass item ch.Race ch.Class) then []
+  elif item.Reqlevel > 0 && characterLevel ch > 0 && characterLevel ch < item.Reqlevel then []
+  elif alreadyWearsItemId ch item.Id then []
+  else
+    slotsItemCanFill item
+    |> List.choose (fun slot ->
+        let worn = wornInSlot ch slot
+        if not worn.HasValue then Some (slot, "empty")
+        elif not includeAcUpgrades && not includeWeaponRatioUpgrades then None
+        else
+          match tryGetCachedItem cache worn.Value with
+          | None -> None
+          | Some wornItem ->
+              upgradeReason slot item wornItem includeAcUpgrades includeWeaponRatioUpgrades
+              |> Option.map (fun why -> slot, why))
+
+/// Bag items held by one character that other characters can use (empty / AC / weapon ratio).
+let modeBagShare (chars: CharactersFile) (cache: ItemCacheFile) (contentRoot: string option ref) =
+  match
+    promptChoice
+      "Share"
+      [| "find items others want"; "list EXTRA inventory (bags/banks)" |]
+  with
+  | None -> ()
+  | Some s when s.StartsWith("list EXTRA", StringComparison.OrdinalIgnoreCase) ->
+      let whoOpts =
+        Array.append [| "ALL characters" |] (chars.Characters |> Seq.map (fun c -> c.Name) |> Array.ofSeq)
+      match promptChoice "EXTRA inventory — whose bags?" whoOpts with
+      | None -> ()
+      | Some "ALL characters" -> dumpExtraInventory cache chars None
+      | Some name ->
+          match chars.Characters |> Seq.tryFind (fun c -> c.Name = name) with
+          | Some ch -> dumpExtraInventory cache chars (Some ch)
+          | None -> showResult "Bag share" $"Not found: {name}"
+  | Some _ when chars.Characters.Count < 2 ->
+      showResult "Bag share" "Need at least two characters."
+  | Some _ ->
+    let holders =
+      match
+        promptChoice
+          "Bag holders to scan"
+          (Array.append [| "ALL characters" |] (chars.Characters |> Seq.map (fun c -> c.Name) |> Array.ofSeq))
+      with
+      | None -> None
+      | Some "ALL characters" -> Some (chars.Characters |> Seq.toList)
+      | Some name ->
+          chars.Characters
+          |> Seq.tryFind (fun c -> c.Name = name)
+          |> Option.map List.singleton
+    match holders with
+    | None -> ()
+    | Some holderList ->
+        let tagFilter =
+          match promptChoice "Which bag tags?" [| "gear only"; "gear + epic"; "all tags" |] with
+          | Some s when s.StartsWith("gear +", StringComparison.OrdinalIgnoreCase) ->
+              fun (tag: string) ->
+                String.Equals(tag, "gear", StringComparison.OrdinalIgnoreCase)
+                || String.Equals(tag, "epic", StringComparison.OrdinalIgnoreCase)
+          | Some s when s.StartsWith("all", StringComparison.OrdinalIgnoreCase) -> fun _ -> true
+          | _ ->
+              fun (tag: string) -> String.Equals(tag, "gear", StringComparison.OrdinalIgnoreCase)
+        let includeUpgrades =
+          match promptChoice "Want means" [| "empty only"; "potential upgrades" |] with
+          | Some s when s.StartsWith("potential", StringComparison.OrdinalIgnoreCase) -> true
+          | _ -> false
+        let includeAcUpgrades = includeUpgrades
+        let includeWeaponRatioUpgrades = includeUpgrades
+        let root = ensureContentRoot contentRoot
+        let rows = ResizeArray<_>()
+        let unresolved = ResizeArray<string>()
+        for holder in holderList do
+          ensureInventory holder.Current
+          for entry in holder.Current.Inventory do
+            let tag = if isNullUnsafe entry.Tag then "other" else entry.Tag
+            if tagFilter tag then
+              let itemOpt =
+                match tryGetCachedItem cache entry.ItemId with
+                | Some i -> Some i
+                | None ->
+                    try Some (resolveItem cache root entry.ItemId None)
+                    with ex ->
+                      unresolved.Add($"{holder.Name}: id {entry.ItemId} — {ex.Message}")
+                      None
+              match itemOpt with
+              | None -> ()
+              | Some item when item.Slots = 0 -> ()
+              | Some item ->
+                  let wanters =
+                    chars.Characters
+                    |> Seq.filter (fun c -> c.Id <> holder.Id)
+                    |> Seq.choose (fun c ->
+                        match
+                          wantReasonsForCharacter
+                            cache
+                            c
+                            item
+                            includeAcUpgrades
+                            includeWeaponRatioUpgrades
+                        with
+                        | [] -> None
+                        | reasons ->
+                            let slots =
+                              reasons
+                              |> List.map (fun (slot, why) -> $"{slot} ({why})")
+                              |> String.concat ", "
+                            Some $"{c.Name}: {slots}")
+                    |> Seq.toArray
+                  if wanters.Length > 0 then
+                    rows.Add(
+                      {|
+                        Item = formatItemRef cache (nInt item.Id)
+                        Holder = holder.Name
+                        Where = inventoryWhere entry
+                        Tag = tag
+                        Qty = entryQty entry
+                        Note = if isNullUnsafe entry.Note then "" else entry.Note
+                        WantedBy = String.Join(" | ", wanters)
+                        Wanters = wanters.Length
+                      |})
+        let ordered =
+          rows
+          |> Seq.sortBy (fun r -> (-r.Wanters, r.Item, r.Holder))
+          |> Seq.toArray
+        if unresolved.Count > 0 then
+          printfn "WARN: %d bag item(s) not in cache/content:" unresolved.Count
+          for line in unresolved do printfn "  %s" line
+        if ordered.Length = 0 then
+          showResult
+            "Bag share"
+            "No bag items matched other characters (empty slots / AC / weapon ratio)."
+        else
+          showResult $"Bag share — {ordered.Length} item(s) others want" ordered
+
 // --- Main ---
 printfn "IdleQuest tracker"
 printfn "Data: %s" Paths.dataDir
@@ -1659,6 +1913,7 @@ let menu = [
   "status", "Dump character status"
   "add", "Add character"
   "update", "Interactive update (gear/inventory/stats/level)"
+  "share", "Bag gear others want (empty / AC / weapon ratio)"
   "raceclass", "Race/class matrix"
   "baseline", "Append full baseline snapshot"
   "progress", "Progress history"
@@ -1676,6 +1931,7 @@ while running do
       | Some ch -> modeEnterGear ch events chars cache contentRoot
       | None -> ()
   | Some "update" -> modeUpdate chars events cache contentRoot
+  | Some "share" -> modeBagShare chars cache contentRoot
   | Some "raceclass" -> modeRaceClass chars
   | Some "baseline" -> modeFullBaseline chars events
   | Some "progress" -> modeProgress chars events cache
