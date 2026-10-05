@@ -1045,45 +1045,6 @@ let dumpSheet (cache: ItemCacheFile) (ch: Character) =
   let rows = Array.append gearRows bagRows
   showResult $"{ch.Name} — {ch.Race} {ch.Class} — updated {formatAt ch.CurrentAt}" rows
 
-let dumpAllStatus (cache: ItemCacheFile) (chars: CharactersFile) =
-  let rows =
-    chars.Characters
-    |> Seq.collect (fun ch ->
-        let s = ch.Current
-        let gear =
-          slotNames
-          |> Seq.choose (fun slot ->
-              let id = if not (isNullUnsafe s.Gear) && s.Gear.ContainsKey slot then s.Gear.[slot] else Nullable()
-              if not id.HasValue then None
-              else
-                Some
-                  {|
-                    Character = ch.Name
-                    Race = ch.Race
-                    Class = ch.Class
-                    At = formatAt ch.CurrentAt
-                    Where = "worn"
-                    Kind = slot
-                    Item = formatItemRef cache id
-                    Note = ""
-                  |})
-        let bag =
-          inventoryStatusRows cache ch
-          |> Seq.map (fun r ->
-              {|
-                Character = ch.Name
-                Race = ch.Race
-                Class = ch.Class
-                At = formatAt ch.CurrentAt
-                Where = r.Where
-                Kind = r.Kind
-                Item = r.Item
-                Note = r.Note
-              |})
-        Seq.append gear bag)
-    |> Seq.toArray
-  showResult $"Status — ALL ({rows.Length} worn/carried/bank rows)" rows
-
 /// All bag/bank stacks (not worn) — who has what. Optional single holder; None = everyone.
 let dumpExtraInventory (cache: ItemCacheFile) (chars: CharactersFile) (holderFilter: Character option) =
   let holders =
@@ -1162,11 +1123,12 @@ let ensureContentRoot (lazyRoot: string option ref) =
 let modeStatus (chars: CharactersFile) (cache: ItemCacheFile) =
   let opts =
     Array.append
-      [| "ALL characters"; "EXTRA inventory (bags/banks)" |]
+      [| "ALL bags/banks (no worn)"; "EXTRA inventory (bags/banks)" |]
       (chars.Characters |> Seq.map (fun c -> c.Name) |> Array.ofSeq)
   match promptChoice "Status — select target" opts with
   | None -> ()
-  | Some "ALL characters" -> dumpAllStatus cache chars
+  | Some s when s.StartsWith("ALL bags", StringComparison.OrdinalIgnoreCase) ->
+      dumpExtraInventory cache chars None
   | Some s when s.StartsWith("EXTRA inventory", StringComparison.OrdinalIgnoreCase) ->
       let whoOpts =
         Array.append [| "ALL characters" |] (chars.Characters |> Seq.map (fun c -> c.Name) |> Array.ofSeq)
@@ -1329,7 +1291,7 @@ let modeInventory (ch: Character) (events: EventsFile) (chars: CharactersFile) (
     match
       promptChoice
         $"Inventory — {ch.Name}"
-        [| "list"; "add item"; "remove item"; "done — back" |]
+        [| "list"; "add item"; "change quantity"; "remove item"; "done — back" |]
     with
     | None -> ()
     | Some s when s.StartsWith("done", StringComparison.OrdinalIgnoreCase) -> ()
@@ -1383,6 +1345,64 @@ let modeInventory (ch: Character) (events: EventsFile) (chars: CharactersFile) (
                 persistAfterMutation chars events
                 showInventoryResult cache ch $"Inventory — added {formatItemRef cache (nInt item.Id)} ({inventoryWhere entry}, {tag})"
                 loop ()
+    | Some s when s.StartsWith("change", StringComparison.OrdinalIgnoreCase) ->
+        showInventoryResult cache ch $"Inventory — {ch.Name} ({ch.Current.Inventory.Count} stacks)"
+        if ch.Current.Inventory.Count = 0 then
+          showResult $"Inventory — {ch.Name}" "Bag is empty."
+          loop ()
+        else
+          let picks =
+            ch.Current.Inventory
+            |> Seq.map (formatInventoryPick cache)
+            |> Array.ofSeq
+          match promptChoice "Change quantity — which stack?" picks with
+          | None -> loop ()
+          | Some pick ->
+              let next = cloneInventory ch.Current.Inventory
+              match next |> Seq.tryFindIndex (fun e -> formatInventoryPick cache e = pick) with
+              | None -> loop ()
+              | Some idx ->
+                  let entry = next.[idx]
+                  let oldQty = entryQty entry
+                  match
+                    promptText
+                      "New quantity"
+                      $"Stack size (0 = remove stack; was {oldQty})"
+                      Array.empty
+                      (string oldQty)
+                  with
+                  | None -> loop ()
+                  | Some t ->
+                      match Int32.TryParse t with
+                      | true, q when q <= 0 ->
+                          next.RemoveAt idx
+                          let at = utcNow ()
+                          let delta = emptyDeltaEvent at "script"
+                          delta.InventorySet <- next
+                          appendEvent events ch.Id delta
+                          refreshCurrent ch events
+                          persistAfterMutation chars events
+                          showInventoryResult
+                            cache
+                            ch
+                            $"Inventory — removed stack {formatItemRef cache (nInt entry.ItemId)}"
+                          loop ()
+                      | true, q ->
+                          entry.Qty <- if q = 1 then Nullable() else nInt q
+                          let at = utcNow ()
+                          let delta = emptyDeltaEvent at "script"
+                          delta.InventorySet <- next
+                          appendEvent events ch.Id delta
+                          refreshCurrent ch events
+                          persistAfterMutation chars events
+                          showInventoryResult
+                            cache
+                            ch
+                            $"Inventory — qty {oldQty}→{q} on {formatItemRef cache (nInt entry.ItemId)}"
+                          loop ()
+                      | _ ->
+                          showResult $"Inventory — {ch.Name}" "Invalid quantity."
+                          loop ()
     | Some s when s.StartsWith("remove", StringComparison.OrdinalIgnoreCase) ->
         if ch.Current.Inventory.Count = 0 then
           showResult $"Inventory — {ch.Name}" "Bag is empty."
