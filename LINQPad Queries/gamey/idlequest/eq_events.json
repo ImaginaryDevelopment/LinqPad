@@ -133,6 +133,13 @@
           "source": "hand-edit",
           "level": 45,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-07T00:56:52.0692588\u002B00:00",
+          "source": "hand-edit",
+          "level": 46,
+          "gear": {}
         }
       ]
     },
@@ -191,6 +198,13 @@
           "at": "2026-10-03T19:25:56.7917701\u002B00:00",
           "source": "hand-edit",
           "level": 24,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-07T00:56:52.0718248\u002B00:00",
+          "source": "hand-edit",
+          "level": 27,
           "gear": {}
         }
       ]
@@ -255,6 +269,13 @@
           "source": "hand-edit",
           "level": 46,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-07T00:56:52.0721509\u002B00:00",
+          "source": "hand-edit",
+          "level": 48,
+          "gear": {}
         }
       ]
     },
@@ -310,6 +331,13 @@
           "at": "2026-10-05T14:20:32.3410101\u002B00:00",
           "source": "hand-edit",
           "level": 41,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-07T00:56:52.0723758\u002B00:00",
+          "source": "hand-edit",
+          "level": 45,
           "gear": {}
         }
       ]
@@ -393,6 +421,13 @@
           "source": "hand-edit",
           "level": 45,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-07T00:56:52.0730112\u002B00:00",
+          "source": "hand-edit",
+          "level": 47,
+          "gear": {}
         }
       ]
     },
@@ -455,6 +490,13 @@
           "at": "2026-10-05T14:20:32.3415225\u002B00:00",
           "source": "hand-edit",
           "level": 46,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-07T00:56:52.0739509\u002B00:00",
+          "source": "hand-edit",
+          "level": 48,
           "gear": {}
         }
       ]
@@ -520,6 +562,13 @@
           "source": "hand-edit",
           "level": 43,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-07T00:56:52.0744601\u002B00:00",
+          "source": "hand-edit",
+          "level": 44,
+          "gear": {}
         }
       ]
     },
@@ -581,6 +630,13 @@
           "at": "2026-10-03T19:25:56.7918836\u002B00:00",
           "source": "hand-edit",
           "level": 26,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-07T00:56:52.0747756\u002B00:00",
+          "source": "hand-edit",
+          "level": 28,
           "gear": {}
         }
       ]
@@ -645,6 +701,13 @@
           "source": "hand-edit",
           "level": 25,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-07T00:56:52.0751509\u002B00:00",
+          "source": "hand-edit",
+          "level": 28,
+          "gear": {}
         }
       ]
     },
@@ -701,6 +764,13 @@
           "at": "2026-10-05T14:20:32.3464221\u002B00:00",
           "source": "hand-edit",
           "level": 44,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-07T00:56:52.0753361\u002B00:00",
+          "source": "hand-edit",
+          "level": 46,
           "gear": {}
         }
       ]
@@ -785,6 +855,13 @@
           "source": "hand-edit",
           "level": 41,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-07T00:56:52.0755051\u002B00:00",
+          "source": "hand-edit",
+          "level": 43,
+          "gear": {}
         }
       ]
     },
@@ -860,6 +937,13 @@
           "source": "hand-edit",
           "level": 23,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-07T00:56:52.0756691\u002B00:00",
+          "source": "hand-edit",
+          "level": 28,
+          "gear": {}
         }
       ]
     },
@@ -933,6 +1017,13 @@
           "source": "hand-edit",
           "level": 46,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-07T00:56:52.0758756\u002B00:00",
+          "source": "hand-edit",
+          "level": 48,
+          "gear": {}
         }
       ]
     },
@@ -1001,6 +1092,13 @@
           "source": "hand-edit",
           "level": 23,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-07T00:56:52.0760875\u002B00:00",
+          "source": "hand-edit",
+          "level": 28,
+          "gear": {}
         }
       ]
     },
@@ -1062,6 +1160,13 @@
           "source": "hand-edit",
           "level": 45,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-07T00:56:52.0764281\u002B00:00",
+          "source": "hand-edit",
+          "level": 46,
+          "gear": {}
         }
       ]
     },
@@ -1121,6 +1226,22 @@
             "feet": 4920,
             "waist": 11601
           }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-07T01:01:14.2250855\u002B00:00",
+          "source": "script",
+          "gear": {
+            "secondary": 24617
+          }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-07T01:02:22.4396405\u002B00:00",
+          "source": "script",
+          "gear": {
+            "fingers2": 5728
+          }
         }
       ]
     },
@@ -1178,6 +1299,13 @@
           "at": "2026-10-05T14:20:32.3475031\u002B00:00",
           "source": "hand-edit",
           "level": 23,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-07T00:56:52.0766031\u002B00:00",
+          "source": "hand-edit",
+          "level": 28,
           "gear": {}
         }
       ]
@@ -1244,6 +1372,13 @@
           "source": "hand-edit",
           "level": 23,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-07T00:56:52.0766951\u002B00:00",
+          "source": "hand-edit",
+          "level": 28,
+          "gear": {}
         }
       ]
     },
@@ -1298,6 +1433,13 @@
           "at": "2026-10-03T19:25:56.7924023\u002B00:00",
           "source": "hand-edit",
           "level": 26,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-07T00:56:52.0768286\u002B00:00",
+          "source": "hand-edit",
+          "level": 28,
           "gear": {}
         }
       ]

@@ -6,7 +6,7 @@
       "race": "Troll",
       "class": "Warrior",
       "current": {
-        "level": 45,
+        "level": 46,
         "gear": {
           "primary": 6624,
           "secondary": 11632,
@@ -57,7 +57,7 @@
           }
         ]
       },
-      "currentAt": "2026-10-05T14:20:32.3384155\u002B00:00"
+      "currentAt": "2026-10-07T00:56:52.0692588\u002B00:00"
     },
     {
       "id": "8ac8f78a19714c9298b2cb6fa338e863",
@@ -65,7 +65,7 @@
       "race": "Iksar",
       "class": "Necromancer",
       "current": {
-        "level": 24,
+        "level": 27,
         "gear": {
           "ear1": null,
           "head": 25514,
@@ -91,7 +91,7 @@
         },
         "inventory": []
       },
-      "currentAt": "2026-10-03T19:25:56.7917701\u002B00:00"
+      "currentAt": "2026-10-07T00:56:52.0718248\u002B00:00"
     },
     {
       "id": "c68105da05e240e2a95e53a4471a29b7",
@@ -99,7 +99,7 @@
       "race": "Human",
       "class": "Monk",
       "current": {
-        "level": 46,
+        "level": 48,
         "gear": {
           "ear1": null,
           "head": null,
@@ -125,7 +125,7 @@
         },
         "inventory": []
       },
-      "currentAt": "2026-10-05T14:20:32.3406922\u002B00:00"
+      "currentAt": "2026-10-07T00:56:52.0721509\u002B00:00"
     },
     {
       "id": "3d3bfa8cdf5542189a53354d03ddae01",
@@ -133,7 +133,7 @@
       "race": "Dwarf",
       "class": "Paladin",
       "current": {
-        "level": 41,
+        "level": 45,
         "gear": {
           "ear1": null,
           "head": 1630,
@@ -159,7 +159,7 @@
         },
         "inventory": []
       },
-      "currentAt": "2026-10-05T14:20:32.3410101\u002B00:00"
+      "currentAt": "2026-10-07T00:56:52.0723758\u002B00:00"
     },
     {
       "id": "d06a753533684e6aad2cc9d87b214e0a",
@@ -167,7 +167,7 @@
       "race": "Wood Elf",
       "class": "Druid",
       "current": {
-        "level": 45,
+        "level": 47,
         "gear": {
           "primary": null,
           "secondary": 9311,
@@ -200,7 +200,7 @@
           }
         ]
       },
-      "currentAt": "2026-10-05T14:20:32.3412492\u002B00:00"
+      "currentAt": "2026-10-07T00:56:52.0730112\u002B00:00"
     },
     {
       "id": "4065622099b84a099e45ca6f6b09101a",
@@ -208,7 +208,7 @@
       "race": "Iksar",
       "class": "Shaman",
       "current": {
-        "level": 46,
+        "level": 48,
         "gear": {
           "ear1": null,
           "head": 4504,
@@ -234,7 +234,7 @@
         },
         "inventory": []
       },
-      "currentAt": "2026-10-05T14:20:32.3415225\u002B00:00"
+      "currentAt": "2026-10-07T00:56:52.0739509\u002B00:00"
     },
     {
       "id": "a55e8e82fa654baaaa8a656bd2c69dc0",
@@ -242,7 +242,7 @@
       "race": "Half Elf",
       "class": "Bard",
       "current": {
-        "level": 43,
+        "level": 44,
         "gear": {
           "primary": 11555,
           "secondary": 25285,
@@ -268,7 +268,7 @@
         },
         "inventory": []
       },
-      "currentAt": "2026-10-05T14:20:32.3452163\u002B00:00"
+      "currentAt": "2026-10-07T00:56:52.0744601\u002B00:00"
     },
     {
       "id": "88c0f32063c0468d8cd8af92c1f0a226",
@@ -276,7 +276,7 @@
       "race": "Wood Elf",
       "class": "Ranger",
       "current": {
-        "level": 26,
+        "level": 28,
         "gear": {
           "ear1": null,
           "head": 4504,
@@ -302,7 +302,7 @@
         },
         "inventory": []
       },
-      "currentAt": "2026-10-03T19:25:56.7918836\u002B00:00"
+      "currentAt": "2026-10-07T00:56:52.0747756\u002B00:00"
     },
     {
       "id": "5a293b8590c84aa2aa04ee0dd1ab1e7b",
@@ -310,7 +310,7 @@
       "race": "Ogre",
       "class": "Shadow Knight",
       "current": {
-        "level": 25,
+        "level": 28,
         "gear": {
           "ear1": null,
           "head": null,
@@ -336,7 +336,7 @@
         },
         "inventory": []
       },
-      "currentAt": "2026-10-03T19:25:56.7919219\u002B00:00"
+      "currentAt": "2026-10-07T00:56:52.0751509\u002B00:00"
     },
     {
       "id": "14cef2cfc1ed4c93808daf6f0e4d2e99",
@@ -344,7 +344,7 @@
       "race": "Gnome",
       "class": "Magician",
       "current": {
-        "level": 44,
+        "level": 46,
         "gear": {
           "ear1": null,
           "head": 25521,
@@ -370,7 +370,7 @@
         },
         "inventory": []
       },
-      "currentAt": "2026-10-05T14:20:32.3464221\u002B00:00"
+      "currentAt": "2026-10-07T00:56:52.0753361\u002B00:00"
     },
     {
       "id": "37a2786428804372b2a6cb5ec92dd4e7",
@@ -378,7 +378,7 @@
       "race": "Gnome",
       "class": "Enchanter",
       "current": {
-        "level": 41,
+        "level": 43,
         "gear": {
           "primary": null,
           "secondary": null,
@@ -411,7 +411,7 @@
           }
         ]
       },
-      "currentAt": "2026-10-05T14:20:32.3466076\u002B00:00"
+      "currentAt": "2026-10-07T00:56:52.0755051\u002B00:00"
     },
     {
       "id": "b9a3db1746374154b3e467679a41de9d",
@@ -419,7 +419,7 @@
       "race": "Dark Elf",
       "class": "Rogue",
       "current": {
-        "level": 23,
+        "level": 28,
         "gear": {
           "primary": 11983,
           "secondary": null,
@@ -445,7 +445,7 @@
         },
         "inventory": []
       },
-      "currentAt": "2026-10-05T14:20:32.3467897\u002B00:00"
+      "currentAt": "2026-10-07T00:56:52.0756691\u002B00:00"
     },
     {
       "id": "77d68250044a4c0aa271692ab48247a7",
@@ -453,7 +453,7 @@
       "race": "Dark Elf",
       "class": "Wizard",
       "current": {
-        "level": 46,
+        "level": 48,
         "gear": {
           "ear1": null,
           "head": 10143,
@@ -479,7 +479,7 @@
         },
         "inventory": []
       },
-      "currentAt": "2026-10-05T14:20:32.3469867\u002B00:00"
+      "currentAt": "2026-10-07T00:56:52.0758756\u002B00:00"
     },
     {
       "id": "5c81db737bea459191913d9c975b3bed",
@@ -487,7 +487,7 @@
       "race": "Erudite",
       "class": "Wizard",
       "current": {
-        "level": 23,
+        "level": 28,
         "gear": {
           "ear1": null,
           "head": 10141,
@@ -513,7 +513,7 @@
         },
         "inventory": []
       },
-      "currentAt": "2026-10-05T14:20:32.3471556\u002B00:00"
+      "currentAt": "2026-10-07T00:56:52.0760875\u002B00:00"
     },
     {
       "id": "284567e2531b44428dc78ccb19053b1c",
@@ -521,7 +521,7 @@
       "race": "Halfling",
       "class": "Cleric",
       "current": {
-        "level": 45,
+        "level": 46,
         "gear": {
           "ear1": null,
           "head": null,
@@ -547,7 +547,7 @@
         },
         "inventory": []
       },
-      "currentAt": "2026-10-05T14:20:32.3473250\u002B00:00"
+      "currentAt": "2026-10-07T00:56:52.0764281\u002B00:00"
     },
     {
       "id": "ce0f39a6e6154cb6a36e47b7afa4e48a",
@@ -557,31 +557,31 @@
       "current": {
         "level": 60,
         "gear": {
-          "ear1": null,
-          "head": 25479,
-          "face": 25031,
-          "ear2": null,
-          "neck": 25295,
-          "shoulders": 27865,
+          "primary": 11057,
+          "secondary": 24617,
+          "chest": 25480,
+          "waist": 11601,
+          "legs": 25484,
           "arms": 25481,
-          "back": 11621,
+          "hands": 11624,
+          "head": 25479,
+          "shoulders": 27865,
+          "face": 25031,
+          "feet": 4920,
           "wrist1": 25482,
           "wrist2": 11584,
-          "range": 7371,
-          "hands": 11624,
-          "primary": 11057,
-          "secondary": 5661,
           "fingers1": 10366,
-          "fingers2": null,
-          "chest": 25480,
-          "legs": 25484,
-          "feet": 4920,
-          "waist": 11601,
+          "fingers2": 5728,
+          "range": 7371,
+          "ear1": null,
+          "ear2": null,
+          "neck": 25295,
+          "back": 11621,
           "ammo": null
         },
         "inventory": []
       },
-      "currentAt": "2026-10-03T10:57:28.6814005\u002B00:00"
+      "currentAt": "2026-10-07T01:02:22.4396405\u002B00:00"
     },
     {
       "id": "23ab3e95816941d1ba6eaa65d871beba",
@@ -589,7 +589,7 @@
       "race": "Dark Elf",
       "class": "Magician",
       "current": {
-        "level": 23,
+        "level": 28,
         "gear": {
           "ear1": null,
           "head": null,
@@ -615,7 +615,7 @@
         },
         "inventory": []
       },
-      "currentAt": "2026-10-05T14:20:32.3475031\u002B00:00"
+      "currentAt": "2026-10-07T00:56:52.0766031\u002B00:00"
     },
     {
       "id": "d090f4de21024ec281caf200e09a15c1",
@@ -623,7 +623,7 @@
       "race": "Gnome",
       "class": "Cleric",
       "current": {
-        "level": 23,
+        "level": 28,
         "gear": {
           "ear1": null,
           "head": null,
@@ -649,7 +649,7 @@
         },
         "inventory": []
       },
-      "currentAt": "2026-10-05T14:20:32.3476607\u002B00:00"
+      "currentAt": "2026-10-07T00:56:52.0766951\u002B00:00"
     },
     {
       "id": "2ce00d6bca8e46d6b04dc8945a561e1f",
@@ -657,7 +657,7 @@
       "race": "Erudite",
       "class": "Wizard",
       "current": {
-        "level": 26,
+        "level": 28,
         "gear": {
           "ear1": null,
           "head": 10141,
@@ -683,7 +683,7 @@
         },
         "inventory": []
       },
-      "currentAt": "2026-10-03T19:25:56.7924023\u002B00:00"
+      "currentAt": "2026-10-07T00:56:52.0768286\u002B00:00"
     }
   ]
 }
