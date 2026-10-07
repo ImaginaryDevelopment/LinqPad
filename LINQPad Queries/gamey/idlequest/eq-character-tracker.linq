@@ -6,6 +6,7 @@
 // Data: eq_characters.json, eq_events.json, item-cache.json (same folder as this script).
 // Tracks equipped gear + inventory bag (spare gear / quest / epic items).
 // Mode "share": bag items others can use (empty slots / higher AC / better weapon ratio).
+// Mode "eta60": days-to-60 from logged level timestamps + Util.Chart dumps.
 // Item lookups use a local idlequest-content clone or GitHub raw shards.
 // Content-root preference: Util.Cache + password; GitHub cancel cooldown ~1 day.
 // UI: one DumpContainer (PromptUi) for current prompt/options + last result; Util.ReadLine suggestions (no WinForms).
@@ -257,6 +258,20 @@ type CachedItem = {
 [<CLIMutable>]
 type ItemCacheFile = {
   mutable Items: Dictionary<string, CachedItem>
+}
+
+/// Named (not anon) so Chart/lambdas don't resolve `.Name` via FieldLabels to CachedItem.
+type Eta60Estimate = {
+  Name: string
+  CharClass: string
+  Band: string
+  Level: int
+  LevelsPerDay: float
+  EtaDays: float
+  EtaAt: string
+  SampleCount: int
+  Window: string
+  Timeline: (DateTimeOffset * int) list
 }
 
 let inventoryTags = [| "gear"; "quest"; "epic"; "other" |]
@@ -1916,6 +1931,180 @@ let modeBagShare (chars: CharactersFile) (cache: ItemCacheFile) (contentRoot: st
         else
           showResult $"Bag share — {ordered.Length} item(s) others want" ordered
 
+// --- ETA to 60 (wall-clock level rates + charts) ---
+let tryParseAt (at: string) =
+  if String.IsNullOrWhiteSpace at then None
+  else
+    match DateTimeOffset.TryParse(at) with
+    | true, dto -> Some dto
+    | _ -> None
+
+/// Ordered unique level samples from events + current sheet if newer/higher.
+let levelTimeline (ch: Character) (events: EventsFile) =
+  let raw = ResizeArray<DateTimeOffset * int>()
+  for e in eventsFor events ch.Id do
+    if e.Level.HasValue then
+      match tryParseAt e.At with
+      | Some t -> raw.Add(t, e.Level.Value)
+      | None -> ()
+  let cur = characterLevel ch
+  if cur > 0 then
+    match tryParseAt ch.CurrentAt with
+    | Some t -> raw.Add(t, cur)
+    | None -> ()
+  raw
+  |> Seq.groupBy fst
+  |> Seq.map (fun (t, g) -> t, g |> Seq.map snd |> Seq.max)
+  |> Seq.sortBy fst
+  |> Seq.toList
+
+let cohortBand (level: int) =
+  if level >= 40 && level < 60 then Some "40+"
+  elif level >= 20 && level <= 39 then Some "20-39"
+  else None
+
+let medianFloat (xs: float array) =
+  if xs.Length = 0 then Double.NaN
+  else
+    let a = xs |> Array.sort
+    let n = a.Length
+    if n % 2 = 1 then a.[n / 2]
+    else (a.[n / 2 - 1] + a.[n / 2]) / 2.0
+
+/// First→last wall-clock levels/day; ETA days to 60 when current < 60.
+let estimateTo60 (ch: Character) (events: EventsFile) : Eta60Estimate option =
+  let lvl = characterLevel ch
+  match cohortBand lvl with
+  | None -> None
+  | Some band ->
+      let timeline = levelTimeline ch events
+      if timeline.Length < 2 then None
+      else
+        let t0, l0 = timeline.Head
+        let t1, l1 = timeline |> List.last
+        let deltaLvl = l1 - l0
+        let deltaDays = (t1 - t0).TotalDays
+        if deltaLvl <= 0 || deltaDays <= 0.0 then None
+        else
+          let rate = float deltaLvl / deltaDays
+          let remain = 60 - lvl
+          let etaDays = float remain / rate
+          let etaAt = t1.AddDays(etaDays)
+          let etaAtTxt = etaAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+          let windowTxt =
+            sprintf "%s L%d → %s L%d" (formatAt (t0.ToString("o"))) l0 (formatAt (t1.ToString("o"))) l1
+          Some
+            {
+              Name = ch.Name
+              CharClass = ch.Class
+              Band = band
+              Level = lvl
+              LevelsPerDay = rate
+              EtaDays = etaDays
+              EtaAt = etaAtTxt
+              SampleCount = timeline.Length
+              Window = windowTxt
+              Timeline = timeline
+            }
+
+let dumpEtaColumnChart (title: string) (rows: (string * float)[]) =
+  if rows.Length = 0 then ()
+  else
+    rows
+      .Chart(
+        Func<string * float, obj>(fun (name, _) -> box name),
+        Func<string * float, obj>(fun (_, eta) -> box eta),
+        seriesType = Util.SeriesType.Column)
+      .Dump(title)
+
+let dumpLevelHistoryChart
+  (title: string)
+  (timelines: (string * (DateTimeOffset * int) list) list)
+  =
+  let allTicks =
+    timelines
+    |> List.collect (fun (_, pts) -> pts |> List.map (fun (t, _) -> t.UtcTicks))
+    |> List.distinct
+    |> List.sort
+  if allTicks.IsEmpty || timelines.IsEmpty then ()
+  else
+    let chart =
+      Util.Chart(
+        allTicks,
+        (fun ticks ->
+          let label = DateTimeOffset(ticks, TimeSpan.Zero).ToLocalTime().ToString("MM-dd HH:mm")
+          box label),
+        seriesType = Util.SeriesType.Line)
+    for name, pts in timelines do
+      let byTick =
+        pts
+        |> Seq.groupBy (fun (t, _) -> t.UtcTicks)
+        |> Seq.map (fun (tick, g) -> tick, g |> Seq.map snd |> Seq.max)
+        |> dict
+      chart.AddYSeries(
+        Func<_, obj>(fun ticks ->
+          let mutable lvl = 0
+          if byTick.TryGetValue(ticks, &lvl) then box lvl else null),
+        seriesType = Util.SeriesType.Line,
+        name = name)
+      |> ignore
+    chart.Dump(title)
+
+let modeEta60 (chars: CharactersFile) (events: EventsFile) =
+  let estimates: Eta60Estimate[] =
+    chars.Characters
+    |> Seq.choose (fun ch -> estimateTo60 ch events)
+    |> Seq.sortBy (fun e -> e.Band, e.EtaDays, e.Name)
+    |> Seq.toArray
+  let band40 = estimates |> Array.filter (fun e -> e.Band = "40+")
+  let band20 = estimates |> Array.filter (fun e -> e.Band = "20-39")
+  let tableRows (rows: Eta60Estimate[]) =
+    rows
+    |> Array.map (fun e ->
+        {|
+          Character = e.Name
+          CharClass = e.CharClass
+          Level = e.Level
+          Band = e.Band
+          LevelsPerDay = Math.Round(e.LevelsPerDay, 3)
+          EtaDays = Math.Round(e.EtaDays, 1)
+          EtaAt = e.EtaAt
+          Samples = e.SampleCount
+          Window = e.Window
+        |})
+  let cohortSummary (label: string) (rows: Eta60Estimate[]) =
+    let etas = rows |> Array.map (fun e -> e.EtaDays)
+    let med = medianFloat etas
+    let mx = if etas.Length = 0 then Double.NaN else Array.max etas
+    let maxRow = rows |> Array.sortByDescending (fun e -> e.EtaDays) |> Array.tryHead
+    {|
+      Cohort = label
+      N = rows.Length
+      MedianEtaDays = if Double.IsNaN med then None else Some (Math.Round(med, 1))
+      MaxEtaDays = if Double.IsNaN mx then None else Some (Math.Round(mx, 1))
+      AllAt60When = maxRow |> Option.map (fun e -> e.EtaAt)
+      Slowest = maxRow |> Option.map (fun e -> e.Name)
+    |}
+  let caveat =
+    "Rates use logged level updates vs wall clock (not continuous XP). Gaps between hand-edits are baked into the rate."
+  showResult
+    "ETA to 60"
+    {|
+      Caveat = caveat
+      Summary40Plus = cohortSummary "40+" band40
+      Summary20to39 = cohortSummary "20-39" band20
+      Band40Plus = tableRows band40
+      Band20to39 = tableRows band20
+    |}
+  dumpEtaColumnChart
+    "ETA days — 40+"
+    (band40 |> Array.map (fun e -> e.Name, Math.Round(e.EtaDays, 1)))
+  dumpEtaColumnChart
+    "ETA days — 20-39"
+    (band20 |> Array.map (fun e -> e.Name, Math.Round(e.EtaDays, 1)))
+  dumpLevelHistoryChart "Level history — 40+" (band40 |> Array.map (fun e -> e.Name, e.Timeline) |> Array.toList)
+  dumpLevelHistoryChart "Level history — 20-39" (band20 |> Array.map (fun e -> e.Name, e.Timeline) |> Array.toList)
+
 // --- Main ---
 printfn "IdleQuest tracker"
 printfn "Data: %s" Paths.dataDir
@@ -1934,6 +2123,7 @@ let menu = [
   "add", "Add character"
   "update", "Interactive update (gear/inventory/stats/level)"
   "share", "Bag gear others want (empty / AC / weapon ratio)"
+  "eta60", "Estimate days to 60 (charts)"
   "raceclass", "Race/class matrix"
   "baseline", "Append full baseline snapshot"
   "progress", "Progress history"
@@ -1952,6 +2142,7 @@ while running do
       | None -> ()
   | Some "update" -> modeUpdate chars events cache contentRoot
   | Some "share" -> modeBagShare chars cache contentRoot
+  | Some "eta60" -> modeEta60 chars events
   | Some "raceclass" -> modeRaceClass chars
   | Some "baseline" -> modeFullBaseline chars events
   | Some "progress" -> modeProgress chars events cache
