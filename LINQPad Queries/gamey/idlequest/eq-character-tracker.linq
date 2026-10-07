@@ -1,4 +1,6 @@
 <Query Kind="FSharpProgram">
+  <Reference>&lt;RuntimeDirectory&gt;\System.Windows.Forms.DataVisualization.dll</Reference>
+  <Namespace>System.Windows.Forms.DataVisualization.Charting</Namespace>
   <IncludeUncapsulator>false</IncludeUncapsulator>
 </Query>
 
@@ -2007,48 +2009,129 @@ let estimateTo60 (ch: Character) (events: EventsFile) : Eta60Estimate option =
               Timeline = timeline
             }
 
-let dumpEtaColumnChart (title: string) (rows: (string * float)[]) =
-  if rows.Length = 0 then ()
-  else
-    rows
-      .Chart(
-        Func<string * float, obj>(fun (name, _) -> box name),
-        Func<string * float, obj>(fun (_, eta) -> box eta),
-        seriesType = Util.SeriesType.Column)
-      .Dump(title)
+let daysSince (t0: DateTimeOffset) (t: DateTimeOffset) = (t - t0).TotalDays
 
+/// Linear interpolate level across full days between samples (clamp outside range).
+let lerpLevelAtDay (pts: (DateTimeOffset * int) list) (t0: DateTimeOffset) (day: float) =
+  let dayPts =
+    pts
+    |> List.map (fun (t, l) -> daysSince t0 t, float l)
+    |> List.distinctBy fst
+    |> List.sortBy fst
+  match dayPts with
+  | [] -> 0.0
+  | [(_, l)] -> l
+  | _ ->
+      let dFirst, lFirst = dayPts.Head
+      let dLast, lLast = List.last dayPts
+      if day <= dFirst then lFirst
+      elif day >= dLast then lLast
+      else
+        let rec find xs =
+          match xs with
+          | (d0, l0) :: (d1, l1) :: _ when day >= d0 && day <= d1 ->
+              let u = if d1 = d0 then 0.0 else (day - d0) / (d1 - d0)
+              l0 + u * (l1 - l0)
+          | _ :: rest -> find rest
+          | [] -> lLast
+        find dayPts
+
+let dayGrid (maxDay: float) =
+  if maxDay <= 0.0 then [| 0.0 |]
+  else
+    let step = max 0.1 (Math.Round(maxDay / 80.0, 3))
+    let last = Math.Ceiling(maxDay / step) * step
+    [| 0.0 .. step .. last |]
+
+/// Shared day-grid line chart. X is numeric days. Y hard-capped at 60 (no chart margin → 80).
+/// Axis tweaks must Dump the Windows chart — mutating ToWindowsChart() then Dump(linqPadChart) is ignored.
+let dumpDayLevelChart
+  (title: string)
+  (xAxisTitle: string)
+  (xDays: float[])
+  (yMin: float)
+  (series: (string * (float -> float)) list)
+  =
+  if xDays.Length = 0 || series.IsEmpty then ()
+  else
+    let (name0, y0) = series.Head
+    let chart =
+      xDays.Chart(
+        Func<float, obj>(fun d -> box (Math.Round(d, 2))),
+        Func<float, obj>(fun d -> box (y0 d)),
+        seriesType = Util.SeriesType.Line)
+    for name, yf in series.Tail do
+      chart.AddYSeries(
+        Func<float, obj>(fun d -> box (yf d)),
+        seriesType = Util.SeriesType.Line,
+        name = name)
+      |> ignore
+    let w = chart.ToWindowsChart()
+    if w.Series.Count > 0 then w.Series.[0].Name <- name0
+    let area = w.ChartAreas.[0]
+    area.AxisX.Title <- xAxisTitle
+    area.AxisX.Minimum <- 0.0
+    area.AxisX.Maximum <- float xDays.[xDays.Length - 1]
+    area.AxisX.IsMarginVisible <- false
+    area.AxisY.Title <- "Level"
+    area.AxisY.Minimum <- yMin
+    area.AxisY.Maximum <- 60.0
+    area.AxisY.Interval <- 5.0
+    area.AxisY.IsMarginVisible <- false
+    // No secondary axis — WinChart often shows an empty right scale otherwise.
+    area.AxisY2.Enabled <- AxisEnabled.False
+    for s in w.Series do
+      s.YAxisType <- AxisType.Primary
+    w.Dump(title)
+
+/// Observed levels: X = full days since cohort t0, Y = linear smooth between samples.
 let dumpLevelHistoryChart
   (title: string)
   (timelines: (string * (DateTimeOffset * int) list) list)
   =
-  let allTicks =
-    timelines
-    |> List.collect (fun (_, pts) -> pts |> List.map (fun (t, _) -> t.UtcTicks))
-    |> List.distinct
-    |> List.sort
-  if allTicks.IsEmpty || timelines.IsEmpty then ()
+  let timelines = timelines |> List.filter (fun (_, pts) -> not pts.IsEmpty)
+  if timelines.IsEmpty then ()
   else
-    let chart =
-      Util.Chart(
-        allTicks,
-        (fun ticks ->
-          let label = DateTimeOffset(ticks, TimeSpan.Zero).ToLocalTime().ToString("MM-dd HH:mm")
-          box label),
-        seriesType = Util.SeriesType.Line)
-    for name, pts in timelines do
-      let byTick =
-        pts
-        |> Seq.groupBy (fun (t, _) -> t.UtcTicks)
-        |> Seq.map (fun (tick, g) -> tick, g |> Seq.map snd |> Seq.max)
-        |> dict
-      chart.AddYSeries(
-        Func<_, obj>(fun ticks ->
-          let mutable lvl = 0
-          if byTick.TryGetValue(ticks, &lvl) then box lvl else null),
-        seriesType = Util.SeriesType.Line,
-        name = name)
-      |> ignore
-    chart.Dump(title)
+    let t0 =
+      timelines
+      |> List.map (fun (_, pts) -> pts.Head |> fst)
+      |> List.min
+    let maxDay =
+      timelines
+      |> List.map (fun (_, pts) -> pts |> List.last |> fst |> daysSince t0)
+      |> List.max
+    let yMin =
+      timelines
+      |> List.collect (fun (_, pts) -> pts |> List.map (snd >> float))
+      |> List.min
+      |> fun m -> max 0.0 (Math.Floor(m / 5.0) * 5.0)
+    let xTitle = sprintf "Days since %s" (t0.ToLocalTime().ToString("yyyy-MM-dd HH:mm"))
+    let series =
+      timelines
+      |> List.map (fun (name, pts) -> name, fun d -> lerpLevelAtDay pts t0 d)
+    dumpDayLevelChart title xTitle (dayGrid maxDay) yMin series
+
+/// Forward-only projection: X=0 is now (last sample), line to (EtaDays, 60).
+/// yFloor = cohort band floor (40 or 20) so the Y axis doesn't waste space below recorded levels.
+let dumpEtaProjectionChart (title: string) (yFloor: float) (estimates: Eta60Estimate[]) =
+  let estimates =
+    estimates
+    |> Array.filter (fun e -> e.LevelsPerDay > 0.0 && e.EtaDays > 0.0 && e.Level < 60)
+  if estimates.Length = 0 then ()
+  else
+    let maxEta = estimates |> Array.map (fun e -> e.EtaDays) |> Array.max
+    let dataMin = estimates |> Array.map (fun e -> float e.Level) |> Array.min
+    let yMin = max yFloor (Math.Floor(dataMin / 5.0) * 5.0)
+    let xTitle = "Days from now (line hits 60 at ETA)"
+    let yProjected (e: Eta60Estimate) (day: float) =
+      min 60.0 (float e.Level + e.LevelsPerDay * day)
+    let series =
+      estimates
+      |> Array.map (fun e ->
+          let label = sprintf "%s (60 @ %s)" e.Name e.EtaAt
+          label, fun d -> yProjected e d)
+      |> Array.toList
+    dumpDayLevelChart title xTitle (dayGrid maxEta) yMin series
 
 let modeEta60 (chars: CharactersFile) (events: EventsFile) =
   let estimates: Eta60Estimate[] =
@@ -2097,14 +2180,10 @@ let modeEta60 (chars: CharactersFile) (events: EventsFile) =
       Band40Plus = tableRows band40
       Band20to39 = tableRows band20
     |}
-  dumpEtaColumnChart
-    "ETA days — 40+"
-    (band40 |> Array.map (fun e -> e.Name, Math.Round(e.EtaDays, 1)))
-  dumpEtaColumnChart
-    "ETA days — 20-39"
-    (band20 |> Array.map (fun e -> e.Name, Math.Round(e.EtaDays, 1)))
   dumpLevelHistoryChart "Level history — 40+" (band40 |> Array.map (fun e -> e.Name, e.Timeline) |> Array.toList)
   dumpLevelHistoryChart "Level history — 20-39" (band20 |> Array.map (fun e -> e.Name, e.Timeline) |> Array.toList)
+  dumpEtaProjectionChart "Level → 60 projection — 40+" 40.0 band40
+  dumpEtaProjectionChart "Level → 60 projection — 20-39" 20.0 band20
 
 // --- Main ---
 printfn "IdleQuest tracker"
