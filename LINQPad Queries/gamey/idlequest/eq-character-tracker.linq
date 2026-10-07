@@ -6,7 +6,7 @@
 // Data: eq_characters.json, eq_events.json, item-cache.json (same folder as this script).
 // Tracks equipped gear + inventory bag (spare gear / quest / epic items).
 // Mode "share": bag items others can use (empty slots / higher AC / better weapon ratio).
-// Mode "eta60": days-to-60 from logged level timestamps + Util.Chart dumps.
+// Mode "eta60": days-to-60 from logged level timestamps + Util.Chart dumps (exits menu; charts need the prompt loop ended).
 // Item lookups use a local idlequest-content clone or GitHub raw shards.
 // Content-root preference: Util.Cache + password; GitHub cancel cooldown ~1 day.
 // UI: one DumpContainer (PromptUi) for current prompt/options + last result; Util.ReadLine suggestions (no WinForms).
@@ -2087,6 +2087,7 @@ let modeEta60 (chars: CharactersFile) (events: EventsFile) =
     |}
   let caveat =
     "Rates use logged level updates vs wall clock (not continuous XP). Gaps between hand-edits are baked into the rate."
+  // Tables stay in PromptUi; Chart.Dump uses Demand/UI that races with the ReadLine menu — caller exits the loop first.
   showResult
     "ETA to 60"
     {|
@@ -2123,7 +2124,7 @@ let menu = [
   "add", "Add character"
   "update", "Interactive update (gear/inventory/stats/level)"
   "share", "Bag gear others want (empty / AC / weapon ratio)"
-  "eta60", "Estimate days to 60 (charts)"
+  "eta60", "Estimate days to 60 (charts; ends menu)"
   "raceclass", "Race/class matrix"
   "baseline", "Append full baseline snapshot"
   "progress", "Progress history"
@@ -2142,7 +2143,9 @@ while running do
       | None -> ()
   | Some "update" -> modeUpdate chars events cache contentRoot
   | Some "share" -> modeBagShare chars cache contentRoot
-  | Some "eta60" -> modeEta60 chars events
+  | Some "eta60" ->
+      modeEta60 chars events
+      running <- false
   | Some "raceclass" -> modeRaceClass chars
   | Some "baseline" -> modeFullBaseline chars events
   | Some "progress" -> modeProgress chars events cache
