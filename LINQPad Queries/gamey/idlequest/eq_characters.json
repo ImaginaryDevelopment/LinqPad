@@ -65,7 +65,7 @@
       "race": "Iksar",
       "class": "Necromancer",
       "current": {
-        "level": 27,
+        "level": 28,
         "gear": {
           "ear1": null,
           "head": 25514,
@@ -91,7 +91,7 @@
         },
         "inventory": []
       },
-      "currentAt": "2026-10-07T00:56:52.0718248\u002B00:00"
+      "currentAt": "2026-10-07T11:12:10.8914143\u002B00:00"
     },
     {
       "id": "c68105da05e240e2a95e53a4471a29b7",
@@ -133,7 +133,7 @@
       "race": "Dwarf",
       "class": "Paladin",
       "current": {
-        "level": 45,
+        "level": 46,
         "gear": {
           "ear1": null,
           "head": 1630,
@@ -159,7 +159,7 @@
         },
         "inventory": []
       },
-      "currentAt": "2026-10-07T00:56:52.0723758\u002B00:00"
+      "currentAt": "2026-10-07T11:12:10.8931929\u002B00:00"
     },
     {
       "id": "d06a753533684e6aad2cc9d87b214e0a",
@@ -167,7 +167,7 @@
       "race": "Wood Elf",
       "class": "Druid",
       "current": {
-        "level": 47,
+        "level": 48,
         "gear": {
           "primary": null,
           "secondary": 9311,
@@ -200,7 +200,7 @@
           }
         ]
       },
-      "currentAt": "2026-10-07T00:56:52.0730112\u002B00:00"
+      "currentAt": "2026-10-07T11:12:10.8938482\u002B00:00"
     },
     {
       "id": "4065622099b84a099e45ca6f6b09101a",
@@ -276,7 +276,7 @@
       "race": "Wood Elf",
       "class": "Ranger",
       "current": {
-        "level": 28,
+        "level": 29,
         "gear": {
           "ear1": null,
           "head": 4504,
@@ -302,7 +302,7 @@
         },
         "inventory": []
       },
-      "currentAt": "2026-10-07T00:56:52.0747756\u002B00:00"
+      "currentAt": "2026-10-07T11:12:10.8943228\u002B00:00"
     },
     {
       "id": "5a293b8590c84aa2aa04ee0dd1ab1e7b",
@@ -310,7 +310,7 @@
       "race": "Ogre",
       "class": "Shadow Knight",
       "current": {
-        "level": 28,
+        "level": 29,
         "gear": {
           "ear1": null,
           "head": null,
@@ -336,7 +336,7 @@
         },
         "inventory": []
       },
-      "currentAt": "2026-10-07T00:56:52.0751509\u002B00:00"
+      "currentAt": "2026-10-07T11:12:10.8945134\u002B00:00"
     },
     {
       "id": "14cef2cfc1ed4c93808daf6f0e4d2e99",
@@ -344,7 +344,7 @@
       "race": "Gnome",
       "class": "Magician",
       "current": {
-        "level": 46,
+        "level": 47,
         "gear": {
           "ear1": null,
           "head": 25521,
@@ -370,7 +370,7 @@
         },
         "inventory": []
       },
-      "currentAt": "2026-10-07T00:56:52.0753361\u002B00:00"
+      "currentAt": "2026-10-07T11:12:10.8947004\u002B00:00"
     },
     {
       "id": "37a2786428804372b2a6cb5ec92dd4e7",
@@ -378,7 +378,7 @@
       "race": "Gnome",
       "class": "Enchanter",
       "current": {
-        "level": 43,
+        "level": 44,
         "gear": {
           "primary": null,
           "secondary": null,
@@ -411,7 +411,7 @@
           }
         ]
       },
-      "currentAt": "2026-10-07T00:56:52.0755051\u002B00:00"
+      "currentAt": "2026-10-07T11:12:10.8948228\u002B00:00"
     },
     {
       "id": "b9a3db1746374154b3e467679a41de9d",
@@ -453,7 +453,7 @@
       "race": "Dark Elf",
       "class": "Wizard",
       "current": {
-        "level": 48,
+        "level": 49,
         "gear": {
           "ear1": null,
           "head": 10143,
@@ -479,7 +479,7 @@
         },
         "inventory": []
       },
-      "currentAt": "2026-10-07T00:56:52.0758756\u002B00:00"
+      "currentAt": "2026-10-07T11:12:10.8949488\u002B00:00"
     },
     {
       "id": "5c81db737bea459191913d9c975b3bed",
@@ -521,7 +521,7 @@
       "race": "Halfling",
       "class": "Cleric",
       "current": {
-        "level": 46,
+        "level": 47,
         "gear": {
           "ear1": null,
           "head": null,
@@ -547,7 +547,7 @@
         },
         "inventory": []
       },
-      "currentAt": "2026-10-07T00:56:52.0764281\u002B00:00"
+      "currentAt": "2026-10-07T11:12:10.8951109\u002B00:00"
     },
     {
       "id": "ce0f39a6e6154cb6a36e47b7afa4e48a",
