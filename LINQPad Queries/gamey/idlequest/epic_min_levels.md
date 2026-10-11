@@ -2,10 +2,13 @@
 
 Classic / Kunark-era class epics (pre–2.0). Sheet for IdleQuest planning: when a toon can **equip**, when the **click/proc matters**, and when the **quest is realistic**.
 
+Index: [Gleam.md](Gleam.md) · Ground spawns (Book of Souls, fusible ore, enable list): [ground_spawns.md](ground_spawns.md)
+
 **Sources**
 - Item text / quest framing: [Project 1999 — Class Epic Quest List](https://wiki.project1999.com/Class_Epic_Quest_List) (+ class epic pages)
 - Item ids: local idlequest-content `data/items` (IdleQuest shortnames unchanged)
 - Hard zone floors (Fear / Hate / Sky / Growth): hunt **46+** unless MQ’d
+- Epic ground spawns / IdleQuest whitelist: [ground_spawns.md](ground_spawns.md)
 
 **IdleQuest note:** content `reqlevel` on these final weapons is **0** in brynnb/idlequest-content. Treat wiki **Required level of 46** rows as classic equip text — confirm on your server if IdleQuest enforces them. Stats still work when equipped; many **effects** still list an activation level.
 
