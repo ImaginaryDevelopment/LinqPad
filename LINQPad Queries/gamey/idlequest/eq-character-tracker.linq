@@ -9,6 +9,7 @@
 // Tracks equipped gear + inventory bag (spare gear / quest / epic items).
 // Mode "share": bag items others can use (empty slots / higher AC / better weapon ratio).
 // Mode "eta60": days-to-60 from logged level timestamps + Util.Chart dumps (exits menu; charts need the prompt loop ended).
+//   Optional XP-weight curve (level^2 per level-up): prompt linear / weighted / both (solid vs dashed).
 // Item lookups use a local idlequest-content clone or GitHub raw shards.
 // Content-root preference: Util.Cache + password; GitHub cancel cooldown ~1 day.
 // UI: one DumpContainer (PromptUi) for current prompt/options + last result; Util.ReadLine suggestions (no WinForms).
@@ -271,9 +272,24 @@ type Eta60Estimate = {
   LevelsPerDay: float
   EtaDays: float
   EtaAt: string
+  /// Weighted units/day from first→last using level^2 per level-up.
+  WeightedRate: float
+  EtaDaysWeighted: float
+  EtaAtWeighted: string
   SampleCount: int
   Window: string
   Timeline: (DateTimeOffset * int) list
+}
+
+type EtaCurveMode =
+  | LinearOnly
+  | WeightedOnly
+  | BothLinearAndWeighted
+
+type ChartSeriesSpec = {
+  Name: string
+  YAt: float -> float
+  Dash: ChartDashStyle
 }
 
 let inventoryTags = [| "gear"; "quest"; "epic"; "other" |]
@@ -1453,113 +1469,174 @@ let modeInventory (ch: Character) (events: EventsFile) (chars: CharactersFile) (
     | _ -> loop ()
   loop ()
 
-let modeUpdate (chars: CharactersFile) (events: EventsFile) (cache: ItemCacheFile) (contentRoot: string option ref) =
-  match pickCharacter chars with
+/// Prompt for a level; returns None on cancel, Some None when unchanged / skip, Some (Some lvl) when changed.
+let promptLevelChange (ch: Character) (title: string) : int option option =
+  let defaultText =
+    if not (isNullUnsafe ch.Current) && ch.Current.Level.HasValue then string ch.Current.Level.Value
+    else ""
+  match promptText title "Level" Array.empty defaultText with
+  | None -> None
+  | Some t when String.IsNullOrWhiteSpace t ->
+      // Blank with no prior level = skip; blank shouldn't happen when default is filled.
+      Some None
+  | Some t ->
+      match Int32.TryParse t with
+      | true, lvl when ch.Current.Level.HasValue && ch.Current.Level.Value = lvl ->
+          Some None
+      | true, lvl -> Some (Some lvl)
+      | _ ->
+          showResult title "Invalid number — skipped."
+          Some None
+
+let applyLevelChange (ch: Character) (events: EventsFile) (chars: CharactersFile) (lvl: int) =
+  let at = utcNow ()
+  let delta = emptyDeltaEvent at "script"
+  delta.Level <- nInt lvl
+  appendEvent events ch.Id delta
+  refreshCurrent ch events
+  persistAfterMutation chars events
+  showResult $"Update — {ch.Name}" $"level -> {lvl}"
+
+/// Walk every character under 60; Enter keeps current level (no write). Type cancel to abort the rest.
+let modeUpdateLevels (chars: CharactersFile) (events: EventsFile) =
+  if chars.Characters.Count = 0 then
+    showResult "Update levels" "No characters yet."
+  else
+    let mutable changed = 0
+    let mutable skipped = 0
+    let mutable skipped60 = 0
+    let mutable aborted = false
+    for ch in chars.Characters do
+      if not aborted then
+        if characterLevel ch >= 60 then
+          skipped60 <- skipped60 + 1
+        else
+          match promptLevelChange ch $"Level — {ch.Name} ({ch.Race} {ch.Class})" with
+          | None ->
+              aborted <- true
+              showResult "Update levels" $"Cancelled at {ch.Name}."
+          | Some None ->
+              skipped <- skipped + 1
+          | Some (Some lvl) ->
+              applyLevelChange ch events chars lvl
+              changed <- changed + 1
+    if not aborted then
+      showResult
+        "Update levels"
+        $"Done — {changed} updated, {skipped} unchanged, {skipped60} skipped (60)."
+
+let modeUpdateOne (ch: Character) (events: EventsFile) (chars: CharactersFile) (cache: ItemCacheFile) (contentRoot: string option ref) =
+  let kinds = [
+    "gear", "Change one gear slot"
+    "inventory", "Bag: spare gear / quest / epic items"
+    "level", "Set level"
+    "stats", "Set primary stats / AC / HP / Mana / ATK"
+    "resists", "Set resists"
+    "field", "Set one named field"
+  ]
+  match promptMenu $"Update — {ch.Name}" kinds with
   | None -> ()
-  | Some ch ->
-      let kinds = [
-        "gear", "Change one gear slot"
-        "inventory", "Bag: spare gear / quest / epic items"
-        "level", "Set level"
-        "stats", "Set primary stats / AC / HP / Mana / ATK"
-        "resists", "Set resists"
-        "field", "Set one named field"
-      ]
-      match promptMenu "Update type" kinds with
+  | Some "gear" -> promptOneGearSlot ch events chars cache contentRoot
+  | Some "inventory" -> modeInventory ch events chars cache contentRoot
+  | Some "level" ->
+      match promptLevelChange ch $"Level — {ch.Name}" with
+      | Some (Some lvl) -> applyLevelChange ch events chars lvl
+      | Some None -> showResult $"Update — {ch.Name}" "Level unchanged."
       | None -> ()
-      | Some "gear" -> promptOneGearSlot ch events chars cache contentRoot
-      | Some "inventory" -> modeInventory ch events chars cache contentRoot
-      | Some "level" ->
-          match promptText "Level" "New level" Array.empty (formatNullable ch.Current.Level) with
+  | Some "stats" ->
+      let fields = [| "hp"; "mana"; "ac"; "atk"; "str"; "sta"; "agi"; "dex"; "wis"; "int"; "cha" |]
+      match promptChoice "Which stat?" fields with
+      | Some field ->
+          match promptText field $"New {field}" Array.empty "" with
           | Some t ->
               match Int32.TryParse t with
-              | true, lvl ->
+              | true, v ->
                   let at = utcNow ()
                   let delta = emptyDeltaEvent at "script"
-                  delta.Level <- nInt lvl
+                  match field with
+                  | "hp" -> delta.Hp <- nInt v
+                  | "mana" -> delta.Mana <- nInt v
+                  | "ac" -> delta.Ac <- nInt v
+                  | "atk" -> delta.Atk <- nInt v
+                  | "str" -> delta.Str <- nInt v
+                  | "sta" -> delta.Sta <- nInt v
+                  | "agi" -> delta.Agi <- nInt v
+                  | "dex" -> delta.Dex <- nInt v
+                  | "wis" -> delta.Wis <- nInt v
+                  | "int" -> delta.Int <- nInt v
+                  | "cha" -> delta.Cha <- nInt v
+                  | _ -> ()
                   appendEvent events ch.Id delta
                   refreshCurrent ch events
                   persistAfterMutation chars events
-                  showResult $"Update — {ch.Name}" $"level -> {lvl}"
+                  showResult $"Update — {ch.Name}" $"{field} -> {v}"
               | _ -> showResult $"Update — {ch.Name}" "Invalid number."
           | None -> ()
-      | Some "stats" ->
-          let fields = [| "hp"; "mana"; "ac"; "atk"; "str"; "sta"; "agi"; "dex"; "wis"; "int"; "cha" |]
-          match promptChoice "Which stat?" fields with
-          | Some field ->
-              match promptText field $"New {field}" Array.empty "" with
-              | Some t ->
-                  match Int32.TryParse t with
-                  | true, v ->
-                      let at = utcNow ()
-                      let delta = emptyDeltaEvent at "script"
-                      match field with
-                      | "hp" -> delta.Hp <- nInt v
-                      | "mana" -> delta.Mana <- nInt v
-                      | "ac" -> delta.Ac <- nInt v
-                      | "atk" -> delta.Atk <- nInt v
-                      | "str" -> delta.Str <- nInt v
-                      | "sta" -> delta.Sta <- nInt v
-                      | "agi" -> delta.Agi <- nInt v
-                      | "dex" -> delta.Dex <- nInt v
-                      | "wis" -> delta.Wis <- nInt v
-                      | "int" -> delta.Int <- nInt v
-                      | "cha" -> delta.Cha <- nInt v
-                      | _ -> ()
-                      appendEvent events ch.Id delta
-                      refreshCurrent ch events
-                      persistAfterMutation chars events
-                      showResult $"Update — {ch.Name}" $"{field} -> {v}"
-                  | _ -> showResult $"Update — {ch.Name}" "Invalid number."
-              | None -> ()
+      | None -> ()
+  | Some "resists" ->
+      let fields = [| "mr"; "fr"; "cr"; "pr"; "dr" |]
+      match promptChoice "Which resist?" fields with
+      | Some field ->
+          match promptText field $"New {field}" Array.empty "" with
+          | Some t ->
+              match Int32.TryParse t with
+              | true, v ->
+                  let at = utcNow ()
+                  let delta = emptyDeltaEvent at "script"
+                  match field with
+                  | "mr" -> delta.Mr <- nInt v
+                  | "fr" -> delta.Fr <- nInt v
+                  | "cr" -> delta.Cr <- nInt v
+                  | "pr" -> delta.Pr <- nInt v
+                  | "dr" -> delta.Dr <- nInt v
+                  | _ -> ()
+                  appendEvent events ch.Id delta
+                  refreshCurrent ch events
+                  persistAfterMutation chars events
+                  showResult $"Update — {ch.Name}" $"{field} -> {v}"
+              | _ -> showResult $"Update — {ch.Name}" "Invalid number."
           | None -> ()
-      | Some "resists" ->
-          let fields = [| "mr"; "fr"; "cr"; "pr"; "dr" |]
-          match promptChoice "Which resist?" fields with
-          | Some field ->
-              match promptText field $"New {field}" Array.empty "" with
-              | Some t ->
-                  match Int32.TryParse t with
-                  | true, v ->
-                      let at = utcNow ()
-                      let delta = emptyDeltaEvent at "script"
-                      match field with
-                      | "mr" -> delta.Mr <- nInt v
-                      | "fr" -> delta.Fr <- nInt v
-                      | "cr" -> delta.Cr <- nInt v
-                      | "pr" -> delta.Pr <- nInt v
-                      | "dr" -> delta.Dr <- nInt v
-                      | _ -> ()
-                      appendEvent events ch.Id delta
-                      refreshCurrent ch events
-                      persistAfterMutation chars events
-                      showResult $"Update — {ch.Name}" $"{field} -> {v}"
-                  | _ -> showResult $"Update — {ch.Name}" "Invalid number."
-              | None -> ()
+      | None -> ()
+  | Some "field" ->
+      let fields = sheetFieldGetters |> List.map (fun (name, _, _) -> name) |> Array.ofList
+      match promptChoice "Field" fields with
+      | Some field ->
+          match promptText field $"New {field}" Array.empty "" with
+          | Some t ->
+              match Int32.TryParse t with
+              | true, v ->
+                  let at = utcNow ()
+                  let expected = cloneSheet ch.Current
+                  let actual = cloneSheet ch.Current
+                  match sheetFieldGetters |> List.tryFind (fun (n, _, _) -> n = field) with
+                  | Some (_, _, setter) -> setter actual (nInt v)
+                  | None -> ()
+                  let delta = buildDeltaFromDiff at "script" expected actual
+                  appendEvent events ch.Id delta
+                  refreshCurrent ch events
+                  persistAfterMutation chars events
+                  showResult $"Update — {ch.Name}" $"{field} -> {v}"
+              | _ -> showResult $"Update — {ch.Name}" "Invalid number."
           | None -> ()
-      | Some "field" ->
-          let fields = sheetFieldGetters |> List.map (fun (name, _, _) -> name) |> Array.ofList
-          match promptChoice "Field" fields with
-          | Some field ->
-              match promptText field $"New {field}" Array.empty "" with
-              | Some t ->
-                  match Int32.TryParse t with
-                  | true, v ->
-                      let at = utcNow ()
-                      let expected = cloneSheet ch.Current
-                      let actual = cloneSheet ch.Current
-                      match sheetFieldGetters |> List.tryFind (fun (n, _, _) -> n = field) with
-                      | Some (_, _, setter) -> setter actual (nInt v)
-                      | None -> ()
-                      let delta = buildDeltaFromDiff at "script" expected actual
-                      appendEvent events ch.Id delta
-                      refreshCurrent ch events
-                      persistAfterMutation chars events
-                      showResult $"Update — {ch.Name}" $"{field} -> {v}"
-                  | _ -> showResult $"Update — {ch.Name}" "Invalid number."
-              | None -> ()
-          | None -> ()
-      | _ -> ()
+      | None -> ()
+  | _ -> ()
+
+let modeUpdate (chars: CharactersFile) (events: EventsFile) (cache: ItemCacheFile) (contentRoot: string option ref) =
+  if chars.Characters.Count = 0 then
+    showResult "Update" "No characters yet."
+  else
+    let opts =
+      Array.append
+        [| "update levels (all characters)" |]
+        (chars.Characters |> Seq.map (fun c -> $"{c.Name} ({c.Race} {c.Class})") |> Array.ofSeq)
+    match promptChoice "Update — select" opts with
+    | None -> ()
+    | Some s when s.StartsWith("update levels", StringComparison.OrdinalIgnoreCase) ->
+        modeUpdateLevels chars events
+    | Some picked ->
+        match chars.Characters |> Seq.tryFind (fun c -> picked.StartsWith(c.Name)) with
+        | Some ch -> modeUpdateOne ch events chars cache contentRoot
+        | None -> showResult "Update" $"Not found: {picked}"
 
 let modeRaceClass (chars: CharactersFile) =
   let rows =
@@ -1973,7 +2050,39 @@ let medianFloat (xs: float array) =
     if n % 2 = 1 then a.[n / 2]
     else (a.[n / 2 - 1] + a.[n / 2]) / 2.0
 
-/// First→last wall-clock levels/day; ETA days to 60 when current < 60.
+/// Simple stand-in for XP-to-next at `level` → level+1 (not real EQ tables).
+let levelUpWeight (level: int) = float level * float level
+
+/// Sum of level-up weights for finishing levels [fromLevel, toLevelExclusive).
+let weightedLevelSpan (fromLevel: int) (toLevelExclusive: int) =
+  if toLevelExclusive <= fromLevel then 0.0
+  else
+    seq { fromLevel .. toLevelExclusive - 1 }
+    |> Seq.sumBy levelUpWeight
+
+/// Project level forward consuming weightedRate * days (fractional levels ok).
+let levelAfterWeightedDays (startLevel: int) (weightedRate: float) (day: float) =
+  if weightedRate <= 0.0 || day <= 0.0 then float startLevel
+  else
+    let mutable budget = weightedRate * day
+    let mutable intLvl = startLevel
+    let mutable lvl = float startLevel
+    while intLvl < 60 && budget > 1e-9 do
+      let w = levelUpWeight intLvl
+      if w <= 0.0 then
+        intLvl <- 60
+        lvl <- 60.0
+        budget <- 0.0
+      elif budget >= w then
+        budget <- budget - w
+        intLvl <- intLvl + 1
+        lvl <- float intLvl
+      else
+        lvl <- float intLvl + budget / w
+        budget <- 0.0
+    min 60.0 lvl
+
+/// First→last wall-clock levels/day + level^2-weighted ETA when current < 60.
 let estimateTo60 (ch: Character) (events: EventsFile) : Eta60Estimate option =
   let lvl = characterLevel ch
   match cohortBand lvl with
@@ -1986,13 +2095,17 @@ let estimateTo60 (ch: Character) (events: EventsFile) : Eta60Estimate option =
         let t1, l1 = timeline |> List.last
         let deltaLvl = l1 - l0
         let deltaDays = (t1 - t0).TotalDays
-        if deltaLvl <= 0 || deltaDays <= 0.0 then None
+        let wGain = weightedLevelSpan l0 l1
+        if deltaLvl <= 0 || deltaDays <= 0.0 || wGain <= 0.0 then None
         else
           let rate = float deltaLvl / deltaDays
           let remain = 60 - lvl
           let etaDays = float remain / rate
-          let etaAt = t1.AddDays(etaDays)
-          let etaAtTxt = etaAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+          let wRate = wGain / deltaDays
+          let wRemain = weightedLevelSpan lvl 60
+          let etaDaysW = wRemain / wRate
+          let etaAtTxt = t1.AddDays(etaDays).ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+          let etaAtWTxt = t1.AddDays(etaDaysW).ToLocalTime().ToString("yyyy-MM-dd HH:mm")
           let windowTxt =
             sprintf "%s L%d → %s L%d" (formatAt (t0.ToString("o"))) l0 (formatAt (t1.ToString("o"))) l1
           Some
@@ -2004,6 +2117,9 @@ let estimateTo60 (ch: Character) (events: EventsFile) : Eta60Estimate option =
               LevelsPerDay = rate
               EtaDays = etaDays
               EtaAt = etaAtTxt
+              WeightedRate = wRate
+              EtaDaysWeighted = etaDaysW
+              EtaAtWeighted = etaAtWTxt
               SampleCount = timeline.Length
               Window = windowTxt
               Timeline = timeline
@@ -2050,24 +2166,30 @@ let dumpDayLevelChart
   (xAxisTitle: string)
   (xDays: float[])
   (yMin: float)
-  (series: (string * (float -> float)) list)
+  (series: ChartSeriesSpec list)
   =
   if xDays.Length = 0 || series.IsEmpty then ()
   else
-    let (name0, y0) = series.Head
+    let s0 = series.Head
     let chart =
       xDays.Chart(
         Func<float, obj>(fun d -> box (Math.Round(d, 2))),
-        Func<float, obj>(fun d -> box (y0 d)),
+        Func<float, obj>(fun d -> box (s0.YAt d)),
         seriesType = Util.SeriesType.Line)
-    for name, yf in series.Tail do
+    for spec in series.Tail do
       chart.AddYSeries(
-        Func<float, obj>(fun d -> box (yf d)),
+        Func<float, obj>(fun d -> box (spec.YAt d)),
         seriesType = Util.SeriesType.Line,
-        name = name)
+        name = spec.Name)
       |> ignore
     let w = chart.ToWindowsChart()
-    if w.Series.Count > 0 then w.Series.[0].Name <- name0
+    series
+    |> List.iteri (fun i spec ->
+        if i < w.Series.Count then
+          w.Series.[i].Name <- spec.Name
+          w.Series.[i].BorderDashStyle <- spec.Dash
+          w.Series.[i].BorderWidth <- 2
+          w.Series.[i].YAxisType <- AxisType.Primary)
     let area = w.ChartAreas.[0]
     area.AxisX.Title <- xAxisTitle
     area.AxisX.Minimum <- 0.0
@@ -2080,8 +2202,6 @@ let dumpDayLevelChart
     area.AxisY.IsMarginVisible <- false
     // No secondary axis — WinChart often shows an empty right scale otherwise.
     area.AxisY2.Enabled <- AxisEnabled.False
-    for s in w.Series do
-      s.YAxisType <- AxisType.Primary
     w.Dump(title)
 
 /// Observed levels: X = full days since cohort t0, Y = linear smooth between samples.
@@ -2108,36 +2228,92 @@ let dumpLevelHistoryChart
     let xTitle = sprintf "Days since %s" (t0.ToLocalTime().ToString("yyyy-MM-dd HH:mm"))
     let series =
       timelines
-      |> List.map (fun (name, pts) -> name, fun d -> lerpLevelAtDay pts t0 d)
+      |> List.map (fun (name, pts) ->
+          {
+            Name = name
+            YAt = fun d -> lerpLevelAtDay pts t0 d
+            Dash = ChartDashStyle.Solid
+          })
     dumpDayLevelChart title xTitle (dayGrid maxDay) yMin series
 
-/// Forward-only projection: X=0 is now (last sample), line to (EtaDays, 60).
-/// yFloor = cohort band floor (40 or 20) so the Y axis doesn't waste space below recorded levels.
-let dumpEtaProjectionChart (title: string) (yFloor: float) (estimates: Eta60Estimate[]) =
+/// Forward projection: X=0 is now. Solid = constant levels/day; dashed = level^2 XP-weight.
+let dumpEtaProjectionChart
+  (title: string)
+  (yFloor: float)
+  (mode: EtaCurveMode)
+  (estimates: Eta60Estimate[])
+  =
   let estimates =
     estimates
-    |> Array.filter (fun e -> e.LevelsPerDay > 0.0 && e.EtaDays > 0.0 && e.Level < 60)
+    |> Array.filter (fun e ->
+        e.LevelsPerDay > 0.0 && e.EtaDays > 0.0 && e.WeightedRate > 0.0
+        && e.EtaDaysWeighted > 0.0 && e.Level < 60)
   if estimates.Length = 0 then ()
   else
-    let maxEta = estimates |> Array.map (fun e -> e.EtaDays) |> Array.max
-    let dataMin = estimates |> Array.map (fun e -> float e.Level) |> Array.min
-    let yMin = max yFloor (Math.Floor(dataMin / 5.0) * 5.0)
-    let xTitle = "Days from now (line hits 60 at ETA)"
-    let yProjected (e: Eta60Estimate) (day: float) =
-      min 60.0 (float e.Level + e.LevelsPerDay * day)
-    let series =
+    let maxEta =
       estimates
       |> Array.map (fun e ->
-          let label = sprintf "%s (60 @ %s)" e.Name e.EtaAt
-          label, fun d -> yProjected e d)
+          match mode with
+          | LinearOnly -> e.EtaDays
+          | WeightedOnly -> e.EtaDaysWeighted
+          | BothLinearAndWeighted -> max e.EtaDays e.EtaDaysWeighted)
+      |> Array.max
+    let dataMin = estimates |> Array.map (fun e -> float e.Level) |> Array.min
+    let yMin = max yFloor (Math.Floor(dataMin / 5.0) * 5.0)
+    let xTitle =
+      match mode with
+      | LinearOnly -> "Days from now (solid linear → 60)"
+      | WeightedOnly -> "Days from now (dashed XP-weight L^2 → 60)"
+      | BothLinearAndWeighted -> "Days from now (solid=linear, dashed=XP-weight L^2)"
+    let yLinear (e: Eta60Estimate) (day: float) =
+      min 60.0 (float e.Level + e.LevelsPerDay * day)
+    let yWeighted (e: Eta60Estimate) (day: float) =
+      levelAfterWeightedDays e.Level e.WeightedRate day
+    let series =
+      estimates
       |> Array.toList
+      |> List.collect (fun e ->
+          let linear =
+            {
+              Name = sprintf "%s linear (60 @ %s)" e.Name e.EtaAt
+              YAt = yLinear e
+              Dash = ChartDashStyle.Solid
+            }
+          let weighted =
+            {
+              Name = sprintf "%s XP-wt (60 @ %s)" e.Name e.EtaAtWeighted
+              YAt = yWeighted e
+              Dash = ChartDashStyle.Dash
+            }
+          match mode with
+          | LinearOnly -> [ linear ]
+          | WeightedOnly -> [ weighted ]
+          | BothLinearAndWeighted -> [ linear; weighted ])
     dumpDayLevelChart title xTitle (dayGrid maxEta) yMin series
 
+let promptEtaCurveMode () =
+  match
+    promptChoice
+      "ETA curve"
+      [|
+        "linear only (constant levels/day)"
+        "XP-weighted only (level^2 per level-up)"
+        "both on same chart (solid=linear, dashed=weighted)"
+      |]
+  with
+  | Some s when s.StartsWith("XP-weighted", StringComparison.OrdinalIgnoreCase) -> WeightedOnly
+  | Some s when s.StartsWith("both", StringComparison.OrdinalIgnoreCase) -> BothLinearAndWeighted
+  | _ -> LinearOnly
+
 let modeEta60 (chars: CharactersFile) (events: EventsFile) =
+  let curveMode = promptEtaCurveMode ()
   let estimates: Eta60Estimate[] =
     chars.Characters
     |> Seq.choose (fun ch -> estimateTo60 ch events)
-    |> Seq.sortBy (fun e -> e.Band, e.EtaDays, e.Name)
+    |> Seq.sortBy (fun e ->
+        e.Band,
+        (match curveMode with WeightedOnly -> e.EtaDaysWeighted | _ -> e.EtaDays),
+        e.Name)
     |> Seq.toArray
   let band40 = estimates |> Array.filter (fun e -> e.Band = "40+")
   let band20 = estimates |> Array.filter (fun e -> e.Band = "20-39")
@@ -2150,40 +2326,58 @@ let modeEta60 (chars: CharactersFile) (events: EventsFile) =
           Level = e.Level
           Band = e.Band
           LevelsPerDay = Math.Round(e.LevelsPerDay, 3)
-          EtaDays = Math.Round(e.EtaDays, 1)
-          EtaAt = e.EtaAt
+          EtaDaysLinear = Math.Round(e.EtaDays, 1)
+          EtaAtLinear = e.EtaAt
+          EtaDaysWeighted = Math.Round(e.EtaDaysWeighted, 1)
+          EtaAtWeighted = e.EtaAtWeighted
           Samples = e.SampleCount
           Window = e.Window
         |})
-  let cohortSummary (label: string) (rows: Eta60Estimate[]) =
-    let etas = rows |> Array.map (fun e -> e.EtaDays)
+  let cohortSummary (label: string) (useWeighted: bool) (rows: Eta60Estimate[]) =
+    let etas =
+      rows
+      |> Array.map (fun e -> if useWeighted then e.EtaDaysWeighted else e.EtaDays)
     let med = medianFloat etas
     let mx = if etas.Length = 0 then Double.NaN else Array.max etas
-    let maxRow = rows |> Array.sortByDescending (fun e -> e.EtaDays) |> Array.tryHead
+    let maxRow =
+      rows
+      |> Array.sortByDescending (fun e -> if useWeighted then e.EtaDaysWeighted else e.EtaDays)
+      |> Array.tryHead
     {|
       Cohort = label
+      Curve = if useWeighted then "XP-weighted L^2" else "linear"
       N = rows.Length
       MedianEtaDays = if Double.IsNaN med then None else Some (Math.Round(med, 1))
       MaxEtaDays = if Double.IsNaN mx then None else Some (Math.Round(mx, 1))
-      AllAt60When = maxRow |> Option.map (fun e -> e.EtaAt)
+      AllAt60When =
+        maxRow
+        |> Option.map (fun e -> if useWeighted then e.EtaAtWeighted else e.EtaAt)
       Slowest = maxRow |> Option.map (fun e -> e.Name)
     |}
+  let curveLabel =
+    match curveMode with
+    | LinearOnly -> "linear only"
+    | WeightedOnly -> "XP-weighted only (level^2)"
+    | BothLinearAndWeighted -> "both (solid=linear, dashed=weighted)"
   let caveat =
-    "Rates use logged level updates vs wall clock (not continuous XP). Gaps between hand-edits are baked into the rate."
+    "Rates use logged level updates vs wall clock (not continuous XP). Gaps between hand-edits are baked into the rate. XP-weight uses level^2 per level-up as a stand-in curve (not real EQ XP tables)."
   // Tables stay in PromptUi; Chart.Dump uses Demand/UI that races with the ReadLine menu — caller exits the loop first.
   showResult
     "ETA to 60"
     {|
       Caveat = caveat
-      Summary40Plus = cohortSummary "40+" band40
-      Summary20to39 = cohortSummary "20-39" band20
+      CurveMode = curveLabel
+      Summary40PlusLinear = cohortSummary "40+" false band40
+      Summary40PlusWeighted = cohortSummary "40+" true band40
+      Summary20to39Linear = cohortSummary "20-39" false band20
+      Summary20to39Weighted = cohortSummary "20-39" true band20
       Band40Plus = tableRows band40
       Band20to39 = tableRows band20
     |}
   dumpLevelHistoryChart "Level history — 40+" (band40 |> Array.map (fun e -> e.Name, e.Timeline) |> Array.toList)
   dumpLevelHistoryChart "Level history — 20-39" (band20 |> Array.map (fun e -> e.Name, e.Timeline) |> Array.toList)
-  dumpEtaProjectionChart "Level → 60 projection — 40+" 40.0 band40
-  dumpEtaProjectionChart "Level → 60 projection — 20-39" 20.0 band20
+  dumpEtaProjectionChart "Level → 60 projection — 40+" 40.0 curveMode band40
+  dumpEtaProjectionChart "Level → 60 projection — 20-39" 20.0 curveMode band20
 
 // --- Main ---
 printfn "IdleQuest tracker"

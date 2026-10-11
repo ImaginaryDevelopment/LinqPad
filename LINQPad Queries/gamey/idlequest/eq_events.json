@@ -147,6 +147,20 @@
           "source": "hand-edit",
           "level": 47,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-09T01:52:12.0490028\u002B00:00",
+          "source": "hand-edit",
+          "level": 49,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-10T22:34:28.4005819\u002B00:00",
+          "source": "script",
+          "level": 51,
+          "gear": {}
         }
       ]
     },
@@ -227,6 +241,13 @@
           "source": "hand-edit",
           "level": 30,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-09T01:52:12.0511441\u002B00:00",
+          "source": "hand-edit",
+          "level": 32,
+          "gear": {}
         }
       ]
     },
@@ -304,6 +325,20 @@
           "source": "hand-edit",
           "level": 49,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-09T01:52:12.0518903\u002B00:00",
+          "source": "hand-edit",
+          "level": 51,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-10T22:34:52.3408552\u002B00:00",
+          "source": "script",
+          "level": 52,
+          "gear": {}
         }
       ]
     },
@@ -380,6 +415,20 @@
           "at": "2026-10-08T11:17:00.5002335\u002B00:00",
           "source": "hand-edit",
           "level": 48,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-09T01:52:12.0521984\u002B00:00",
+          "source": "hand-edit",
+          "level": 49,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-10T22:35:06.5094937\u002B00:00",
+          "source": "script",
+          "level": 52,
           "gear": {}
         }
       ]
@@ -484,6 +533,28 @@
           "source": "hand-edit",
           "level": 49,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-08T22:25:05.9461403\u002B00:00",
+          "source": "script",
+          "gear": {
+            "ear1": 12801
+          }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-09T01:52:12.0524306\u002B00:00",
+          "source": "hand-edit",
+          "level": 50,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-10T22:35:14.6010786\u002B00:00",
+          "source": "script",
+          "level": 52,
+          "gear": {}
         }
       ]
     },
@@ -560,6 +631,13 @@
           "at": "2026-10-08T11:17:00.5013740\u002B00:00",
           "source": "hand-edit",
           "level": 49,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-10T22:35:21.9789546\u002B00:00",
+          "source": "script",
+          "level": 51,
           "gear": {}
         }
       ]
@@ -638,6 +716,13 @@
           "at": "2026-10-08T11:17:00.5015613\u002B00:00",
           "source": "hand-edit",
           "level": 45,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-10T22:35:28.5570470\u002B00:00",
+          "source": "script",
+          "level": 49,
           "gear": {}
         }
       ]
@@ -721,6 +806,13 @@
           "at": "2026-10-08T11:17:00.5017232\u002B00:00",
           "source": "hand-edit",
           "level": 31,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-10T22:35:41.1554793\u002B00:00",
+          "source": "script",
+          "level": 41,
           "gear": {}
         }
       ]
@@ -806,6 +898,13 @@
           "source": "hand-edit",
           "level": 31,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-10T22:35:45.4428231\u002B00:00",
+          "source": "script",
+          "level": 39,
+          "gear": {}
         }
       ]
     },
@@ -883,6 +982,13 @@
           "at": "2026-10-08T11:17:00.5020056\u002B00:00",
           "source": "hand-edit",
           "level": 49,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-10T22:36:00.1170334\u002B00:00",
+          "source": "script",
+          "level": 52,
           "gear": {}
         }
       ]
@@ -988,6 +1094,13 @@
           "source": "hand-edit",
           "level": 45,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-10T22:36:07.9222636\u002B00:00",
+          "source": "script",
+          "level": 51,
+          "gear": {}
         }
       ]
     },
@@ -1076,6 +1189,13 @@
           "at": "2026-10-08T11:17:00.5023543\u002B00:00",
           "source": "hand-edit",
           "level": 31,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-10T22:36:14.4555298\u002B00:00",
+          "source": "script",
+          "level": 40,
           "gear": {}
         }
       ]
@@ -1171,6 +1291,13 @@
           "source": "hand-edit",
           "level": 51,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-10T22:36:23.5376397\u002B00:00",
+          "source": "script",
+          "level": 53,
+          "gear": {}
         }
       ]
     },
@@ -1253,6 +1380,13 @@
           "source": "hand-edit",
           "level": 31,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-10T22:36:31.6288631\u002B00:00",
+          "source": "script",
+          "level": 41,
+          "gear": {}
         }
       ]
     },
@@ -1334,6 +1468,52 @@
           "at": "2026-10-08T11:17:00.5026882\u002B00:00",
           "source": "hand-edit",
           "level": 48,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-09T01:45:19.2873285\u002B00:00",
+          "source": "script",
+          "gear": {
+            "head": 25493
+          }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-09T01:45:39.4047528\u002B00:00",
+          "source": "script",
+          "gear": {
+            "primary": 10914
+          }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-09T01:46:38.2778372\u002B00:00",
+          "source": "script",
+          "gear": {
+            "shoulders": 3258
+          }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-09T01:47:26.3416712\u002B00:00",
+          "source": "script",
+          "gear": {
+            "hands": 11668
+          }
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-09T01:52:12.0531592\u002B00:00",
+          "source": "hand-edit",
+          "level": 50,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-10T22:36:37.7840856\u002B00:00",
+          "source": "script",
+          "level": 51,
           "gear": {}
         }
       ]
@@ -1482,6 +1662,20 @@
           "source": "hand-edit",
           "level": 30,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-09T01:52:12.0534326\u002B00:00",
+          "source": "hand-edit",
+          "level": 33,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-10T22:37:07.3275691\u002B00:00",
+          "source": "script",
+          "level": 34,
+          "gear": {}
         }
       ]
     },
@@ -1561,6 +1755,20 @@
           "source": "hand-edit",
           "level": 31,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-09T01:52:12.0536207\u002B00:00",
+          "source": "hand-edit",
+          "level": 36,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-10T22:37:17.3901844\u002B00:00",
+          "source": "script",
+          "level": 41,
+          "gear": {}
         }
       ]
     },
@@ -1629,6 +1837,216 @@
           "at": "2026-10-08T11:17:00.5035622\u002B00:00",
           "source": "hand-edit",
           "level": 30,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-09T01:52:12.0537970\u002B00:00",
+          "source": "hand-edit",
+          "level": 36,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-10T22:37:21.5098535\u002B00:00",
+          "source": "script",
+          "level": 40,
+          "gear": {}
+        }
+      ]
+    },
+    {
+      "characterId": "9a87927dc331442193ad43b613c8eb1c",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-08T22:25:31.3549786\u002B00:00",
+          "source": "script",
+          "level": 1,
+          "gear": {
+            "primary": null,
+            "secondary": null,
+            "chest": null,
+            "waist": null,
+            "legs": null,
+            "arms": null,
+            "hands": null,
+            "head": null,
+            "shoulders": null,
+            "face": null,
+            "feet": null,
+            "wrist1": null,
+            "wrist2": null,
+            "fingers1": null,
+            "fingers2": null,
+            "range": null,
+            "ear1": null,
+            "ear2": null,
+            "neck": null,
+            "back": null,
+            "ammo": null
+          },
+          "inventorySet": []
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-09T01:52:12.0541286\u002B00:00",
+          "source": "hand-edit",
+          "level": 14,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-10T22:37:27.4007439\u002B00:00",
+          "source": "script",
+          "level": 31,
+          "gear": {}
+        }
+      ]
+    },
+    {
+      "characterId": "a69aba5fbd414c6c9f79481d24fe70cd",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-08T22:25:52.6997464\u002B00:00",
+          "source": "script",
+          "level": 1,
+          "gear": {
+            "primary": null,
+            "secondary": null,
+            "chest": null,
+            "waist": null,
+            "legs": null,
+            "arms": null,
+            "hands": null,
+            "head": null,
+            "shoulders": null,
+            "face": null,
+            "feet": null,
+            "wrist1": null,
+            "wrist2": null,
+            "fingers1": null,
+            "fingers2": null,
+            "range": null,
+            "ear1": null,
+            "ear2": null,
+            "neck": null,
+            "back": null,
+            "ammo": null
+          },
+          "inventorySet": []
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-09T01:52:12.0543067\u002B00:00",
+          "source": "hand-edit",
+          "level": 15,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-10T22:37:34.8807582\u002B00:00",
+          "source": "script",
+          "level": 33,
+          "gear": {}
+        }
+      ]
+    },
+    {
+      "characterId": "420cf1da98064f7abce20962d99ad5f4",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-08T22:26:07.9216466\u002B00:00",
+          "source": "script",
+          "level": 1,
+          "gear": {
+            "primary": null,
+            "secondary": null,
+            "chest": null,
+            "waist": null,
+            "legs": null,
+            "arms": null,
+            "hands": null,
+            "head": null,
+            "shoulders": null,
+            "face": null,
+            "feet": null,
+            "wrist1": null,
+            "wrist2": null,
+            "fingers1": null,
+            "fingers2": null,
+            "range": null,
+            "ear1": null,
+            "ear2": null,
+            "neck": null,
+            "back": null,
+            "ammo": null
+          },
+          "inventorySet": []
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-09T01:52:12.0544611\u002B00:00",
+          "source": "hand-edit",
+          "level": 14,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-10T22:37:46.3538573\u002B00:00",
+          "source": "script",
+          "level": 31,
+          "gear": {}
+        }
+      ]
+    },
+    {
+      "characterId": "18610b70a7354466bc0d223cc88b0260",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-08T22:26:27.0186612\u002B00:00",
+          "source": "script",
+          "level": 1,
+          "gear": {
+            "primary": null,
+            "secondary": null,
+            "chest": null,
+            "waist": null,
+            "legs": null,
+            "arms": null,
+            "hands": null,
+            "head": null,
+            "shoulders": null,
+            "face": null,
+            "feet": null,
+            "wrist1": null,
+            "wrist2": null,
+            "fingers1": null,
+            "fingers2": null,
+            "range": null,
+            "ear1": null,
+            "ear2": null,
+            "neck": null,
+            "back": null,
+            "ammo": null
+          },
+          "inventorySet": []
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-09T01:52:12.0546467\u002B00:00",
+          "source": "hand-edit",
+          "level": 15,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-10T22:37:49.6933885\u002B00:00",
+          "source": "script",
+          "level": 33,
           "gear": {}
         }
       ]
