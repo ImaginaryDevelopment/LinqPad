@@ -124,7 +124,7 @@ let classBits =
     "Warrior", 1; "Cleric", 2; "Paladin", 4; "Ranger", 8; "Shadow Knight", 16
     "Druid", 32; "Monk", 64; "Bard", 128; "Rogue", 256; "Shaman", 512
     "Necromancer", 1024; "Wizard", 2048; "Magician", 4096; "Enchanter", 8192
-    "Beastlord", 16384; "Berserker", 32768
+    // "Beastlord", 16384; "Berserker", 32768
   ]
 
 let raceNames = raceBits.Keys |> Seq.sort |> Array.ofSeq
@@ -1508,7 +1508,7 @@ let modeUpdateLevels (chars: CharactersFile) (events: EventsFile) =
     let mutable aborted = false
     for ch in chars.Characters do
       if not aborted then
-        if characterLevel ch >= 60 then
+        if ch.Current.Level.GetValueOrDefault() >= 60 then
           skipped60 <- skipped60 + 1
         else
           match promptLevelChange ch $"Level — {ch.Name} ({ch.Race} {ch.Class})" with
@@ -1641,10 +1641,10 @@ let modeUpdate (chars: CharactersFile) (events: EventsFile) (cache: ItemCacheFil
 let modeRaceClass (chars: CharactersFile) =
   let rows =
     chars.Characters
-    |> Seq.groupBy (fun c -> c.Race, c.Class)
+    |> Seq.groupBy (fun c -> c.Class)
     |> Seq.sortBy fst
-    |> Seq.map (fun ((race, cls), group) ->
-        {| Race = race; Class = cls; Count = Seq.length group; Names = group |> Seq.map (fun c -> c.Name) |> Array.ofSeq |})
+    |> Seq.map (fun ((cls), group) ->
+        {| Class = cls; Count = Seq.length group; Names = group |> Seq.map (fun c -> c.Name + ":" + c.Race) |> Array.ofSeq |})
     |> Seq.toArray
   showResult $"Race/class matrix ({rows.Length} groups)" rows
 
