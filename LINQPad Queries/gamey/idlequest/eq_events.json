@@ -175,6 +175,13 @@
           "source": "script",
           "level": 54,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:35:32.0699333\u002B00:00",
+          "source": "script",
+          "level": 56,
+          "gear": {}
         }
       ]
     },
@@ -275,6 +282,13 @@
           "at": "2026-10-13T12:07:39.4827729\u002B00:00",
           "source": "script",
           "level": 39,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:35:48.4743177\u002B00:00",
+          "source": "script",
+          "level": 45,
           "gear": {}
         }
       ]
@@ -381,6 +395,13 @@
           "source": "script",
           "level": 55,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:35:58.8048988\u002B00:00",
+          "source": "script",
+          "level": 57,
+          "gear": {}
         }
       ]
     },
@@ -485,6 +506,13 @@
           "at": "2026-10-13T12:08:28.7813279\u002B00:00",
           "source": "script",
           "level": 56,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:36:04.8046882\u002B00:00",
+          "source": "script",
+          "level": 58,
           "gear": {}
         }
       ]
@@ -625,6 +653,13 @@
           "source": "script",
           "level": 55,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:36:15.5457528\u002B00:00",
+          "source": "script",
+          "level": 57,
+          "gear": {}
         }
       ]
     },
@@ -722,6 +757,13 @@
           "at": "2026-10-13T12:08:44.8923750\u002B00:00",
           "source": "script",
           "level": 55,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:36:23.2903255\u002B00:00",
+          "source": "script",
+          "level": 57,
           "gear": {}
         }
       ]
@@ -821,6 +863,13 @@
           "at": "2026-10-13T12:08:52.5747310\u002B00:00",
           "source": "script",
           "level": 54,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:36:29.7212584\u002B00:00",
+          "source": "script",
+          "level": 56,
           "gear": {}
         }
       ]
@@ -925,6 +974,13 @@
           "at": "2026-10-13T12:08:58.6046938\u002B00:00",
           "source": "script",
           "level": 48,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:36:37.2882380\u002B00:00",
+          "source": "script",
+          "level": 52,
           "gear": {}
         }
       ]
@@ -1031,6 +1087,13 @@
           "source": "script",
           "level": 46,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:36:46.7881932\u002B00:00",
+          "source": "script",
+          "level": 52,
+          "gear": {}
         }
       ]
     },
@@ -1129,6 +1192,13 @@
           "at": "2026-10-13T12:09:17.9944366\u002B00:00",
           "source": "script",
           "level": 56,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:36:55.7895665\u002B00:00",
+          "source": "script",
+          "level": 58,
           "gear": {}
         }
       ]
@@ -1255,6 +1325,13 @@
           "source": "script",
           "level": 56,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:37:08.2650061\u002B00:00",
+          "source": "script",
+          "level": 58,
+          "gear": {}
         }
       ]
     },
@@ -1357,6 +1434,13 @@
           "at": "2026-10-12T05:28:21.5514315\u002B00:00",
           "source": "script",
           "level": 45,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:37:17.6020480\u002B00:00",
+          "source": "script",
+          "level": 48,
           "gear": {}
         }
       ]
@@ -1473,6 +1557,13 @@
           "source": "script",
           "level": 57,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:37:24.5512779\u002B00:00",
+          "source": "script",
+          "level": 59,
+          "gear": {}
         }
       ]
     },
@@ -1575,6 +1666,13 @@
           "at": "2026-10-13T12:09:51.1745498\u002B00:00",
           "source": "script",
           "level": 49,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:37:34.7470678\u002B00:00",
+          "source": "script",
+          "level": 53,
           "gear": {}
         }
       ]
@@ -1717,6 +1815,13 @@
           "at": "2026-10-13T12:10:00.6000144\u002B00:00",
           "source": "script",
           "level": 55,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:37:40.4569188\u002B00:00",
+          "source": "script",
+          "level": 57,
           "gear": {}
         }
       ]
@@ -1893,6 +1998,13 @@
           "source": "script",
           "level": 45,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:37:52.5809136\u002B00:00",
+          "source": "script",
+          "level": 52,
+          "gear": {}
         }
       ]
     },
@@ -2000,6 +2112,13 @@
           "source": "script",
           "level": 50,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:38:02.6909704\u002B00:00",
+          "source": "script",
+          "level": 54,
+          "gear": {}
         }
       ]
     },
@@ -2097,6 +2216,13 @@
           "source": "script",
           "level": 48,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:38:08.2120682\u002B00:00",
+          "source": "script",
+          "level": 53,
+          "gear": {}
         }
       ]
     },
@@ -2159,6 +2285,13 @@
           "at": "2026-10-13T12:10:35.4348132\u002B00:00",
           "source": "script",
           "level": 37,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:38:18.8597659\u002B00:00",
+          "source": "script",
+          "level": 42,
           "gear": {}
         }
       ]
@@ -2223,6 +2356,13 @@
           "source": "script",
           "level": 40,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:38:27.9484906\u002B00:00",
+          "source": "script",
+          "level": 45,
+          "gear": {}
         }
       ]
     },
@@ -2285,6 +2425,13 @@
           "at": "2026-10-13T12:10:57.0954488\u002B00:00",
           "source": "script",
           "level": 40,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:38:45.5217440\u002B00:00",
+          "source": "script",
+          "level": 45,
           "gear": {}
         }
       ]
@@ -2349,6 +2496,13 @@
           "source": "script",
           "level": 42,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:38:52.9417297\u002B00:00",
+          "source": "script",
+          "level": 50,
+          "gear": {}
         }
       ]
     },
@@ -2390,6 +2544,13 @@
           "at": "2026-10-13T12:11:11.5360865\u002B00:00",
           "source": "script",
           "level": 5,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:38:59.0979964\u002B00:00",
+          "source": "script",
+          "level": 37,
           "gear": {}
         }
       ]
@@ -2433,6 +2594,13 @@
           "source": "script",
           "level": 5,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:39:07.4780355\u002B00:00",
+          "source": "script",
+          "level": 37,
+          "gear": {}
         }
       ]
     },
@@ -2474,6 +2642,13 @@
           "at": "2026-10-13T12:11:21.1074824\u002B00:00",
           "source": "script",
           "level": 5,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:39:15.3656258\u002B00:00",
+          "source": "script",
+          "level": 37,
           "gear": {}
         }
       ]
@@ -2517,6 +2692,13 @@
           "source": "script",
           "level": 5,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:39:23.7932988\u002B00:00",
+          "source": "script",
+          "level": 37,
+          "gear": {}
         }
       ]
     },
@@ -2559,6 +2741,13 @@
           "source": "script",
           "level": 5,
           "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:39:28.9612244\u002B00:00",
+          "source": "script",
+          "level": 37,
+          "gear": {}
         }
       ]
     },
@@ -2600,6 +2789,181 @@
           "at": "2026-10-13T12:11:42.2859139\u002B00:00",
           "source": "script",
           "level": 5,
+          "gear": {}
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:39:39.2121366\u002B00:00",
+          "source": "script",
+          "level": 36,
+          "gear": {}
+        }
+      ]
+    },
+    {
+      "characterId": "1c38ecfdd3ed4da191b84ab131232720",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-17T19:28:45.0649324\u002B00:00",
+          "source": "script",
+          "level": 1,
+          "gear": {
+            "primary": null,
+            "secondary": null,
+            "chest": null,
+            "waist": null,
+            "legs": null,
+            "arms": null,
+            "hands": null,
+            "head": null,
+            "shoulders": null,
+            "face": null,
+            "feet": null,
+            "wrist1": null,
+            "wrist2": null,
+            "fingers1": null,
+            "fingers2": null,
+            "range": null,
+            "ear1": null,
+            "ear2": null,
+            "neck": null,
+            "back": null,
+            "ammo": null
+          },
+          "inventorySet": []
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:39:49.9317674\u002B00:00",
+          "source": "script",
+          "level": 14,
+          "gear": {}
+        }
+      ]
+    },
+    {
+      "characterId": "273592ea5b3e4bd4988bcb69873018ba",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-17T19:29:23.9750626\u002B00:00",
+          "source": "script",
+          "level": 1,
+          "gear": {
+            "primary": null,
+            "secondary": null,
+            "chest": null,
+            "waist": null,
+            "legs": null,
+            "arms": null,
+            "hands": null,
+            "head": null,
+            "shoulders": null,
+            "face": null,
+            "feet": null,
+            "wrist1": null,
+            "wrist2": null,
+            "fingers1": null,
+            "fingers2": null,
+            "range": null,
+            "ear1": null,
+            "ear2": null,
+            "neck": null,
+            "back": null,
+            "ammo": null
+          },
+          "inventorySet": []
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:39:53.8828834\u002B00:00",
+          "source": "script",
+          "level": 14,
+          "gear": {}
+        }
+      ]
+    },
+    {
+      "characterId": "efa4dcc6a0f84689a4a1c7616851fee2",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-17T19:29:54.9723913\u002B00:00",
+          "source": "script",
+          "level": 1,
+          "gear": {
+            "primary": null,
+            "secondary": null,
+            "chest": null,
+            "waist": null,
+            "legs": null,
+            "arms": null,
+            "hands": null,
+            "head": null,
+            "shoulders": null,
+            "face": null,
+            "feet": null,
+            "wrist1": null,
+            "wrist2": null,
+            "fingers1": null,
+            "fingers2": null,
+            "range": null,
+            "ear1": null,
+            "ear2": null,
+            "neck": null,
+            "back": null,
+            "ammo": null
+          },
+          "inventorySet": []
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:39:58.1400590\u002B00:00",
+          "source": "script",
+          "level": 14,
+          "gear": {}
+        }
+      ]
+    },
+    {
+      "characterId": "7f8b567b25a6494a8df3a81ebcfdcb58",
+      "events": [
+        {
+          "kind": "full",
+          "at": "2026-10-17T19:31:10.6408621\u002B00:00",
+          "source": "script",
+          "level": 1,
+          "gear": {
+            "primary": null,
+            "secondary": null,
+            "chest": null,
+            "waist": null,
+            "legs": null,
+            "arms": null,
+            "hands": null,
+            "head": null,
+            "shoulders": null,
+            "face": null,
+            "feet": null,
+            "wrist1": null,
+            "wrist2": null,
+            "fingers1": null,
+            "fingers2": null,
+            "range": null,
+            "ear1": null,
+            "ear2": null,
+            "neck": null,
+            "back": null,
+            "ammo": null
+          },
+          "inventorySet": []
+        },
+        {
+          "kind": "delta",
+          "at": "2026-10-17T19:40:01.7730861\u002B00:00",
+          "source": "script",
+          "level": 14,
           "gear": {}
         }
       ]
