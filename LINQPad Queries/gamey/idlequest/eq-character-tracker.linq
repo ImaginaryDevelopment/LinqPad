@@ -1639,12 +1639,17 @@ let modeUpdate (chars: CharactersFile) (events: EventsFile) (cache: ItemCacheFil
         | None -> showResult "Update" $"Not found: {picked}"
 
 let modeRaceClass (chars: CharactersFile) =
+  let nameCell (c: Character) =
+    let lvl =
+      if not (isNullUnsafe c.Current) && c.Current.Level.HasValue then string c.Current.Level.Value
+      else "?"
+    $"{c.Name}({lvl}):{c.Race}"
   let rows =
     chars.Characters
     |> Seq.groupBy (fun c -> c.Class)
     |> Seq.sortBy fst
     |> Seq.map (fun ((cls), group) ->
-        {| Class = cls; Count = Seq.length group; Names = group |> Seq.map (fun c -> c.Name + ":" + c.Race) |> Array.ofSeq |})
+        {| Class = cls; Count = Seq.length group; Names = group |> Seq.map nameCell |> Array.ofSeq |})
     |> Seq.toArray
   showResult $"Race/class matrix ({rows.Length} groups)" rows
 
