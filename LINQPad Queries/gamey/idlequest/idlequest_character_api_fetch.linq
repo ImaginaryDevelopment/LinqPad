@@ -15,9 +15,12 @@
 // baseline if no events yet). Inventory is preserved (API has no bag). Source = "idlequest-api".
 // After save/sync, prompts to compare stats vs another character already saved under
 // characters/ (one file per name; independent of eq_characters.json).
+// Gear diffs include a "source" row under each "item" (item-cache zoneIds, else local
+// brynn idlequest-content drop→zone; prefers idlequestContentRoot / D:\projects\idlequest-content).
 
 open System
 open System.Collections.Generic
+open System.Data
 open System.IO
 open System.Net.Http
 open System.Text.Json
@@ -37,6 +40,7 @@ module Paths =
   let charactersDir = Path.Combine(dataDir, "characters")
   let charactersPath = Path.Combine(dataDir, "eq_characters.json")
   let eventsPath = Path.Combine(dataDir, "eq_events.json")
+  let itemCachePath = Path.Combine(dataDir, "item-cache.json")
 
 /// IdleQuest public API allows at most one request every 5 seconds.
 let apiMinInterval = TimeSpan.FromSeconds 5.0
@@ -113,7 +117,7 @@ let slotNames =
     "range"; "ear1"; "ear2"; "neck"; "back"; "ammo"
   |]
 
-/// EQ client inventory slot index → tracker gear key (charm=0 skipped).
+/// EQ client inventory slot index → tracker gear key (charm=0 skipped for tracker sync).
 let eqSlotToName =
   dict [
     1, "ear1"; 2, "head"; 3, "face"; 4, "ear2"; 5, "neck"; 6, "shoulders"
@@ -121,6 +125,28 @@ let eqSlotToName =
     13, "primary"; 14, "secondary"; 15, "fingers1"; 16, "fingers2"; 17, "chest"
     18, "legs"; 19, "feet"; 20, "waist"; 21, "ammo"
   ]
+
+/// Slot order for gear compare (includes charm).
+let eqSlotDisplayOrder =
+  [|
+    0, "charm"; 1, "ear1"; 2, "head"; 3, "face"; 4, "ear2"; 5, "neck"
+    6, "shoulders"; 7, "arms"; 8, "back"; 9, "wrist1"; 10, "wrist2"
+    11, "range"; 12, "hands"; 13, "primary"; 14, "secondary"
+    15, "fingers1"; 16, "fingers2"; 17, "chest"; 18, "legs"; 19, "feet"
+    20, "waist"; 21, "ammo"
+  |]
+
+/// Item fields compared slot-by-slot (API JSON names).
+let itemStatKeys =
+  [|
+    "ac"; "hp"; "mana"; "endurance"
+    "str"; "sta"; "dex"; "agi"; "int"; "wis"; "cha"
+    "mr"; "fr"; "cr"; "dr"; "pr"; "corruptionResist"
+    "attack"; "haste"; "hpRegen"; "manaRegen"; "enduranceRegen"
+    "damage"; "delay"; "range"
+    "skillModType"; "skillModValue"
+    "wornSpellId"; "focusSpellId"; "clickSpellId"; "procSpellId"
+  |]
 
 let raceIdToName =
   dict [
@@ -221,12 +247,17 @@ type EventsFile = {
 type ApiItem = {
   id: int
   name: string
+  /// Ordered numeric fields from the API item payload (for gear compare).
+  stats: (string * int)[]
 }
 
 type ApiEquip = {
   slot: int
   item: ApiItem
 }
+
+let emptyApiItem () : ApiItem =
+  { id = 0; name = ""; stats = Array.empty }
 
 type ApiStats = {
   maxHp: int
@@ -322,6 +353,17 @@ let parseApiStats (el: JsonElement) : ApiStats =
       pr = jsonInt el "pr" 0
     }
 
+let parseApiItem (item: JsonElement) : ApiItem =
+  if item.ValueKind <> JsonValueKind.Object then emptyApiItem ()
+  else
+    {
+      id = jsonInt item "id" 0
+      name = jsonString item "name" ""
+      stats =
+        itemStatKeys
+        |> Array.map (fun k -> k, jsonInt item k 0)
+    }
+
 let parseApiEquipment (root: JsonElement) : ApiEquip[] =
   match root.TryGetProperty("equipment") with
   | false, _ -> Array.empty
@@ -338,11 +380,7 @@ let parseApiEquipment (root: JsonElement) : ApiEquip[] =
                 Some
                   {
                     slot = jsonInt eq "slot" -1
-                    item =
-                      {
-                        id = jsonInt item "id" 0
-                        name = jsonString item "name" ""
-                      }
+                    item = parseApiItem item
                   })
       |> Seq.toArray
 
@@ -773,14 +811,6 @@ let saveEnvelope (characterName: string) (envelope: obj) =
   File.WriteAllText(path, json)
   path
 
-[<CLIMutable>]
-type SavedEnvelope = {
-  mutable CharacterName: string
-  mutable PulledAt: string
-  mutable RequestUrl: string
-  mutable Response: JsonElement
-}
-
 type SnapshotRef = {
   CharacterName: string
   PulledAt: string
@@ -788,24 +818,49 @@ type SnapshotRef = {
   Api: ApiCharacter
 }
 
+let tryGetPropCI (obj: JsonElement) (name: string) =
+  match obj.TryGetProperty(name) with
+  | true, p -> Some p
+  | false, _ ->
+      obj.EnumerateObject()
+      |> Seq.tryFind (fun p -> String.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
+      |> Option.map (fun p -> p.Value)
+
 let tryLoadSnapshot (path: string) : SnapshotRef option =
   try
-    let text = File.ReadAllText path
-    let env = JsonSerializer.Deserialize<SavedEnvelope>(text, jsonOpts)
-    if isNullUnsafe env || env.Response.ValueKind <> JsonValueKind.Object then None
+    use doc = JsonDocument.Parse(File.ReadAllText path)
+    let root = doc.RootElement
+    if root.ValueKind <> JsonValueKind.Object then None
     else
-      let api = parseApiCharacter env.Response
-      let name =
-        if isValueString env.CharacterName then env.CharacterName.Trim()
-        elif isValueString api.name then api.name.Trim()
-        else Path.GetFileNameWithoutExtension path
-      Some
-        {
-          CharacterName = name
-          PulledAt = if isNullUnsafe env.PulledAt then "" else env.PulledAt
-          Path = path
-          Api = api
-        }
+      match tryGetPropCI root "response" with
+      | None -> None
+      | Some resp when resp.ValueKind <> JsonValueKind.Object -> None
+      | Some resp ->
+          let response = resp.Clone()
+          let api = parseApiCharacter response
+          let envName =
+            match tryGetPropCI root "characterName" with
+            | Some p when p.ValueKind = JsonValueKind.String ->
+                let s = p.GetString()
+                if isValueString s then s.Trim() else ""
+            | _ -> ""
+          let pulledAt =
+            match tryGetPropCI root "pulledAt" with
+            | Some p when p.ValueKind = JsonValueKind.String ->
+                let s = p.GetString()
+                if isNullUnsafe s then "" else s
+            | _ -> ""
+          let name =
+            if isValueString envName then envName
+            elif isValueString api.name then api.name.Trim()
+            else Path.GetFileNameWithoutExtension path
+          Some
+            {
+              CharacterName = name
+              PulledAt = pulledAt
+              Path = path
+              Api = api
+            }
   with _ -> None
 
 /// One snapshot per character under characters/ (prefer newest write if duplicates remain).
@@ -844,38 +899,355 @@ let statsPairs (api: ApiCharacter) =
       "pr", st.pr
     |]
 
+let compareColumnNames (leftName: string) (rightName: string) =
+  let leftCol = if isValueString leftName then leftName.Trim() else "Fetched"
+  let rightCol = if isValueString rightName then rightName.Trim() else "Other"
+  let rightColUnique =
+    if String.Equals(leftCol, rightCol, StringComparison.OrdinalIgnoreCase) then
+      rightCol + " (other)"
+    else rightCol
+  leftCol, rightColUnique
+
+let equipmentBySlot (api: ApiCharacter) =
+  let map = Dictionary<int, ApiItem>()
+  if not (isNullUnsafe api.equipment) then
+    for eq in api.equipment do
+      if eq.slot >= 0 && not (isNullUnsafe eq.item) && eq.item.id <> 0 then
+        map.[eq.slot] <- eq.item
+  map
+
+let itemStatValue (item: ApiItem) (stat: string) =
+  if isNullUnsafe item || isNullUnsafe item.stats then 0
+  else
+    match item.stats |> Array.tryFind (fun (k, _) -> k = stat) with
+    | Some (_, v) -> v
+    | None -> 0
+
+let slotItemId (map: Dictionary<int, ApiItem>) (slot: int) =
+  let mutable item = emptyApiItem ()
+  if map.TryGetValue(slot, &item) then item.id else 0
+
+/// Paired wear slots that can be swapped without gameplay meaning (ears / wrists / rings).
+let pairedCompareSlots =
+  [|
+    (1, 4)   // ear1, ear2
+    (9, 10)  // wrist1, wrist2
+    (15, 16) // fingers1, fingers2
+  |]
+
+/// Remap the right-hand equipment so paired slots line up with left by item id when a
+/// swap improves matches (same pieces worn on opposite ears/wrists/rings).
+let alignPairedSlots
+  (left: Dictionary<int, ApiItem>)
+  (right: Dictionary<int, ApiItem>)
+  =
+  let aligned = Dictionary<int, ApiItem>(right)
+  for s1, s2 in pairedCompareSlots do
+    let l1 = slotItemId left s1
+    let l2 = slotItemId left s2
+    let r1 = slotItemId right s1
+    let r2 = slotItemId right s2
+    let straight = (if l1 = r1 then 1 else 0) + (if l2 = r2 then 1 else 0)
+    let swapped = (if l1 = r2 then 1 else 0) + (if l2 = r1 then 1 else 0)
+    if swapped > straight then
+      let mutable a = emptyApiItem ()
+      let mutable b = emptyApiItem ()
+      let hasA = right.TryGetValue(s1, &a)
+      let hasB = right.TryGetValue(s2, &b)
+      ignore (aligned.Remove s1)
+      ignore (aligned.Remove s2)
+      if hasB then aligned.[s1] <- b
+      if hasA then aligned.[s2] <- a
+  aligned
+
+// --- Item source (item-cache ZoneIds, else local brynn idlequest-content drop→zone) ---
+
+let defaultContentRoot = @"D:\projects\idlequest-content"
+let contentShards =
+  [| '0'..'9' |] |> Array.map string |> Array.append ([| 'a'..'f' |] |> Array.map string)
+
+[<CLIMutable>]
+type CachedItemZones = {
+  mutable Id: int
+  mutable ZoneIds: int[]
+}
+
+[<CLIMutable>]
+type ItemCacheZonesFile = {
+  mutable Items: Dictionary<string, CachedItemZones>
+}
+
+let itemCacheReadOpts =
+  let o = JsonSerializerOptions(PropertyNameCaseInsensitive = true)
+  o
+
+let tryContentRootQuiet () =
+  let candidates =
+    [
+      try
+        let pw = Util.GetPassword("idlequestContentRoot")
+        if isNullUnsafe pw then "" else pw.Trim()
+      with _ -> ""
+      defaultContentRoot
+    ]
+  candidates
+  |> List.tryFind (fun root ->
+      isValueString root
+      && Directory.Exists(Path.Combine(root, "data", "zone"))
+      && Directory.Exists(Path.Combine(root, "data", "lootdrop_entries")))
+
+let loadItemCacheZoneIds () =
+  let map = Dictionary<int, int[]>()
+  try
+    if File.Exists Paths.itemCachePath then
+      let text = File.ReadAllText Paths.itemCachePath
+      let parsed = JsonSerializer.Deserialize<ItemCacheZonesFile>(text, itemCacheReadOpts)
+      if not (isNullUnsafe parsed) && not (isNullUnsafe parsed.Items) then
+        for KeyValue(key, item) in parsed.Items do
+          let id =
+            if not (isNullUnsafe item) && item.Id <> 0 then item.Id
+            else
+              match Int32.TryParse key with
+              | true, n -> n
+              | _ -> 0
+          if id > 0 && not (isNullUnsafe item) && not (isNullUnsafe item.ZoneIds) && item.ZoneIds.Length > 0 then
+            map.[id] <- item.ZoneIds
+  with ex ->
+    printfn "WARN: could not read item-cache.json for sources: %s" ex.Message
+  map
+
+let jsonStrEl (el: JsonElement) (name: string) =
+  match el.TryGetProperty(name) with
+  | true, p when p.ValueKind = JsonValueKind.String ->
+      let s = p.GetString()
+      if isNullUnsafe s then "" else s
+  | _ -> ""
+
+let forEachContentRow (contentRoot: string) (table: string) (action: JsonElement -> unit) =
+  for shard in contentShards do
+    let path = Path.Combine(contentRoot, "data", table, shard + ".ndjson")
+    if File.Exists path then
+      try
+        for line in File.ReadLines path do
+          if line.Length > 0 then
+            try
+              use doc = JsonDocument.Parse line
+              action doc.RootElement
+            with _ -> ()
+      with ex ->
+        printfn "WARN: %s/%s read failed: %s" table shard ex.Message
+
+let loadZoneShortNames (contentRoot: string) =
+  let map = Dictionary<int, string>()
+  if isValueString contentRoot then
+    forEachContentRow contentRoot "zone" (fun row ->
+      let id = jsonInt row "id" 0
+      let shortName = jsonStrEl row "short_name"
+      if id > 0 && isValueString shortName then map.[id] <- shortName)
+  map
+
+let addToSetMap (map: Dictionary<'K, HashSet<'V>>) (key: 'K) (value: 'V) =
+  let mutable set = Unchecked.defaultof<HashSet<'V>>
+  if not (map.TryGetValue(key, &set)) then
+    set <- HashSet<'V>()
+    map.[key] <- set
+  ignore (set.Add value)
+
+/// item_id → zone.id via lootdrop → loottable → npc → spawn → zone (brynn content).
+let buildItemDropZones (contentRoot: string) : Dictionary<int, int[]> =
+  let zoneByShort = Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+  forEachContentRow contentRoot "zone" (fun row ->
+    let id = jsonInt row "id" 0
+    let shortName = jsonStrEl row "short_name"
+    if id > 0 && isValueString shortName then zoneByShort.[shortName] <- id)
+  let groupZones = Dictionary<int, HashSet<int>>()
+  forEachContentRow contentRoot "spawn2" (fun row ->
+    let groupId = jsonInt row "spawngroupID" 0
+    let shortName = jsonStrEl row "zone"
+    let mutable zoneId = 0
+    if groupId > 0 && zoneByShort.TryGetValue(shortName, &zoneId) then
+      addToSetMap groupZones groupId zoneId)
+  let npcZones = Dictionary<int, HashSet<int>>()
+  forEachContentRow contentRoot "spawnentry" (fun row ->
+    let npcId = jsonInt row "npcID" 0
+    let groupId = jsonInt row "spawngroupID" 0
+    let mutable zones = Unchecked.defaultof<HashSet<int>>
+    if npcId > 0 && groupZones.TryGetValue(groupId, &zones) then
+      for z in zones do addToSetMap npcZones npcId z)
+  let tableZones = Dictionary<int, HashSet<int>>()
+  forEachContentRow contentRoot "npc_types" (fun row ->
+    let npcId = jsonInt row "id" 0
+    let loottableId = jsonInt row "loottable_id" 0
+    let mutable zones = Unchecked.defaultof<HashSet<int>>
+    if loottableId > 0 && npcZones.TryGetValue(npcId, &zones) then
+      for z in zones do addToSetMap tableZones loottableId z)
+  let dropZones = Dictionary<int, HashSet<int>>()
+  forEachContentRow contentRoot "loottable_entries" (fun row ->
+    let loottableId = jsonInt row "loottable_id" 0
+    let lootdropId = jsonInt row "lootdrop_id" 0
+    let mutable zones = Unchecked.defaultof<HashSet<int>>
+    if lootdropId > 0 && tableZones.TryGetValue(loottableId, &zones) then
+      for z in zones do addToSetMap dropZones lootdropId z)
+  let itemZones = Dictionary<int, HashSet<int>>()
+  forEachContentRow contentRoot "lootdrop_entries" (fun row ->
+    let itemId = jsonInt row "item_id" 0
+    let lootdropId = jsonInt row "lootdrop_id" 0
+    let mutable zones = Unchecked.defaultof<HashSet<int>>
+    if itemId > 0 && dropZones.TryGetValue(lootdropId, &zones) then
+      for z in zones do addToSetMap itemZones itemId z)
+  let result = Dictionary<int, int[]>()
+  for KeyValue(itemId, zones) in itemZones do
+    result.[itemId] <- zones |> Seq.sort |> Seq.toArray
+  result
+
+let formatZoneSource (zoneIds: int[]) (zoneNames: Dictionary<int, string>) =
+  if isNullUnsafe zoneIds || zoneIds.Length = 0 then ""
+  else
+    zoneIds
+    |> Array.map (fun id ->
+        let mutable name = ""
+        if zoneNames.TryGetValue(id, &name) && isValueString name then name
+        else sprintf "zone:%d" id)
+    |> Array.distinct
+    |> String.concat ", "
+
+/// Resolves drop-zone labels: item-cache ZoneIds first, else local brynn content join.
+let makeItemSourceResolver () =
+  let cacheZones = loadItemCacheZoneIds ()
+  let contentRoot = tryContentRootQuiet () |> Option.defaultValue ""
+  let zoneNames =
+    if isValueString contentRoot then loadZoneShortNames contentRoot
+    else Dictionary<int, string>()
+  let contentZones = ref (None: Dictionary<int, int[]> option)
+  let memo = Dictionary<int, string>()
+  let ensureContentZones () =
+    match !contentZones with
+    | Some idx -> idx
+    | None when not (isValueString contentRoot) ->
+        let empty = Dictionary<int, int[]>()
+        contentZones := Some empty
+        empty
+    | None ->
+        printfn "Building item→zone drop index from idlequest-content (for gear source rows)..."
+        let idx = buildItemDropZones contentRoot
+        printfn "Drop-zone index ready (%d items)." idx.Count
+        contentZones := Some idx
+        idx
+  fun (itemId: int) ->
+    if itemId <= 0 then ""
+    else
+      let mutable hit = ""
+      if memo.TryGetValue(itemId, &hit) then hit
+      else
+        let mutable zones = Unchecked.defaultof<int[]>
+        let fromCache = cacheZones.TryGetValue(itemId, &zones)
+        let zoneIds =
+          if fromCache && not (isNullUnsafe zones) && zones.Length > 0 then zones
+          else
+            let idx = ensureContentZones ()
+            let mutable fromContent = Unchecked.defaultof<int[]>
+            if idx.TryGetValue(itemId, &fromContent) then fromContent else [||]
+        let label = formatZoneSource zoneIds zoneNames
+        memo.[itemId] <- label
+        label
+
+/// Slot → Stat → left/right/delta. Only rows where the two sides differ.
+/// Ear / wrist / ring pairs are aligned by item id before comparing.
+/// After each differing "item" row, a "source" row lists drop zones (cache, else brynn).
+let compareGearTable (leftCol: string) (rightCol: string) (left: ApiCharacter) (right: ApiCharacter) =
+  let leftSlots = equipmentBySlot left
+  let rightSlots = alignPairedSlots leftSlots (equipmentBySlot right)
+  let resolveSource = makeItemSourceResolver ()
+  let table = new DataTable()
+  ignore (table.Columns.Add("Slot", typeof<string>))
+  ignore (table.Columns.Add("Stat", typeof<string>))
+  ignore (table.Columns.Add(leftCol, typeof<obj>))
+  ignore (table.Columns.Add(rightCol, typeof<obj>))
+  ignore (table.Columns.Add("Delta", typeof<obj>))
+  let addRow slot stat (l: obj) (r: obj) (d: obj) =
+    table.Rows.Add(slot, stat, l, r, d) |> ignore
+  for slotId, slotName in eqSlotDisplayOrder do
+    let mutable leftItem = emptyApiItem ()
+    let mutable rightItem = emptyApiItem ()
+    let hasL = leftSlots.TryGetValue(slotId, &leftItem)
+    let hasR = rightSlots.TryGetValue(slotId, &rightItem)
+    if not hasL then leftItem <- emptyApiItem ()
+    if not hasR then rightItem <- emptyApiItem ()
+    let leftName = if hasL && isValueString leftItem.name then leftItem.name else ""
+    let rightName = if hasR && isValueString rightItem.name then rightItem.name else ""
+    if leftItem.id <> rightItem.id || leftName <> rightName then
+      addRow
+        slotName
+        "item"
+        (if hasL then box leftName else box DBNull.Value)
+        (if hasR then box rightName else box DBNull.Value)
+        (box DBNull.Value)
+      let leftSrc = if hasL then resolveSource leftItem.id else ""
+      let rightSrc = if hasR then resolveSource rightItem.id else ""
+      addRow
+        slotName
+        "source"
+        (if hasL && isValueString leftSrc then box leftSrc else box DBNull.Value)
+        (if hasR && isValueString rightSrc then box rightSrc else box DBNull.Value)
+        (box DBNull.Value)
+    for stat in itemStatKeys do
+      let sentinel =
+        stat = "skillModType"
+        || stat.EndsWith("SpellId", StringComparison.Ordinal)
+      let lv = if hasL then itemStatValue leftItem stat else (if sentinel then -1 else 0)
+      let rv = if hasR then itemStatValue rightItem stat else (if sentinel then -1 else 0)
+      if lv <> rv then
+        addRow slotName stat (box lv) (box rv) (box (lv - rv))
+  table
+
 let compareStats (leftName: string) (left: ApiCharacter) (right: SnapshotRef) =
   let leftMap = statsPairs left |> dict
   let rightMap = statsPairs right.Api |> dict
+  // Prefer gameplay-ish order; fall back to alpha for anything unexpected.
+  let preferred =
+    [|
+      "level"; "maxHp"; "maxMana"; "ac"; "atk"
+      "str"; "sta"; "dex"; "agi"; "int"; "wis"; "cha"
+      "mr"; "fr"; "cr"; "dr"; "pr"
+    |]
   let keys =
-    Seq.append leftMap.Keys rightMap.Keys
-    |> Seq.distinct
-    |> Seq.sort
-    |> Seq.toArray
-  keys
-  |> Array.map (fun k ->
-      let mutable lv = 0
-      let mutable rv = 0
-      let hasL = leftMap.TryGetValue(k, &lv)
-      let hasR = rightMap.TryGetValue(k, &rv)
-      let l = if hasL then Nullable lv else Nullable()
-      let r = if hasR then Nullable rv else Nullable()
-      let delta =
-        if hasL && hasR then Nullable(lv - rv) else Nullable()
-      {|
-        Stat = k
-        Fetched = l
-        Other = r
-        DeltaFetchedMinusOther = delta
-      |})
-  |> fun rows ->
-      {|
-        Fetched = leftName
-        Other = right.CharacterName
-        OtherPulledAt = right.PulledAt
-        OtherPath = right.Path
-        Rows = rows
-      |}
+    let present =
+      Seq.append leftMap.Keys rightMap.Keys
+      |> Seq.distinct
+      |> Set.ofSeq
+    let head = preferred |> Array.filter present.Contains
+    let tail =
+      present
+      |> Seq.filter (fun k -> preferred |> Array.contains k |> not)
+      |> Seq.sort
+      |> Seq.toArray
+    Array.append head tail
+  let leftCol, rightColUnique = compareColumnNames leftName right.CharacterName
+  let table = new DataTable()
+  ignore (table.Columns.Add("Stat", typeof<string>))
+  ignore (table.Columns.Add(leftCol, typeof<obj>))
+  ignore (table.Columns.Add(rightColUnique, typeof<obj>))
+  ignore (table.Columns.Add("Delta", typeof<obj>))
+  for k in keys do
+    let mutable lv = 0
+    let mutable rv = 0
+    let hasL = leftMap.TryGetValue(k, &lv)
+    let hasR = rightMap.TryGetValue(k, &rv)
+    let leftObj: obj = if hasL then box lv else box DBNull.Value
+    let rightObj: obj = if hasR then box rv else box DBNull.Value
+    let deltaObj: obj =
+      if hasL && hasR then box (lv - rv) else box DBNull.Value
+    table.Rows.Add(k, leftObj, rightObj, deltaObj) |> ignore
+  let gear = compareGearTable leftCol rightColUnique left right.Api
+  {|
+    Left = leftCol
+    Right = rightColUnique
+    RightPulledAt = right.PulledAt
+    RightPath = right.Path
+    Delta = sprintf "%s − %s" leftCol rightColUnique
+    Stats = table
+    Gear = gear
+  |}
 
 /// Prompt to compare this fetch vs another character snapshot already in characters/.
 let promptStatComparison (fetchedName: string) (fetched: ApiCharacter) =
