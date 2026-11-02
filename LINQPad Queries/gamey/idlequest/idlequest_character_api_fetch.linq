@@ -15,8 +15,8 @@
 // baseline if no events yet). Inventory is preserved (API has no bag). Source = "idlequest-api".
 // After save/sync, prompts to compare stats vs another character already saved under
 // characters/ (one file per name; independent of eq_characters.json).
-// Gear diffs include a "source" row under each "item" (item-cache zoneIds, else local
-// brynn idlequest-content drop→zone; prefers idlequestContentRoot / D:\projects\idlequest-content).
+// Gear diffs include under each differing "item": source (item-cache zoneIds, else local
+// brynn idlequest-content drop→zone), then tankScore (Velious warrior-raid HP-eq: 1*hp+3*ac+6*sta).
 
 open System
 open System.Collections.Generic
@@ -981,15 +981,14 @@ let itemCacheReadOpts =
   let o = JsonSerializerOptions(PropertyNameCaseInsensitive = true)
   o
 
+let passwordContentRootOrEmpty () =
+  try
+    let pw = Util.GetPassword("idlequestContentRoot")
+    if isNullUnsafe pw then "" else pw.Trim()
+  with _ -> ""
+
 let tryContentRootQuiet () =
-  let candidates =
-    [
-      try
-        let pw = Util.GetPassword("idlequestContentRoot")
-        if isNullUnsafe pw then "" else pw.Trim()
-      with _ -> ""
-      defaultContentRoot
-    ]
+  let candidates = [ passwordContentRootOrEmpty (); defaultContentRoot ]
   candidates
   |> List.tryFind (fun root ->
       isValueString root
@@ -1023,17 +1022,20 @@ let jsonStrEl (el: JsonElement) (name: string) =
       if isNullUnsafe s then "" else s
   | _ -> ""
 
+let tryActionContentLine (line: string) (action: JsonElement -> unit) =
+  if line.Length > 0 then
+    try
+      use doc = JsonDocument.Parse line
+      action doc.RootElement
+    with _ -> ()
+
 let forEachContentRow (contentRoot: string) (table: string) (action: JsonElement -> unit) =
   for shard in contentShards do
     let path = Path.Combine(contentRoot, "data", table, shard + ".ndjson")
     if File.Exists path then
       try
         for line in File.ReadLines path do
-          if line.Length > 0 then
-            try
-              use doc = JsonDocument.Parse line
-              action doc.RootElement
-            with _ -> ()
+          tryActionContentLine line action
       with ex ->
         printfn "WARN: %s/%s read failed: %s" table shard ex.Message
 
@@ -1121,17 +1123,17 @@ let makeItemSourceResolver () =
   let contentZones = ref (None: Dictionary<int, int[]> option)
   let memo = Dictionary<int, string>()
   let ensureContentZones () =
-    match !contentZones with
+    match contentZones.Value with
     | Some idx -> idx
     | None when not (isValueString contentRoot) ->
         let empty = Dictionary<int, int[]>()
-        contentZones := Some empty
+        contentZones.Value <- Some empty
         empty
     | None ->
         printfn "Building item→zone drop index from idlequest-content (for gear source rows)..."
         let idx = buildItemDropZones contentRoot
         printfn "Drop-zone index ready (%d items)." idx.Count
-        contentZones := Some idx
+        contentZones.Value <- Some idx
         idx
   fun (itemId: int) ->
     if itemId <= 0 then ""
@@ -1151,9 +1153,79 @@ let makeItemSourceResolver () =
         memo.[itemId] <- label
         label
 
-/// Slot → Stat → left/right/delta. Only rows where the two sides differ.
+// --- Tank score (Velious warrior raid tank HP-equivalents) ---
+// Priority AC → HP/STA: https://www.eqprogression.com/warrior-best-in-slot-bis-gearing-guide-scars-of-velious/
+// AC↔HP exchange: https://wiki.project1999.com/Sakuragi's_Warrior_Guide (raid ≈ 1 AC = 3 HP)
+// STA→HP at L60 warrior ≈ 6 (classic community rule of thumb).
+// Offense / AGI / resists / haste / ratio stats are excluded from tankScore.
+
+let tankScoreProfile = "warrior-raid-velious"
+let tankWeightHp = 1.0
+let tankWeightAc = 3.0
+let tankWeightSta = 6.0
+
+let tankScoreFormulaText =
+  sprintf "tankScore = %.0f×HP + %.0f×AC + %.0f×STA (HP-equivalent)"
+    tankWeightHp tankWeightAc tankWeightSta
+
+let tankScoreWeightsLegend () =
+  {|
+    Profile = tankScoreProfile
+    Hp = tankWeightHp
+    Ac = tankWeightAc
+    Sta = tankWeightSta
+    Unit = "HP-equivalent"
+    Formula = tankScoreFormulaText
+    Sources =
+      [|
+        "https://www.eqprogression.com/warrior-best-in-slot-bis-gearing-guide-scars-of-velious/"
+        "https://wiki.project1999.com/Sakuragi's_Warrior_Guide"
+      |]
+  |}
+
+let printTankScoreBlurb () =
+  printfn ""
+  printfn "Tank score (%s)" tankScoreProfile
+  printfn "  %s" tankScoreFormulaText
+  printfn "  Raid-tank heuristic from classic/Velious warrior theorycrafting:"
+  printfn "    • 1 AC ≈ 3 HP (Sakuragi raid profile; leveling would use ≈5 HP)"
+  printfn "    • 1 STA ≈ 6 HP at level 60 for warriors (STA mostly exists to raise max HP)"
+  printfn "  Sheet \"tankScore\" uses character maxHp / ac / sta; gear \"tankScore\" rows use item hp / ac / sta."
+  printfn "  Offense, AGI, resists, haste, and spell IDs are not included."
+  printfn ""
+
+/// Tanking score in HP-equivalent units from raw hp / ac / sta.
+let tankScoreFromParts (hp: int) (ac: int) (sta: int) =
+  Math.Round(
+    tankWeightHp * float hp + tankWeightAc * float ac + tankWeightSta * float sta,
+    1)
+
+/// Empty item → 0. Only hp / ac / sta.
+let itemTankScore (item: ApiItem) =
+  if isNullUnsafe item || item.id = 0 then 0.0
+  else
+    tankScoreFromParts
+      (itemStatValue item "hp")
+      (itemStatValue item "ac")
+      (itemStatValue item "sta")
+
+/// Overall character sheet tankScore from maxHp / ac / sta.
+let characterTankScore (api: ApiCharacter) =
+  let st = api.stats
+  if isNullUnsafe st then 0.0
+  else tankScoreFromParts st.maxHp st.ac st.sta
+
+let tankScoreWeightForStat (stat: string) =
+  match stat with
+  | "hp" -> Some tankWeightHp
+  | "ac" -> Some tankWeightAc
+  | "sta" -> Some tankWeightSta
+  | _ -> None
+
+/// Slot → Stat → left/right/delta/score. Only rows where the two sides differ.
 /// Ear / wrist / ring pairs are aligned by item id before comparing.
-/// After each differing "item" row, a "source" row lists drop zones (cache, else brynn).
+/// After each differing "item" row: source (drop zones), then tankScore (HP-eq).
+/// Score column: blank unless the row feeds tankScore (hp/ac/sta contrib, or tankScore total).
 let compareGearTable (leftCol: string) (rightCol: string) (left: ApiCharacter) (right: ApiCharacter) =
   let leftSlots = equipmentBySlot left
   let rightSlots = alignPairedSlots leftSlots (equipmentBySlot right)
@@ -1164,8 +1236,10 @@ let compareGearTable (leftCol: string) (rightCol: string) (left: ApiCharacter) (
   ignore (table.Columns.Add(leftCol, typeof<obj>))
   ignore (table.Columns.Add(rightCol, typeof<obj>))
   ignore (table.Columns.Add("Delta", typeof<obj>))
-  let addRow slot stat (l: obj) (r: obj) (d: obj) =
-    table.Rows.Add(slot, stat, l, r, d) |> ignore
+  ignore (table.Columns.Add("Score", typeof<obj>))
+  let addRow slot stat (l: obj) (r: obj) (d: obj) (score: obj) =
+    table.Rows.Add(slot, stat, l, r, d, score) |> ignore
+  let blank = box DBNull.Value
   for slotId, slotName in eqSlotDisplayOrder do
     let mutable leftItem = emptyApiItem ()
     let mutable rightItem = emptyApiItem ()
@@ -1179,25 +1253,43 @@ let compareGearTable (leftCol: string) (rightCol: string) (left: ApiCharacter) (
       addRow
         slotName
         "item"
-        (if hasL then box leftName else box DBNull.Value)
-        (if hasR then box rightName else box DBNull.Value)
-        (box DBNull.Value)
+        (if hasL then box leftName else blank)
+        (if hasR then box rightName else blank)
+        blank
+        blank
       let leftSrc = if hasL then resolveSource leftItem.id else ""
       let rightSrc = if hasR then resolveSource rightItem.id else ""
       addRow
         slotName
         "source"
-        (if hasL && isValueString leftSrc then box leftSrc else box DBNull.Value)
-        (if hasR && isValueString rightSrc then box rightSrc else box DBNull.Value)
-        (box DBNull.Value)
+        (if hasL && isValueString leftSrc then box leftSrc else blank)
+        (if hasR && isValueString rightSrc then box rightSrc else blank)
+        blank
+        blank
+      let leftScore = if hasL then itemTankScore leftItem else 0.0
+      let rightScore = if hasR then itemTankScore rightItem else 0.0
+      let scoreDelta = Math.Round(leftScore - rightScore, 1)
+      addRow
+        slotName
+        "tankScore"
+        (box leftScore)
+        (box rightScore)
+        (box scoreDelta)
+        (box scoreDelta)
     for stat in itemStatKeys do
-      let sentinel =
+      let isIdLike =
         stat = "skillModType"
         || stat.EndsWith("SpellId", StringComparison.Ordinal)
-      let lv = if hasL then itemStatValue leftItem stat else (if sentinel then -1 else 0)
-      let rv = if hasR then itemStatValue rightItem stat else (if sentinel then -1 else 0)
+      let lv = if hasL then itemStatValue leftItem stat else (if isIdLike then -1 else 0)
+      let rv = if hasR then itemStatValue rightItem stat else (if isIdLike then -1 else 0)
       if lv <> rv then
-        addRow slotName stat (box lv) (box rv) (box (lv - rv))
+        let delta: obj =
+          if isIdLike then blank else box (lv - rv)
+        let score: obj =
+          match tankScoreWeightForStat stat with
+          | Some w -> box (Math.Round(w * float (lv - rv), 1))
+          | None -> blank
+        addRow slotName stat (box lv) (box rv) delta score
   table
 
 let compareStats (leftName: string) (left: ApiCharacter) (right: SnapshotRef) =
@@ -1228,6 +1320,14 @@ let compareStats (leftName: string) (left: ApiCharacter) (right: SnapshotRef) =
   ignore (table.Columns.Add(leftCol, typeof<obj>))
   ignore (table.Columns.Add(rightColUnique, typeof<obj>))
   ignore (table.Columns.Add("Delta", typeof<obj>))
+  let leftScore = characterTankScore left
+  let rightScore = characterTankScore right.Api
+  table.Rows.Add(
+    "tankScore",
+    box leftScore,
+    box rightScore,
+    box (Math.Round(leftScore - rightScore, 1)))
+  |> ignore
   for k in keys do
     let mutable lv = 0
     let mutable rv = 0
@@ -1245,6 +1345,13 @@ let compareStats (leftName: string) (left: ApiCharacter) (right: SnapshotRef) =
     RightPulledAt = right.PulledAt
     RightPath = right.Path
     Delta = sprintf "%s − %s" leftCol rightColUnique
+    TankScoreWeights = tankScoreWeightsLegend ()
+    OverallTankScore =
+      {|
+        Left = leftScore
+        Right = rightScore
+        Delta = Math.Round(leftScore - rightScore, 1)
+      |}
     Stats = table
     Gear = gear
   |}
@@ -1353,6 +1460,9 @@ let sync = trySyncTrackedCharacter characterName envelope.Api
 printfn "Tracker sync: %s — %s" (if sync.Updated then "updated" else "skipped") sync.Reason
 
 let comparison = promptStatComparison characterName envelope.Api
+match comparison with
+| Some _ -> printTankScoreBlurb ()
+| None -> ()
 
 {|
   SavedPath = path
