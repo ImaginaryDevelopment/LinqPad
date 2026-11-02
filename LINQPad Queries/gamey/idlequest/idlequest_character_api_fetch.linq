@@ -15,8 +15,8 @@
 // baseline if no events yet). Inventory is preserved (API has no bag). Source = "idlequest-api".
 // After save/sync, prompts to compare stats vs another character already saved under
 // characters/ (one file per name; independent of eq_characters.json).
-// Gear diffs include under each differing "item": source (item-cache zoneIds, else local
-// brynn idlequest-content drop→zone), then tankScore (Velious warrior-raid HP-eq: 1*hp+3*ac+6*sta).
+// Gear diffs include under each differing "item": source (item-cache zoneIds → brynn
+// drop→zone → brynn quest SummonItem), then tankScore (Velious warrior-raid HP-eq).
 
 open System
 open System.Collections.Generic
@@ -1113,7 +1113,44 @@ let formatZoneSource (zoneIds: int[]) (zoneNames: Dictionary<int, string>) =
     |> Array.distinct
     |> String.concat ", "
 
-/// Resolves drop-zone labels: item-cache ZoneIds first, else local brynn content join.
+let cleanQuestNpcName (raw: string) =
+  if not (isValueString raw) then ""
+  else
+    raw.Trim().TrimStart('#').Replace('_', ' ')
+
+/// item_id → "quest: Npc @ zone" labels from data/quests/*.ndjson lua SummonItem(id).
+let buildItemQuestRewardLabels (contentRoot: string) : Dictionary<int, string[]> =
+  let map = Dictionary<int, HashSet<string>>()
+  let summonRe = System.Text.RegularExpressions.Regex(@"SummonItem\s*\(\s*(\d+)\s*\)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+  forEachContentRow contentRoot "quests" (fun row ->
+    let zone = jsonStrEl row "zone"
+    let npc = cleanQuestNpcName (jsonStrEl row "name")
+    let lua =
+      match row.TryGetProperty("lua_content") with
+      | true, p when p.ValueKind = JsonValueKind.String ->
+          let s = p.GetString()
+          if isNullUnsafe s then "" else s
+      | _ -> ""
+    if isValueString lua then
+      for m in summonRe.Matches(lua) do
+        let mutable itemId = 0
+        if Int32.TryParse(m.Groups.[1].Value, &itemId) && itemId > 0 then
+          let label =
+            if isValueString npc && isValueString zone then sprintf "quest: %s @ %s" npc zone
+            elif isValueString npc then sprintf "quest: %s" npc
+            elif isValueString zone then sprintf "quest @ %s" zone
+            else sprintf "quest (SummonItem %d)" itemId
+          addToSetMap map itemId label)
+  let result = Dictionary<int, string[]>()
+  for KeyValue(itemId, labels) in map do
+    result.[itemId] <- labels |> Seq.sort |> Seq.toArray
+  result
+
+let formatQuestSource (labels: string[]) =
+  if isNullUnsafe labels || labels.Length = 0 then ""
+  else String.Join("; ", labels)
+
+/// Source labels: item-cache ZoneIds → brynn drop→zone → brynn quest SummonItem.
 let makeItemSourceResolver () =
   let cacheZones = loadItemCacheZoneIds ()
   let contentRoot = tryContentRootQuiet () |> Option.defaultValue ""
@@ -1121,6 +1158,7 @@ let makeItemSourceResolver () =
     if isValueString contentRoot then loadZoneShortNames contentRoot
     else Dictionary<int, string>()
   let contentZones = ref (None: Dictionary<int, int[]> option)
+  let questRewards = ref (None: Dictionary<int, string[]> option)
   let memo = Dictionary<int, string>()
   let ensureContentZones () =
     match contentZones.Value with
@@ -1134,6 +1172,23 @@ let makeItemSourceResolver () =
         let idx = buildItemDropZones contentRoot
         printfn "Drop-zone index ready (%d items)." idx.Count
         contentZones.Value <- Some idx
+        idx
+  let ensureQuestRewards () =
+    match questRewards.Value with
+    | Some idx -> idx
+    | None when not (isValueString contentRoot) ->
+        let empty = Dictionary<int, string[]>()
+        questRewards.Value <- Some empty
+        empty
+    | None when not (Directory.Exists(Path.Combine(contentRoot, "data", "quests"))) ->
+        let empty = Dictionary<int, string[]>()
+        questRewards.Value <- Some empty
+        empty
+    | None ->
+        printfn "Building item→quest reward index from idlequest-content (SummonItem)..."
+        let idx = buildItemQuestRewardLabels contentRoot
+        printfn "Quest-reward index ready (%d items)." idx.Count
+        questRewards.Value <- Some idx
         idx
   fun (itemId: int) ->
     if itemId <= 0 then ""
@@ -1149,7 +1204,14 @@ let makeItemSourceResolver () =
             let idx = ensureContentZones ()
             let mutable fromContent = Unchecked.defaultof<int[]>
             if idx.TryGetValue(itemId, &fromContent) then fromContent else [||]
-        let label = formatZoneSource zoneIds zoneNames
+        let dropLabel = formatZoneSource zoneIds zoneNames
+        let label =
+          if isValueString dropLabel then dropLabel
+          else
+            let qIdx = ensureQuestRewards ()
+            let mutable qLabels = Unchecked.defaultof<string[]>
+            if qIdx.TryGetValue(itemId, &qLabels) then formatQuestSource qLabels
+            else ""
         memo.[itemId] <- label
         label
 
