@@ -6,13 +6,15 @@
 // Endpoint: GET https://idlequest.net/api/characters/{characterName}
 //   (live site uses plural "characters"; singular /api/character/{name} 404s)
 // Rate limit: 1 request per 5 seconds — waits out cooldown before calling.
-// Output: characters/{Name}_{yyyyMMdd-HHmmss}.json
+// Output: characters/{Name}.json (overwrites prior snapshot; PulledAt lives in the envelope)
 //   envelope = { pulledAt, characterName, requestUrl, response }
 // Throws on non-success HTTP or if the body is not a JSON object.
 //
 // If the name already exists in eq_characters.json, also updates that sheet + appends
 // eq_events.json the same way hand-edit sync does (delta vs folded events, or full
 // baseline if no events yet). Inventory is preserved (API has no bag). Source = "idlequest-api".
+// After save/sync, prompts to compare stats vs another character already saved under
+// characters/ (one file per name; independent of eq_characters.json).
 
 open System
 open System.Collections.Generic
@@ -216,49 +218,157 @@ type EventsFile = {
   mutable Characters: ResizeArray<CharacterEvents>
 }
 
-[<CLIMutable>]
 type ApiItem = {
-  mutable id: int
-  mutable name: string
+  id: int
+  name: string
 }
 
-[<CLIMutable>]
 type ApiEquip = {
-  mutable slot: int
-  mutable item: ApiItem
+  slot: int
+  item: ApiItem
 }
 
-[<CLIMutable>]
 type ApiStats = {
-  mutable maxHp: int
-  mutable maxMana: int
-  mutable ac: int
-  mutable atk: int
-  mutable str: int
-  mutable sta: int
-  mutable dex: int
-  mutable agi: int
-  [<JsonPropertyName("int")>]
-  mutable intellect: int
-  mutable wis: int
-  mutable cha: int
-  mutable mr: int
-  mutable fr: int
-  mutable cr: int
-  mutable dr: int
-  mutable pr: int
+  maxHp: int
+  maxMana: int
+  ac: int
+  atk: int
+  str: int
+  sta: int
+  dex: int
+  agi: int
+  intellect: int
+  wis: int
+  cha: int
+  mr: int
+  fr: int
+  cr: int
+  dr: int
+  pr: int
 }
 
-[<CLIMutable>]
 type ApiCharacter = {
-  mutable name: string
-  mutable level: int
-  [<JsonPropertyName("class")>]
-  mutable className: string
-  mutable raceId: int
-  mutable stats: ApiStats
-  mutable equipment: ApiEquip[]
+  name: string
+  level: int
+  className: string
+  raceId: int
+  stats: ApiStats
+  equipment: ApiEquip[]
 }
+
+/// Coerce JSON number/string/null/missing → int (API sometimes sends floats).
+let jsonInt (el: JsonElement) (name: string) (fallback: int) =
+  match el.TryGetProperty(name) with
+  | false, _ -> fallback
+  | true, p ->
+      match p.ValueKind with
+      | JsonValueKind.Null
+      | JsonValueKind.Undefined -> fallback
+      | JsonValueKind.Number ->
+          let mutable i = 0
+          if p.TryGetInt32(&i) then i
+          else
+            let mutable l = 0L
+            if p.TryGetInt64(&l) then int l
+            else
+              let mutable d = 0.0
+              if p.TryGetDouble(&d) then int (Math.Round d) else fallback
+      | JsonValueKind.String ->
+          match Int32.TryParse(p.GetString()) with
+          | true, i -> i
+          | _ ->
+              match Double.TryParse(p.GetString()) with
+              | true, d -> int (Math.Round d)
+              | _ -> fallback
+      | JsonValueKind.True -> 1
+      | JsonValueKind.False -> 0
+      | _ -> fallback
+
+let jsonString (el: JsonElement) (name: string) (fallback: string) =
+  match el.TryGetProperty(name) with
+  | false, _ -> fallback
+  | true, p when p.ValueKind = JsonValueKind.String ->
+      let s = p.GetString()
+      if isNullUnsafe s then fallback else s
+  | true, p when p.ValueKind = JsonValueKind.Number -> p.ToString()
+  | _ -> fallback
+
+let emptyApiStats () : ApiStats =
+  {
+    maxHp = 0; maxMana = 0; ac = 0; atk = 0
+    str = 0; sta = 0; dex = 0; agi = 0; intellect = 0
+    wis = 0; cha = 0; mr = 0; fr = 0; cr = 0; dr = 0; pr = 0
+  }
+
+let parseApiStats (el: JsonElement) : ApiStats =
+  if el.ValueKind <> JsonValueKind.Object then emptyApiStats ()
+  else
+    {
+      maxHp = jsonInt el "maxHp" 0
+      maxMana = jsonInt el "maxMana" 0
+      ac = jsonInt el "ac" 0
+      atk = jsonInt el "atk" 0
+      str = jsonInt el "str" 0
+      sta = jsonInt el "sta" 0
+      dex = jsonInt el "dex" 0
+      agi = jsonInt el "agi" 0
+      intellect = jsonInt el "int" 0
+      wis = jsonInt el "wis" 0
+      cha = jsonInt el "cha" 0
+      mr = jsonInt el "mr" 0
+      fr = jsonInt el "fr" 0
+      cr = jsonInt el "cr" 0
+      dr = jsonInt el "dr" 0
+      pr = jsonInt el "pr" 0
+    }
+
+let parseApiEquipment (root: JsonElement) : ApiEquip[] =
+  match root.TryGetProperty("equipment") with
+  | false, _ -> Array.empty
+  | true, arr when arr.ValueKind <> JsonValueKind.Array -> Array.empty
+  | true, arr ->
+      arr.EnumerateArray()
+      |> Seq.choose (fun eq ->
+          if eq.ValueKind <> JsonValueKind.Object then None
+          else
+            match eq.TryGetProperty("item") with
+            | false, _ -> None
+            | true, item when item.ValueKind <> JsonValueKind.Object -> None
+            | true, item ->
+                Some
+                  {
+                    slot = jsonInt eq "slot" -1
+                    item =
+                      {
+                        id = jsonInt item "id" 0
+                        name = jsonString item "name" ""
+                      }
+                  })
+      |> Seq.toArray
+
+let parseApiCharacter (root: JsonElement) : ApiCharacter =
+  let stats =
+    match root.TryGetProperty("stats") with
+    | true, s -> parseApiStats s
+    | _ -> emptyApiStats ()
+  {
+    name = jsonString root "name" ""
+    level = jsonInt root "level" 0
+    className = jsonString root "class" ""
+    raceId = jsonInt root "raceId" 0
+    stats = stats
+    equipment = parseApiEquipment root
+  }
+
+let dumpRawJsonOnError (title: string) (body: string) =
+  printfn "%s" title
+  try
+    use doc = JsonDocument.Parse(body)
+    let pretty =
+      JsonSerializer.Serialize(doc.RootElement, jsonWriteOpts)
+    pretty.Dump("Raw API JSON (parse failed)")
+  with _ ->
+    body.Dump("Raw API body (not re-formattable)")
 
 let utcNow () = DateTimeOffset.UtcNow.ToString("o")
 let nInt (v: int) = Nullable<int>(v)
@@ -513,30 +623,26 @@ let sheetFromApi (api: ApiCharacter) (preserveInventory: ResizeArray<InventoryEn
   let st = api.stats
   let sheet = emptySheet ()
   sheet.Level <- nInt api.level
-  if not (isNullUnsafe st) then
-    sheet.Hp <- nInt st.maxHp
-    sheet.Mana <- nInt st.maxMana
-    sheet.Ac <- nInt st.ac
-    sheet.Atk <- nInt st.atk
-    sheet.Str <- nInt st.str
-    sheet.Sta <- nInt st.sta
-    sheet.Agi <- nInt st.agi
-    sheet.Dex <- nInt st.dex
-    sheet.Wis <- nInt st.wis
-    sheet.Int <- nInt st.intellect
-    sheet.Cha <- nInt st.cha
-    sheet.Mr <- nInt st.mr
-    sheet.Fr <- nInt st.fr
-    sheet.Cr <- nInt st.cr
-    sheet.Pr <- nInt st.pr
-    sheet.Dr <- nInt st.dr
-  if not (isNullUnsafe api.equipment) then
-    for eq in api.equipment do
-      if isNullUnsafe eq || isNullUnsafe eq.item then ()
-      else
-        let mutable slotName = ""
-        if eqSlotToName.TryGetValue(eq.slot, &slotName) then
-          sheet.Gear.[slotName] <- nInt eq.item.id
+  sheet.Hp <- nInt st.maxHp
+  sheet.Mana <- nInt st.maxMana
+  sheet.Ac <- nInt st.ac
+  sheet.Atk <- nInt st.atk
+  sheet.Str <- nInt st.str
+  sheet.Sta <- nInt st.sta
+  sheet.Agi <- nInt st.agi
+  sheet.Dex <- nInt st.dex
+  sheet.Wis <- nInt st.wis
+  sheet.Int <- nInt st.intellect
+  sheet.Cha <- nInt st.cha
+  sheet.Mr <- nInt st.mr
+  sheet.Fr <- nInt st.fr
+  sheet.Cr <- nInt st.cr
+  sheet.Pr <- nInt st.pr
+  sheet.Dr <- nInt st.dr
+  for eq in api.equipment do
+    let mutable slotName = ""
+    if eq.slot >= 0 && eqSlotToName.TryGetValue(eq.slot, &slotName) && eq.item.id <> 0 then
+      sheet.Gear.[slotName] <- nInt eq.item.id
   sheet.Inventory <- cloneInventory preserveInventory
   sheet
 
@@ -626,9 +732,12 @@ let fetchCharacter (characterName: string) =
   use doc = parseJsonObject body
   let responseElement = doc.RootElement.Clone()
   let api =
-    try JsonSerializer.Deserialize<ApiCharacter>(body, jsonOpts)
-    with ex -> raise (InvalidOperationException("Failed to map response to ApiCharacter.", ex))
-  if isNullUnsafe api then invalidOp "ApiCharacter deserialize returned null."
+    try parseApiCharacter responseElement
+    with ex ->
+      dumpRawJsonOnError
+        (sprintf "Failed to map response to ApiCharacter (%s). Dumping raw JSON." ex.Message)
+        body
+      raise (InvalidOperationException("Failed to map response to ApiCharacter. See dumped raw JSON.", ex))
   {|
     PulledAt = pulledAt.ToString("o")
     CharacterName = name
@@ -637,20 +746,174 @@ let fetchCharacter (characterName: string) =
     Api = api
   |}
 
+let safeFileName (characterName: string) =
+  let invalid = Path.GetInvalidFileNameChars()
+  let cleaned =
+    characterName.Trim()
+    |> Seq.map (fun c -> if invalid |> Array.contains c then '_' else c)
+    |> String.Concat
+  if String.IsNullOrWhiteSpace cleaned then "character" else cleaned
+
 let saveEnvelope (characterName: string) (envelope: obj) =
   let dir = ensureCharactersDir ()
-  let stamp = DateTimeOffset.UtcNow.ToLocalTime().ToString("yyyyMMdd-HHmmss")
-  let safeName =
-    let invalid = Path.GetInvalidFileNameChars()
-    let cleaned =
-      characterName.Trim()
-      |> Seq.map (fun c -> if invalid |> Array.contains c then '_' else c)
-      |> String.Concat
-    if String.IsNullOrWhiteSpace cleaned then "character" else cleaned
-  let path = Path.Combine(dir, sprintf "%s_%s.json" safeName stamp)
+  let safeName = safeFileName characterName
+  let path = Path.Combine(dir, sprintf "%s.json" safeName)
+  // Drop legacy timestamped copies (Name_yyyyMMdd-HHmmss.json) for this character.
+  try
+    let prefix = safeName + "_"
+    for old in Directory.GetFiles(dir, "*.json") do
+      let baseName = Path.GetFileNameWithoutExtension old
+      if
+        not (String.Equals(old, path, StringComparison.OrdinalIgnoreCase))
+        && baseName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+      then
+        File.Delete old
+  with _ -> ()
   let json = JsonSerializer.Serialize(envelope, jsonWriteOpts)
   File.WriteAllText(path, json)
   path
+
+[<CLIMutable>]
+type SavedEnvelope = {
+  mutable CharacterName: string
+  mutable PulledAt: string
+  mutable RequestUrl: string
+  mutable Response: JsonElement
+}
+
+type SnapshotRef = {
+  CharacterName: string
+  PulledAt: string
+  Path: string
+  Api: ApiCharacter
+}
+
+let tryLoadSnapshot (path: string) : SnapshotRef option =
+  try
+    let text = File.ReadAllText path
+    let env = JsonSerializer.Deserialize<SavedEnvelope>(text, jsonOpts)
+    if isNullUnsafe env || env.Response.ValueKind <> JsonValueKind.Object then None
+    else
+      let api = parseApiCharacter env.Response
+      let name =
+        if isValueString env.CharacterName then env.CharacterName.Trim()
+        elif isValueString api.name then api.name.Trim()
+        else Path.GetFileNameWithoutExtension path
+      Some
+        {
+          CharacterName = name
+          PulledAt = if isNullUnsafe env.PulledAt then "" else env.PulledAt
+          Path = path
+          Api = api
+        }
+  with _ -> None
+
+/// One snapshot per character under characters/ (prefer newest write if duplicates remain).
+let listLatestSnapshotsExclude (excludeName: string) =
+  let dir = ensureCharactersDir ()
+  Directory.GetFiles(dir, "*.json")
+  |> Array.choose tryLoadSnapshot
+  |> Array.filter (fun s ->
+      not (String.Equals(s.CharacterName, excludeName, StringComparison.OrdinalIgnoreCase)))
+  |> Array.groupBy (fun s -> s.CharacterName.ToLowerInvariant())
+  |> Array.map (fun (_, group) ->
+      group |> Array.maxBy (fun s -> File.GetLastWriteTimeUtc s.Path))
+  |> Array.sortBy (fun s -> s.CharacterName)
+
+let statsPairs (api: ApiCharacter) =
+  let st = api.stats
+  if isNullUnsafe st then Array.empty
+  else
+    [|
+      "level", api.level
+      "maxHp", st.maxHp
+      "maxMana", st.maxMana
+      "ac", st.ac
+      "atk", st.atk
+      "str", st.str
+      "sta", st.sta
+      "dex", st.dex
+      "agi", st.agi
+      "int", st.intellect
+      "wis", st.wis
+      "cha", st.cha
+      "mr", st.mr
+      "fr", st.fr
+      "cr", st.cr
+      "dr", st.dr
+      "pr", st.pr
+    |]
+
+let compareStats (leftName: string) (left: ApiCharacter) (right: SnapshotRef) =
+  let leftMap = statsPairs left |> dict
+  let rightMap = statsPairs right.Api |> dict
+  let keys =
+    Seq.append leftMap.Keys rightMap.Keys
+    |> Seq.distinct
+    |> Seq.sort
+    |> Seq.toArray
+  keys
+  |> Array.map (fun k ->
+      let mutable lv = 0
+      let mutable rv = 0
+      let hasL = leftMap.TryGetValue(k, &lv)
+      let hasR = rightMap.TryGetValue(k, &rv)
+      let l = if hasL then Nullable lv else Nullable()
+      let r = if hasR then Nullable rv else Nullable()
+      let delta =
+        if hasL && hasR then Nullable(lv - rv) else Nullable()
+      {|
+        Stat = k
+        Fetched = l
+        Other = r
+        DeltaFetchedMinusOther = delta
+      |})
+  |> fun rows ->
+      {|
+        Fetched = leftName
+        Other = right.CharacterName
+        OtherPulledAt = right.PulledAt
+        OtherPath = right.Path
+        Rows = rows
+      |}
+
+/// Prompt to compare this fetch vs another character snapshot already in characters/.
+let promptStatComparison (fetchedName: string) (fetched: ApiCharacter) =
+  let others = listLatestSnapshotsExclude fetchedName
+  if others.Length = 0 then
+    printfn "Stat compare: no other character snapshots in %s yet." Paths.charactersDir
+    None
+  else
+    let labels =
+      others
+      |> Array.map (fun s ->
+          let lvl = string s.Api.level
+          let cls = if isValueString s.Api.className then s.Api.className else "?"
+          sprintf "%s (L%s %s)" s.CharacterName lvl cls)
+    let skip = "(skip comparison)"
+    let opts = Array.append [| skip |] labels
+    let picked = Util.ReadLine("Compare stats vs character in characters/ folder", skip, opts)
+    if isNullUnsafe picked || picked = skip || String.IsNullOrWhiteSpace picked then
+      printfn "Stat compare: skipped."
+      None
+    else
+      match labels |> Array.tryFindIndex (fun l -> l = picked) with
+      | Some i ->
+          let other = others.[i]
+          printfn "Comparing %s vs %s (%s)" fetchedName other.CharacterName other.Path
+          Some (compareStats fetchedName fetched other)
+      | None ->
+          match
+            others
+            |> Array.tryFind (fun s ->
+                picked.StartsWith(s.CharacterName, StringComparison.OrdinalIgnoreCase))
+          with
+          | Some other ->
+              printfn "Comparing %s vs %s (%s)" fetchedName other.CharacterName other.Path
+              Some (compareStats fetchedName fetched other)
+          | None ->
+              printfn "Stat compare: could not match selection '%s'." picked
+              None
 
 // --- Main ---
 let nameKey = "idlequestCharacterApiName"
@@ -717,6 +980,8 @@ printfn "Wrote %s" path
 let sync = trySyncTrackedCharacter characterName envelope.Api
 printfn "Tracker sync: %s — %s" (if sync.Updated then "updated" else "skipped") sync.Reason
 
+let comparison = promptStatComparison characterName envelope.Api
+
 {|
   SavedPath = path
   PulledAt = envelope.PulledAt
@@ -724,6 +989,7 @@ printfn "Tracker sync: %s — %s" (if sync.Updated then "updated" else "skipped"
   RequestUrl = envelope.RequestUrl
   Response = envelope.Response
   TrackerSync = sync
+  StatComparison = comparison
 |}
 |> Dump
 |> ignore
