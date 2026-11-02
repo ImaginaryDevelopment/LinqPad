@@ -12,3 +12,5 @@ Fsx/.paket/
 Framework 4\.6/MyExtensions\.FW46\.xml
 
 .fake
+LINQPad Queries/gamey/idlequest/item-cache.json
+LINQPad Queries/gamey/idlequest/.idlequest_api_last_request_utc.txt
