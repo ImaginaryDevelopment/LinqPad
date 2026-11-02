@@ -1284,25 +1284,37 @@ let tankScoreWeightForStat (stat: string) =
   | "sta" -> Some tankWeightSta
   | _ -> None
 
+let isWarriorClass (api: ApiCharacter) =
+  isValueString api.className
+  && String.Equals(api.className.Trim(), "Warrior", StringComparison.OrdinalIgnoreCase)
+
+type GearCompareRow = {
+  Slot: string
+  Stat: string
+  Left: obj
+  Right: obj
+  Delta: obj
+  Score: obj
+}
+
+type GearSlotGroup = {
+  SlotOrder: int
+  ScoreDelta: float
+  Rows: ResizeArray<GearCompareRow>
+}
+
 /// Slot → Stat → left/right/delta/score. Only rows where the two sides differ.
 /// Ear / wrist / ring pairs are aligned by item id before comparing.
 /// After each differing "item" row: source (drop zones), then tankScore (HP-eq).
 /// Score column: blank unless the row feeds tankScore (hp/ac/sta contrib, or tankScore total).
+/// When both characters are Warriors, slot groups are ordered by |tankScore delta| (largest first).
 let compareGearTable (leftCol: string) (rightCol: string) (left: ApiCharacter) (right: ApiCharacter) =
   let leftSlots = equipmentBySlot left
   let rightSlots = alignPairedSlots leftSlots (equipmentBySlot right)
   let resolveSource = makeItemSourceResolver ()
-  let table = new DataTable()
-  ignore (table.Columns.Add("Slot", typeof<string>))
-  ignore (table.Columns.Add("Stat", typeof<string>))
-  ignore (table.Columns.Add(leftCol, typeof<obj>))
-  ignore (table.Columns.Add(rightCol, typeof<obj>))
-  ignore (table.Columns.Add("Delta", typeof<obj>))
-  ignore (table.Columns.Add("Score", typeof<obj>))
-  let addRow slot stat (l: obj) (r: obj) (d: obj) (score: obj) =
-    table.Rows.Add(slot, stat, l, r, d, score) |> ignore
   let blank = box DBNull.Value
-  for slotId, slotName in eqSlotDisplayOrder do
+  let groups = ResizeArray<GearSlotGroup>()
+  for slotIdx, (slotId, slotName) in Array.indexed eqSlotDisplayOrder do
     let mutable leftItem = emptyApiItem ()
     let mutable rightItem = emptyApiItem ()
     let hasL = leftSlots.TryGetValue(slotId, &leftItem)
@@ -1311,9 +1323,20 @@ let compareGearTable (leftCol: string) (rightCol: string) (left: ApiCharacter) (
     if not hasR then rightItem <- emptyApiItem ()
     let leftName = if hasL && isValueString leftItem.name then leftItem.name else ""
     let rightName = if hasR && isValueString rightItem.name then rightItem.name else ""
+    let rows = ResizeArray<GearCompareRow>()
+    let mutable scoreDelta = 0.0
+    let addRow stat (l: obj) (r: obj) (d: obj) (score: obj) =
+      rows.Add
+        {
+          Slot = slotName
+          Stat = stat
+          Left = l
+          Right = r
+          Delta = d
+          Score = score
+        }
     if leftItem.id <> rightItem.id || leftName <> rightName then
       addRow
-        slotName
         "item"
         (if hasL then box leftName else blank)
         (if hasR then box rightName else blank)
@@ -1322,7 +1345,6 @@ let compareGearTable (leftCol: string) (rightCol: string) (left: ApiCharacter) (
       let leftSrc = if hasL then resolveSource leftItem.id else ""
       let rightSrc = if hasR then resolveSource rightItem.id else ""
       addRow
-        slotName
         "source"
         (if hasL && isValueString leftSrc then box leftSrc else blank)
         (if hasR && isValueString rightSrc then box rightSrc else blank)
@@ -1330,14 +1352,8 @@ let compareGearTable (leftCol: string) (rightCol: string) (left: ApiCharacter) (
         blank
       let leftScore = if hasL then itemTankScore leftItem else 0.0
       let rightScore = if hasR then itemTankScore rightItem else 0.0
-      let scoreDelta = Math.Round(leftScore - rightScore, 1)
-      addRow
-        slotName
-        "tankScore"
-        (box leftScore)
-        (box rightScore)
-        (box scoreDelta)
-        (box scoreDelta)
+      scoreDelta <- Math.Round(leftScore - rightScore, 1)
+      addRow "tankScore" (box leftScore) (box rightScore) (box scoreDelta) (box scoreDelta)
     for stat in itemStatKeys do
       let isIdLike =
         stat = "skillModType"
@@ -1351,7 +1367,33 @@ let compareGearTable (leftCol: string) (rightCol: string) (left: ApiCharacter) (
           match tankScoreWeightForStat stat with
           | Some w -> box (Math.Round(w * float (lv - rv), 1))
           | None -> blank
-        addRow slotName stat (box lv) (box rv) delta score
+        addRow stat (box lv) (box rv) delta score
+    if rows.Count > 0 then
+      groups.Add
+        {
+          SlotOrder = slotIdx
+          ScoreDelta = scoreDelta
+          Rows = rows
+        }
+  let orderedGroups =
+    if isWarriorClass left && isWarriorClass right then
+      groups
+      |> Seq.sortByDescending (fun g -> Math.Abs g.ScoreDelta, -g.SlotOrder)
+      |> Seq.toArray
+    else
+      groups
+      |> Seq.sortBy (fun g -> g.SlotOrder)
+      |> Seq.toArray
+  let table = new DataTable()
+  ignore (table.Columns.Add("Slot", typeof<string>))
+  ignore (table.Columns.Add("Stat", typeof<string>))
+  ignore (table.Columns.Add(leftCol, typeof<obj>))
+  ignore (table.Columns.Add(rightCol, typeof<obj>))
+  ignore (table.Columns.Add("Delta", typeof<obj>))
+  ignore (table.Columns.Add("Score", typeof<obj>))
+  for g in orderedGroups do
+    for row in g.Rows do
+      table.Rows.Add(row.Slot, row.Stat, row.Left, row.Right, row.Delta, row.Score) |> ignore
   table
 
 let compareStats (leftName: string) (left: ApiCharacter) (right: SnapshotRef) =
